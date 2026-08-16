@@ -82,7 +82,7 @@ window.__ModuleLoader__.load({
 .ima-error{color:var(--ima-danger);font-size:12px;margin:0 0 12px}
 .ima-pending{margin:0 0 14px;padding:10px 12px;border:1px solid rgba(210,153,34,.35);border-radius:12px}
 .ima-pending-row{display:flex;gap:8px;align-items:center;margin-top:8px}
-.ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}.ima-official-tree{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}.ima-official-tree{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}.ima-native,.ima-rail.ima-native,.ima-rail.dcu-wb{box-sizing:border-box;padding-right:var(--dsh-sidebar-inline-padding,12px)}
 .ima-tabs{display:flex;gap:18px;padding:4px 12px 0;border-bottom:1px solid var(--ima-line)}
 .ima-tab{appearance:none;border:0;background:transparent;color:var(--ima-muted);padding:8px 0;font-size:13px;cursor:pointer}
 .ima-tab.on{color:var(--ima-text);box-shadow:inset 0 -2px 0 currentColor}
@@ -768,7 +768,7 @@ window.__ModuleLoader__.load({
       );
     }
 
-    const WB_CSS = `.dcu-wb,.ima-native{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-head{flex:none;display:flex;align-items:center;height:36px;padding-left:4px;margin:2px 0 4px;color:var(--dsw-alias-label-tertiary,#81858C);font:14px/20px inherit}.ima-native-tree,.dcu-wb-tree{padding:0 0 16px 4px}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}
+    const WB_CSS = `.dcu-wb,.ima-native{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;padding-right:var(--dsh-sidebar-inline-padding,12px);box-sizing:border-box;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-head{flex:none;display:flex;align-items:center;height:36px;padding-left:4px;margin:2px 0 4px;color:var(--dsw-alias-label-tertiary,#81858C);font:14px/20px inherit}.ima-native-tree,.dcu-wb-tree{padding:0 0 16px 4px;scrollbar-gutter:stable}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}
 .dcu-wb *,.ima-native *{box-sizing:border-box}
 .dcu-wb-tree,.ima-native-tree{flex:1;min-height:0;overflow-y:auto;padding-bottom:16px;user-select:none}
 .dcu-wb-project-head,.ima-native-head,.dcu-wb-session,.ima-native-session{display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:8px;padding:0 8px;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
@@ -1317,6 +1317,7 @@ window.__ModuleLoader__.load({
         id: "im-assistant",
         order: 28,
         label: "IM助理",
+        icon: "chat",
         inject: () => ({
           createWorkspace: (input) => ctx.workspaces.create(input),
           pickDirectory: () => ctx.workspaces.pickDirectory(),
