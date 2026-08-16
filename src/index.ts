@@ -10,7 +10,7 @@ import { ChannelManager } from './manager.js'
 import type { EngineConfig } from './engine/types.js'
 
 export const name = 'dsh-im-connect'
-export const inject = ['webServer', 'credentials', 'agents', 'agentPresets', 'agentDefaultModel', 'llm']
+export const inject = ['webServer', 'credentials', 'agents', 'agentPresets', 'agentDefaultModel', 'llm', 'workspaceRegistry']
 
 export interface PluginConfig {
   stateDir: string

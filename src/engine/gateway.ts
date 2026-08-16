@@ -40,6 +40,7 @@ export class ImEngine {
     private readonly onUnauthorized?: (channelId: string, msg: ImMessage) => string,
   ) {
     this.router = new SessionRouter(ctx, store, config, log)
+    void this.router.attachMappedSessions()
     this.merger = new SessionMerger((config.mergeTimeoutSecs || 5) * 1000, (key, text) => {
       const sep = key.indexOf(':')
       const channelId = key.slice(0, sep)

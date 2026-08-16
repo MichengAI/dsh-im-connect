@@ -19,6 +19,10 @@ type AgentHost = Context & {
     create(opts: Record<string, unknown>): Promise<{ agent?: { followup(message: unknown): void; session?: { id?: string } }; dispose(): Promise<void> }>
     get?(id: string): { followup(message: unknown): void; session?: { id?: string } } | undefined
     resume?(opts: Record<string, unknown>): Promise<{ agent?: { followup(message: unknown): void }; dispose(): Promise<void> }>
+    withoutInitiator?<T>(operation: () => T): T
+  }
+  workspaceRegistry?: {
+    list(): Array<{ path: string; attachSession(sessionId: string): Promise<void> }>
   }
   agentPresets?: { mount(agentCtx: unknown, presetId: string): Promise<void> }
   agentDefaultModel?: { currentSelection(): { provider?: string; model?: string } }
@@ -128,6 +132,7 @@ export class SessionRouter {
     this.store.upsert(key, record)
     const binding: ChatBinding = { key, channelId, kind, chatId, sessionId, handle }
     this.live.set(key, binding)
+    await this.attachWorkspace(sessionId)
     this.log(`[router] 新建 IM 会话 ${sessionId}`)
     return binding
   }
@@ -142,6 +147,7 @@ export class SessionRouter {
         chatId: record.chatId,
         sessionId: record.sessionId,
       }
+      await this.attachWorkspace(record.sessionId)
       return binding
     }
     if (!this.ctx.agents?.resume) return undefined
@@ -151,6 +157,7 @@ export class SessionRouter {
         agentOptions: this.resolveAgentOptions(),
         setup: this.presetSetup(),
       })
+      await this.attachWorkspace(record.sessionId)
       return {
         key: sessionKeyOf(record.channel, record.kind, record.chatId),
         channelId: record.channel,
@@ -166,12 +173,13 @@ export class SessionRouter {
   }
 
   private async createHandle(sessionId: string) {
-    if (!this.ctx.agents?.create) throw new Error('当前 Host 没有 agents 服务，无法创建 IM 会话')
+    const agents = this.ctx.agents
+    if (!agents?.create) throw new Error('当前 Host 没有 agents 服务，无法创建 IM 会话')
     // DSH 会话头的 origin 只能是 subagent；IM 与任务的区分靠 sessionId 的 im: 前缀。
     // 必须带上当前默认模型，否则 deployment:persona 的 {{model}} 组装会失败。
     const agentOptions = this.resolveAgentOptions()
     this.log(`[router] 使用模型 ${agentOptions.provider}/${agentOptions.model}${this.config.reasoningEffort ? ` ${this.config.reasoningEffort}` : ''}`)
-    return this.ctx.agents.create({
+    const create = () => agents.create({
       sessionId,
       meta: {
         cwd: this.config.cwd || process.cwd(),
@@ -183,6 +191,43 @@ export class SessionRouter {
       },
       setup: this.presetSetup(),
     })
+    return agents.withoutInitiator ? agents.withoutInitiator(create) : create()
+  }
+
+  async attachMappedSessions(): Promise<void> {
+    for (const record of this.store.list()) {
+      await this.attachWorkspace(record.sessionId)
+    }
+  }
+
+  private samePath(left: string, right: string): boolean {
+    const norm = (value: string) => value.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase()
+    return norm(left) === norm(right)
+  }
+
+  private async attachWorkspace(sessionId: string): Promise<void> {
+    const workspaces = this.ctx.workspaceRegistry?.list?.() ?? []
+    if (workspaces.length === 0) {
+      this.log(`[router] 当前没有工作区，网页点不开会话 ${sessionId}`)
+      return
+    }
+    const preferred = this.config.cwd || process.cwd()
+    const ordered = [...workspaces].sort((left, right) => {
+      const leftHit = this.samePath(left.path, preferred) ? 0 : 1
+      const rightHit = this.samePath(right.path, preferred) ? 0 : 1
+      return leftHit - rightHit
+    })
+    let lastError = ''
+    for (const workspace of ordered) {
+      try {
+        await workspace.attachSession(sessionId)
+        this.log(`[router] 已把 ${sessionId} 挂到工作区 ${workspace.path}`)
+        return
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error)
+      }
+    }
+    this.log(`[router] 挂载会话失败 ${sessionId}: ${lastError}`)
   }
 
   private resolveAgentOptions(): { provider: string; model: string } {
