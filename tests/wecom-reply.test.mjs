@@ -30,18 +30,18 @@ test('企业微信回复必须走回调帧 replyStream，不能只主动推送',
   assert.equal(client.calls[0].finish, true)
 })
 
-test('收到消息后先回正在思考中，最终回复复用同一条流', async () => {
+test('企业微信不推流式分片，只回思考中和最终全文', async () => {
   const client = fakeClient()
   const broker = new WecomReplyBroker(client, () => undefined, () => 'stream-2')
   const frame = { headers: { req_id: 'req-2' } }
   broker.remember('user-2', frame)
   await broker.startThinking('user-2')
   const stream = await broker.beginReply('user-2')
-  await stream.update('部分答案')
+  await stream.update('respon')
+  await stream.update('response 部分答案')
   await stream.finish('完整答案')
   assert.deepEqual(client.calls.map((item) => [item.type, item.content, item.finish]), [
     ['replyStream', '正在思考中…', false],
-    ['replyStream', '部分答案', false],
     ['replyStream', '完整答案', true],
   ])
   assert.ok(client.calls.every((item) => item.streamId === 'stream-2'))

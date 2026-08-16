@@ -109,11 +109,12 @@ export class ChannelManager {
   }
 
   channelSessions() {
+    const connected = new Set(this.list().filter((item) => item.connected).map((item) => item.id))
     return CHANNEL_ORDER.map((id) => ({
       id,
       label: CHANNEL_META[id].label,
       sessions: this.sessions.list().filter((item) => item.channel === id),
-    })).filter((group) => group.sessions.length > 0)
+    })).filter((group) => group.sessions.length > 0 || connected.has(group.id))
   }
 
   pendingRequests() {

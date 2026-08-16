@@ -58,11 +58,13 @@ window.__ModuleLoader__.load({
 .ima-error{color:var(--ima-danger);font-size:12px;margin:0 0 12px}
 .ima-pending{margin:0 0 14px;padding:10px 12px;border:1px solid rgba(210,153,34,.35);border-radius:12px}
 .ima-pending-row{display:flex;gap:8px;align-items:center;margin-top:8px}
-.ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1}
+.ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}
 .ima-tabs{display:flex;gap:18px;padding:4px 12px 0;border-bottom:1px solid var(--ima-line)}
 .ima-tab{appearance:none;border:0;background:transparent;color:var(--ima-muted);padding:8px 0;font-size:13px;cursor:pointer}
 .ima-tab.on{color:var(--ima-text);box-shadow:inset 0 -2px 0 currentColor}
-.ima-rail{flex:1;min-height:0;overflow:auto;padding:8px 10px 16px}
+.ima-tabs{flex:none}
+.ima-rail{flex:1 1 auto;min-height:180px;overflow:auto;padding:8px 10px 16px}
+.ima-empty{flex:1;min-height:80px}
 .ima-group{margin-bottom:10px}
 .ima-group-h{display:flex;align-items:center;gap:8px;width:100%;border:0;background:rgba(255,255,255,.06);color:inherit;border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left;min-height:36px}
 .ima-item{display:flex;align-items:center;padding:8px 12px 8px 18px;border-radius:8px;cursor:pointer;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:36px}
@@ -531,10 +533,20 @@ window.__ModuleLoader__.load({
     }
 
     function ChannelRail(props) {
+      if (typeof props.useSessions === "function") return h(ChannelRailWithSessions, props);
+      return h(ChannelRailView, props);
+    }
+
+    function ChannelRailWithSessions(props) {
+      const selectedId = props.useSessions((state) => (state && state.current) || null);
+      return h(ChannelRailView, Object.assign({}, props, { selectedId: selectedId || props.selectedId || null }));
+    }
+
+    function ChannelRailView(props) {
       const [groups, setGroups] = useState([]);
       const [folded, setFolded] = useState({});
-      const snap = props.useSessions ? props.useSessions() : { current: props.selectedId };
-      const selectedId = snap.current || props.selectedId;
+      const [error, setError] = useState("");
+      const selectedId = props.selectedId;
       const open = (id) => {
         if (typeof props.openSession === "function") props.openSession(id);
         else openImSession(id);
@@ -542,16 +554,16 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         ensureStyle();
         const load = () => api("/channels").then((data) => {
-          if (data.ok) setGroups(data.groups || []);
-        }).catch(() => undefined);
+          if (data.ok) { setGroups(data.groups || []); setError(""); }
+          else setError(data.error || "加载失败");
+        }).catch(() => setError("无法连接本机 IM 助理接口"));
         load();
         const timer = setInterval(load, 4000);
         return () => clearInterval(timer);
       }, []);
-      if (groups.length === 0) {
-        return h("div", { className: "ima-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道。");
-      }
       return h("div", { className: "ima-rail dcu-wb-tree", role: "tree" },
+        error && h("div", { className: "ima-empty" }, error),
+        !error && groups.length === 0 && h("div", { className: "ima-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。"),
         ...groups.map((g) => h("div", { key: g.id, className: "ima-group dcu-wb-project" },
           h("button", {
             className: "ima-group-h dcu-wb-project-head",
@@ -562,31 +574,42 @@ window.__ModuleLoader__.load({
             h(Logo, { id: g.id, small: true }),
             h("span", { className: "dcu-wb-project-title" }, g.label),
           ),
-          !folded[g.id] && g.sessions.map((s) => h("div", {
-            key: s.sessionId,
-            className: (selectedId === s.sessionId ? "ima-item on dcu-wb-session dcu-wb-selected" : "ima-item dcu-wb-session"),
-            role: "treeitem",
-            tabIndex: 0,
-            "aria-selected": selectedId === s.sessionId,
-            onClick: () => open(s.sessionId),
-            onKeyDown: (e) => {
-              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(s.sessionId); }
-            },
-          }, s.title || s.chatId)),
+          !folded[g.id] && ((g.sessions && g.sessions.length)
+            ? g.sessions.map((sess) => h("div", {
+              key: sess.sessionId,
+              className: (selectedId === sess.sessionId ? "ima-item on dcu-wb-session dcu-wb-selected" : "ima-item dcu-wb-session"),
+              role: "treeitem",
+              tabIndex: 0,
+              "aria-selected": selectedId === sess.sessionId,
+              onClick: () => open(sess.sessionId),
+              onKeyDown: (e) => {
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(sess.sessionId); }
+              },
+            }, sess.title || sess.chatId))
+            : h("div", { className: "ima-empty" }, "暂无会话")),
         )),
       );
     }
 
-    function TaskList({ useSessions, openSession }) {
-      const snap = useSessions ? useSessions() : { ids: [], byId: {}, current: null };
-      const items = (snap.ids || []).map((id) => snap.byId[id]).filter((s) => s && s.origin !== "im" && s.origin !== "subagent" && !s.blank && !(s.id || "").startsWith("im:"));
-      if (items.length === 0) return h("div", { className: "ima-empty" }, "暂无网页任务");
+    function TaskList(props) {
+      if (typeof props.useSessions === "function") return h(TaskListWithSessions, props);
+      return h(TaskListView, { items: [], current: null, openSession: props.openSession });
+    }
+
+    function TaskListWithSessions(props) {
+      const snap = props.useSessions((state) => state || { ids: [], byId: {}, current: null });
+      const items = (snap.ids || []).map((id) => snap.byId[id]).filter((item) => item && item.origin !== "im" && item.origin !== "subagent" && !item.blank && !(item.id || "").startsWith("im:"));
+      return h(TaskListView, { items, current: snap.current, openSession: props.openSession });
+    }
+
+    function TaskListView({ items, current, openSession }) {
+      if (!items.length) return h("div", { className: "ima-empty" }, "暂无网页任务");
       return h("div", { className: "ima-rail" },
-        ...items.map((s) => h("div", {
-          key: s.id,
-          className: snap.current === s.id ? "ima-item on" : "ima-item",
-          onClick: () => openSession && openSession(s.id),
-        }, s.title || s.id)),
+        ...items.map((item) => h("div", {
+          key: item.id,
+          className: current === item.id ? "ima-item on" : "ima-item",
+          onClick: () => openSession && openSession(item.id),
+        }, item.title || item.id)),
       );
     }
 
@@ -604,7 +627,7 @@ window.__ModuleLoader__.load({
         ),
         tab === "tasks"
           ? h(TaskList, { useSessions: props.useSessions, openSession })
-          : h(ChannelRail, { openSession, selectedId: props.useSessions ? props.useSessions().current : null }),
+          : h(ChannelRail, { openSession, useSessions: props.useSessions, selectedId: props.selectedId || null }),
       );
     }
 

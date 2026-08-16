@@ -76,13 +76,12 @@ export class WecomReplyBroker {
     if (!item) throw new Error('wecom: 没有待回复的回调帧')
     if (!item.started) await this.startThinking(chatId)
     return {
-      update: async (text) => {
-        await this.client.replyStream(item.frame, item.streamId, text || '正在思考中…', false)
-      },
+      // 企业微信客户端会把未完成分片渲染成一条条气泡，这里只收最终全文。
+      update: async () => undefined,
       finish: async (text) => {
         await this.client.replyStream(item.frame, item.streamId, text, true)
         this.pending.delete(chatId)
-        this.log(`[wecom] 流式回复已结束 ${chatId}`)
+        this.log(`[wecom] 已通过回调回复 ${chatId}`)
       },
     }
   }
@@ -176,10 +175,6 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     },
     async sendAction(chatId) {
       await broker?.startThinking(chatId).catch(() => undefined)
-    },
-    async beginReply(chatId) {
-      if (!broker) throw new Error('wecom: 尚未连接')
-      return broker.beginReply(chatId)
     },
     setMessageHandler(h) { handler = h },
     status() { return statusText },
