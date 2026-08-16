@@ -54,11 +54,13 @@ export function apply(ctx: Context, config: PluginConfig): void {
     permissionPreset: 'full-access',
   }
 
+  const applyStarted = Date.now()
   const manager = new ChannelManager({ ctx, stateDir, log, engineConfig })
+  log(`[boot] ChannelManager 构造 ${Date.now() - applyStarted}ms`)
   ctx.effect(() => {
     manager.registerApi(ctx)
     void manager.initEnabled().finally(() => { void manager.attachMappedSessions() })
-    log('IM 助理已启动')
+    log(`[boot] apply 完成 ${Date.now() - applyStarted}ms`)
     return () => { manager.disposeApi() }
   }, 'im-connect.serve')
 }

@@ -219,14 +219,31 @@ window.__ModuleLoader__.load({
       return "请使用对应 App 扫描二维码";
     }
 
-    let openImSession = (id) => { try { window.__dshSessionsOpen && window.__dshSessionsOpen(id); } catch { /* ignore */ } };
+    let openImSession = (id) => {
+      try {
+        if (window.__dshSessionsOpen) { window.__dshSessionsOpen(id); return true; }
+      } catch { /* ignore */ }
+      return false;
+    };
     const openListedSession = (id, hostOpen) => {
       if (!id) return;
-      if (String(id).startsWith("im:") || typeof hostOpen !== "function") {
-        openImSession(id);
+      if (String(id).startsWith("im:")) {
+        api("/sessions/ensure", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionId: id }),
+        }).then((data) => {
+          if (!data.ok) { console.warn("[dsh-im-connect] 无法恢复会话", data.error || id); return; }
+          const tryOpen = (left) => {
+            if (openImSession(id) || left <= 0) return;
+            setTimeout(() => tryOpen(left - 1), 80);
+          };
+          tryOpen(20);
+        }).catch((error) => console.warn("[dsh-im-connect] 无法恢复会话", id, error));
         return;
       }
-      hostOpen(id);
+      if (typeof hostOpen === "function") hostOpen(id);
+      else openImSession(id);
     };
     let channelSkin = "native";
 
@@ -904,11 +921,10 @@ window.__ModuleLoader__.load({
           return;
         }
         if (action === "archive") {
-          const finish = () => api("/channels").then((data) => { if (data.ok) syncList(data.groups); }).catch(() => undefined);
           if (typeof acts.archiveSession === "function") {
-            Promise.resolve(acts.archiveSession(sess.sessionId)).then(finish).catch(finish);
+            Promise.resolve(acts.archiveSession(sess.sessionId)).then(afterHost).catch(afterHost);
           } else {
-            finish();
+            afterHost();
           }
           return;
         }
@@ -1313,8 +1329,8 @@ window.__ModuleLoader__.load({
     function apply(ctx) {
       ensureStyle();
       openImSession = (id) => {
-        try { ctx.sessions.open(id); }
-        catch (error) { console.warn("[dsh-im-connect] 无法打开会话", id, error); }
+        try { ctx.sessions.open(id); return true; }
+        catch (error) { console.warn("[dsh-im-connect] 无法打开会话", id, error); return false; }
       };
       ctx.slots.inject("settings.section", () => ctx.slots.register({
         name: "settings.section",
@@ -1434,6 +1450,7 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
+
 
 
 

@@ -14,6 +14,11 @@ export interface ChatBinding {
   handle?: { agent?: unknown; dispose(): Promise<void> }
 }
 
+type WorkspaceLookup = {
+  list(): Array<{ path: string; attachSession(sessionId: string): Promise<void> }>
+  archivedSessionIds?: readonly string[]
+}
+
 type AgentHost = Context & {
   agents?: {
     create(opts: Record<string, unknown>): Promise<{ agent?: { followup(message: unknown): void; session?: { id?: string } }; dispose(): Promise<void> }>
@@ -21,9 +26,7 @@ type AgentHost = Context & {
     resume?(opts: Record<string, unknown>): Promise<{ agent?: { followup(message: unknown): void }; dispose(): Promise<void> }>
     withoutInitiator?<T>(operation: () => T): T
   }
-  get?(name: string): {
-    list(): Array<{ path: string; attachSession(sessionId: string): Promise<void> }>
-  } | undefined
+  get?(name: string): WorkspaceLookup | undefined
   agentPresets?: { mount(agentCtx: unknown, presetId: string): Promise<void> }
   agentDefaultModel?: { currentSelection(): { provider?: string; model?: string } }
 }
@@ -60,14 +63,26 @@ export class SessionRouter {
   async getOrCreate(channelId: ChannelId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const live = this.live.get(key)
-    if (live?.handle) return live
+    if (live?.handle) {
+      if (this.isArchived(live.sessionId)) {
+        this.log(`[router] 当前会话已归档，轮换 ${live.sessionId}`)
+        return this.rotate(channelId, kind, chatId, title)
+      }
+      return live
+    }
     const saved = this.store.get(key)
     if (saved) {
+      if (this.isArchived(saved.sessionId)) {
+        this.log(`[router] 映射会话已归档，轮换 ${saved.sessionId}`)
+        return this.rotate(channelId, kind, chatId, title)
+      }
       const resumed = await this.resume(saved)
       if (resumed) {
         this.live.set(key, resumed)
         return resumed
       }
+      // 幽灵会话：官方 persistence 没有，按原 id 重建，方便网页点开。
+      return this.create(channelId, kind, chatId, title, saved.sessionId)
     }
     return this.create(channelId, kind, chatId, title)
   }
@@ -103,6 +118,13 @@ export class SessionRouter {
     return true
   }
 
+  async ensure(sessionId: string): Promise<boolean> {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (!rec) return false
+    await this.getOrCreate(rec.channel, rec.kind, rec.chatId, rec.title)
+    return true
+  }
+
   async disposeAll(): Promise<void> {
     for (const item of this.live.values()) {
       await item.handle?.dispose().catch(() => undefined)
@@ -117,9 +139,9 @@ export class SessionRouter {
     agent.followup(message)
   }
 
-  private async create(channelId: ChannelId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
+  private async create(channelId: ChannelId, kind: ChatKind, chatId: string, title: string, preferredSessionId?: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
-    const sessionId = createImSessionId(channelId, kind, chatId)
+    const sessionId = preferredSessionId || createImSessionId(channelId, kind, chatId)
     const handle = await this.createHandle(sessionId)
     const record: SessionRecord = {
       sessionId,
@@ -195,8 +217,20 @@ export class SessionRouter {
   }
 
   async attachMappedSessions(): Promise<void> {
+    const started = Date.now()
     for (const record of this.store.list()) {
       await this.attachWorkspace(record.sessionId)
+    }
+    this.log(`[boot] attachMappedSessions ${Date.now() - started}ms`)
+  }
+
+  private isArchived(sessionId: string): boolean {
+    try {
+      const ids = this.ctx.get?.('workspaceRegistry')?.archivedSessionIds
+      if (!ids) return false
+      return ids.some((id: unknown) => String(id) === sessionId)
+    } catch {
+      return false
     }
   }
 
@@ -276,6 +310,4 @@ export class SessionRouter {
     }
   }
 }
-
-
 

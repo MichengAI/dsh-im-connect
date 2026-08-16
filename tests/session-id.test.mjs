@@ -6,16 +6,36 @@ import {
   isImOrigin,
   isImSessionId,
   isTaskSession,
+  parseImSessionId,
   sessionKeyOf,
 } from '../lib/engine/session-id.js'
 
 test('IM 会话 id 带前缀且可识别', () => {
-  const id = createImSessionId('wecom', 'group', 'woOoKtPAAAAvBcwwV96r5Uw')
-  assert.equal(id, 'im:wecom:group:woOoKtPAAAAvBcwwV96r5Uw')
+  const id = createImSessionId('wecom', 'group', 'woOoKtPAAAAvBcwwV96r5Uw', 1786881038856)
+  assert.equal(id, 'im:wecom:group:1786881038856:woOoKtPAAAAvBcwwV96r5Uw')
   assert.equal(isImSessionId(id), true)
   assert.equal(isImSessionId('abc'), false)
   assert.equal(isImOrigin(IM_ORIGIN), true)
   assert.equal(sessionKeyOf('wecom', 'group', 'woOoKtPAAAAvBcwwV96r5Uw'), 'wecom:group:woOoKtPAAAAvBcwwV96r5Uw')
+  assert.deepEqual(parseImSessionId('im:weixin:dm:1786881038856:o9cq802KqrxiODVTN9zoEjur3Ayw@im.wechat'), {
+    channel: 'weixin',
+    kind: 'dm',
+    chatId: 'o9cq802KqrxiODVTN9zoEjur3Ayw@im.wechat',
+  })
+  assert.deepEqual(parseImSessionId('im:weixin:dm:o9cq802KqrxiODVTN9zoEjur3Ayw@im.wechat'), {
+    channel: 'weixin',
+    kind: 'dm',
+    chatId: 'o9cq802KqrxiODVTN9zoEjur3Ayw@im.wechat',
+  })
+  assert.equal(parseImSessionId('im:weixin'), undefined)
+})
+
+test('连续新建不会撞上同一个时间戳 id', () => {
+  const first = createImSessionId('wecom', 'dm', 'user-a', 1786881038856)
+  const second = createImSessionId('wecom', 'dm', 'user-a', 1786881038856)
+  assert.notEqual(first, second)
+  assert.equal(parseImSessionId(first)?.chatId, 'user-a')
+  assert.equal(parseImSessionId(second)?.chatId, 'user-a')
 })
 
 test('任务列表必须滤掉 IM 会话', () => {

@@ -69,6 +69,10 @@ export class ImEngine {
     return this.router.remove(sessionId)
   }
 
+  async ensureSession(sessionId: string): Promise<boolean> {
+    return this.router.ensure(sessionId)
+  }
+
   setModel(provider: string, model: string, reasoningEffort?: string): void {
     this.config.provider = provider
     this.config.model = model

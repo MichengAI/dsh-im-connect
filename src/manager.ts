@@ -203,15 +203,19 @@ export class ChannelManager {
   }
 
   async initEnabled(): Promise<void> {
+    const started = Date.now()
     for (const id of CHANNEL_ORDER) {
       const state = this.store.channels[id]
       if (state?.enabled && state.receiveEnabled !== false) {
         this.applyAccessMode(id, state.config?.accessMode)
+        const one = Date.now()
         await this.startOne(id).catch((error) => {
           this.log(`[manager] 启动 ${id} 失败: ${error instanceof Error ? error.message : String(error)}`)
         })
+        this.log(`[boot] 渠道 ${id} 启动 ${Date.now() - one}ms`)
       }
     }
+    this.log(`[boot] initEnabled ${Date.now() - started}ms`)
   }
 
   registerApi(ctx: Context): void {
@@ -279,6 +283,11 @@ export class ChannelManager {
           if (action === 'remove') {
             const ok = await this.engine.removeSession(sessionId)
             send(res, ok ? 200 : 404, ok ? { ok: true, groups: this.channelSessions() } : { ok: false, error: '会话不存在' })
+            return
+          }
+          if (action === 'ensure') {
+            const ok = await this.engine.ensureSession(sessionId)
+            send(res, ok ? 200 : 404, ok ? { ok: true, sessionId } : { ok: false, error: '会话不存在' })
             return
           }
           send(res, 404, { ok: false, error: `未知会话操作 ${action}` })
