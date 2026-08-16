@@ -10,7 +10,7 @@ import { ChannelManager } from './manager.js'
 import type { EngineConfig } from './engine/types.js'
 
 export const name = 'dsh-im-connect'
-export const inject = ['webServer', 'credentials', 'agents', 'agentPresets', 'agentDefaultModel', 'llm', 'workspaceRegistry']
+export const inject = ['webServer', 'credentials', 'agents', 'agentPresets', 'agentDefaultModel', 'llm']
 
 export interface PluginConfig {
   stateDir: string
@@ -57,7 +57,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
   const manager = new ChannelManager({ ctx, stateDir, log, engineConfig })
   ctx.effect(() => {
     manager.registerApi(ctx)
-    void manager.initEnabled()
+    void manager.initEnabled().finally(() => { void manager.attachMappedSessions() })
     log('IM 助理已启动')
     return () => { manager.disposeApi() }
   }, 'im-connect.serve')

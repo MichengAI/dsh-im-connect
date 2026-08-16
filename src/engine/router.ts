@@ -21,9 +21,9 @@ type AgentHost = Context & {
     resume?(opts: Record<string, unknown>): Promise<{ agent?: { followup(message: unknown): void }; dispose(): Promise<void> }>
     withoutInitiator?<T>(operation: () => T): T
   }
-  workspaceRegistry?: {
+  get?(name: string): {
     list(): Array<{ path: string; attachSession(sessionId: string): Promise<void> }>
-  }
+  } | undefined
   agentPresets?: { mount(agentCtx: unknown, presetId: string): Promise<void> }
   agentDefaultModel?: { currentSelection(): { provider?: string; model?: string } }
 }
@@ -206,7 +206,12 @@ export class SessionRouter {
   }
 
   private async attachWorkspace(sessionId: string): Promise<void> {
-    const workspaces = this.ctx.workspaceRegistry?.list?.() ?? []
+    let workspaces: Array<{ path: string; attachSession(sessionId: string): Promise<void> }> = []
+    try {
+      workspaces = this.ctx.get?.('workspaceRegistry')?.list?.() ?? []
+    } catch {
+      workspaces = []
+    }
     if (workspaces.length === 0) {
       this.log(`[router] 当前没有工作区，网页点不开会话 ${sessionId}`)
       return

@@ -198,6 +198,10 @@ export class ChannelManager {
     this.flush()
   }
 
+  attachMappedSessions(): Promise<void> {
+    return this.engine.attachMappedSessions()
+  }
+
   async initEnabled(): Promise<void> {
     for (const id of CHANNEL_ORDER) {
       const state = this.store.channels[id]
