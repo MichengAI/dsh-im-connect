@@ -7,9 +7,7 @@ DeepSeek Harness 的 IM 助理。工作区对标千问办公：任务和频道�
 ## 安装
 
 ```
-npm install
-npm run build
-dsh plugin --profile web add .
+dsh plugin --profile web add @michengai/dsh-im-connect
 ```
 
 重启 `dsh web`，打开「设置 → IM助理」。

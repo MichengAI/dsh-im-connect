@@ -1,5 +1,5 @@
 {
-  "name": "dsh-im-connect",
+  "name": "@michengai/dsh-im-connect",
   "version": "0.1.0",
   "description": "DeepSeek Harness IM 助理：把本机 agent 接到微信、企微、钉钉、飞书、Telegram，会话与网页任务分列。",
   "type": "module",
@@ -23,7 +23,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-client.mjs",
-    "test": "npm run build && node --test tests/*.test.mjs"
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "prepublishOnly": "npm test"
   },
   "license": "MIT",
   "engines": {
@@ -54,7 +55,9 @@
       ],
       "platform": "web"
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }
-
-

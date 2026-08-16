@@ -817,7 +817,7 @@ window.__ModuleLoader__.load({
 .ima-n-row{height:34px}
 .ima-n-sess{height:32px;gap:0;position:relative}
 .ima-n-row:hover,.ima-n-sess:hover,.ima-n-sess.on,.ima-n-row.menu-on,.ima-n-sess.menu-on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
-.ima-n-slot{flex:none;width:16px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#81858C)}
+.ima-n-slot{flex:none;width:16px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#81858C)}.ima-run-dot{flex:none;color:var(--dsw-static-deepseek-450,#4c8dff)}.ima-run-dot-cell{fill:currentColor;opacity:.15;animation:ima-run-chase 1s infinite}@keyframes ima-run-chase{0%,12.4%{opacity:1}12.5%,24.9%{opacity:.6}25%,37.4%{opacity:.35}37.5%,100%{opacity:.15}}
 .ima-n-row .ima-n-chevron{display:none;color:var(--dsw-alias-label-caption,#ADB2B8)}
 .ima-n-row:hover .ima-n-chevron{display:inline-flex}
 .ima-n-row:hover .ima-n-folder{display:none}
@@ -879,6 +879,14 @@ window.__ModuleLoader__.load({
     function MoreIcon() {
       return h(IconEllipsis);
     }
+    const RUN_CELLS = [[0,0],[4,0],[8,0],[8,4],[8,8],[4,8],[0,8],[0,4]];
+    function RunningStateDot() {
+      return h("svg", { className: "ima-run-dot", width: 10, height: 10, viewBox: "0 0 10 10", shapeRendering: "crispEdges", "aria-hidden": "true" },
+        RUN_CELLS.map(function (cell, index) {
+          return h("rect", { key: cell[0] + "-" + cell[1], className: "ima-run-dot-cell", x: cell[0], y: cell[1], width: "2", height: "2", style: { animationDelay: ((index - RUN_CELLS.length) * 125) + "ms" } });
+        })
+      );
+    }
     function relativeTime(value) {
       const ts = Date.parse(value || "");
       if (!Number.isFinite(ts)) return "";
@@ -892,7 +900,7 @@ window.__ModuleLoader__.load({
     }
 
 
-    function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions }) {
+    function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById }) {
       const [menu, setMenu] = useState(false);
       const [renaming, setRenaming] = useState(false);
       const [draft, setDraft] = useState(sess.title || sess.chatId || "");
@@ -975,7 +983,7 @@ window.__ModuleLoader__.load({
         onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(sess.sessionId); } },
         onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); setMenu(!menu); },
       },
-        native && h("span", { className: "ima-n-slot" }),
+        native && h("span", { className: "ima-n-slot" }, (sess.running || (sessionById && sessionById[sess.sessionId] && sessionById[sess.sessionId].running)) ? h(RunningStateDot) : null),
         h("span", { className: native ? "ima-n-title" : "dcu-wb-session-title" }, title),
         native && h("span", { className: "ima-n-time" }, relativeTime(sess.updatedAt)),
         h("span", { className: native ? "ima-n-acts" : "dcu-wb-actions" },
@@ -1009,9 +1017,13 @@ window.__ModuleLoader__.load({
       const archivedIds = typeof props.useWorkspaces === "function"
         ? props.useWorkspaces((state) => (state && state.archivedSessionIds) || [])
         : (props.archivedIds || []);
+      const sessionById = typeof props.useSessions === "function"
+        ? props.useSessions((state) => (state && state.byId) || {})
+        : {};
       return h(ChannelRailView, Object.assign({}, props, {
         selectedId: selectedId || props.selectedId || null,
         archivedIds,
+        sessionById,
       }));
     }
 
@@ -1067,6 +1079,7 @@ window.__ModuleLoader__.load({
                 key: sess.sessionId,
                 sess,
                 selected: selectedId === sess.sessionId,
+                sessionById: props.sessionById,
                 onOpen: open,
                 onChanged: (next) => setGroups(next),
                 skin,
@@ -1450,6 +1463,7 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
+
 
 
 
