@@ -60,7 +60,7 @@ export class SessionRouter {
     }
   }
 
-  async getOrCreate(channelId: ChannelId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
+  async getOrCreate(channelId: ChannelId, kind: ChatKind, chatId: string, title: string, options?: { rebuildMissing?: boolean }): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const live = this.live.get(key)
     if (live?.handle) {
@@ -81,8 +81,16 @@ export class SessionRouter {
         this.live.set(key, resumed)
         return resumed
       }
-      // 幽灵会话：官方 persistence 没有，按原 id 重建，方便网页点开。
-      return this.create(channelId, kind, chatId, title, saved.sessionId)
+      if (options?.rebuildMissing) {
+        try {
+          return await this.create(channelId, kind, chatId, title, saved.sessionId)
+        } catch (error) {
+          if (!isIdCollision(error)) throw error
+          this.log(`[router] 原 id 与磁盘日志冲突，改新建 ${saved.sessionId}`)
+        }
+      }
+      this.log(`[router] 无法恢复会话，轮换 ${saved.sessionId}`)
+      return this.rotate(channelId, kind, chatId, title)
     }
     return this.create(channelId, kind, chatId, title)
   }
@@ -121,7 +129,7 @@ export class SessionRouter {
   async ensure(sessionId: string): Promise<boolean> {
     const rec = this.store.list().find((item) => item.sessionId === sessionId)
     if (!rec) return false
-    await this.getOrCreate(rec.channel, rec.kind, rec.chatId, rec.title)
+    await this.getOrCreate(rec.channel, rec.kind, rec.chatId, rec.title, { rebuildMissing: true })
     return true
   }
 
@@ -142,7 +150,14 @@ export class SessionRouter {
   private async create(channelId: ChannelId, kind: ChatKind, chatId: string, title: string, preferredSessionId?: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const sessionId = preferredSessionId || createImSessionId(channelId, kind, chatId)
-    const handle = await this.createHandle(sessionId)
+    let handle: Awaited<ReturnType<SessionRouter['createHandle']>>
+    try {
+      handle = await this.createHandle(sessionId)
+    } catch (error) {
+      if (!preferredSessionId || !isIdCollision(error)) throw error
+      this.log(`[router] 创建冲突，改用新 id ${sessionId}`)
+      return this.create(channelId, kind, chatId, title)
+    }
     const record: SessionRecord = {
       sessionId,
       channel: channelId,
@@ -311,3 +326,8 @@ export class SessionRouter {
   }
 }
 
+
+function isIdCollision(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('id collision') || message.includes('already has a persisted log')
+}
