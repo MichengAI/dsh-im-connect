@@ -418,7 +418,8 @@ export class ChannelManager {
     const next = normalizeWorkspacePath(cwd)
     if (!next) return
     this.engineConfig.cwd = next
-    this.engine.setCwd(next)
+    // 构造阶段 engine 还没建好，先只写配置；ImEngine 会读同一份 engineConfig。
+    this.engine?.setCwd(next)
   }
 
   currentPermission(): PermissionPreset {
@@ -429,7 +430,7 @@ export class ChannelManager {
     const next = normalizePermission(permission)
     if (!next) return
     this.engineConfig.permissionPreset = next
-    this.engine.setPermission(next)
+    this.engine?.setPermission(next)
   }
 
   private async listModelCatalog(): Promise<Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>> {
