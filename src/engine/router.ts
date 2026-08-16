@@ -77,6 +77,28 @@ export class SessionRouter {
     return this.create(channelId, kind, chatId, title)
   }
 
+  rename(sessionId: string, title: string): boolean {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (!rec) return false
+    this.store.upsert(sessionKeyOf(rec.channel, rec.kind, rec.chatId), {
+      ...rec,
+      title,
+      updatedAt: new Date().toISOString(),
+    })
+    return true
+  }
+
+  async remove(sessionId: string): Promise<boolean> {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (!rec) return false
+    const key = sessionKeyOf(rec.channel, rec.kind, rec.chatId)
+    const live = this.live.get(key)
+    if (live?.handle) await live.handle.dispose().catch(() => undefined)
+    this.live.delete(key)
+    this.store.remove(key)
+    return true
+  }
+
   async disposeAll(): Promise<void> {
     for (const item of this.live.values()) {
       await item.handle?.dispose().catch(() => undefined)

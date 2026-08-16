@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
     var exports = module.exports;
     const React = require("react");
     const { useState, useEffect, useCallback, useRef } = React;
-    const inject = ["slots"];
+    const inject = ["slots", "sessions"];
     const API_BASE = "/dsh-im-connect/api";
     const TAB_KEY = "dsh-im-connect.sidebar-tab";
     const h = React.createElement;
@@ -63,18 +63,27 @@ window.__ModuleLoader__.load({
 .ima-tab{appearance:none;border:0;background:transparent;color:var(--ima-muted);padding:8px 0;font-size:13px;cursor:pointer}
 .ima-tab.on{color:var(--ima-text);box-shadow:inset 0 -2px 0 currentColor}
 .ima-tabs{flex:none}
-.ima-rail{flex:1 1 auto;min-height:180px;overflow:auto;padding:8px 10px 16px}
-.ima-empty{flex:1;min-height:80px}
-.ima-group{margin-bottom:10px}
-.ima-group-h{display:flex;align-items:center;gap:8px;width:100%;border:0;background:rgba(255,255,255,.06);color:inherit;border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left;min-height:36px}
-.ima-item{display:flex;align-items:center;padding:8px 12px 8px 18px;border-radius:8px;cursor:pointer;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:36px}
+.ima-rail{flex:1 1 auto;min-height:180px;overflow:auto}
+.ima-item{display:flex;align-items:center;gap:6px;padding:0 8px 0 18px;border-radius:8px;cursor:pointer;font-size:13px;min-height:32px;position:relative}
+.ima-item-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ima-item:hover,.ima-item.on{background:rgba(255,255,255,.06)}
+.ima-sess-actions{display:none;flex:none;align-items:center;gap:2px}
+.ima-item:hover .ima-sess-actions,.ima-item.menu-on .ima-sess-actions{display:flex}
+.ima-sess-btn{width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;font-size:16px;line-height:1}
+.ima-sess-btn:hover{background:rgba(255,255,255,.08)}
+.ima-sess-menu{position:absolute;right:8px;top:30px;min-width:132px;padding:6px;border:1px solid var(--ima-line);border-radius:10px;background:#161b22;z-index:8}
+.ima-sess-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--ima-text);padding:7px 10px;border-radius:6px;cursor:pointer}
+.ima-sess-menu button:hover{background:rgba(255,255,255,.06)}
+.ima-sess-menu button.danger{color:var(--ima-danger)}
+.ima-rename{flex:1;min-width:0;min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid var(--ima-line);background:#0d1117;color:var(--ima-text);font-size:13px}
 .ima-empty{color:var(--ima-muted);font-size:12px;padding:12px 8px}
 .ima-logo{width:28px;height:28px;flex:none;display:block;line-height:0;background:transparent}
 .ima-logo svg{width:28px;height:28px;display:block}
-.ima-logo.sm{width:18px;height:18px}
-.ima-logo.sm svg{width:18px;height:18px}
-.ima-logo[data-brand="wecom"]{border-radius:7px;box-shadow:inset 0 0 0 1px rgba(15,23,42,.12);overflow:hidden;background:#fff}
+.ima-logo.sm{width:16px;height:16px;overflow:visible}
+.ima-logo.sm svg{width:16px;height:16px}
+.ima-logo.sm[data-brand="weixin"] svg,.ima-logo.sm[data-brand="feishu"] svg,.ima-logo.sm[data-brand="lark"] svg,.ima-logo.sm[data-brand="telegram"] svg{transform:scale(1.2);transform-origin:center}
+.ima-logo[data-brand="wecom"]{border-radius:6px;box-shadow:inset 0 0 0 1px rgba(15,23,42,.12);overflow:hidden;background:#fff}
+.ima-logo.sm[data-brand="wecom"]{border-radius:4px}
 .ima-mask{position:fixed;inset:0;background:rgba(0,0,0,.62);display:grid;place-items:center;z-index:80;padding:24px}
 .ima-modal{width:min(440px,100%);background:#1c2128;color:var(--ima-text);border:1px solid var(--ima-line);border-radius:16px;padding:20px 22px 22px;text-align:left;box-shadow:0 16px 48px rgba(0,0,0,.4)}
 .ima-modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -186,6 +195,7 @@ window.__ModuleLoader__.load({
     }
 
     let openImSession = (id) => { try { window.__dshSessionsOpen && window.__dshSessionsOpen(id); } catch { /* ignore */ } };
+    let channelSkin = "native";
 
     function BindModal({ ch, onClose, onConnected }) {
       const hasQr = ch.kind === "qr" || ch.kind === "qr-or-credentials";
@@ -542,13 +552,152 @@ window.__ModuleLoader__.load({
       return h(ChannelRailView, Object.assign({}, props, { selectedId: selectedId || props.selectedId || null }));
     }
 
+    const WB_CSS = `.dcu-wb,.ima-native{display:flex;flex:1;min-height:0;flex-direction:column;padding:4px 10px 8px;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}
+.dcu-wb *,.ima-native *{box-sizing:border-box}
+.dcu-wb-tree,.ima-native-tree{flex:1;min-height:0;overflow-y:auto;padding-bottom:16px;user-select:none}
+.dcu-wb-project-head,.ima-native-head,.dcu-wb-session,.ima-native-session{display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:8px;padding:0 8px;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
+.dcu-wb-project-head,.ima-native-head{height:34px}
+.dcu-wb-project-head:hover,.dcu-wb-session:hover,.dcu-wb-session.dcu-wb-selected,.ima-native-head:hover,.ima-native-session:hover,.ima-native-session.on{background:var(--dsw-alias-interactive-bg-hover,var(--dcu-sidebar-hover,rgba(255,255,255,.06)))}
+.dcu-wb-folder,.ima-native-folder{display:grid;place-items:center;flex:none;width:16px;height:20px}
+.dcu-wb-project-title,.dcu-wb-session-title,.ima-native-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;flex:1;font-weight:500}
+.dcu-wb-session-title,.ima-native-session .ima-native-title{font-weight:400}
+.dcu-wb-session,.ima-native-session{position:relative;min-height:32px;padding-left:32px}
+.dcu-wb-actions,.ima-native-actions{display:none;align-items:center;flex:none}
+.dcu-wb-session:hover .dcu-wb-actions,.dcu-wb-session.dcu-wb-menu-open .dcu-wb-actions,.ima-native-session:hover .ima-native-actions,.ima-native-session.menu-on .ima-native-actions{display:flex}
+.dcu-wb-more,.ima-native-more{display:grid;place-items:center;width:20px;height:20px;border:0;border-radius:4px;padding:0;background:transparent;color:var(--dsw-alias-label-secondary,var(--ima-muted));cursor:pointer}
+.dcu-wb-empty,.ima-native-empty{padding:14px 8px;color:var(--dsw-alias-label-tertiary,var(--ima-muted));font-size:13px}
+.ima-sess-menu{position:absolute;right:8px;top:30px;min-width:132px;padding:6px;border:1px solid var(--dsw-alias-stroke-primary,var(--ima-line));border-radius:10px;background:var(--dsw-alias-bg-secondary,#161b22);z-index:8}
+.ima-sess-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:inherit;padding:7px 10px;border-radius:6px;cursor:pointer;font:13px/18px inherit}
+.ima-sess-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
+.ima-sess-menu button.danger{color:var(--dsw-alias-state-error-primary,var(--ima-danger))}
+.ima-rename{flex:1;min-width:0;min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid var(--dsw-alias-stroke-primary,var(--ima-line));background:transparent;color:inherit;font:inherit}`;
+
+    function MoreIcon() {
+      return h("svg", { viewBox: "0 0 16 16", width: 16, height: 16, "aria-hidden": "true" },
+        h("circle", { cx: 3.5, cy: 8, r: 1.2, fill: "currentColor" }),
+        h("circle", { cx: 8, cy: 8, r: 1.2, fill: "currentColor" }),
+        h("circle", { cx: 12.5, cy: 8, r: 1.2, fill: "currentColor" }),
+      );
+    }
+
+    function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions }) {
+      const [menu, setMenu] = useState(false);
+      const [renaming, setRenaming] = useState(false);
+      const [draft, setDraft] = useState(sess.title || sess.chatId || "");
+      const title = sess.title || sess.chatId;
+      const native = skin !== "codex";
+      const rowClass = native
+        ? ("ima-native-session" + (selected ? " on" : "") + (menu ? " menu-on" : ""))
+        : ("dcu-wb-session" + (selected ? " dcu-wb-selected" : "") + (menu ? " dcu-wb-menu-open" : ""));
+      const syncList = (groups) => { if (groups) onChanged(groups); };
+      const run = (action, extra) => {
+        setMenu(false);
+        if (action === "copy-title") { try { navigator.clipboard.writeText(title); } catch { /* ignore */ } return; }
+        if (action === "copy-id") { try { navigator.clipboard.writeText(sess.sessionId); } catch { /* ignore */ } return; }
+        if (action === "copy-link") {
+          try { navigator.clipboard.writeText(location.origin + "/?session=" + encodeURIComponent(sess.sessionId)); } catch { /* ignore */ }
+          return;
+        }
+        const acts = sessionActions || {};
+        const afterHost = () => api("/sessions/" + (action === "archive" || action === "delete" || action === "fork" ? "remove" : action), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(Object.assign({ sessionId: sess.sessionId }, extra || {})),
+        }).then((data) => { if (data.ok) syncList(data.groups); }).catch(() => undefined);
+        if (action === "rename" && typeof acts.renameSession === "function") {
+          Promise.resolve(acts.renameSession(sess.sessionId, (extra && extra.title) || title)).then(afterHost).catch(afterHost);
+          return;
+        }
+        if (action === "archive" && typeof acts.archiveSession === "function") {
+          Promise.resolve(acts.archiveSession(sess.sessionId)).then(afterHost).catch(afterHost);
+          return;
+        }
+        if ((action === "delete" || action === "remove") && typeof acts.deleteSession === "function") {
+          Promise.resolve(acts.deleteSession(sess.sessionId)).then(() => afterHost()).catch(() => afterHost());
+          return;
+        }
+        if (action === "fork" && typeof acts.forkSession === "function") {
+          Promise.resolve(acts.forkSession(sess.sessionId)).catch(() => undefined);
+          return;
+        }
+        const localAction = action === "delete" ? "remove" : action;
+        api("/sessions/" + localAction, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(Object.assign({ sessionId: sess.sessionId }, extra || {})),
+        }).then((data) => { if (data.ok) syncList(data.groups); }).catch(() => undefined);
+      };
+      if (renaming) {
+        return h("div", { className: rowClass },
+          h("input", {
+            className: "ima-rename",
+            value: draft,
+            autoFocus: true,
+            "aria-label": "重命名会话",
+            onChange: (e) => setDraft(e.target.value),
+            onClick: (e) => e.stopPropagation(),
+            onKeyDown: (e) => {
+              if (e.key === "Enter") { e.preventDefault(); setRenaming(false); run("rename", { title: draft.trim() || title }); }
+              if (e.key === "Escape") { e.preventDefault(); setRenaming(false); setDraft(title); }
+            },
+            onBlur: () => { setRenaming(false); if (draft.trim() && draft.trim() !== title) run("rename", { title: draft.trim() }); },
+          }),
+        );
+      }
+      return h("div", {
+        className: rowClass,
+        role: "treeitem",
+        tabIndex: 0,
+        "aria-selected": selected,
+        onClick: () => onOpen(sess.sessionId),
+        onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(sess.sessionId); } },
+        onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); setMenu(!menu); },
+      },
+        h("span", { className: native ? "ima-native-title" : "dcu-wb-session-title" }, title),
+        h("span", { className: native ? "ima-native-actions" : "dcu-wb-actions" },
+          h("button", {
+            type: "button",
+            className: native ? "ima-native-more" : "dcu-wb-more",
+            "aria-label": title + " 更多",
+            onClick: (e) => { e.stopPropagation(); setMenu(!menu); },
+          }, h(MoreIcon)),
+        ),
+        menu && h("div", { className: "ima-sess-menu", onClick: (e) => e.stopPropagation() },
+          h("button", { type: "button", onClick: () => { setMenu(false); setRenaming(true); } }, "重命名"),
+          native
+            ? h("button", { type: "button", onClick: () => run("remove") }, "归档")
+            : [
+              h("button", { key: "fork", type: "button", onClick: () => run("fork") }, "派生"),
+              h("button", { key: "arch", type: "button", onClick: () => run("archive") }, "归档"),
+              h("button", { key: "ct", type: "button", onClick: () => run("copy-title") }, "复制标题"),
+              h("button", { key: "ci", type: "button", onClick: () => run("copy-id") }, "复制 ID"),
+              h("button", { key: "cl", type: "button", onClick: () => run("copy-link") }, "复制链接"),
+              h("button", { key: "del", type: "button", className: "danger", onClick: () => run("delete") }, "删除"),
+            ],
+        ),
+      );
+    }
+
+    function ChannelRail(props) {
+      if (typeof props.useSessions === "function") return h(ChannelRailWithSessions, props);
+      return h(ChannelRailView, props);
+    }
+
+    function ChannelRailWithSessions(props) {
+      const selectedId = props.useSessions((state) => (state && state.current) || null);
+      return h(ChannelRailView, Object.assign({}, props, { selectedId: selectedId || props.selectedId || null }));
+    }
+
     function ChannelRailView(props) {
       const [groups, setGroups] = useState([]);
       const [folded, setFolded] = useState({});
       const [error, setError] = useState("");
       const selectedId = props.selectedId;
+      const skin = props.skin || channelSkin;
+      const native = skin !== "codex";
       const open = (id) => {
         if (typeof props.openSession === "function") props.openSession(id);
+        else if (typeof props.open === "function") props.open(id);
         else openImSession(id);
       };
       useEffect(() => {
@@ -561,33 +710,39 @@ window.__ModuleLoader__.load({
         const timer = setInterval(load, 4000);
         return () => clearInterval(timer);
       }, []);
-      return h("div", { className: "ima-rail dcu-wb-tree", role: "tree" },
-        error && h("div", { className: "ima-empty" }, error),
-        !error && groups.length === 0 && h("div", { className: "ima-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。"),
-        ...groups.map((g) => h("div", { key: g.id, className: "ima-group dcu-wb-project" },
-          h("button", {
-            className: "ima-group-h dcu-wb-project-head",
-            type: "button",
-            onClick: () => setFolded({ ...folded, [g.id]: !folded[g.id] }),
-          },
-            folded[g.id] ? "▸" : "▾",
-            h(Logo, { id: g.id, small: true }),
-            h("span", { className: "dcu-wb-project-title" }, g.label),
-          ),
-          !folded[g.id] && ((g.sessions && g.sessions.length)
-            ? g.sessions.map((sess) => h("div", {
-              key: sess.sessionId,
-              className: (selectedId === sess.sessionId ? "ima-item on dcu-wb-session dcu-wb-selected" : "ima-item dcu-wb-session"),
-              role: "treeitem",
-              tabIndex: 0,
-              "aria-selected": selectedId === sess.sessionId,
-              onClick: () => open(sess.sessionId),
-              onKeyDown: (e) => {
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(sess.sessionId); }
-              },
-            }, sess.title || sess.chatId))
-            : h("div", { className: "ima-empty" }, "暂无会话")),
-        )),
+      return h("div", { className: native ? "ima-native ima-rail" : "dcu-wb ima-rail" },
+        h("style", null, WB_CSS),
+        h("div", { className: native ? "ima-native-tree" : "dcu-wb-tree", role: "tree" },
+          error && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, error),
+          !error && groups.length === 0 && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。"),
+          ...groups.map((g) => h("div", { key: g.id, className: native ? "ima-native-project" : "dcu-wb-project" },
+            h("button", {
+              className: native ? "ima-native-head" : "dcu-wb-project-head",
+              type: "button",
+              onClick: () => setFolded({ ...folded, [g.id]: !folded[g.id] }),
+            },
+              h("span", { className: native ? "ima-native-folder" : "dcu-wb-folder" }, h(Logo, { id: g.id, small: true })),
+              h("span", { className: native ? "ima-native-title" : "dcu-wb-project-title" }, g.label),
+            ),
+            !folded[g.id] && ((g.sessions && g.sessions.length)
+              ? g.sessions.map((sess) => h(ChannelSessionRow, {
+                key: sess.sessionId,
+                sess,
+                selected: selectedId === sess.sessionId,
+                onOpen: open,
+                onChanged: (next) => setGroups(next),
+                skin,
+                sessionActions: {
+                  renameSession: props.renameSession,
+                  archiveSession: props.archiveSession,
+                  deleteSession: props.deleteSession,
+                  forkSession: props.forkSession,
+                  openPath: props.openPath,
+                },
+              }))
+              : h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "暂无会话")),
+          )),
+        ),
       );
     }
 
@@ -631,13 +786,22 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function hasCodexUi(ctx) {
+    /** 探测是否装了 dsh-codex-ui。装了则只填 sidebar.channels，样式走官方 Codex 工作区树；没装则给原生 sidebar.workspaces 套「任务/频道」壳，样式走 DSH 原生行。 */
+    function hasDshCodexUi(ctx) {
       try {
         const registry = ctx.registry;
-        if (!registry) return false;
-        for (const item of registry) {
-          const n = String(item?.name ?? item?.runtime?.name ?? "");
-          if (/codex-ui|dsh-codex-ui/i.test(n)) return true;
+        if (registry) {
+          for (const item of registry) {
+            const n = String(item?.name ?? item?.runtime?.name ?? item?.id ?? "");
+            if (/codex-ui|dsh-codex-ui|michengai-codex-ui/i.test(n)) return true;
+          }
+        }
+        const sidebar = ctx.slots && ctx.slots.entries && ctx.slots.entries("sidebar");
+        if (sidebar) {
+          for (const item of sidebar) {
+            const n = String(item?.options?.id ?? item?.options?.name ?? item?.id ?? "");
+            if (/codex-ui|dsh-codex-ui|michengai-codex-ui/i.test(n)) return true;
+          }
         }
       } catch { /* ignore */ }
       return false;
@@ -645,7 +809,11 @@ window.__ModuleLoader__.load({
 
     function apply(ctx) {
       ensureStyle();
-      openImSession = (id) => { try { ctx.sessions.open(id); } catch { /* ignore */ } };
+      channelSkin = hasDshCodexUi(ctx) ? "codex" : "native";
+      openImSession = (id) => {
+        try { ctx.sessions.open(id); }
+        catch (error) { console.warn("[dsh-im-connect] 无法打开会话", id, error); }
+      };
       ctx.slots.inject("settings.section", () => ctx.slots.register({
         name: "settings.section",
         id: "im-assistant",
@@ -656,18 +824,16 @@ window.__ModuleLoader__.load({
       ctx.slots.inject("sidebar.channels", () => ctx.slots.register({
         name: "sidebar.channels",
         id: "im-connect-channels",
-        inject: () => ({
-          openSession: (id) => { try { ctx.sessions.open(id); } catch { /* 独立环境可能无 sessions */ } },
-        }),
       }, ChannelRail));
 
-      if (!hasCodexUi(ctx)) {
+      if (!hasDshCodexUi(ctx)) {
         ctx.slots.inject("sidebar.workspaces", () => ctx.slots.register({
           name: "sidebar.workspaces",
           id: "im-connect-switcher",
           priority: 20,
           inject: () => ({
-            openSession: (id) => { try { ctx.sessions.open(id); } catch { /* ignore */ } },
+            openSession: (id) => { ctx.sessions.open(id); },
+            open: (id) => { ctx.sessions.open(id); },
           }),
         }, SessionSwitcher));
       }

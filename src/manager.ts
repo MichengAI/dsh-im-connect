@@ -256,6 +256,26 @@ export class ChannelManager {
           send(res, 405, { ok: false, error: 'method not allowed' })
           return
         }
+        if (parts[2] === 'sessions' && parts.length === 4 && req.method === 'POST') {
+          const action = parts[3]
+          const body = await readBody(req)
+          const sessionId = String(body.sessionId ?? '')
+          if (!sessionId) { send(res, 400, { ok: false, error: '缺少 sessionId' }); return }
+          if (action === 'rename') {
+            const title = String(body.title ?? '').trim()
+            if (!title) { send(res, 400, { ok: false, error: '缺少标题' }); return }
+            const ok = this.engine.renameSession(sessionId, title)
+            send(res, ok ? 200 : 404, ok ? { ok: true, groups: this.channelSessions() } : { ok: false, error: '会话不存在' })
+            return
+          }
+          if (action === 'remove') {
+            const ok = await this.engine.removeSession(sessionId)
+            send(res, ok ? 200 : 404, ok ? { ok: true, groups: this.channelSessions() } : { ok: false, error: '会话不存在' })
+            return
+          }
+          send(res, 404, { ok: false, error: `未知会话操作 ${action}` })
+          return
+        }
         if (parts[2] === 'channels' && parts.length === 3 && req.method === 'GET') {
           send(res, 200, payload())
           return

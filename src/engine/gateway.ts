@@ -61,6 +61,14 @@ export class ImEngine {
     }
   }
 
+  renameSession(sessionId: string, title: string): boolean {
+    return this.router.rename(sessionId, title)
+  }
+
+  async removeSession(sessionId: string): Promise<boolean> {
+    return this.router.remove(sessionId)
+  }
+
   setModel(provider: string, model: string): void {
     this.config.provider = provider
     this.config.model = model
