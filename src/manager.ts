@@ -10,7 +10,7 @@ import { createFileVault, createServiceVault, credentialRef, type CredentialServ
 import { ImEngine } from './engine/gateway.js'
 import { SeenStore } from './engine/seen-store.js'
 import { clearWeixinLogin, persistWeixinLogin } from './channels/weixin.js'
-import { normalizeAssistantModel, type AssistantModel } from './engine/assistant-settings.js'
+import { normalizeAssistantModel, normalizePermission, normalizeWorkspacePath, type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js'
 import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
 
 export interface ChannelState {
@@ -38,6 +38,8 @@ interface Persisted {
   allowlist: Record<string, string[]>
   pending: Record<string, Array<{ userId: string; username?: string; chatId?: string; time: number }>>
   assistant?: AssistantModel
+  cwd?: string
+  permission?: PermissionPreset
 }
 
 export class ChannelManager {
@@ -63,6 +65,8 @@ export class ChannelManager {
     this.log = options.log
     this.load()
     this.applyAssistant(this.store.assistant)
+    this.applyWorkspace(this.store.cwd)
+    this.applyPermission(this.store.permission)
     const seen = new SeenStore(join(options.stateDir, 'seen.json'))
     const credentials = (options.ctx as Context & { credentials?: CredentialService }).credentials
     this.vault = credentials
@@ -244,7 +248,7 @@ export class ChannelManager {
         const parts = url.pathname.split('/').filter(Boolean)
         if (parts[2] === 'assistant' && parts.length === 3) {
           if (req.method === 'GET') {
-            send(res, 200, { ok: true, assistant: this.currentAssistant(), providers: await this.listModelCatalog() })
+            send(res, 200, { ok: true, assistant: this.currentAssistant(), cwd: this.currentWorkspace(), permission: this.currentPermission(), providers: await this.listModelCatalog() })
             return
           }
           if (req.method === 'POST') {
@@ -367,15 +371,35 @@ export class ChannelManager {
     return normalizeAssistantModel(this.store.assistant ?? this.engineConfig)
   }
 
-  setAssistant(input: { provider?: unknown; model?: unknown }): { ok: boolean; error?: string; assistant?: AssistantModel } {
-    const next = normalizeAssistantModel(input)
-    if (!next) return { ok: false, error: '请选择提供商和模型' }
-    this.store.assistant = next
-    this.applyAssistant(next)
-    this.engine.setModel(next.provider, next.model)
+  setAssistant(input: { provider?: unknown; model?: unknown; cwd?: unknown; permission?: unknown }): { ok: boolean; error?: string; assistant?: AssistantModel; cwd?: string; permission?: PermissionPreset } {
+    const hasModel = input.provider !== undefined || input.model !== undefined
+    const hasWorkspace = input.cwd !== undefined
+    const hasPermission = input.permission !== undefined
+    if (!hasModel && !hasWorkspace && !hasPermission) return { ok: false, error: '请选择提供商、模型、工作区或权限' }
+    if (hasModel) {
+      const next = normalizeAssistantModel(input)
+      if (!next) return { ok: false, error: '请选择提供商和模型' }
+      this.store.assistant = next
+      this.applyAssistant(next)
+      this.engine.setModel(next.provider, next.model, next.reasoningEffort)
+      this.log(`[manager] 助手模型已设为 ${next.provider}/${next.model}`)
+    }
+    if (hasWorkspace) {
+      const cwd = normalizeWorkspacePath(input.cwd)
+      if (!cwd) return { ok: false, error: '请选择工作区' }
+      this.store.cwd = cwd
+      this.applyWorkspace(cwd)
+      this.log(`[manager] 工作区已设为 ${cwd}`)
+    }
+    if (hasPermission) {
+      const permission = normalizePermission(input.permission)
+      if (!permission) return { ok: false, error: '请选择权限' }
+      this.store.permission = permission
+      this.applyPermission(permission)
+      this.log(`[manager] 权限已设为 ${permission}`)
+    }
     this.flush()
-    this.log(`[manager] 助手模型已设为 ${next.provider}/${next.model}`)
-    return { ok: true, assistant: next }
+    return { ok: true, assistant: this.currentAssistant(), cwd: this.currentWorkspace(), permission: this.currentPermission() }
   }
 
   private applyAssistant(assistant?: AssistantModel): void {
@@ -383,6 +407,29 @@ export class ChannelManager {
     if (!next) return
     this.engineConfig.provider = next.provider
     this.engineConfig.model = next.model
+    this.engineConfig.reasoningEffort = next.reasoningEffort
+  }
+
+  currentWorkspace(): string {
+    return this.store.cwd || this.engineConfig.cwd
+  }
+
+  private applyWorkspace(cwd?: string): void {
+    const next = normalizeWorkspacePath(cwd)
+    if (!next) return
+    this.engineConfig.cwd = next
+    this.engine.setCwd(next)
+  }
+
+  currentPermission(): PermissionPreset {
+    return this.store.permission || this.engineConfig.permissionPreset || 'full-access'
+  }
+
+  private applyPermission(permission?: PermissionPreset): void {
+    const next = normalizePermission(permission)
+    if (!next) return
+    this.engineConfig.permissionPreset = next
+    this.engine.setPermission(next)
   }
 
   private async listModelCatalog(): Promise<Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>> {
@@ -399,7 +446,11 @@ export class ChannelManager {
       out.push({
         id: item.id,
         name: item.name || item.id,
-        models: models.map((model: { id: string; name?: string }) => ({ id: model.id, name: model.name || model.id })),
+        models: models.map((model: { id: string; name?: string; reasoning?: { defaultEffort?: string; efforts?: Array<{ id: string; name?: string }> } }) => ({
+          id: model.id,
+          name: model.name || model.id,
+          reasoning: model.reasoning,
+        })),
       })
     }
     return out
@@ -490,6 +541,8 @@ export class ChannelManager {
         allowlist: parsed.allowlist ?? {},
         pending: parsed.pending ?? {},
         assistant: normalizeAssistantModel(parsed.assistant ?? {}),
+        cwd: normalizeWorkspacePath(parsed.cwd),
+        permission: normalizePermission(parsed.permission),
       }
     } catch {
       this.store = { channels: {}, allowlist: {}, pending: {} }

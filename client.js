@@ -7,14 +7,15 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     var exports = module.exports;
     const React = require("react");
-    const { useState, useEffect, useCallback, useRef } = React;
-    const inject = ["slots", "sessions"];
+    const { useState, useEffect, useCallback, useRef, useSyncExternalStore } = React;
+    const EMPTY_EXTRA_TABS = [];
+    const inject = ["slots", "sessions", "workspaces"];
     const API_BASE = "/dsh-im-connect/api";
     const TAB_KEY = "dsh-im-connect.sidebar-tab";
     const h = React.createElement;
 
     const CSS = `
-.ima-page{--ima-text:var(--dsh-text,#e6edf3);--ima-muted:var(--dsh-text-muted,#8b949e);--ima-line:var(--dsh-border,rgba(255,255,255,.1));--ima-card:rgba(255,255,255,.04);--ima-card-hover:rgba(255,255,255,.06);--ima-ok:#3fb950;--ima-danger:#f85149;--ima-accent:#1677ff;max-width:720px;margin:0 auto;padding:8px 4px 36px;color:var(--ima-text)}
+.ima-page{--ima-text:var(--dsw-alias-label-primary,var(--dsh-text,#e6edf3));--ima-muted:var(--dsw-alias-label-tertiary,var(--dsh-text-muted,#8b949e));--ima-line:var(--dsw-alias-border-l2,var(--dsh-border,rgba(255,255,255,.1)));--ima-card:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));--ima-card-hover:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));--ima-ok:var(--dsw-alias-state-success-primary,#3fb950);--ima-danger:var(--dsw-alias-state-error-primary,#f85149);--ima-accent:var(--dsw-alias-brand-primary,#4b7cff);box-sizing:border-box;max-width:760px;width:100%;margin:0 auto;padding:0 0 32px;color:var(--ima-text)}
 .ima-deco{display:flex;justify-content:center;align-items:flex-end;gap:10px;min-height:56px;margin:8px 0 14px}
 .ima-bubble{font-size:12px;line-height:1.4;padding:6px 10px;border-radius:12px;max-width:220px;border:1px solid var(--ima-line)}
 .ima-bubble.left{background:rgba(46,160,67,.14);color:#7ee787}
@@ -23,16 +24,39 @@ window.__ModuleLoader__.load({
 .ima-avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;border:2px solid #111}
 .ima-avatar.bot{background:#123524;margin-right:-8px;z-index:1}
 .ima-avatar.user{background:#3d3428}
-.ima-title{margin:0 0 8px;font-size:26px;font-weight:700;letter-spacing:.03em;text-align:center}
-.ima-sub{margin:0 auto 22px;max-width:520px;color:var(--ima-muted);font-size:13px;line-height:1.7;text-align:center}
-.ima-model{margin:0 0 14px}
-.ima-model-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-top:10px}
-.ima-select-wrap{display:flex;flex-direction:column;gap:6px;min-width:0}
-.ima-select-wrap span{color:var(--ima-muted);font-size:12px}
-.ima-select{width:100%;min-height:36px;padding:8px 10px;border-radius:8px;border:1px solid var(--ima-line);background:#0d1117;color:var(--ima-text)}
-@media (max-width:640px){.ima-model-grid{grid-template-columns:1fr}}
+.ima-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.ima-title{margin:0;font-size:20px;line-height:28px;font-weight:650;letter-spacing:-.2px;text-align:left}
+.ima-sub{margin:4px 0 0;max-width:42em;color:var(--ima-muted);font-size:13px;line-height:1.5;text-align:left}
+.ima-composer-wrap{margin:0 0 16px}
+.ima-composer,.ima-composer-left,.ima-composer-right{display:flex;align-items:center;flex-wrap:nowrap}
+.ima-composer{justify-content:space-between;gap:8px;padding:4px 8px;border:1px solid var(--ima-line);border-radius:14px;background:var(--ima-card)}
+.ima-composer-left,.ima-composer-right{gap:2px;min-width:0}
+.ima-chip{position:relative;min-width:0;z-index:1}
+.ima-chip.is-open{z-index:30}
+.ima-chip-btn{display:inline-flex;align-items:center;gap:6px;min-height:28px;height:28px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:var(--ima-muted);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer}
+.ima-chip-btn:hover,.ima-chip.is-open .ima-chip-btn{background:rgba(255,255,255,.06);color:var(--ima-text)}
+.ima-chip-label{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.ima-chip-btn em{width:6px;height:6px;margin-left:2px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.55;flex:none}
+.ima-chip-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:260px;max-height:280px;overflow:auto;padding:6px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:#2a2c31;box-shadow:0 16px 40px rgba(0,0,0,.42)}
+.ima-chip-menu.is-end{left:auto;right:0}
+.ima-chip-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:8px 10px;border:0;border-radius:10px;background:transparent;color:inherit;text-align:left;cursor:pointer;font-size:13px}
+.ima-chip-row:hover,.ima-chip-row.is-on{background:rgba(255,255,255,.06)}
+.ima-chip-row-main{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.ima-chip-tick{width:6px;height:12px;border-right:1.6px solid #7aa2ff;border-bottom:1.6px solid #7aa2ff;transform:rotate(45deg) translateY(-2px);flex:none}
+.ima-chip-empty{padding:14px 12px;color:var(--ima-muted);font-size:12px;text-align:center}
+.ima-composer-hint{margin-top:8px;color:var(--ima-muted);font-size:12px;text-align:center}
+.ima-chip svg{flex:none}
+.ima-chip-row.is-kv .ima-chip-row-main{flex:none}
+.ima-chip-row-side{display:inline-flex;align-items:center;gap:8px;color:var(--ima-muted);font-size:12px;min-width:0}
+.ima-chip-next{width:7px;height:7px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(-45deg);opacity:.55;flex:none}
+.ima-chip-split{height:1px;margin:6px 8px;background:rgba(255,255,255,.08)}
+.ima-chip-effort{color:var(--ima-muted);font-weight:500}
+.ima-chip-dialog{margin-top:10px;padding:12px;border:1px solid var(--ima-line);border-radius:12px;background:rgba(255,255,255,.03)}
+.ima-chip-dialog strong{display:block;margin:0 0 8px;font-size:13px}
+.ima-chip-dialog input{width:100%;min-height:36px;padding:8px 10px;border-radius:8px;border:1px solid var(--ima-line);background:#0d1117;color:var(--ima-text);box-sizing:border-box}
+.ima-chip-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+
 .ima-list{display:flex;flex-direction:column;gap:10px}
-.ima-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:52px;padding:10px 16px;border:1px solid var(--ima-line);border-radius:14px;background:var(--ima-card)}
+.ima-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:52px;padding:13px 16px;border:1px solid var(--ima-line);border-radius:12px;background:var(--ima-card)}
 .ima-card:hover{background:var(--ima-card-hover)}
 .ima-card-main{min-width:0}
 .ima-name-row{display:flex;align-items:center;gap:10px;min-height:28px}
@@ -41,8 +65,8 @@ window.__ModuleLoader__.load({
 .ima-badge{font-size:11px;line-height:18px;padding:0 7px;border-radius:8px;background:rgba(46,160,67,.16);color:var(--ima-ok)}
 .ima-desc,.ima-meta{margin-top:3px;margin-left:38px;color:var(--ima-muted);font-size:12px;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:17px}
 .ima-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:36px;position:relative}
-.ima-btn{appearance:none;border:1px solid rgba(255,255,255,.78);background:#fff;color:#111;border-radius:10px;min-width:72px;min-height:32px;padding:0 14px;font-size:13px;cursor:pointer}
-.ima-btn:hover{filter:brightness(.96)}
+.ima-btn{appearance:none;border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.16));background:transparent;color:var(--dsw-alias-label-primary,inherit);border-radius:8px;min-width:72px;min-height:32px;padding:0 12px;font:inherit;font-size:13px;cursor:pointer}
+.ima-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 .ima-btn:focus-visible,.ima-more:focus-visible,.ima-switch:focus-visible,.ima-link:focus-visible,.ima-x:focus-visible{outline:2px solid var(--ima-accent);outline-offset:2px}
 .ima-btn:disabled{opacity:.5;cursor:not-allowed}
 .ima-btn.primary{background:var(--ima-accent);border-color:var(--ima-accent);color:#fff}
@@ -58,7 +82,7 @@ window.__ModuleLoader__.load({
 .ima-error{color:var(--ima-danger);font-size:12px;margin:0 0 12px}
 .ima-pending{margin:0 0 14px;padding:10px 12px;border:1px solid rgba(210,153,34,.35);border-radius:12px}
 .ima-pending-row{display:flex;gap:8px;align-items:center;margin-top:8px}
-.ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}
+.ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}.ima-official-tree{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .ima-tabs{display:flex;gap:18px;padding:4px 12px 0;border-bottom:1px solid var(--ima-line)}
 .ima-tab{appearance:none;border:0;background:transparent;color:var(--ima-muted);padding:8px 0;font-size:13px;cursor:pointer}
 .ima-tab.on{color:var(--ima-text);box-shadow:inset 0 -2px 0 currentColor}
@@ -287,7 +311,6 @@ window.__ModuleLoader__.load({
             h("button", { className: tab === "manual" ? "on" : "", onClick: () => switchTab("manual") }, "手动配置"),
           ),
           error && h("div", { className: "ima-error" }, error),
-        h(ModelCard),
           tab === "qr" && hasQr && (
             status === "success"
               ? h("div", { className: "ima-ok" }, "绑定成功，频道已连接")
@@ -379,99 +402,301 @@ window.__ModuleLoader__.load({
     }
 
 
-    function ModelCard() {
+    const PERMISSIONS = [
+      { value: "read-only", label: "Read Only" },
+      { value: "workspace-write", label: "Workspace Write" },
+      { value: "full-access", label: "Full access" },
+    ];
+    const DEFAULT_EFFORTS = [
+      { id: "low", name: "Low" },
+      { id: "medium", name: "Medium" },
+      { id: "high", name: "High" },
+    ];
+
+    function FolderIcon() {
+      return h("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", "aria-hidden": "true" },
+        h("path", { d: "M5.196 1.571c.615 0 1.19.308 1.532.819l.471.708c.086.128.23.205.383.205h4.588A2.666 2.666 0 0 1 14.586 5.72v.907c.683.4 1.074 1.223.852 2.06l-1.053 3.971A2.666 2.666 0 0 1 12.05 14.453H2.917A2.416 2.416 0 0 1 .502 11.952V3.987A2.416 2.416 0 0 1 2.918 1.571h2.278Z", fill: "currentColor" }),
+      );
+    }
+
+    function ShieldIcon() {
+      return h("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", "aria-hidden": "true" },
+        h("path", { d: "M8 1.25 14.1 3.15v4.25c0 3.55-2.18 6.15-6.1 7.5-3.92-1.35-6.1-3.95-6.1-7.5V3.15L8 1.25Z", stroke: "currentColor", strokeWidth: "1.4", strokeLinejoin: "round" }),
+        h("path", { d: "m5.55 8.05 1.55 1.55 3.35-3.55", stroke: "currentColor", strokeWidth: "1.4", strokeLinecap: "round", strokeLinejoin: "round" }),
+      );
+    }
+
+    function PlusIcon() {
+      return h("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", "aria-hidden": "true" },
+        h("path", { d: "M8 3v10M3 8h10", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }),
+      );
+    }
+
+    function ChipMenu(props) {
+      const root = useRef(null);
+      useEffect(() => {
+        if (!props.open) return undefined;
+        const close = (event) => {
+          if (root.current && root.current.contains(event.target)) return;
+          props.onToggle(false);
+        };
+        document.addEventListener("mousedown", close);
+        return () => document.removeEventListener("mousedown", close);
+      }, [props.open]);
+      return h("div", { className: "ima-chip" + (props.open ? " is-open" : ""), ref: root },
+        h("button", {
+          type: "button",
+          className: "ima-chip-btn",
+          "aria-label": props.ariaLabel,
+          "aria-expanded": Boolean(props.open),
+          onMouseDown: (event) => event.stopPropagation(),
+          onClick: () => props.onToggle(!props.open),
+        },
+          props.icon,
+          h("span", { className: "ima-chip-label" }, props.label),
+          props.suffix && h("span", { className: "ima-chip-effort" }, props.suffix),
+          h("em"),
+        ),
+        props.open && h("div", { className: "ima-chip-menu" + (props.align === "end" ? " is-end" : "") }, props.children),
+      );
+    }
+
+    function ChipRow(props) {
+      return h("button", {
+        type: "button",
+        className: "ima-chip-row" + (props.active ? " is-on" : "") + (props.kv ? " is-kv" : ""),
+        onClick: props.onClick,
+      },
+        h("span", { className: "ima-chip-row-main" },
+          props.icon,
+          h("span", null, props.label),
+        ),
+        h("span", { className: "ima-chip-row-side" },
+          props.hint && h("span", null, props.hint),
+          props.active && !props.chevron && h("i", { className: "ima-chip-tick" }),
+          props.chevron && h("i", { className: "ima-chip-next" }),
+        ),
+      );
+    }
+
+    function ComposerBar(props) {
+      const items = typeof props.useWorkspaces === "function"
+        ? (props.useWorkspaces((state) => (state && state.items) || []) || [])
+        : [];
       const [providers, setProviders] = useState([]);
       const [provider, setProvider] = useState("");
       const [model, setModel] = useState("");
-      const [saved, setSaved] = useState(false);
-      const [busy, setBusy] = useState(false);
+      const [effort, setEffort] = useState("");
+      const [cwd, setCwd] = useState("");
+      const [permission, setPermission] = useState("full-access");
+      const [open, setOpen] = useState("");
+      const [modelPane, setModelPane] = useState("root");
       const [hint, setHint] = useState("");
+      const [adding, setAdding] = useState(false);
+      const [addPath, setAddPath] = useState("");
+      const [addBusy, setAddBusy] = useState(false);
 
       useEffect(() => {
         api("/assistant").then((data) => {
-          if (!data.ok) { setHint(data.error || "无法加载模型列表"); return; }
+          if (!data.ok) { setHint(data.error || "无法加载全局配置"); return; }
           const list = data.providers || [];
           setProviders(list);
           const current = data.assistant || {};
           const nextProvider = current.provider || (list[0] && list[0].id) || "";
           const models = ((list.find((item) => item.id === nextProvider) || {}).models) || [];
           const nextModel = current.model || (models[0] && models[0].id) || "";
+          const found = models.find((item) => item.id === nextModel) || models[0];
           setProvider(nextProvider);
           setModel(nextModel);
-          setSaved(Boolean(current.provider && current.model));
+          setEffort(current.reasoningEffort || (found && found.reasoning && found.reasoning.defaultEffort) || "");
+          setCwd(data.cwd || "");
+          setPermission(data.permission || "full-access");
           if (!list.length) setHint("当前 Host 还没有可用模型，请先在网页里配置提供商");
-        }).catch(() => setHint("无法加载模型列表"));
+        }).catch(() => setHint("无法加载全局配置"));
       }, []);
 
-      const models = ((providers.find((item) => item.id === provider) || {}).models) || [];
-
-      const save = (nextProvider, nextModel) => {
-        if (!nextProvider || !nextModel) { setHint("请选择提供商和模型"); return; }
-        setBusy(true);
+      const save = (body) => {
         api("/assistant", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ provider: nextProvider, model: nextModel }),
+          body: JSON.stringify(body),
         }).then((data) => {
-          if (!data.ok) { setHint(data.error || "保存失败"); setSaved(false); return; }
-          setSaved(true);
-          setHint("已保存。新的频道会话将使用这个模型。");
-        }).catch(() => { setHint("保存失败"); setSaved(false); })
-          .finally(() => setBusy(false));
+          if (!data.ok) setHint(data.error || "保存失败");
+          else setHint("");
+        }).catch(() => setHint("保存失败"));
       };
 
-      const onProvider = (value) => {
-        const nextModels = ((providers.find((item) => item.id === value) || {}).models) || [];
-        const nextModel = nextModels.some((item) => item.id === model) ? model : ((nextModels[0] && nextModels[0].id) || "");
-        setProvider(value);
-        setModel(nextModel);
-        setSaved(false);
+      const workspace = items.find((item) => item.path === cwd);
+      const models = providers.flatMap((item) => (item.models || []).map((entry) => ({
+        value: item.id + "::" + entry.id,
+        provider: item.id,
+        model: entry.id,
+        label: entry.name || entry.id,
+        reasoning: entry.reasoning,
+      })));
+      const currentModel = models.find((item) => item.provider === provider && item.model === model);
+      const efforts = (currentModel && currentModel.reasoning && currentModel.reasoning.efforts && currentModel.reasoning.efforts.length)
+        ? currentModel.reasoning.efforts.map((item) => ({ id: item.id, name: item.name || item.id }))
+        : DEFAULT_EFFORTS;
+      const effortLabel = (efforts.find((item) => item.id === effort) || {}).name || "";
+      const perm = PERMISSIONS.find((item) => item.value === permission) || PERMISSIONS[2];
+
+      const addWorkspace = (path) => {
+        const next = (path || "").trim();
+        if (!next) { setHint("请选择工作区目录"); return Promise.resolve(); }
+        if (typeof props.createWorkspace !== "function") { setHint("当前 Host 无法新增工作区"); return Promise.resolve(); }
+        setAddBusy(true);
+        return Promise.resolve(props.createWorkspace({ path: next })).then((created) => {
+          const cwdPath = (created && (created.path || created.cwd)) || next;
+          setCwd(cwdPath);
+          save({ cwd: cwdPath });
+          setAdding(false);
+          setAddPath("");
+          setOpen("");
+        }).catch((error) => {
+          setHint((error && error.message) || "新增工作区失败");
+        }).finally(() => setAddBusy(false));
       };
 
-      return h("div", { className: "ima-card ima-model" },
-        h("div", { className: "ima-card-main" },
-          h("div", { className: "ima-name-row" },
-            h("span", { className: "ima-name" }, "助手模型"),
-            saved && h("span", { className: "ima-badge" }, "已设置"),
+      const onAddWorkspace = () => {
+        setOpen("");
+        if (typeof props.pickDirectory === "function") {
+          Promise.resolve(props.pickDirectory()).then((picked) => {
+            if (!picked) return;
+            return addWorkspace(picked);
+          }).catch(() => {
+            setAdding(true);
+            setAddPath("");
+          });
+          return;
+        }
+        setAdding(true);
+        setAddPath("");
+      };
+
+      return h("div", { className: "ima-composer-wrap" },
+        h("div", { className: "ima-composer", "aria-label": "全局会话配置" },
+          h("div", { className: "ima-composer-left" },
+            h(ChipMenu, {
+              open: open === "ws",
+              onToggle: (next) => setOpen(next ? "ws" : ""),
+              icon: h(FolderIcon),
+              label: (workspace && (workspace.title || workspace.path)) || cwd || "选择项目",
+              ariaLabel: "项目",
+            },
+              items.length === 0 && h("div", { className: "ima-chip-empty" }, "暂无工作区"),
+              ...items.map((item) => h(ChipRow, {
+                key: item.path,
+                icon: h(FolderIcon),
+                label: item.title || item.path,
+                active: item.path === cwd,
+                onClick: () => { setCwd(item.path); save({ cwd: item.path }); setOpen(""); },
+              })),
+              h("div", { className: "ima-chip-split" }),
+              h(ChipRow, {
+                icon: h(PlusIcon),
+                label: "添加工作区…",
+                onClick: onAddWorkspace,
+              }),
+            ),
+            h(ChipMenu, {
+              open: open === "perm",
+              onToggle: (next) => setOpen(next ? "perm" : ""),
+              icon: h(ShieldIcon),
+              label: perm.label,
+              ariaLabel: "权限",
+            },
+              ...PERMISSIONS.map((item) => h(ChipRow, {
+                key: item.value,
+                icon: h(ShieldIcon),
+                label: item.label,
+                active: item.value === permission,
+                onClick: () => { setPermission(item.value); save({ permission: item.value }); setOpen(""); },
+              })),
+            ),
           ),
-          h("div", { className: "ima-desc" }, "频道会话使用这里选择的模型，与网页任务互不影响。"),
-          h("div", { className: "ima-model-grid" },
-            h("label", { className: "ima-select-wrap" },
-              h("span", null, "提供商"),
-              h("select", {
-                className: "ima-select",
-                value: provider,
-                "aria-label": "提供商",
-                onChange: (event) => onProvider(event.target.value),
+          h("div", { className: "ima-composer-right" },
+            h(ChipMenu, {
+              open: open === "model",
+              onToggle: (next) => {
+                setOpen(next ? "model" : "");
+                if (next) setModelPane("root");
               },
-                h("option", { value: "" }, "请选择"),
-                ...providers.map((item) => h("option", { key: item.id, value: item.id }, item.name || item.id)),
+              align: "end",
+              label: (currentModel && currentModel.label) || "选择模型",
+              suffix: effortLabel,
+              ariaLabel: "模型",
+            },
+              modelPane === "root" && [
+                h(ChipRow, {
+                  key: "model",
+                  kv: true,
+                  label: "Model",
+                  hint: (currentModel && currentModel.label) || "未选择",
+                  chevron: true,
+                  onClick: () => setModelPane("model"),
+                }),
+                h(ChipRow, {
+                  key: "effort",
+                  kv: true,
+                  label: "Effort",
+                  hint: effortLabel || "Default",
+                  chevron: true,
+                  onClick: () => setModelPane("effort"),
+                }),
+              ],
+              modelPane === "model" && (
+                models.length === 0
+                  ? h("div", { className: "ima-chip-empty" }, "暂无模型")
+                  : models.map((item) => h(ChipRow, {
+                      key: item.value,
+                      label: item.label,
+                      active: item.provider === provider && item.model === model,
+                      onClick: () => {
+                        const nextEffort = (item.reasoning && item.reasoning.defaultEffort) || effort || "high";
+                        setProvider(item.provider);
+                        setModel(item.model);
+                        setEffort(nextEffort);
+                        save({ provider: item.provider, model: item.model, reasoningEffort: nextEffort });
+                        setOpen("");
+                      },
+                    }))
               ),
+              modelPane === "effort" && efforts.map((item) => h(ChipRow, {
+                key: item.id,
+                label: item.name,
+                active: item.id === effort,
+                onClick: () => {
+                  setEffort(item.id);
+                  if (provider && model) save({ provider, model, reasoningEffort: item.id });
+                  setOpen("");
+                },
+              })),
             ),
-            h("label", { className: "ima-select-wrap" },
-              h("span", null, "模型"),
-              h("select", {
-                className: "ima-select",
-                value: model,
-                "aria-label": "模型",
-                onChange: (event) => { setModel(event.target.value); setSaved(false); },
-              },
-                h("option", { value: "" }, models.length ? "请选择" : "暂无模型"),
-                ...models.map((item) => h("option", { key: item.id, value: item.id }, item.name || item.id)),
-              ),
-            ),
+          ),
+        ),
+        adding && h("div", { className: "ima-chip-dialog" },
+          h("strong", null, "添加工作区…"),
+          h("input", {
+            value: addPath,
+            placeholder: "工作区路径",
+            "aria-label": "工作区路径",
+            onChange: (event) => setAddPath(event.target.value),
+          }),
+          h("div", { className: "ima-chip-dialog-actions" },
+            h("button", { className: "ima-btn", onClick: () => { setAdding(false); setAddPath(""); } }, "取消"),
             h("button", {
               className: "ima-btn primary",
-              disabled: busy || !provider || !model,
-              onClick: () => save(provider, model),
-            }, busy ? "保存中…" : "保存"),
+              disabled: addBusy || !addPath.trim(),
+              onClick: () => addWorkspace(addPath),
+            }, addBusy ? "添加中…" : "确认"),
           ),
-          hint && h("div", { className: "ima-meta" }, hint),
         ),
+        hint && h("div", { className: "ima-composer-hint" }, hint),
       );
     }
 
-    function SettingsPage() {
+    function SettingsPage(props) {
       const [channels, setChannels] = useState(null);
       const [pending, setPending] = useState([]);
       const [error, setError] = useState("");
@@ -508,12 +733,13 @@ window.__ModuleLoader__.load({
       };
 
       return h("section", { className: "ima-page", "aria-label": "IM助理" },
-        h("h1", { className: "ima-title" }, "IM 频道"),
-        h("p", { className: "ima-sub" },
-          "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。",
-          h("br"),
-          "频道配置信息仅存储在本地，不会上传到云端。",
+        h("header", { className: "ima-head" },
+          h("div", null,
+            h("h2", { className: "ima-title" }, "IM 频道"),
+            h("p", { className: "ima-sub" }, "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。频道配置仅保存在本机。"),
+          ),
         ),
+        h(ComposerBar, { useWorkspaces: props.useWorkspaces, createWorkspace: props.createWorkspace, pickDirectory: props.pickDirectory }),
         error && h("div", { className: "ima-error" }, error),
         pending && pending.length > 0 && h("div", { className: "ima-pending" },
           h("div", null, "有访问请求（仅在关闭全局放行时需要批准）"),
@@ -542,24 +768,14 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function ChannelRail(props) {
-      if (typeof props.useSessions === "function") return h(ChannelRailWithSessions, props);
-      return h(ChannelRailView, props);
-    }
-
-    function ChannelRailWithSessions(props) {
-      const selectedId = props.useSessions((state) => (state && state.current) || null);
-      return h(ChannelRailView, Object.assign({}, props, { selectedId: selectedId || props.selectedId || null }));
-    }
-
-    const WB_CSS = `.dcu-wb,.ima-native{display:flex;flex:1;min-height:0;flex-direction:column;padding:4px 10px 8px;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}
+    const WB_CSS = `.dcu-wb,.ima-native{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-head{flex:none;display:flex;align-items:center;height:36px;padding-left:4px;margin:2px 0 4px;color:var(--dsw-alias-label-tertiary,#81858C);font:14px/20px inherit}.ima-native-tree,.dcu-wb-tree{padding:0 0 16px 4px}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}
 .dcu-wb *,.ima-native *{box-sizing:border-box}
 .dcu-wb-tree,.ima-native-tree{flex:1;min-height:0;overflow-y:auto;padding-bottom:16px;user-select:none}
 .dcu-wb-project-head,.ima-native-head,.dcu-wb-session,.ima-native-session{display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:8px;padding:0 8px;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
 .dcu-wb-project-head,.ima-native-head{height:34px}
 .dcu-wb-project-head:hover,.dcu-wb-session:hover,.dcu-wb-session.dcu-wb-selected,.ima-native-head:hover,.ima-native-session:hover,.ima-native-session.on{background:var(--dsw-alias-interactive-bg-hover,var(--dcu-sidebar-hover,rgba(255,255,255,.06)))}
 .dcu-wb-folder,.ima-native-folder{display:grid;place-items:center;flex:none;width:16px;height:20px}
-.dcu-wb-project-title,.dcu-wb-session-title,.ima-native-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;flex:1;font-weight:500}
+.dcu-wb-project-title,.dcu-wb-session-title,.ima-native-title,.ima-n-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;flex:1;font-weight:400}
 .dcu-wb-session-title,.ima-native-session .ima-native-title{font-weight:400}
 .dcu-wb-session,.ima-native-session{position:relative;min-height:32px;padding-left:32px}
 .dcu-wb-actions,.ima-native-actions{display:none;align-items:center;flex:none}
@@ -570,15 +786,85 @@ window.__ModuleLoader__.load({
 .ima-sess-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:inherit;padding:7px 10px;border-radius:6px;cursor:pointer;font:13px/18px inherit}
 .ima-sess-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 .ima-sess-menu button.danger{color:var(--dsw-alias-state-error-primary,var(--ima-danger))}
-.ima-rename{flex:1;min-width:0;min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid var(--dsw-alias-stroke-primary,var(--ima-line));background:transparent;color:inherit;font:inherit}`;
+.ima-rename{flex:1;min-width:0;min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid var(--dsw-alias-stroke-primary,var(--ima-line));background:transparent;color:inherit;font:inherit}
+.ima-n-row,.ima-n-sess{display:flex;align-items:center;gap:6px;border-radius:8px;padding:0 8px;cursor:pointer;user-select:none;width:100%;border:0;background:transparent;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit;text-align:left;box-sizing:border-box}
+.ima-n-row{height:34px}
+.ima-n-sess{height:32px;gap:0;position:relative}
+.ima-n-row:hover,.ima-n-sess:hover,.ima-n-sess.on,.ima-n-row.menu-on,.ima-n-sess.menu-on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
+.ima-n-slot{flex:none;width:16px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#81858C)}
+.ima-n-row .ima-n-chevron{display:none;color:var(--dsw-alias-label-caption,#ADB2B8)}
+.ima-n-row:hover .ima-n-chevron{display:inline-flex}
+.ima-n-row:hover .ima-n-folder{display:none}
+.ima-n-arrow{transition:transform .15s ease}
+.ima-n-arrow.open{transform:rotate(90deg)}
+.ima-n-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;flex:1;font-weight:400}
+.ima-n-sess .ima-n-title{margin:0 6px 0 4px}
+.ima-n-time{flex:none;font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary,#81858C)}
+.ima-n-acts{flex:none;display:none;align-items:center;gap:12px}
+.ima-n-row:hover .ima-n-acts,.ima-n-sess:hover .ima-n-acts,.ima-n-row.menu-on .ima-n-acts,.ima-n-sess.menu-on .ima-n-acts{display:inline-flex}
+.ima-n-sess:hover .ima-n-time,.ima-n-sess.menu-on .ima-n-time{display:none}
+.ima-n-ico{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:0;border-radius:4px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-tertiary,#81858C)}
+.ima-n-ico:hover{color:var(--dsw-alias-label-primary,var(--ima-text))}
+.ima-n-menu{position:absolute;right:8px;top:calc(100% + 4px);z-index:1100;min-width:218px;max-width:360px;box-sizing:border-box;padding:4px;display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-specific-menu,#1c2128);box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.36))}
+.ima-n-menu button{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:10px;background:transparent;cursor:pointer;font-size:14px;line-height:22px;color:var(--dsw-alias-label-primary,var(--ima-text));text-align:left}
+.ima-n-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
+.ima-n-mi{display:inline-flex;flex:none;width:16px;height:16px;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#81858C)}
+.ima-n-menu button.danger{color:var(--dsw-alias-state-error-primary,#f85149)}
+.ima-n-menu button.danger .ima-n-mi{color:inherit}
+.ima-n-menu button.danger:hover{background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.12))}`;
 
-    function MoreIcon() {
-      return h("svg", { viewBox: "0 0 16 16", width: 16, height: 16, "aria-hidden": "true" },
-        h("circle", { cx: 3.5, cy: 8, r: 1.2, fill: "currentColor" }),
-        h("circle", { cx: 8, cy: 8, r: 1.2, fill: "currentColor" }),
-        h("circle", { cx: 12.5, cy: 8, r: 1.2, fill: "currentColor" }),
-      );
+    function NativeSvg(viewBox, size, children) {
+      return h("svg", { viewBox, width: size, height: size, fill: "none", xmlns: "http://www.w3.org/2000/svg", "aria-hidden": "true" }, children);
     }
+    function NativePath(d, extra) {
+      return h("path", Object.assign({ d, fill: "currentColor" }, extra || {}));
+    }
+    function IconEllipsis() {
+      return NativeSvg("0 0 16 16", 16, [
+        NativePath("M4.55146 8.00001C4.55146 8.63513 4.03659 9.15001 3.40146 9.15001C2.76634 9.15001 2.25146 8.63513 2.25146 8.00001C2.25146 7.36488 2.76634 6.85001 3.40146 6.85001C4.03659 6.85001 4.55146 7.36488 4.55146 8.00001Z"),
+        NativePath("M9.1476 8.00001C9.1476 8.63513 8.63273 9.15001 7.9976 9.15001C7.36248 9.15001 6.8476 8.63513 6.8476 8.00001C6.8476 7.36488 7.36248 6.85001 7.9976 6.85001C8.63273 6.85001 9.1476 7.36488 9.1476 8.00001Z"),
+        NativePath("M13.7486 8.00001C13.7486 8.63513 13.2338 9.15001 12.5986 9.15001C11.9635 9.15001 11.4486 8.63513 11.4486 8.00001C11.4486 7.36488 11.9635 6.85001 12.5986 6.85001C13.2338 6.85001 13.7486 7.36488 13.7486 8.00001Z"),
+      ]);
+    }
+    function IconEdit() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M9.941 1.349a2.54 2.54 0 0 1 2.473 0c.292.171.555.442.897.784.341.341.612.604.783.896a2.54 2.54 0 0 1 0 2.473c-.171.292-.442.555-.784.896L6.659 13.05c-.378.378-.652.661-.994.86-.341.199-.722.298-1.238.44l-1.183.326c-.469.13-.899.25-1.243.292-.349.043-.821.033-1.19-.336-.369-.369-.379-.841-.336-1.19.042-.344.163-.774.292-1.243l.326-1.183c.143-.516.242-.897.44-1.238.199-.342.482-.615.86-.994l6.652-6.651c.341-.342.604-.613.896-.784Zm1.759 1.222a1.16 1.16 0 0 0-1.045 0c-.095.056-.206.158-.61.562L9.456 3.721l2.265 2.265.589-.588c.404-.403.507-.515.562-.61a1.16 1.16 0 0 0 0-1.045c-.056-.095-.158-.206-.562-.61-.404-.404-.515-.507-.61-.562ZM3.394 9.784c-.429.429-.551.56-.637.706-.085.147-.138.318-.3.903l-.326 1.183c-.129.468-.209.766-.242.978.212-.033.51-.112.979-.241l1.183-.327c.585-.161.756-.214.902-.3.147-.085.277-.208.706-.636l5.062-5.063-2.265-2.265-5.062 5.062Z"));
+    }
+    function IconBranch() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M13.076 1.372c1.008 0 1.826.819 1.826 1.827s-.818 1.826-1.826 1.826c-.78 0-1.444-.488-1.706-1.175H4.355c.439.415.804.915 1.062 1.485l1.69 3.733a4.83 4.83 0 0 0 4.312 2.97c.29-.626.923-1.061 1.658-1.061 1.008 0 1.826.818 1.826 1.826s-.818 1.826-1.826 1.826c-.823 0-1.519-.545-1.747-1.293a6.34 6.34 0 0 1-5.406-3.731L4.232 5.871A3.83 3.83 0 0 0 1.098 3.85V2.549h10.272c.263-.687.927-1.177 1.706-1.177Zm0 10.904a.525.525 0 1 0 0 1.052.525.525 0 0 0 0-1.052Zm0-9.603a.526.526 0 1 0 0 1.053.526.526 0 0 0 0-1.053Z", { fillRule: "evenodd", clipRule: "evenodd" }));
+    }
+    function IconArchive() {
+      return NativeSvg("0 0 20 20", 16, [
+        NativePath("M15.866 2.06a2.526 2.526 0 0 1 2.525 2.525v.902c0 .54-.172 1.04-.461 1.45l.009.085v5.866c0 .746 0 1.35-.039 1.837-.035.434-.106.825-.262 1.189l-.072.154a3.03 3.03 0 0 1-1.262 1.366l-.236.132c-.408.208-.848.294-1.344.334-.488.04-1.091.04-1.837.04H7.111c-.746 0-1.35 0-1.837-.04-.434-.035-.825-.105-1.189-.261l-.154-.073a3.03 3.03 0 0 1-1.366-1.262l-.132-.235a2.53 2.53 0 0 1-.335-1.344c-.04-.487-.039-1.091-.039-1.837V7.022c0-.029.005-.057.008-.086A2.48 2.48 0 0 1 1.609 5.487v-.902A2.526 2.526 0 0 1 4.134 2.06h11.732Zm.632 5.87a2.48 2.48 0 0 1-.632.083H4.134a2.48 2.48 0 0 1-.634-.083v4.959c0 .77 0 1.304.034 1.72.034.406.095.635.182.806l.076.137c.191.311.465.565.792.731l.141.061c.156.055.361.096.666.121.415.034.95.035 1.72.035h5.775c.77 0 1.305 0 1.72-.035.407-.033.636-.095.807-.182l.138-.077c.311-.191.565-.464.731-.791l.06-.142c.056-.155.097-.36.122-.665.034-.415.034-.95.034-1.72V7.93ZM4.134 3.5a1.086 1.086 0 0 0-1.085 1.085v.902c0 .599.486 1.085 1.085 1.085h11.732c.599 0 1.085-.486 1.085-1.085v-.902A1.086 1.086 0 0 0 15.866 3.5H4.134Z", { fillRule: "evenodd", clipRule: "evenodd" }),
+        NativePath("M12.796 12.566v-1.483H7.205v1.483h5.591Z"),
+      ]);
+    }
+    function IconTrash() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M14.478 4.841 14.214 10.115c-.104 2.072-.147 2.896-.827 3.846a3.53 3.53 0 0 1-1.044.993c-.519.333-1.101.478-1.784.546-.671.067-1.509.066-2.559.066s-1.887.001-2.558-.066c-.683-.068-1.266-.213-1.784-.546a3.53 3.53 0 0 1-1.044-.993c-.681-.95-.724-1.774-.828-3.846L1.522 4.841l1.368-.068.263 5.273c.109 2.176.171 2.556.573 3.117a2.16 2.16 0 0 0 .673.64c.263.169.603.277 1.179.334.587.059 1.345.06 2.422.06s1.834-.001 2.422-.06c.575-.057.916-.165 1.179-.335.262-.168.49-.386.672-.64.402-.56.464-.94.573-3.116l.263-5.273 1.369.068ZM5.43 6.228h1.37v5.163H5.43V6.228Zm3.77 0h1.37v5.163H9.2V6.228ZM8.536.434c.644 0 1.116-.007 1.56.137.14.045.276.101.406.168.416.212.745.552 1.2 1.007l.796.795h2.876v1.37H.626V2.541h2.876l.796-.795c.456-.455.784-.795 1.2-1.007.13-.067.266-.123.405-.168C6.348.427 6.82.434 7.464.434h1.072Zm-1.072 1.37c-.732 0-.948.008-1.138.07a2.2 2.2 0 0 0-.206.085c-.156.08-.296.204-.678.583h5.117c-.382-.379-.522-.503-.679-.583a2.2 2.2 0 0 0-.205-.085c-.191-.062-.406-.07-1.138-.07H7.464Z"));
+    }
+    function IconFolderClose() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M6.556 3.377 6.007 3.725l.549-.348ZM14.5 12.342h.65V6.397h-.65-.65v5.945h.65Zm-1.674-7.618v-.65H8.023v.65h4.803Zm-5.746-.519.55-.347-.525-.828-.549.348-.549.348.525.828.55-.348ZM5.613 2.858h0H3.174v.65h2.439v-.65ZM3 4.532v8.46h.65V4.532H3Zm11.326 9.484v-.65H4.674v.65h9.652ZM3 12.342h-.65A2.324 2.324 0 0 0 4.674 14.666v-1.3A.824.824 0 0 1 3.65 12.342H3Zm.174-9.484h0A2.324 2.324 0 0 0 2.35 4.532h1.3A.824.824 0 0 1 4.674 3.508h0V2.858Zm3.382.519.549-.348A1.824 1.824 0 0 0 5.613 2.208v1.3c.16 0 .308.082.394.217l.549-.348Zm1.467 1.347h0c-.16 0-.308-.082-.393-.216l-.55.347-.549.348A1.824 1.824 0 0 0 8.023 5.374v-1.3ZM14.5 6.397h.65A2.324 2.324 0 0 0 12.826 4.073v1.3c.565 0 1.024.458 1.024 1.024h.65Zm0 5.945h-.65c0 .565-.458 1.024-1.024 1.024v1.3A2.324 2.324 0 0 0 15.15 12.342h-.65Z"));
+    }
+    function IconFolderOpen() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M5.196 1.571c.615 0 1.19.308 1.532.819l.471.708c.086.128.23.205.383.205h4.588A2.666 2.666 0 0 1 14.586 5.72v.907c.683.4 1.074 1.223.852 2.06l-1.053 3.971A2.666 2.666 0 0 1 12.05 14.453H2.917A2.416 2.416 0 0 1 .502 11.952V3.987A2.416 2.416 0 0 1 2.918 1.571h2.278Zm-1.417 6.185c-.469 0-.88.316-1.001.77l-.862 3.247c-.174.657.322 1.301 1.001 1.301H12.05c.469 0 .88-.316 1.001-.77l1.053-3.97c.078-.291-.142-.577-.444-.577H3.779Zm-.861-4.804c-.572 0-1.035.464-1.035 1.035v3.307a2.67 2.67 0 0 1 1.896-.919h9.426V5.72c0-.572-.464-1.035-1.035-1.035H7.582c-.615 0-1.19-.309-1.531-.82L5.579 3.156a.666.666 0 0 0-.383-.204H2.918Z"));
+    }
+    function IconChevron() {
+      return NativeSvg("0 0 14 14", 14, NativePath("M4.25 2.828v8.344c0 .49.592.735.939.389l4.172-4.172a.55.55 0 0 0 0-.778L5.189 2.439c-.347-.347-.939-.101-.939.389Z"));
+    }
+    function MoreIcon() {
+      return h(IconEllipsis);
+    }
+    function relativeTime(value) {
+      const ts = Date.parse(value || "");
+      if (!Number.isFinite(ts)) return "";
+      const delta = Math.max(0, Date.now() - ts);
+      const min = Math.floor(delta / 60000);
+      if (min < 1) return "刚刚";
+      if (min < 60) return min + "分钟";
+      const hour = Math.floor(min / 60);
+      if (hour < 24) return hour + "小时";
+      return Math.floor(hour / 24) + "天";
+    }
+
 
     function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions }) {
       const [menu, setMenu] = useState(false);
@@ -608,8 +894,13 @@ window.__ModuleLoader__.load({
           Promise.resolve(acts.renameSession(sess.sessionId, (extra && extra.title) || title)).then(afterHost).catch(afterHost);
           return;
         }
-        if (action === "archive" && typeof acts.archiveSession === "function") {
-          Promise.resolve(acts.archiveSession(sess.sessionId)).then(afterHost).catch(afterHost);
+        if (action === "archive") {
+          const finish = () => api("/channels").then((data) => { if (data.ok) syncList(data.groups); }).catch(() => undefined);
+          if (typeof acts.archiveSession === "function") {
+            Promise.resolve(acts.archiveSession(sess.sessionId)).then(finish).catch(finish);
+          } else {
+            finish();
+          }
           return;
         }
         if ((action === "delete" || action === "remove") && typeof acts.deleteSession === "function") {
@@ -644,8 +935,14 @@ window.__ModuleLoader__.load({
           }),
         );
       }
+      const menuItems = [
+        { id: "rename", label: "重命名", icon: h(IconEdit), go: () => { setRenaming(true); } },
+        { id: "fork", label: "分叉会话", icon: h(IconBranch), go: () => run("fork") },
+        { id: "archive", label: "归档会话", icon: h(IconArchive), go: () => run("archive") },
+        { id: "delete", label: "删除会话", icon: h(IconTrash), danger: true, go: () => run("delete") },
+      ];
       return h("div", {
-        className: rowClass,
+        className: native ? ("ima-n-sess" + (selected ? " on" : "") + (menu ? " menu-on" : "")) : rowClass,
         role: "treeitem",
         tabIndex: 0,
         "aria-selected": selected,
@@ -653,39 +950,44 @@ window.__ModuleLoader__.load({
         onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(sess.sessionId); } },
         onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); setMenu(!menu); },
       },
-        h("span", { className: native ? "ima-native-title" : "dcu-wb-session-title" }, title),
-        h("span", { className: native ? "ima-native-actions" : "dcu-wb-actions" },
+        native && h("span", { className: "ima-n-slot" }),
+        h("span", { className: native ? "ima-n-title" : "dcu-wb-session-title" }, title),
+        native && h("span", { className: "ima-n-time" }, relativeTime(sess.updatedAt)),
+        h("span", { className: native ? "ima-n-acts" : "dcu-wb-actions" },
           h("button", {
             type: "button",
-            className: native ? "ima-native-more" : "dcu-wb-more",
+            className: native ? "ima-n-ico" : "dcu-wb-more",
             "aria-label": title + " 更多",
             onClick: (e) => { e.stopPropagation(); setMenu(!menu); },
-          }, h(MoreIcon)),
+          }, native ? h(IconEllipsis) : h(MoreIcon)),
         ),
-        menu && h("div", { className: "ima-sess-menu", onClick: (e) => e.stopPropagation() },
-          h("button", { type: "button", onClick: () => { setMenu(false); setRenaming(true); } }, "重命名"),
-          native
-            ? h("button", { type: "button", onClick: () => run("remove") }, "归档")
-            : [
-              h("button", { key: "fork", type: "button", onClick: () => run("fork") }, "派生"),
-              h("button", { key: "arch", type: "button", onClick: () => run("archive") }, "归档"),
-              h("button", { key: "ct", type: "button", onClick: () => run("copy-title") }, "复制标题"),
-              h("button", { key: "ci", type: "button", onClick: () => run("copy-id") }, "复制 ID"),
-              h("button", { key: "cl", type: "button", onClick: () => run("copy-link") }, "复制链接"),
-              h("button", { key: "del", type: "button", className: "danger", onClick: () => run("delete") }, "删除"),
-            ],
+        menu && h("div", { className: native ? "ima-n-menu" : "ima-sess-menu", onClick: (e) => e.stopPropagation() },
+          ...menuItems.map((item) => h("button", {
+            key: item.id,
+            type: "button",
+            className: item.danger ? "danger" : undefined,
+            onClick: () => { setMenu(false); item.go(); },
+          }, native && h("span", { className: "ima-n-mi" }, item.icon), item.label)),
         ),
       );
     }
 
     function ChannelRail(props) {
-      if (typeof props.useSessions === "function") return h(ChannelRailWithSessions, props);
+      if (typeof props.useSessions === "function" || typeof props.useWorkspaces === "function") return h(ChannelRailWithSessions, props);
       return h(ChannelRailView, props);
     }
 
     function ChannelRailWithSessions(props) {
-      const selectedId = props.useSessions((state) => (state && state.current) || null);
-      return h(ChannelRailView, Object.assign({}, props, { selectedId: selectedId || props.selectedId || null }));
+      const selectedId = typeof props.useSessions === "function"
+        ? props.useSessions((state) => (state && state.current) || null)
+        : (props.selectedId || null);
+      const archivedIds = typeof props.useWorkspaces === "function"
+        ? props.useWorkspaces((state) => (state && state.archivedSessionIds) || [])
+        : (props.archivedIds || []);
+      return h(ChannelRailView, Object.assign({}, props, {
+        selectedId: selectedId || props.selectedId || null,
+        archivedIds,
+      }));
     }
 
     function ChannelRailView(props) {
@@ -693,6 +995,7 @@ window.__ModuleLoader__.load({
       const [folded, setFolded] = useState({});
       const [error, setError] = useState("");
       const selectedId = props.selectedId;
+      const archived = new Set(props.archivedIds || []);
       const skin = props.skin || channelSkin;
       const native = skin !== "codex";
       const open = (id) => {
@@ -712,20 +1015,35 @@ window.__ModuleLoader__.load({
       }, []);
       return h("div", { className: native ? "ima-native ima-rail" : "dcu-wb ima-rail" },
         h("style", null, WB_CSS),
+        native ? h("div", { className: "ima-n-head" }, "频道") : null,
         h("div", { className: native ? "ima-native-tree" : "dcu-wb-tree", role: "tree" },
           error && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, error),
           !error && groups.length === 0 && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。"),
-          ...groups.map((g) => h("div", { key: g.id, className: native ? "ima-native-project" : "dcu-wb-project" },
+          ...groups.map((g) => {
+            const visible = (g.sessions || []).filter((sess) => !archived.has(sess.sessionId));
+            if (!visible.length) return null;
+            const expanded = !folded[g.id];
+            return h("div", { key: g.id, className: native ? "ima-native-project" : "dcu-wb-project" },
             h("button", {
-              className: native ? "ima-native-head" : "dcu-wb-project-head",
+              className: native ? "ima-n-row" : "dcu-wb-project-head",
               type: "button",
+              role: "treeitem",
+              "aria-expanded": expanded,
               onClick: () => setFolded({ ...folded, [g.id]: !folded[g.id] }),
             },
-              h("span", { className: native ? "ima-native-folder" : "dcu-wb-folder" }, h(Logo, { id: g.id, small: true })),
-              h("span", { className: native ? "ima-native-title" : "dcu-wb-project-title" }, g.label),
+              native
+                ? [
+                  h("span", { key: "folder", className: "ima-n-slot ima-n-folder" }, expanded ? h(IconFolderOpen) : h(IconFolderClose)),
+                  h("span", { key: "chev", className: "ima-n-slot ima-n-chevron" }, h("span", { className: expanded ? "ima-n-arrow open" : "ima-n-arrow" }, h(IconChevron))),
+                  h("span", { key: "title", className: "ima-n-title" }, g.label),
+                ]
+                : [
+                  h("span", { key: "folder", className: "dcu-wb-folder" }, h(Logo, { id: g.id, small: true })),
+                  h("span", { key: "title", className: "dcu-wb-project-title" }, g.label),
+                ],
             ),
-            !folded[g.id] && ((g.sessions && g.sessions.length)
-              ? g.sessions.map((sess) => h(ChannelSessionRow, {
+            !folded[g.id] && (visible.length
+              ? visible.map((sess) => h(ChannelSessionRow, {
                 key: sess.sessionId,
                 sess,
                 selected: selectedId === sess.sessionId,
@@ -741,75 +1059,255 @@ window.__ModuleLoader__.load({
                 },
               }))
               : h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "暂无会话")),
+          );
+          }),
+        ),
+      );
+    }
+
+    function isTaskSessionItem(item) {
+      if (!item) return false;
+      if (item.blank) return false;
+      if (item.origin === "im" || item.origin === "subagent") return false;
+      return !String(item.id || "").startsWith("im:");
+    }
+
+    function TaskList(props) {
+      if (typeof props.useSessions === "function") return h(TaskListWithSessions, props);
+      return h(TaskListView, { groups: [], current: null, openSession: props.openSession });
+    }
+
+    function TaskListWithSessions(props) {
+      const snap = props.useSessions((state) => state || { ids: [], byId: {}, current: null });
+      const workspaces = typeof props.useWorkspaces === "function"
+        ? props.useWorkspaces((state) => state || { items: [], archivedSessionIds: [] })
+        : { items: [], archivedSessionIds: [] };
+      const archived = new Set(workspaces.archivedSessionIds || []);
+      const assigned = new Set();
+      const groups = [];
+      for (const ws of workspaces.items || []) {
+        const sessions = (ws.sessionIds || [])
+          .map((id) => snap.byId[id])
+          .filter((item) => isTaskSessionItem(item) && !archived.has(item.id));
+        sessions.forEach((item) => assigned.add(item.id));
+        if (sessions.length) {
+          groups.push({ id: ws.workspaceId || ws.id, label: ws.title || ws.path || "工作区", sessions });
+        }
+      }
+      const ungrouped = (snap.ids || [])
+        .map((id) => snap.byId[id])
+        .filter((item) => item && !assigned.has(item.id) && isTaskSessionItem(item) && !archived.has(item.id));
+      if (ungrouped.length) groups.push({ id: "", label: "未分组", sessions: ungrouped });
+      return h(TaskListView, { groups, current: snap.current, openSession: props.openSession });
+    }
+
+    function TaskListView({ groups, current, openSession }) {
+      if (!groups.length) return h("div", { className: "ima-empty" }, "暂无网页任务");
+      return h("div", { className: "ima-native ima-rail" },
+        h("div", { className: "ima-native-tree" },
+          ...groups.map((group) => h("div", { key: group.id || "ungrouped", className: "ima-native-project" },
+            h("div", { className: "ima-native-head" },
+              h("span", { className: "ima-native-title" }, group.label),
+            ),
+            ...group.sessions.map((item) => h("div", {
+              key: item.id,
+              className: current === item.id ? "ima-native-session on" : "ima-native-session",
+              role: "treeitem",
+              tabIndex: 0,
+              onClick: () => openSession && openSession(item.id),
+              onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSession && openSession(item.id); } },
+            }, h("span", { className: "ima-native-title" }, item.title || item.id))),
           )),
         ),
       );
     }
 
-    function TaskList(props) {
-      if (typeof props.useSessions === "function") return h(TaskListWithSessions, props);
-      return h(TaskListView, { items: [], current: null, openSession: props.openSession });
+    function filterSessionsByIm(state, keepIm) {
+      const src = state || { ids: [], byId: {}, current: null };
+      const ids = (src.ids || []).filter((id) => String(id).startsWith("im:") === keepIm);
+      const byId = {};
+      for (const id of ids) {
+        if (src.byId && src.byId[id]) byId[id] = src.byId[id];
+      }
+      return Object.assign({}, src, { ids, byId });
     }
 
-    function TaskListWithSessions(props) {
-      const snap = props.useSessions((state) => state || { ids: [], byId: {}, current: null });
-      const items = (snap.ids || []).map((id) => snap.byId[id]).filter((item) => item && item.origin !== "im" && item.origin !== "subagent" && !item.blank && !(item.id || "").startsWith("im:"));
-      return h(TaskListView, { items, current: snap.current, openSession: props.openSession });
+    function filterTaskSessions(state) {
+      return filterSessionsByIm(state, false);
     }
 
-    function TaskListView({ items, current, openSession }) {
-      if (!items.length) return h("div", { className: "ima-empty" }, "暂无网页任务");
-      return h("div", { className: "ima-rail" },
-        ...items.map((item) => h("div", {
-          key: item.id,
-          className: current === item.id ? "ima-item on" : "ima-item",
-          onClick: () => openSession && openSession(item.id),
-        }, item.title || item.id)),
-      );
+    function filterChannelSessions(state) {
+      return filterSessionsByIm(state, true);
+    }
+
+    function createNativeTabRegistry(officialTree) {
+      const tabs = new Map();
+      const sessionFilters = [];
+      const listeners = new Set();
+      let cachedTabs = [];
+      const rebuild = () => { cachedTabs = [...tabs.values()].sort((a, b) => (a.order || 0) - (b.order || 0)); };
+      const emit = () => { for (const listener of listeners) listener(); };
+      return {
+        version: 1,
+        officialTree,
+        sessionFilters,
+        getTabs() { return cachedTabs; },
+        subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+        insert(tab) {
+          if (!tab || !tab.id) return () => {};
+          tabs.set(tab.id, tab);
+          rebuild();
+          emit();
+          return () => { tabs.delete(tab.id); rebuild(); emit(); };
+        },
+        addSessionFilter(filter) {
+          sessionFilters.push(filter);
+          emit();
+          return () => {
+            const index = sessionFilters.indexOf(filter);
+            if (index >= 0) sessionFilters.splice(index, 1);
+            emit();
+          };
+        },
+      };
+    }
+
+    function attachNativeTabRegistry(target, registry) {
+      try { target.__dshNativeTabs = registry; } catch { /* ignore */ }
+      return registry;
+    }
+
+    function findNativeTabRegistry(entry) {
+      return entry?.__dshNativeTabs || entry?.component?.__dshNativeTabs || null;
+    }
+
+    function applyRegistryFilters(state, registry) {
+      const src = state || { ids: [], byId: {}, current: null };
+      const filters = registry && registry.sessionFilters ? registry.sessionFilters : [];
+      if (!filters.length) return src;
+      const ids = (src.ids || []).filter((id) => filters.every((fn) => fn(String(id))));
+      const byId = {};
+      for (const id of ids) {
+        if (src.byId && src.byId[id]) byId[id] = src.byId[id];
+      }
+      return Object.assign({}, src, { ids, byId });
     }
 
     function SessionSwitcher(props) {
+      const Official = props.officialTree;
+      const rawUseSessions = props.useSessions;
+      const nativeTabs = props.nativeTabs;
+      const extraTabs = useSyncExternalStore(
+        (listener) => (nativeTabs && nativeTabs.subscribe ? nativeTabs.subscribe(listener) : () => {}),
+        () => (nativeTabs && nativeTabs.getTabs ? nativeTabs.getTabs() : EMPTY_EXTRA_TABS),
+        () => EMPTY_EXTRA_TABS,
+      );
       const [tab, setTab] = useState(() => {
         try { return localStorage.getItem(TAB_KEY) || "tasks"; } catch { return "tasks"; }
       });
+      const currentId = typeof rawUseSessions === "function"
+        ? rawUseSessions((state) => (state && state.current) || null)
+        : (props.selectedId || null);
+      const useTaskSessions = useCallback((selector) => {
+        if (typeof rawUseSessions !== "function") return selector({ ids: [], byId: {}, current: null });
+        return rawUseSessions((state) => selector(applyRegistryFilters(filterTaskSessions(state), nativeTabs)));
+      }, [rawUseSessions, nativeTabs]);
+      const useChannelSessions = useCallback((selector) => {
+        if (typeof rawUseSessions !== "function") return selector({ ids: [], byId: {}, current: null });
+        return rawUseSessions((state) => selector(filterChannelSessions(state)));
+      }, [rawUseSessions]);
       useEffect(() => { ensureStyle(); }, []);
       useEffect(() => { try { localStorage.setItem(TAB_KEY, tab); } catch { /* ignore */ } }, [tab]);
-      const openSession = props.openSession;
+      useEffect(() => {
+        if (typeof currentId === "string" && currentId.startsWith("im:")) setTab("channels");
+        if (typeof currentId === "string") {
+          const matched = extraTabs.find((item) => item.matchSession && item.matchSession(currentId));
+          if (matched) setTab(matched.id);
+        }
+      }, [currentId, extraTabs]);
+      const openSession = props.openSession || props.open || openImSession;
+      const officialProps = Object.assign({}, props, { useSessions: useTaskSessions });
+      const channelRail = h(ChannelRail, {
+        openSession,
+        open: openSession,
+        useSessions: rawUseSessions,
+        useWorkspaces: props.useWorkspaces,
+        selectedId: currentId || props.selectedId || null,
+        skin: "native",
+        renameSession: props.renameSession,
+        archiveSession: props.archiveSession,
+        deleteSession: props.deleteSession,
+        forkSession: props.forkSession,
+        openPath: props.openPath,
+      });
+      if (props.wide === false) return Official ? h(Official, officialProps) : null;
+      const officialTree = Official
+        ? h("div", { className: "ima-official-tree" }, h(Official, officialProps))
+        : null;
+      const extra = extraTabs.find((item) => item.id === tab);
       return h("div", { className: "ima-wrap" },
-        h("div", { className: "ima-tabs" },
-          h("button", { className: tab === "tasks" ? "ima-tab on" : "ima-tab", onClick: () => setTab("tasks") }, "任务"),
-          h("button", { className: tab === "channels" ? "ima-tab on" : "ima-tab", onClick: () => setTab("channels") }, "频道"),
+        h("div", { className: "ima-tabs", role: "tablist", "aria-label": "工作区分类" },
+          h("button", { type: "button", role: "tab", "aria-selected": tab === "tasks", className: tab === "tasks" ? "ima-tab on" : "ima-tab", onClick: () => setTab("tasks") }, "任务"),
+          h("button", { type: "button", role: "tab", "aria-selected": tab === "channels", className: tab === "channels" ? "ima-tab on" : "ima-tab", onClick: () => setTab("channels") }, "频道"),
+          ...extraTabs.map((item) => h("button", {
+            key: item.id,
+            type: "button",
+            role: "tab",
+            "aria-selected": tab === item.id,
+            className: tab === item.id ? "ima-tab on" : "ima-tab",
+            onClick: () => setTab(item.id),
+          }, item.label)),
         ),
         tab === "tasks"
-          ? h(TaskList, { useSessions: props.useSessions, openSession })
-          : h(ChannelRail, { openSession, useSessions: props.useSessions, selectedId: props.selectedId || null }),
+          ? (officialTree || h(TaskList, { useSessions: useTaskSessions, useWorkspaces: props.useWorkspaces, openSession }))
+          : extra
+            ? extra.render(Object.assign({}, props, { openSession, open: openSession }))
+            : channelRail,
       );
     }
 
-    /** 探测是否装了 dsh-codex-ui。装了则只填 sidebar.channels，样式走官方 Codex 工作区树；没装则给原生 sidebar.workspaces 套「任务/频道」壳，样式走 DSH 原生行。 */
-    function hasDshCodexUi(ctx) {
+    function sidebarOccupantName(item) {
+      return String(
+        item?.options?.locale ??
+        item?.options?.id ??
+        item?.options?.name ??
+        item?.options?.registrant ??
+        item?.component?.displayName ??
+        item?.component?.name ??
+        item?.id ??
+        item?.name ??
+        "",
+      );
+    }
+
+    /** 只认真正占用 sidebar 槽的主人。包在注册表里但没接管侧栏时，必须走原生页签。 */
+    function hasDshCodexUiSidebar(ctx) {
       try {
-        const registry = ctx.registry;
-        if (registry) {
-          for (const item of registry) {
-            const n = String(item?.name ?? item?.runtime?.name ?? item?.id ?? "");
-            if (/codex-ui|dsh-codex-ui|michengai-codex-ui/i.test(n)) return true;
-          }
-        }
-        const sidebar = ctx.slots && ctx.slots.entries && ctx.slots.entries("sidebar");
-        if (sidebar) {
-          for (const item of sidebar) {
-            const n = String(item?.options?.id ?? item?.options?.name ?? item?.id ?? "");
-            if (/codex-ui|dsh-codex-ui|michengai-codex-ui/i.test(n)) return true;
-          }
+        const read = ctx.slots && (ctx.slots.entriesOfSlot || ctx.slots.entries);
+        const sidebar = read && read.call(ctx.slots, "sidebar");
+        if (!sidebar) return false;
+        for (const item of sidebar) {
+          if (/dsh-codex-ui|michengai-codex-ui|michengai\.codexUi|codex-ui/i.test(sidebarOccupantName(item))) return true;
         }
       } catch { /* ignore */ }
       return false;
     }
 
+    function pickOfficialWorkspaces(ctx) {
+      const entries = (ctx.slots.entries && ctx.slots.entries("sidebar.workspaces")) || [];
+      for (const item of entries) {
+        if (!item || !item.component) continue;
+        if (item.component.__imConnectWrapped) continue;
+        if (item.component.__imConnectOriginal) continue;
+        if (item.component.__dshNativeTabHost) continue;
+        if (item.component.__dshAutomationWrapped) continue;
+        return item;
+      }
+      return null;
+    }
+
     function apply(ctx) {
       ensureStyle();
-      channelSkin = hasDshCodexUi(ctx) ? "codex" : "native";
       openImSession = (id) => {
         try { ctx.sessions.open(id); }
         catch (error) { console.warn("[dsh-im-connect] 无法打开会话", id, error); }
@@ -819,24 +1317,107 @@ window.__ModuleLoader__.load({
         id: "im-assistant",
         order: 28,
         label: "IM助理",
+        inject: () => ({
+          createWorkspace: (input) => ctx.workspaces.create(input),
+          pickDirectory: () => ctx.workspaces.pickDirectory(),
+        }),
       }, SettingsPage));
 
       ctx.slots.inject("sidebar.channels", () => ctx.slots.register({
         name: "sidebar.channels",
         id: "im-connect-channels",
+        inject: () => ({
+          openSession: (id) => { ctx.sessions.open(id); },
+          open: (id) => { ctx.sessions.open(id); },
+          archiveSession: (id) => ctx.workspaces.archiveSession(id),
+          forkSession: (id) => {
+            ctx.sessions.fork({ sessionId: id, increaseTitle: true })
+              .then((childId) => { ctx.sessions.open(childId); })
+              .catch(() => undefined);
+          },
+          renameSession: async (sessionId, title) => {
+            const session = ctx.sessions.binding && ctx.sessions.binding(sessionId)?.session;
+            if (!session) throw new Error("unknown session");
+            const result = await session.rename(title);
+            if (!result.ok) throw new Error(result.error.message);
+          },
+        }),
       }, ChannelRail));
 
-      if (!hasDshCodexUi(ctx)) {
-        ctx.slots.inject("sidebar.workspaces", () => ctx.slots.register({
-          name: "sidebar.workspaces",
-          id: "im-connect-switcher",
-          priority: 20,
-          inject: () => ({
-            openSession: (id) => { ctx.sessions.open(id); },
-            open: (id) => { ctx.sessions.open(id); },
-          }),
-        }, SessionSwitcher));
-      }
+      // 只包一层官方任务树，绝不在通知回调里再 register，否则会把启动卡在 Loading plugins。
+      ctx.slots.inject("sidebar.workspaces", () => {
+        let wrappedEntry = null;
+        let originalComp = null;
+        let removeInsertedTab = () => {};
+        let syncing = false;
+        const unwrap = () => {
+          removeInsertedTab();
+          removeInsertedTab = () => {};
+          if (wrappedEntry && originalComp) {
+            try { wrappedEntry.component = originalComp; } catch { /* ignore */ }
+          }
+          wrappedEntry = null;
+          originalComp = null;
+        };
+        const insertChannelTab = (entry) => {
+          const registry = findNativeTabRegistry(entry);
+          if (!registry) return false;
+          if (registry.getTabs().some((item) => item.id === "channels")) return true;
+          removeInsertedTab();
+          removeInsertedTab = registry.insert({
+            id: "channels",
+            label: "频道",
+            order: 20,
+            matchSession: (id) => String(id).startsWith("im:"),
+            render: (props) => h(ChannelRail, Object.assign({}, props, { skin: "native" })),
+          });
+          return true;
+        };
+        const sync = () => {
+          if (syncing) return;
+          syncing = true;
+          try {
+            const combo = hasDshCodexUiSidebar(ctx);
+            channelSkin = combo ? "codex" : "native";
+            if (combo) {
+              unwrap();
+              return;
+            }
+            const entries = (ctx.slots.entries && ctx.slots.entries("sidebar.workspaces")) || [];
+            const occupant = entries.find((item) => item && item.component);
+            if (occupant && (occupant.component.__dshNativeTabHost || occupant.component.__dshAutomationWrapped || findNativeTabRegistry(occupant))) {
+              insertChannelTab(occupant);
+              return;
+            }
+            if (wrappedEntry && wrappedEntry.component && wrappedEntry.component.__imConnectWrapped) {
+              insertChannelTab(wrappedEntry);
+              return;
+            }
+            const official = pickOfficialWorkspaces(ctx);
+            if (!official || official.component.__imConnectWrapped || official.component.__dshNativeTabHost) return;
+            originalComp = official.component;
+            const registry = createNativeTabRegistry(originalComp);
+            attachNativeTabRegistry(official, registry);
+            function ImNativeWorkspaceShell(innerProps) {
+              return h(SessionSwitcher, Object.assign({}, innerProps, { officialTree: originalComp, nativeTabs: registry }));
+            }
+            ImNativeWorkspaceShell.displayName = "ImNativeWorkspaceShell";
+            ImNativeWorkspaceShell.__imConnectWrapped = true;
+            ImNativeWorkspaceShell.__imConnectOriginal = originalComp;
+            ImNativeWorkspaceShell.__dshNativeTabHost = true;
+            attachNativeTabRegistry(ImNativeWorkspaceShell, registry);
+            official.component = ImNativeWorkspaceShell;
+            wrappedEntry = official;
+          } catch (error) {
+            console.warn("[dsh-im-connect] 包裹官方任务树失败", error);
+          } finally {
+            syncing = false;
+          }
+        };
+        sync();
+        const unsub = typeof ctx.slots.subscribe === "function" ? ctx.slots.subscribe("sidebar.workspaces", sync) : () => {};
+        return () => { unsub(); unwrap(); };
+      });
     }
 
     exports.apply = apply;
@@ -844,6 +1425,9 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
+
+
+
 
 
 

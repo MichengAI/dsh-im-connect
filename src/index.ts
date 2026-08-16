@@ -51,6 +51,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     agentPreset: config.agentPreset || 'standard',
     allowAllUsers: config.allowAllUsers,
     mergeTimeoutSecs: config.mergeTimeoutSecs || 5,
+    permissionPreset: 'full-access',
   }
 
   const manager = new ChannelManager({ ctx, stateDir, log, engineConfig })

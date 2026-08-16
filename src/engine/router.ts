@@ -170,14 +170,17 @@ export class SessionRouter {
     // DSH 会话头的 origin 只能是 subagent；IM 与任务的区分靠 sessionId 的 im: 前缀。
     // 必须带上当前默认模型，否则 deployment:persona 的 {{model}} 组装会失败。
     const agentOptions = this.resolveAgentOptions()
-    this.log(`[router] 使用模型 ${agentOptions.provider}/${agentOptions.model}`)
+    this.log(`[router] 使用模型 ${agentOptions.provider}/${agentOptions.model}${this.config.reasoningEffort ? ` ${this.config.reasoningEffort}` : ''}`)
     return this.ctx.agents.create({
       sessionId,
       meta: {
         cwd: this.config.cwd || process.cwd(),
         ...(this.config.agentPreset ? { agentPreset: this.config.agentPreset } : {}),
       },
-      agentOptions,
+      agentOptions: {
+        ...agentOptions,
+        ...(this.config.reasoningEffort ? { reasoningEffort: this.config.reasoningEffort } : {}),
+      },
       setup: this.presetSetup(),
     })
   }
@@ -193,8 +196,33 @@ export class SessionRouter {
   private presetSetup() {
     const ctx = this.ctx
     const preset = this.config.agentPreset || 'standard'
+    const permission = this.config.permissionPreset
     return async (agentCtx: unknown) => {
       if (ctx.agentPresets?.mount) await ctx.agentPresets.mount(agentCtx, preset)
+      if (this.config.provider && this.config.model) {
+        try {
+          const { installModelSelection } = await import('@deepseek-ai/dsh-agent')
+          installModelSelection(agentCtx, {
+            current: {
+              provider: this.config.provider,
+              model: this.config.model,
+              ...(this.config.reasoningEffort ? { reasoningEffort: this.config.reasoningEffort } : {}),
+            },
+            assembled: undefined,
+          })
+        } catch {
+          // Host 未暴露该接口时，仍把 reasoningEffort 放在 agentOptions 里。
+        }
+      }
+      if (permission && permission !== 'full-access') {
+        try {
+          const { setSandboxMode } = await import('@deepseek-ai/dsh-sandbox-policy')
+          const agent = (agentCtx as { agent?: { session?: unknown } }).agent
+          if (agent?.session) setSandboxMode(agent.session, permission)
+        } catch (error) {
+          this.log(`[router] 无法应用权限 ${permission}: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
     }
   }
 }

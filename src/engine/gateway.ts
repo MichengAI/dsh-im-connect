@@ -69,9 +69,20 @@ export class ImEngine {
     return this.router.remove(sessionId)
   }
 
-  setModel(provider: string, model: string): void {
+  setModel(provider: string, model: string, reasoningEffort?: string): void {
     this.config.provider = provider
     this.config.model = model
+    this.config.reasoningEffort = reasoningEffort
+    void this.router.disposeAll()
+  }
+
+  setCwd(cwd: string): void {
+    this.config.cwd = cwd
+    void this.router.disposeAll()
+  }
+
+  setPermission(permission: 'read-only' | 'workspace-write' | 'full-access'): void {
+    this.config.permissionPreset = permission
     void this.router.disposeAll()
   }
 
