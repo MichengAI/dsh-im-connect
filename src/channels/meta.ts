@@ -1,0 +1,89 @@
+import type { ChannelId } from '../engine/session-id.js'
+
+export type ChannelKind = 'qr' | 'credentials' | 'qr-or-credentials'
+
+export interface ChannelField {
+  key: string
+  label: string
+  secret?: boolean
+}
+
+export interface ChannelMeta {
+  id: ChannelId
+  label: string
+  description: string
+  kind: ChannelKind
+  fields: ChannelField[]
+}
+
+/** 设置页卡片顺序，对标视觉稿后再补 Telegram。 */
+export const CHANNEL_ORDER: ChannelId[] = [
+  'dingtalk',
+  'feishu',
+  'lark',
+  'weixin',
+  'wecom',
+  'telegram',
+]
+
+export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
+  dingtalk: {
+    id: 'dingtalk',
+    label: '钉钉',
+    description: '通过钉钉机器人接收并回复用户消息',
+    kind: 'qr-or-credentials',
+    fields: [
+      { key: 'clientId', label: 'Client ID（原 AppKey）' },
+      { key: 'clientSecret', label: 'Client Secret（原 AppSecret）', secret: true },
+    ],
+  },
+  feishu: {
+    id: 'feishu',
+    label: '飞书',
+    description: '通过飞书机器人接收并回复用户消息',
+    kind: 'qr',
+    fields: [],
+  },
+  lark: {
+    id: 'lark',
+    label: 'Lark',
+    description: '通过 Lark 机器人接收并回复用户消息',
+    kind: 'qr',
+    fields: [],
+  },
+  weixin: {
+    id: 'weixin',
+    label: '微信',
+    description: '通过微信机器人接收并回复用户消息',
+    kind: 'qr',
+    fields: [],
+  },
+  wecom: {
+    id: 'wecom',
+    label: '企业微信',
+    description: '通过企业微信机器人接收并回复用户消息',
+    kind: 'qr-or-credentials',
+    fields: [
+      { key: 'botId', label: 'Bot ID' },
+      { key: 'secret', label: 'Secret', secret: true },
+    ],
+  },
+  telegram: {
+    id: 'telegram',
+    label: 'Telegram',
+    description: '通过 Telegram 机器人接收并回复用户消息',
+    kind: 'credentials',
+    fields: [
+      { key: 'token', label: 'Bot Token', secret: true },
+    ],
+  },
+}
+
+export function listChannelMeta(): ChannelMeta[] {
+  return CHANNEL_ORDER.map((id) => CHANNEL_META[id])
+}
+
+export function supportsQr(id: ChannelId): boolean {
+  const kind = CHANNEL_META[id]?.kind
+  return kind === 'qr' || kind === 'qr-or-credentials'
+}
