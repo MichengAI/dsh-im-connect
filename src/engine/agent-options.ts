@@ -7,7 +7,18 @@ export function resolveImAgentOptions(input: {
   const provider = input.provider?.trim() || input.fallback?.provider?.trim() || ''
   const model = input.model?.trim() || input.fallback?.model?.trim() || ''
   if (!provider || !model) {
-    throw new Error('当前 Host 没有默认模型。请先在网页里选好模型，或在 IM 助理配置里填写 provider 和 model。')
+    throw new Error('请先在设置 → IM助理 页面选择模型。')
   }
   return { provider, model }
+}
+
+/** 用 ctx.get 读默认模型，避免未 inject 时直接访问属性抛错。 */
+export function readHostDefaultModel(ctx: {
+  get?(name: string): { currentSelection?: () => { provider?: string; model?: string } } | undefined
+}): { provider?: string; model?: string } | undefined {
+  try {
+    return ctx.get?.('agentDefaultModel')?.currentSelection?.()
+  } catch {
+    return undefined
+  }
 }

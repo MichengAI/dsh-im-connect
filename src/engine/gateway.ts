@@ -61,6 +61,12 @@ export class ImEngine {
     }
   }
 
+  setModel(provider: string, model: string): void {
+    this.config.provider = provider
+    this.config.model = model
+    void this.router.disposeAll()
+  }
+
   register(channel: ChannelAdapter): void {
     this.channels.set(channel.id, channel)
     channel.setMessageHandler((msg) => this.enqueue(channel.id, msg))
@@ -150,7 +156,7 @@ export class ImEngine {
       }
     } catch (error) {
       this.log(`[${channelId}] 处理失败: ${error instanceof Error ? error.message : String(error)}`)
-      await channel.send(msg.chatId, '消息处理失败，请稍后重试。').catch(() => undefined)
+      await channel.send(msg.chatId, `消息处理失败：${error instanceof Error ? error.message : String(error)}`).catch(() => undefined)
     }
   }
 

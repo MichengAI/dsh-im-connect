@@ -25,11 +25,18 @@ window.__ModuleLoader__.load({
 .ima-avatar.user{background:#3d3428}
 .ima-title{margin:0 0 8px;font-size:26px;font-weight:700;letter-spacing:.03em;text-align:center}
 .ima-sub{margin:0 auto 22px;max-width:520px;color:var(--ima-muted);font-size:13px;line-height:1.7;text-align:center}
+.ima-model{margin:0 0 14px}
+.ima-model-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-top:10px}
+.ima-select-wrap{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ima-select-wrap span{color:var(--ima-muted);font-size:12px}
+.ima-select{width:100%;min-height:36px;padding:8px 10px;border-radius:8px;border:1px solid var(--ima-line);background:#0d1117;color:var(--ima-text)}
+@media (max-width:640px){.ima-model-grid{grid-template-columns:1fr}}
 .ima-list{display:flex;flex-direction:column;gap:10px}
-.ima-card{display:grid;grid-template-columns:minmax(0,1fr) 118px;align-items:center;gap:14px;min-height:72px;padding:14px 16px;border:1px solid var(--ima-line);border-radius:16px;background:var(--ima-card)}
+.ima-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:52px;padding:10px 16px;border:1px solid var(--ima-line);border-radius:14px;background:var(--ima-card)}
 .ima-card:hover{background:var(--ima-card-hover)}
 .ima-card-main{min-width:0}
 .ima-name-row{display:flex;align-items:center;gap:10px;min-height:28px}
+.ima-status{margin-left:auto;color:var(--ima-muted);font-size:12px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%}
 .ima-name{font-size:15px;font-weight:650}
 .ima-badge{font-size:11px;line-height:18px;padding:0 7px;border-radius:8px;background:rgba(46,160,67,.16);color:var(--ima-ok)}
 .ima-desc,.ima-meta{margin-top:3px;margin-left:38px;color:var(--ima-muted);font-size:12px;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:17px}
@@ -268,6 +275,7 @@ window.__ModuleLoader__.load({
             h("button", { className: tab === "manual" ? "on" : "", onClick: () => switchTab("manual") }, "手动配置"),
           ),
           error && h("div", { className: "ima-error" }, error),
+        h(ModelCard),
           tab === "qr" && hasQr && (
             status === "success"
               ? h("div", { className: "ima-ok" }, "绑定成功，频道已连接")
@@ -345,17 +353,109 @@ window.__ModuleLoader__.load({
           ],
       );
 
-      return h("div", { className: "ima-card" },
+      return h("div", { className: "ima-card", title: ch.description || ch.label },
         h("div", { className: "ima-card-main" },
           h("div", { className: "ima-name-row" },
             h(Logo, { id: ch.id }),
             h("span", { className: "ima-name" }, ch.label),
             ch.connected && h("span", { className: "ima-badge" }, "已连接"),
+            h("span", { className: "ima-status" }, meta),
           ),
-          h("div", { className: "ima-desc" }, ch.description),
-          h("div", { className: "ima-meta" }, meta),
         ),
         right,
+      );
+    }
+
+
+    function ModelCard() {
+      const [providers, setProviders] = useState([]);
+      const [provider, setProvider] = useState("");
+      const [model, setModel] = useState("");
+      const [saved, setSaved] = useState(false);
+      const [busy, setBusy] = useState(false);
+      const [hint, setHint] = useState("");
+
+      useEffect(() => {
+        api("/assistant").then((data) => {
+          if (!data.ok) { setHint(data.error || "无法加载模型列表"); return; }
+          const list = data.providers || [];
+          setProviders(list);
+          const current = data.assistant || {};
+          const nextProvider = current.provider || (list[0] && list[0].id) || "";
+          const models = ((list.find((item) => item.id === nextProvider) || {}).models) || [];
+          const nextModel = current.model || (models[0] && models[0].id) || "";
+          setProvider(nextProvider);
+          setModel(nextModel);
+          setSaved(Boolean(current.provider && current.model));
+          if (!list.length) setHint("当前 Host 还没有可用模型，请先在网页里配置提供商");
+        }).catch(() => setHint("无法加载模型列表"));
+      }, []);
+
+      const models = ((providers.find((item) => item.id === provider) || {}).models) || [];
+
+      const save = (nextProvider, nextModel) => {
+        if (!nextProvider || !nextModel) { setHint("请选择提供商和模型"); return; }
+        setBusy(true);
+        api("/assistant", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ provider: nextProvider, model: nextModel }),
+        }).then((data) => {
+          if (!data.ok) { setHint(data.error || "保存失败"); setSaved(false); return; }
+          setSaved(true);
+          setHint("已保存。新的频道会话将使用这个模型。");
+        }).catch(() => { setHint("保存失败"); setSaved(false); })
+          .finally(() => setBusy(false));
+      };
+
+      const onProvider = (value) => {
+        const nextModels = ((providers.find((item) => item.id === value) || {}).models) || [];
+        const nextModel = nextModels.some((item) => item.id === model) ? model : ((nextModels[0] && nextModels[0].id) || "");
+        setProvider(value);
+        setModel(nextModel);
+        setSaved(false);
+      };
+
+      return h("div", { className: "ima-card ima-model" },
+        h("div", { className: "ima-card-main" },
+          h("div", { className: "ima-name-row" },
+            h("span", { className: "ima-name" }, "助手模型"),
+            saved && h("span", { className: "ima-badge" }, "已设置"),
+          ),
+          h("div", { className: "ima-desc" }, "频道会话使用这里选择的模型，与网页任务互不影响。"),
+          h("div", { className: "ima-model-grid" },
+            h("label", { className: "ima-select-wrap" },
+              h("span", null, "提供商"),
+              h("select", {
+                className: "ima-select",
+                value: provider,
+                "aria-label": "提供商",
+                onChange: (event) => onProvider(event.target.value),
+              },
+                h("option", { value: "" }, "请选择"),
+                ...providers.map((item) => h("option", { key: item.id, value: item.id }, item.name || item.id)),
+              ),
+            ),
+            h("label", { className: "ima-select-wrap" },
+              h("span", null, "模型"),
+              h("select", {
+                className: "ima-select",
+                value: model,
+                "aria-label": "模型",
+                onChange: (event) => { setModel(event.target.value); setSaved(false); },
+              },
+                h("option", { value: "" }, models.length ? "请选择" : "暂无模型"),
+                ...models.map((item) => h("option", { key: item.id, value: item.id }, item.name || item.id)),
+              ),
+            ),
+            h("button", {
+              className: "ima-btn primary",
+              disabled: busy || !provider || !model,
+              onClick: () => save(provider, model),
+            }, busy ? "保存中…" : "保存"),
+          ),
+          hint && h("div", { className: "ima-meta" }, hint),
+        ),
       );
     }
 
@@ -396,14 +496,6 @@ window.__ModuleLoader__.load({
       };
 
       return h("section", { className: "ima-page", "aria-label": "IM助理" },
-        h("div", { className: "ima-deco", "aria-hidden": "true" },
-          h("div", { className: "ima-bubble left" }, "Here are key decisions today."),
-          h("div", { className: "ima-avatars" },
-            h("div", { className: "ima-avatar bot" }, h(BrandMark, { id: "wecom" })),
-            h("div", { className: "ima-avatar user" }, h(BrandMark, { id: "weixin" })),
-          ),
-          h("div", { className: "ima-bubble right" }, "Summarize today's message highlights for me"),
-        ),
         h("h1", { className: "ima-title" }, "IM 频道"),
         h("p", { className: "ima-sub" },
           "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。",

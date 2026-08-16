@@ -10,6 +10,7 @@ import { createFileVault, createServiceVault, credentialRef, type CredentialServ
 import { ImEngine } from './engine/gateway.js'
 import { SeenStore } from './engine/seen-store.js'
 import { clearWeixinLogin, persistWeixinLogin } from './channels/weixin.js'
+import { normalizeAssistantModel, type AssistantModel } from './engine/assistant-settings.js'
 import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
 
 export interface ChannelState {
@@ -36,6 +37,7 @@ interface Persisted {
   channels: Record<string, ChannelState>
   allowlist: Record<string, string[]>
   pending: Record<string, Array<{ userId: string; username?: string; chatId?: string; time: number }>>
+  assistant?: AssistantModel
 }
 
 export class ChannelManager {
@@ -46,16 +48,21 @@ export class ChannelManager {
   private readonly vault: CredentialVault
   private readonly pairing: PairingHub
   private readonly log: (line: string) => void
+  private readonly ctx: Context
+  private readonly engineConfig: EngineConfig
   private store: Persisted = { channels: {}, allowlist: {}, pending: {} }
   private readonly running = new Map<string, ChannelAdapter>()
   private apiDisposers: Array<() => void> = []
 
   constructor(options: { ctx: Context; stateDir: string; log: (line: string) => void; engineConfig: EngineConfig }) {
+    this.ctx = options.ctx
+    this.engineConfig = options.engineConfig
     this.stateDir = options.stateDir
     this.file = join(options.stateDir, 'channels.json')
     this.sessions = new SessionMapStore(join(options.stateDir, 'sessions.json'))
     this.log = options.log
     this.load()
+    this.applyAssistant(this.store.assistant)
     const seen = new SeenStore(join(options.stateDir, 'seen.json'))
     const credentials = (options.ctx as Context & { credentials?: CredentialService }).credentials
     this.vault = credentials
@@ -226,6 +233,7 @@ export class ChannelManager {
       channels: this.list(),
       groups: this.channelSessions(),
       pending: this.pendingRequests(),
+      assistant: this.currentAssistant(),
     })
     const dispose = webServer.register({
       kind: 'prefix',
@@ -233,6 +241,20 @@ export class ChannelManager {
       handler: async (req, res) => {
         const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
         const parts = url.pathname.split('/').filter(Boolean)
+        if (parts[2] === 'assistant' && parts.length === 3) {
+          if (req.method === 'GET') {
+            send(res, 200, { ok: true, assistant: this.currentAssistant(), providers: await this.listModelCatalog() })
+            return
+          }
+          if (req.method === 'POST') {
+            const body = await readBody(req)
+            const result = this.setAssistant(body)
+            send(res, result.ok ? 200 : 400, result)
+            return
+          }
+          send(res, 405, { ok: false, error: 'method not allowed' })
+          return
+        }
         if (parts[2] === 'channels' && parts.length === 3 && req.method === 'GET') {
           send(res, 200, payload())
           return
@@ -319,6 +341,49 @@ export class ChannelManager {
     this.engine.dispose()
   }
 
+
+  currentAssistant(): AssistantModel | undefined {
+    return normalizeAssistantModel(this.store.assistant ?? this.engineConfig)
+  }
+
+  setAssistant(input: { provider?: unknown; model?: unknown }): { ok: boolean; error?: string; assistant?: AssistantModel } {
+    const next = normalizeAssistantModel(input)
+    if (!next) return { ok: false, error: '请选择提供商和模型' }
+    this.store.assistant = next
+    this.applyAssistant(next)
+    this.engine.setModel(next.provider, next.model)
+    this.flush()
+    this.log(`[manager] 助手模型已设为 ${next.provider}/${next.model}`)
+    return { ok: true, assistant: next }
+  }
+
+  private applyAssistant(assistant?: AssistantModel): void {
+    const next = normalizeAssistantModel(assistant ?? {})
+    if (!next) return
+    this.engineConfig.provider = next.provider
+    this.engineConfig.model = next.model
+  }
+
+  private async listModelCatalog(): Promise<Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>> {
+    const llm = (this.ctx as Context & {
+      get?(name: string): {
+        listProviders?: () => Array<{ id: string; name?: string }>
+        listModels?: (provider: string) => Promise<Array<{ id: string; name?: string }>>
+      } | undefined
+    }).get?.('llm')
+    const providers = llm?.listProviders?.() ?? []
+    const out: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }> = []
+    for (const item of providers) {
+      const models = llm?.listModels ? await llm.listModels(item.id).catch(() => []) : []
+      out.push({
+        id: item.id,
+        name: item.name || item.id,
+        models: models.map((model: { id: string; name?: string }) => ({ id: model.id, name: model.name || model.id })),
+      })
+    }
+    return out
+  }
+
   private requestAuthorization(channelId: string, msg: ImMessage): void {
     const userId = msg.userId ?? '(匿名)'
     const list = this.store.pending[channelId] ?? []
@@ -403,6 +468,7 @@ export class ChannelManager {
         channels: parsed.channels ?? {},
         allowlist: parsed.allowlist ?? {},
         pending: parsed.pending ?? {},
+        assistant: normalizeAssistantModel(parsed.assistant ?? {}),
       }
     } catch {
       this.store = { channels: {}, allowlist: {}, pending: {} }

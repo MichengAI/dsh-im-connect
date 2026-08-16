@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ChannelId, ChatKind, SessionRecord } from './session-id.js'
 import { createImSessionId, sessionKeyOf } from './session-id.js'
 import { SessionMapStore } from './session-store.js'
-import { resolveImAgentOptions } from './agent-options.js'
+import { readHostDefaultModel, resolveImAgentOptions } from './agent-options.js'
 import type { EngineConfig } from './types.js'
 
 export interface ChatBinding {
@@ -164,7 +164,7 @@ export class SessionRouter {
     return resolveImAgentOptions({
       provider: this.config.provider,
       model: this.config.model,
-      fallback: this.ctx.agentDefaultModel?.currentSelection(),
+      fallback: readHostDefaultModel(this.ctx),
     })
   }
 
