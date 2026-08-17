@@ -50,6 +50,20 @@ test('reset 清掉残留流，新回合从空白开始不拼接旧文本', async
   assert.deepEqual(updates, [['旧', '旧'], ['新', '新']])
 })
 
+test('reset 后迟到的旧回合增量不会重建流', async () => {
+  const hub = new ReplyStreamHub()
+  const pending = hub.onTextDelta('k', '旧', async () => {
+    // 慢 start 模拟回合被中断后增量才到达
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    return { async update() {}, async finish() {} }
+  })
+  hub.reset('k')
+  await pending
+  const taken = await hub.take('k')
+  assert.equal(taken.stream, undefined)
+  assert.equal(taken.text, '')
+})
+
 test('流式收口后标记已投递，重复助手消息不再发', async () => {
   const hub = new ReplyStreamHub()
   await hub.onTextDelta('dingtalk:c1', '完', async () => ({
