@@ -18,7 +18,7 @@ dsh plugin --profile web add @michengai/dsh-im-connect
 npm install @larksuiteoapi/node-sdk dingtalk-stream @wecom/aibot-node-sdk
 ```
 
-微信走官方 iLink 扫码；Telegram 填 Bot Token。同一 Bot 不要同时开 Webhook。
+微信走官方 iLink 扫码；Telegram 填 Bot Token；QQ 填开放平台 AppID + AppSecret，或扫码创建机器人。同一 Bot 不要同时开 Webhook。
 
 ## 行为
 
@@ -35,5 +35,6 @@ npm install @larksuiteoapi/node-sdk dingtalk-stream @wecom/aibot-node-sdk
 ```
 npm test
 ```
+
 
 

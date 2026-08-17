@@ -1,4 +1,5 @@
 import type { ChannelAdapter, ImMessage } from '../engine/types.js'
+import { quietSdkLogger } from '../engine/quiet-logger.js'
 
 export interface FeishuConfig {
   appId?: string
@@ -29,7 +30,9 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         throw new Error('缺少依赖 @larksuiteoapi/node-sdk')
       }
       const domain = id === 'lark' || config.domain === 'lark' ? 'https://open.larksuite.com' : undefined
-      client = new sdk.Client({ appId, appSecret, ...(domain ? { domain } : {}) }) as unknown as typeof client
+      const logger = quietSdkLogger(log, id)
+      const loggerLevel = sdk.LoggerLevel?.error ?? 1
+      client = new sdk.Client({ appId, appSecret, logger, loggerLevel, ...(domain ? { domain } : {}) }) as unknown as typeof client
       const dispatcher = new sdk.EventDispatcher({}).register({
         'im.message.receive_v1': (data: {
           sender?: { sender_id?: { open_id?: string } }
@@ -52,7 +55,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           })
         },
       })
-      const wsClient = new sdk.WSClient({ appId, appSecret, ...(domain ? { domain } : {}) })
+      const wsClient = new sdk.WSClient({ appId, appSecret, logger, loggerLevel, ...(domain ? { domain } : {}) })
       ws = wsClient
       await wsClient.start({ eventDispatcher: dispatcher })
       statusText = '长连接已建立'
@@ -74,4 +77,5 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
     status() { return statusText },
   }
 }
+
 

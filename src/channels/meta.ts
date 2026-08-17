@@ -23,6 +23,7 @@ export const CHANNEL_ORDER: ChannelId[] = [
   'lark',
   'weixin',
   'wecom',
+  'qq',
   'telegram',
 ]
 
@@ -68,6 +69,17 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
       { key: 'secret', label: 'Secret', secret: true },
     ],
   },
+
+  qq: {
+    id: 'qq',
+    label: 'QQ',
+    description: '通过 QQ 开放平台机器人接收并回复用户消息',
+    kind: 'qr-or-credentials',
+    fields: [
+      { key: 'appId', label: 'AppID' },
+      { key: 'appSecret', label: 'AppSecret', secret: true },
+    ],
+  },
   telegram: {
     id: 'telegram',
     label: 'Telegram',
@@ -87,3 +99,4 @@ export function supportsQr(id: ChannelId): boolean {
   const kind = CHANNEL_META[id]?.kind
   return kind === 'qr' || kind === 'qr-or-credentials'
 }
+

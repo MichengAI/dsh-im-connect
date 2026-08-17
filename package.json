@@ -1,7 +1,7 @@
 {
   "name": "@michengai/dsh-im-connect",
   "version": "0.1.0",
-  "description": "DeepSeek Harness IM 助理：把本机 agent 接到微信、企微、钉钉、飞书、Telegram，会话与网页任务分列。",
+  "description": "DeepSeek Harness IM 助理：把本机 agent 接到微信、企微、钉钉、飞书、QQ、Telegram，会话与网页任务分列。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -34,6 +34,7 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/schemastery": "^3.18.1",
     "@larksuiteoapi/node-sdk": "^1.36.0",
+    "@tencent-connect/qqbot-connector": "^1.2.0",
     "@wecom/aibot-node-sdk": "^1.0.7",
     "dingtalk-stream": "^2.1.4",
     "qrcode": "^1.5.4"
@@ -61,3 +62,4 @@
     "registry": "https://registry.npmjs.org/"
   }
 }
+

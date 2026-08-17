@@ -2,6 +2,7 @@ node_modules/
 lib/
 dist/
 *.log
+*.tgz
 .env
 .env.*
 secrets.json

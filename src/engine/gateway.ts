@@ -5,9 +5,9 @@ import { SessionRouter } from './router.js'
 import { SeenStore } from './seen-store.js'
 import { SessionMapStore } from './session-store.js'
 import { isImSessionId, type ChannelId, type ChatKind } from './session-id.js'
-import { decideAccess } from './access.js'
 import { splitText } from './split.js'
-import type { ChannelAdapter, EngineConfig, ImMessage, ReplyStream } from './types.js'
+import { ReplyStreamHub, isAssistantTextDelta } from './reply-stream.js'
+import type { ChannelAdapter, EngineConfig, ImMessage } from './types.js'
 
 const HELP = [
   'IM 助理已连接本机 DeepSeek Harness。',
@@ -24,11 +24,8 @@ export class ImEngine {
   private readonly router: SessionRouter
   private readonly broker = new ApprovalBroker()
   private readonly merger: SessionMerger
-  private readonly extraAllow = new Map<string, Set<string>>()
-  private readonly extraGroups = new Map<string, Set<string>>()
-  private readonly openChannels = new Set<string>()
   private readonly queues = new Map<string, Promise<void>>()
-  private readonly streams = new Map<string, ReplyStream>()
+  private readonly streams = new ReplyStreamHub()
   private readonly disposeEvents: Array<() => void> = []
 
   constructor(
@@ -37,7 +34,6 @@ export class ImEngine {
     private readonly seen: SeenStore,
     private readonly config: EngineConfig,
     private readonly log: (line: string) => void,
-    private readonly onUnauthorized?: (channelId: string, msg: ImMessage) => string,
   ) {
     this.router = new SessionRouter(ctx, store, config, log)
     this.merger = new SessionMerger((config.mergeTimeoutSecs || 5) * 1000, (key, text) => {
@@ -46,7 +42,13 @@ export class ImEngine {
       const rest = key.slice(sep + 1)
       const channel = this.channels.get(channelId)
       if (!channel) return
-      void this.inject(channel, { chatId: rest.split(':').slice(1).join(':') || rest, text, kind: rest.startsWith('group:') ? 'group' : 'dm' })
+      const merged: ImMessage = { chatId: rest.split(':').slice(1).join(':') || rest, text, kind: rest.startsWith('group:') ? 'group' : 'dm' }
+      // 合并窗口回调不在任何请求链路里，必须自兜底，否则 rejection 无人接
+      void this.inject(channel, merged).catch((error) => {
+        const detail = error instanceof Error ? error.message : String(error)
+        this.log(`[${channelId}] 合并投递失败: ${detail}`)
+        channel.send(merged.chatId, `消息处理失败：${detail}`).catch(() => undefined)
+      })
     })
     const on = (this.ctx as unknown as { on: (name: string, fn: (...args: unknown[]) => unknown, opts?: unknown) => () => void }).on
     if (typeof on === 'function') {
@@ -103,15 +105,6 @@ export class ImEngine {
     this.channels.delete(channelId)
   }
 
-  addAllowed(channelId: string, userId: string): void {
-    let set = this.extraAllow.get(channelId)
-    if (!set) {
-      set = new Set()
-      this.extraAllow.set(channelId, set)
-    }
-    set.add(userId)
-  }
-
   dispose(): void {
     for (const off of this.disposeEvents) off()
     this.broker.dispose()
@@ -147,25 +140,6 @@ export class ImEngine {
       }
       if (['拒绝', 'no', 'n', 'reject', 'deny'].includes(text.toLowerCase())) {
         if (await this.answerApproval(channelId, msg, false)) return
-      }
-      const local = channel.authorizes?.(msg.userId ?? '')
-      const decision = decideAccess({
-        allowAll: this.config.allowAllUsers,
-        channelOpen: this.openChannels.has(channelId),
-        userAllowed: local === true || (local !== false && this.userAllowed(channelId, msg.userId)),
-        groupAllowed: msg.kind === 'group' && this.groupAllowed(channelId, msg.chatId),
-        kind: msg.kind === 'group' ? 'group' : 'dm',
-        addressed: msg.addressed,
-      })
-      if (decision === 'ignore') return
-      if (decision === 'deny-group-silent') {
-        this.onUnauthorized?.(channelId, msg)
-        return
-      }
-      if (decision === 'deny-dm' || local === false) {
-        const hint = this.onUnauthorized?.(channelId, msg) ?? '未授权：请管理员在设置 → IM助理 中批准你的访问。'
-        await channel.send(msg.chatId, hint).catch(() => undefined)
-        return
       }
       if (msg.media && msg.media.length > 0) {
         await this.inject(channel, msg)
@@ -218,6 +192,7 @@ export class ImEngine {
       else if (media.path) content.push({ type: 'text', text: `[附件 ${media.name ?? media.kind}] ${media.path}` })
     }
     if (content.length === 0) return
+    this.streams.reset(`${channel.id}:${msg.chatId}`)
     await channel.sendAction?.(msg.chatId, 'typing').catch(() => undefined)
     this.router.followup(binding, {
       id: crypto.randomUUID(),
@@ -226,20 +201,6 @@ export class ImEngine {
       source: { kind: 'user' },
     })
     this.log(`[${channel.id}] 已注入 ${binding.sessionId}`)
-  }
-
-  setAccessMode(channelId: string, mode: 'pair' | 'open'): void {
-    if (mode === 'open') this.openChannels.add(channelId)
-    else this.openChannels.delete(channelId)
-  }
-
-  private userAllowed(channelId: string, userId?: string): boolean {
-    if (!userId) return false
-    return this.extraAllow.get(channelId)?.has(userId) === true
-  }
-
-  private groupAllowed(channelId: string, chatId: string): boolean {
-    return this.extraGroups.get(channelId)?.has(chatId) === true
   }
 
   private async answerApproval(channelId: string, msg: ImMessage, allow: boolean): Promise<boolean> {
@@ -273,13 +234,13 @@ export class ImEngine {
     const channel = binding ? this.channels.get(binding.channelId) : undefined
     if (!binding || !channel) return
     const streamKey = `${binding.channelId}:${binding.chatId}`
-    if (event.type === 'assistant/chunk' && event.data?.chunk?.text && channel.beginReply) {
-      let stream = this.streams.get(streamKey)
-      if (!stream) {
-        stream = await channel.beginReply(binding.chatId).catch(() => undefined)
-        if (stream) this.streams.set(streamKey, stream)
-      }
-      if (stream) await stream.update(event.data.chunk.text).catch(() => undefined)
+    const chunk = event.data?.chunk
+    if (event.type === 'assistant/chunk' && channel.beginReply && isAssistantTextDelta(chunk)) {
+      // 事件回调不在请求链路里，流式更新失败必须自兜底，避免 unhandled rejection
+      void this.streams.onTextDelta(streamKey, chunk.text, () => channel.beginReply!(binding.chatId).catch(() => undefined))
+        .catch((error) => {
+          this.log(`[${channel.id}] 流式更新失败: ${error instanceof Error ? error.message : String(error)}`)
+        })
       return
     }
     if (event.type === 'turn/end') {
@@ -288,7 +249,12 @@ export class ImEngine {
       if (reason?.kind === 'error') {
         const detail = reason.error?.message || '模型调用失败'
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
-        await this.deliver(channel, binding.chatId, `助手没有生成回复：${detail}`)
+        const failed = `助手没有生成回复：${detail}`
+        const taken = await this.streams.take(streamKey)
+        if (taken.stream) await taken.stream.finish(failed).catch(() => this.deliver(channel, binding.chatId, failed))
+        else await this.deliver(channel, binding.chatId, failed)
+        // 失败收口也算已投递，避免同回合残留的 assistant/message 再补一条内容冲突的消息
+        this.streams.markDelivered(streamKey)
       }
       return
     }
@@ -298,10 +264,23 @@ export class ImEngine {
         .map((block) => block.text ?? '')
         .join('\n')
         .trim()
-      const stream = this.streams.get(streamKey)
-      this.streams.delete(streamKey)
-      if (stream && text) {
-        await stream.finish(text).catch(() => this.deliver(channel, binding.chatId, text))
+      const taken = await this.streams.take(streamKey)
+      if (taken.stream) {
+        const finalText = text || taken.text
+        if (finalText) {
+          try {
+            await taken.stream.finish(finalText)
+          } catch (error) {
+            // 收口失败时大概率没送出去，宁可小概率重复也不能让用户收不到回复
+            this.log(`[${channel.id}] 流式收口失败，改走普通投递: ${error instanceof Error ? error.message : String(error)}`)
+            await this.deliver(channel, binding.chatId, finalText)
+          }
+          this.streams.markDelivered(streamKey)
+        }
+        return
+      }
+      if (this.streams.consumeDelivered(streamKey)) {
+        this.log(`[${channel.id}] 忽略重复助手消息 ${sessionId}`)
         return
       }
       if (text) {
@@ -324,6 +303,9 @@ export class ImEngine {
     }
   }
 }
+
+
+
 
 
 

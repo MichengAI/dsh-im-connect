@@ -59,6 +59,7 @@ export interface PairingBegin {
   expiresAt?: number
   pollIntervalMs: number
   poll: (signal?: AbortSignal) => Promise<PairingPoll>
+  dispose?: () => void
 }
 
 export interface PairingPoll {
@@ -66,6 +67,8 @@ export interface PairingPoll {
   credentials?: Record<string, string>
   error?: string
   pollIntervalMs?: number
+  qrUrl?: string
+  qrImage?: string
 }
 export function isRasterQr(value?: string): boolean {
   if (!value) return false
@@ -77,4 +80,5 @@ export function qrPayloadOf(begun: { qrUrl?: string; qrImage?: string }): { qrUr
   const qrUrl = begun.qrUrl || begun.qrImage
   return { qrUrl, qrImage: undefined }
 }
+
 

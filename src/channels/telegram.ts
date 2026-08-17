@@ -124,18 +124,47 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     async beginReply(chatId): Promise<ReplyStream> {
       const first = await api<{ message_id: number }>('sendMessage', { chat_id: Number(chatId), text: '…' })
       let last = '…'
+      let timer: ReturnType<typeof setTimeout> | undefined
+      let pending: string | undefined
+      let inflight = Promise.resolve()
+
+      const flush = async (text: string, allowSend: boolean) => {
+        const next = text.slice(0, 4000) || '…'
+        if (next === last) return
+        // last 只在发送成功后更新：失败时保留旧值，finish 才能靠 sendMessage 兜底送出全文
+        try {
+          await api('editMessageText', { chat_id: Number(chatId), message_id: first.message_id, text: next })
+          last = next
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error)
+          if (detail.includes('message is not modified')) {
+            last = next
+            return
+          }
+          if (!allowSend) return
+          await api('sendMessage', { chat_id: Number(chatId), text: next })
+          last = next
+        }
+      }
+
       return {
         async update(text) {
-          const next = text.slice(0, 4000) || '…'
-          if (next === last) return
-          last = next
-          await api('editMessageText', { chat_id: Number(chatId), message_id: first.message_id, text: next }).catch(() => undefined)
+          pending = text
+          if (timer) return
+          timer = setTimeout(() => {
+            timer = undefined
+            const next = pending
+            pending = undefined
+            if (next !== undefined) inflight = inflight.then(() => flush(next, false))
+          }, 400)
         },
         async finish(text) {
-          const next = text.slice(0, 4000) || last
-          await api('editMessageText', { chat_id: Number(chatId), message_id: first.message_id, text: next }).catch(async () => {
-            await api('sendMessage', { chat_id: Number(chatId), text: next })
-          })
+          if (timer) {
+            clearTimeout(timer)
+            timer = undefined
+          }
+          await inflight.catch(() => undefined)
+          await flush(text || pending || last, true)
         },
       }
     },
@@ -143,3 +172,4 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     status() { return stopped ? '已停止' : lastError ? `轮询中（${lastError}）` : '轮询中' },
   }
 }
+

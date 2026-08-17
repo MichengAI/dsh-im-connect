@@ -36,3 +36,18 @@ test('别人已经包裹时只插入频道页签，自己包裹时提供插入�
   assert.match(client, /insertChannelTab/)
   assert.match(client, /__dshNativeTabHost/)
 })
+test('客户端模块按完整包名注册，避免 client-modules 加载失败', () => {
+  assert.match(client, /id:\s*"@michengai\/dsh-im-connect"/)
+  assert.doesNotMatch(client, /id:\s*"dsh-im-connect"/)
+})
+test('频道会话菜单由列表统一开关，同一时间只开一个', () => {
+  assert.match(client, /const \[openMenu, setOpenMenu\] = useState\(null\)/)
+  assert.match(client, /function SessionPointerMenu/)
+  assert.match(client, /ReactDOM\.createPortal/)
+  assert.match(client, /onMenuChange\(true, e\)/)
+  assert.match(client, /pointerPoint\(event\)/)
+  assert.match(client, /menuOpen: openMenu && openMenu.id === sess\.sessionId/)
+  assert.match(client, /data-ima-session-menu/)
+  assert.match(client, /function ChannelSessionRow\(\{ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange \}\)/)
+  assert.doesNotMatch(client, /function ChannelSessionRow\([^\)]*\) \{\s*const \[menu, setMenu\] = useState\(false\)/)
+})

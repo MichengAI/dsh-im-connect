@@ -1,4 +1,5 @@
 import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
+import { quietSdkLogger } from '../engine/quiet-logger.js'
 
 export interface WecomConfig {
   botId?: string
@@ -34,7 +35,8 @@ export function messageText(body: Record<string, unknown>): string {
 
 /** 企业微信智能机器人必须按回调帧 replyStream，主动 sendMessage 用户看不到。 */
 export class WecomReplyBroker {
-  private readonly pending = new Map<string, { frame: unknown; streamId: string; started: boolean }>()
+  // 同一聊天可能连续来多条消息，每条都有独立的回调帧，必须排队而不是单槽覆盖
+  private readonly pending = new Map<string, Array<{ frame: unknown; streamId: string; started: boolean }>>()
 
   constructor(
     private readonly client: Pick<WecomSdkClient, 'replyStream' | 'sendMessage'>,
@@ -43,28 +45,39 @@ export class WecomReplyBroker {
   ) {}
 
   remember(chatId: string, frame: unknown): string {
+    const list = this.pending.get(chatId) ?? []
     const streamId = this.newStreamId()
-    this.pending.set(chatId, { frame, streamId, started: false })
+    list.push({ frame, streamId, started: false })
+    this.pending.set(chatId, list)
     return streamId
   }
 
+  private shift(chatId: string): { frame: unknown; streamId: string; started: boolean } | undefined {
+    const list = this.pending.get(chatId)
+    if (!list?.length) return undefined
+    return list.shift()
+  }
+
   async startThinking(chatId: string): Promise<void> {
-    const item = this.pending.get(chatId)
-    if (!item || item.started) return
-    await this.client.replyStream(item.frame, item.streamId, '正在思考中…', false)
-    item.started = true
+    for (const item of this.pending.get(chatId) ?? []) {
+      if (item.started) continue
+      await this.client.replyStream(item.frame, item.streamId, '正在思考中…', false)
+      item.started = true
+    }
   }
 
   async send(chatId: string, text: string): Promise<void> {
-    const item = this.pending.get(chatId)
+    const item = this.shift(chatId)
     if (item) {
       try {
         await this.client.replyStream(item.frame, item.streamId, text, true)
-        this.pending.delete(chatId)
         this.log(`[wecom] 已通过回调回复 ${chatId}`)
         return
       } catch (error) {
         this.log(`[wecom] 回调回复失败，改走主动推送：${error instanceof Error ? error.message : String(error)}`)
+        // 帧先放回去，后续回复仍可尝试回调通道
+        const list = this.pending.get(chatId)
+        if (list) list.unshift(item)
       }
     }
     await this.client.sendMessage(chatId, { msgtype: 'markdown', markdown: { content: text } })
@@ -72,15 +85,22 @@ export class WecomReplyBroker {
   }
 
   async beginReply(chatId: string): Promise<ReplyStream> {
-    const item = this.pending.get(chatId)
+    const item = this.shift(chatId)
     if (!item) throw new Error('wecom: 没有待回复的回调帧')
-    if (!item.started) await this.startThinking(chatId)
+    if (!item.started) {
+      await this.client.replyStream(item.frame, item.streamId, '正在思考中…', false)
+      item.started = true
+    }
     return {
       // 企业微信客户端会把未完成分片渲染成一条条气泡，这里只收最终全文。
       update: async () => undefined,
       finish: async (text) => {
-        await this.client.replyStream(item.frame, item.streamId, text, true)
-        this.pending.delete(chatId)
+        try {
+          await this.client.replyStream(item.frame, item.streamId, text, true)
+        } catch (error) {
+          this.log(`[wecom] 回调收口失败，改走主动推送：${error instanceof Error ? error.message : String(error)}`)
+          await this.client.sendMessage(chatId, { msgtype: 'markdown', markdown: { content: text } })
+        }
         this.log(`[wecom] 已通过回调回复 ${chatId}`)
       },
     }
@@ -104,7 +124,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     skipMerge: true,
     async start() {
       let sdk: {
-        WSClient: new (opts: { botId: string; secret: string }) => WecomSdkClient
+        WSClient: new (opts: { botId: string; secret: string; maxAuthFailureAttempts?: number; logger?: { debug: Function; info: Function; warn: Function; error: Function } }) => WecomSdkClient
         generateReqId?: (prefix: string) => string
       }
       try {
@@ -112,7 +132,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       } catch {
         throw new Error('缺少依赖 @wecom/aibot-node-sdk')
       }
-      client = new sdk.WSClient({ botId, secret })
+      client = new sdk.WSClient({ botId, secret, maxAuthFailureAttempts: 1, logger: quietSdkLogger(log, 'wecom') })
       const newStreamId = sdk.generateReqId
         ? () => sdk.generateReqId!('stream')
         : () => `stream_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`
@@ -161,7 +181,6 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       client.connect()
       await ready
       statusText = '长连接已建立'
-      log('[wecom] WebSocket 已连接')
     },
     async stop() {
       client?.disconnect()
@@ -180,3 +199,5 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     status() { return statusText },
   }
 }
+
+

@@ -11,7 +11,7 @@ import { ImEngine } from './engine/gateway.js'
 import { SeenStore } from './engine/seen-store.js'
 import { clearWeixinLogin, persistWeixinLogin } from './channels/weixin.js'
 import { normalizeAssistantModel, normalizePermission, normalizeWorkspacePath, type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js'
-import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
+import type { ChannelAdapter, EngineConfig } from './engine/types.js'
 
 export interface ChannelState {
   enabled?: boolean
@@ -30,13 +30,10 @@ export interface ChannelView {
   receiveEnabled: boolean
   configuredKeys: string[]
   status: string
-  accessMode?: string
 }
 
 interface Persisted {
   channels: Record<string, ChannelState>
-  allowlist: Record<string, string[]>
-  pending: Record<string, Array<{ userId: string; username?: string; chatId?: string; time: number }>>
   assistant?: AssistantModel
   cwd?: string
   permission?: PermissionPreset
@@ -52,7 +49,7 @@ export class ChannelManager {
   private readonly log: (line: string) => void
   private readonly ctx: Context
   private readonly engineConfig: EngineConfig
-  private store: Persisted = { channels: {}, allowlist: {}, pending: {} }
+  private store: Persisted = { channels: {} }
   private readonly running = new Map<string, ChannelAdapter>()
   private apiDisposers: Array<() => void> = []
 
@@ -72,10 +69,7 @@ export class ChannelManager {
     this.vault = credentials
       ? createServiceVault(credentials)
       : createFileVault(join(options.stateDir, 'secrets.json'))
-    this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log, (channelId, msg) => {
-      this.requestAuthorization(channelId, msg)
-      return '未授权：请管理员在设置 → IM助理 中批准你的访问。'
-    })
+    this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log)
     this.pairing = new PairingHub({
       log: options.log,
       onSuccess: async (id, creds) => {
@@ -83,9 +77,6 @@ export class ChannelManager {
         if (!result.ok) throw new Error(result.error ?? '保存失败')
       },
     })
-    for (const [channelId, users] of Object.entries(this.store.allowlist)) {
-      for (const userId of users) this.engine.addAllowed(channelId, userId)
-    }
   }
 
   list(): ChannelView[] {
@@ -107,7 +98,6 @@ export class ChannelManager {
         receiveEnabled: connected && state.receiveEnabled !== false,
         configuredKeys,
         status,
-        accessMode: config.accessMode,
       }
     })
   }
@@ -119,12 +109,6 @@ export class ChannelManager {
       label: CHANNEL_META[id].label,
       sessions: this.sessions.list().filter((item) => item.channel === id),
     })).filter((group) => group.sessions.length > 0 || connected.has(group.id))
-  }
-
-  pendingRequests() {
-    return Object.entries(this.store.pending).flatMap(([channelId, list]) =>
-      list.map((item) => ({ channelId, ...item })),
-    )
   }
 
   async connect(id: ChannelId, config?: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
@@ -143,7 +127,6 @@ export class ChannelManager {
     const nextConfig = await this.persistSecrets(id, { ...(prev.config ?? {}), ...incoming })
     this.store.channels[id] = { ...prev, enabled: true, receiveEnabled: true, config: nextConfig }
     this.flush()
-    this.applyAccessMode(id, nextConfig.accessMode)
     try {
       await this.startOne(id)
       return { ok: true }
@@ -174,6 +157,7 @@ export class ChannelManager {
   }
 
   async remove(id: ChannelId): Promise<void> {
+    if (!CHANNEL_META[id]) return
     await this.stopOne(id)
     this.pairing.cancel(id)
     delete this.store.channels[id]
@@ -182,20 +166,6 @@ export class ChannelManager {
     for (const field of CHANNEL_META[id].fields.filter((item) => item.secret)) {
       await this.vault.unset(credentialRef(id, field.key)).catch(() => undefined)
     }
-  }
-
-  approve(id: string, userId: string): void {
-    const list = this.store.allowlist[id] ?? []
-    if (!list.includes(userId)) list.push(userId)
-    this.store.allowlist[id] = list
-    this.store.pending[id] = (this.store.pending[id] ?? []).filter((item) => item.userId !== userId)
-    this.engine.addAllowed(id, userId)
-    this.flush()
-  }
-
-  deny(id: string, userId: string): void {
-    this.store.pending[id] = (this.store.pending[id] ?? []).filter((item) => item.userId !== userId)
-    this.flush()
   }
 
   attachMappedSessions(): Promise<void> {
@@ -207,7 +177,6 @@ export class ChannelManager {
     for (const id of CHANNEL_ORDER) {
       const state = this.store.channels[id]
       if (state?.enabled && state.receiveEnabled !== false) {
-        this.applyAccessMode(id, state.config?.accessMode)
         const one = Date.now()
         await this.startOne(id).catch((error) => {
           this.log(`[manager] 启动 ${id} 失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -245,14 +214,14 @@ export class ChannelManager {
       ok: true,
       channels: this.list(),
       groups: this.channelSessions(),
-      pending: this.pendingRequests(),
       assistant: this.currentAssistant(),
     })
     const dispose = webServer.register({
       kind: 'prefix',
       path: '/dsh-im-connect/api',
       handler: async (req, res) => {
-        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+        try {
+          const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
         const parts = url.pathname.split('/').filter(Boolean)
         if (parts[2] === 'assistant' && parts.length === 3) {
           if (req.method === 'GET') {
@@ -309,11 +278,7 @@ export class ChannelManager {
           if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'method not allowed' }); return }
           const body = await readBody(req)
           if (action === 'start') {
-            const extra: Record<string, string> = {}
-            if (id === 'dingtalk' && (body.accessMode === 'pair' || body.accessMode === 'open')) {
-              extra.accessMode = String(body.accessMode)
-            }
-            const pairing = await this.pairing.start(id, extra)
+            const pairing = await this.pairing.start(id)
             send(res, pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
             return
           }
@@ -353,18 +318,16 @@ export class ChannelManager {
             send(res, 200, { ok: true, channel: this.list().find((item) => item.id === id) })
             return
           }
-          if (action === 'approve' || action === 'deny') {
-            const userId = String(body.userId ?? '')
-            if (!userId) { send(res, 400, { ok: false, error: '缺少 userId' }); return }
-            if (action === 'approve') this.approve(id, userId)
-            else this.deny(id, userId)
-            send(res, 200, { ok: true, pending: this.pendingRequests() })
-            return
-          }
           send(res, 404, { ok: false, error: `未知操作 ${action}` })
           return
         }
         send(res, 404, { ok: false, error: 'not found' })
+        } catch (error) {
+          // 单个路由异常不能让 HTTP 连接悬死，统一回 500 并落日志
+          const detail = error instanceof Error ? error.message : String(error)
+          this.log(`[manager] API 处理失败: ${detail}`)
+          send(res, 500, { ok: false, error: detail })
+        }
       },
     })
     if (typeof dispose === 'function') this.apiDisposers.push(dispose)
@@ -470,28 +433,12 @@ export class ChannelManager {
     return out
   }
 
-  private requestAuthorization(channelId: string, msg: ImMessage): void {
-    const userId = msg.userId ?? '(匿名)'
-    const list = this.store.pending[channelId] ?? []
-    if (!list.some((item) => item.userId === userId)) {
-      list.push({ userId, username: msg.username, chatId: msg.chatId, time: Date.now() })
-      this.store.pending[channelId] = list
-      this.flush()
-    }
-  }
-
-  private applyAccessMode(id: ChannelId, mode?: string): void {
-    if (id !== 'dingtalk') return
-    this.engine.setAccessMode(id, mode === 'open' ? 'open' : 'pair')
-  }
-
   private async startOne(id: ChannelId): Promise<void> {
     await this.stopOne(id)
     const state = this.store.channels[id]
     const resolved = await this.resolveSecrets(id, state?.config ?? {})
     const adapter = createChannelAdapter(id, resolved, this.log, join(this.stateDir, id))
     if (!adapter) throw new Error('凭据不足，无法启动渠道')
-    this.applyAccessMode(id, resolved.accessMode)
     this.engine.register(adapter)
     this.running.set(id, adapter)
     try {
@@ -552,14 +499,12 @@ export class ChannelManager {
       const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<Persisted>
       this.store = {
         channels: parsed.channels ?? {},
-        allowlist: parsed.allowlist ?? {},
-        pending: parsed.pending ?? {},
         assistant: normalizeAssistantModel(parsed.assistant ?? {}),
         cwd: normalizeWorkspacePath(parsed.cwd),
         permission: normalizePermission(parsed.permission),
       }
     } catch {
-      this.store = { channels: {}, allowlist: {}, pending: {} }
+      this.store = { channels: {} }
     }
   }
 

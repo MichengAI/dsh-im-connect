@@ -5,6 +5,7 @@ import { createFeishuChannel } from './feishu.js'
 import { createTelegramChannel } from './telegram.js'
 import { createWecomChannel } from './wecom.js'
 import { createWeixinChannel } from './weixin.js'
+import { createQqChannel } from './qq.js'
 
 export function createChannelAdapter(
   id: ChannelId,
@@ -25,8 +26,13 @@ export function createChannelAdapter(
       return createWecomChannel({ botId: config.botId, secret: config.secret }, log)
     case 'dingtalk':
       return createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret }, log)
+    case 'qq':
+      return createQqChannel({ appId: config.appId, appSecret: config.appSecret }, log)
     default:
       return undefined
   }
 }
+
+
+
 

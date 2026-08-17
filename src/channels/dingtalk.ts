@@ -6,6 +6,31 @@ export interface DingtalkConfig {
   clientSecret?: string
 }
 
+export function parseDingtalkRobotEvent(payload: {
+  text?: { content?: string }
+  senderStaffId?: string
+  senderId?: string
+  conversationId?: string
+  conversationType?: string
+  sessionWebhook?: string
+  msgId?: string
+  msgid?: string
+  msgIdEnc?: string
+}): { chatId: string; userId: string; text: string; kind: 'dm' | 'group'; messageId?: string } | undefined {
+  const text = payload.text?.content?.trim() ?? ''
+  const sender = payload.senderStaffId ?? payload.senderId ?? ''
+  const group = String(payload.conversationType) === '2'
+  const chatId = group ? (payload.conversationId ?? '') : sender
+  if (!chatId) return undefined
+  const messageId = payload.msgId || payload.msgid || payload.msgIdEnc
+  return {
+    chatId,
+    userId: sender,
+    text,
+    kind: group ? 'group' : 'dm',
+    messageId,
+  }
+}
 export function createDingtalkChannel(config: DingtalkConfig, log: (line: string) => void): ChannelAdapter | undefined {
   const clientId = config.clientId?.trim()
   const clientSecret = config.clientSecret?.trim()
@@ -16,7 +41,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
   let statusText = '未连接'
   const webhooks = new Map<string, string>()
   const targets = new Map<string, CardTarget>()
-  const cards = new DingtalkCardClient(clientId, clientSecret)
+  const cards = new DingtalkCardClient(clientId, clientSecret, log)
 
   return {
     id: 'dingtalk',
@@ -39,23 +64,21 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
             sessionWebhook?: string
           }
           try { payload = JSON.parse(res.data) as typeof payload } catch { return }
-          const text = payload.text?.content?.trim() ?? ''
-          const sender = payload.senderStaffId ?? payload.senderId ?? ''
-          const group = String(payload.conversationType) === '2'
-          const chatId = group ? (payload.conversationId ?? '') : sender
-          if (payload.sessionWebhook && chatId) webhooks.set(chatId, payload.sessionWebhook)
-          if (chatId) {
-            targets.set(chatId, group
-              ? { type: 'group', openConversationId: payload.conversationId ?? chatId }
-              : { type: 'user', userId: sender })
+          const parsed = parseDingtalkRobotEvent(payload)
+          if (payload.sessionWebhook && parsed?.chatId) webhooks.set(parsed.chatId, payload.sessionWebhook)
+          if (parsed?.chatId) {
+            targets.set(parsed.chatId, parsed.kind === 'group'
+              ? { type: 'group', openConversationId: payload.conversationId ?? parsed.chatId }
+              : { type: 'user', userId: parsed.userId })
           }
-          if (!chatId || !text) return { status: 'SUCCESS' }
+          if (!parsed?.chatId || !parsed.text) return { status: 'SUCCESS' }
           void handler?.({
-            chatId,
-            userId: sender,
-            text,
-            kind: group ? 'group' : 'dm',
+            chatId: parsed.chatId,
+            userId: parsed.userId,
+            text: parsed.text,
+            kind: parsed.kind,
             addressed: true,
+            messageId: parsed.messageId,
           })
           return { status: 'SUCCESS' }
         })
@@ -109,5 +132,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
     status() { return statusText },
   }
 }
+
+
 
 

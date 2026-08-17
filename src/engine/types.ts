@@ -37,7 +37,6 @@ export interface ChannelAdapter {
   loginUrl?(): string | undefined
   sendAction?(chatId: string, action: 'typing'): Promise<void>
   sendMedia?(chatId: string, filePath: string, caption?: string): Promise<void>
-  authorizes?(userId: string): boolean | undefined
   beginReply?(chatId: string): Promise<ReplyStream>
   /** 企业微信等回调通道不能等合并窗口，必须立刻处理。 */
   skipMerge?: boolean
@@ -48,7 +47,6 @@ export interface EngineConfig {
   provider: string
   model: string
   agentPreset: string
-  allowAllUsers: boolean
   mergeTimeoutSecs: number
   permissionPreset: 'read-only' | 'workspace-write' | 'full-access'
   reasoningEffort?: string

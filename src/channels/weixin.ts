@@ -253,13 +253,6 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
           state.botToken = token
           const newBaseUrl = pickStr(st, 'baseurl', 'base_url')
           if (newBaseUrl) state.baseUrl = newBaseUrl
-          if (!state.allowedUserId) {
-            state.allowedUserId = userId
-            log(`[weixin] 已绑定白名单用户 ${userId}（仅该用户可驱动）`)
-          } else if (state.allowedUserId !== userId) {
-            log(`[weixin] 扫码用户 ${userId} 不在白名单（白名单=${state.allowedUserId}）`)
-            return false
-          }
           flush()
           statusText = '已登录'
           currentLoginUrl = undefined
@@ -466,7 +459,6 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
             const parsed = parseInbound(raw)
             if (!parsed) continue
             if (parsed.contextToken) state.contextTokens[parsed.fromUserId] = parsed.contextToken
-            if (state.allowedUserId && parsed.fromUserId !== state.allowedUserId) continue
             const media = await Promise.all(parsed.media)
             if (parsed.text === '' && media.length === 0) continue
             void handler?.({
@@ -652,12 +644,6 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     },
     loginUrl() {
       return currentLoginUrl
-    },
-    authorizes(userId: string) {
-      // 已绑定扫码白名单：仅放行该用户（其余在轮询层已过滤）
-      if (state.allowedUserId) return state.allowedUserId === userId
-      // 尚未登录/未绑定白名单：交给网关全局白名单决定
-      return undefined
     },
     setMessageHandler(h) {
       handler = h

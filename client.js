@@ -2,12 +2,13 @@
  * dsh-im-connect 浏览器端：IM助理设置页 + 工作区频道槽。
  */
 window.__ModuleLoader__.load({
-  id: "dsh-im-connect",
+  id: "@michengai/dsh-im-connect",
   factory: (require) => {
     var module = { exports: {} };
     var exports = module.exports;
     const React = require("react");
-    const { useState, useEffect, useCallback, useRef, useSyncExternalStore } = React;
+    const { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } = React;
+    const ReactDOM = require("react-dom");
     const EMPTY_EXTRA_TABS = [];
     const inject = ["slots", "sessions", "workspaces"];
     const API_BASE = "/dsh-im-connect/api";
@@ -81,8 +82,6 @@ window.__ModuleLoader__.load({
 .ima-switch i{position:absolute;top:2px;left:20px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .16s ease}
 .ima-switch.off i{left:2px}
 .ima-error{color:var(--ima-danger);font-size:12px;margin:0 0 12px}
-.ima-pending{margin:0 0 14px;padding:10px 12px;border:1px solid rgba(210,153,34,.35);border-radius:12px}
-.ima-pending-row{display:flex;gap:8px;align-items:center;margin-top:8px}
 .ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}.ima-official-tree{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}.ima-native,.ima-rail.ima-native,.ima-rail.dcu-wb{box-sizing:border-box;padding-right:var(--dsh-sidebar-inline-padding,12px)}
 .ima-tabs{display:flex;gap:18px;padding:4px 12px 0;border-bottom:1px solid var(--ima-line)}
 .ima-tab{appearance:none;border:0;background:transparent;color:var(--ima-muted);padding:8px 0;font-size:13px;cursor:pointer}
@@ -106,7 +105,7 @@ window.__ModuleLoader__.load({
 .ima-logo svg{width:28px;height:28px;display:block}
 .ima-logo.sm{width:16px;height:16px;overflow:visible}
 .ima-logo.sm svg{width:16px;height:16px}
-.ima-logo.sm[data-brand="weixin"] svg,.ima-logo.sm[data-brand="feishu"] svg,.ima-logo.sm[data-brand="lark"] svg,.ima-logo.sm[data-brand="telegram"] svg{transform:scale(1.2);transform-origin:center}
+.ima-logo.sm[data-brand="weixin"] svg,.ima-logo.sm[data-brand="feishu"] svg,.ima-logo.sm[data-brand="lark"] svg,.ima-logo.sm[data-brand="telegram"] svg,.ima-logo.sm[data-brand="qq"] svg{transform:scale(1.2);transform-origin:center}
 .ima-logo[data-brand="wecom"]{border-radius:6px;box-shadow:inset 0 0 0 1px rgba(15,23,42,.12);overflow:hidden;background:#fff}
 .ima-logo.sm[data-brand="wecom"]{border-radius:4px}
 .ima-mask{position:fixed;inset:0;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.45));backdrop-filter:var(--dsw-mask-blur,blur(8px));display:grid;place-items:center;z-index:80;padding:24px}
@@ -183,6 +182,12 @@ window.__ModuleLoader__.load({
         ]);
       }
 
+      if (id === "qq") {
+        return svg("0 0 24 24", [
+          h("path", { key: "mark", fill: "#12B7F5", d: "M21.395 15.035a40 40 0 0 0-.803-2.264l-1.079-2.695c.001-.032.014-.562.014-.836C19.526 4.632 17.351 0 12 0S4.474 4.632 4.474 9.241c0 .274.013.804.014.836l-1.08 2.695a39 39 0 0 0-.802 2.264c-1.021 3.283-.69 4.643-.438 4.673.54.065 2.103-2.472 2.103-2.472 0 1.469.756 3.387 2.394 4.771-.612.188-1.363.479-1.845.835-.434.32-.379.646-.301.778.343.578 5.883.369 7.482.189 1.6.18 7.14.389 7.483-.189.078-.132.132-.458-.301-.778-.483-.356-1.233-.646-1.846-.836 1.637-1.384 2.393-3.302 2.393-4.771 0 0 1.563 2.537 2.103 2.472.251-.03.581-1.39-.438-4.673" }),
+        ]);
+      }
+
       if (id === "telegram") {
         return svg("0 0 24 24", [
           h("path", { key: "mark", fill: "#26A5E4", d: "M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" }),
@@ -216,6 +221,7 @@ window.__ModuleLoader__.load({
       if (ch.id === "lark") return "请使用 Lark 扫描二维码完成配对";
       if (ch.id === "wecom") return "请使用企业微信扫描二维码，快捷绑定机器人";
       if (ch.id === "dingtalk") return "请使用钉钉扫描二维码，自动创建机器人";
+      if (ch.id === "qq") return "请使用手机 QQ 扫描二维码，创建开放平台机器人";
       return "请使用对应 App 扫描二维码";
     }
 
@@ -253,7 +259,6 @@ window.__ModuleLoader__.load({
       const [tab, setTab] = useState(hasQr ? "qr" : "manual");
       const [pairing, setPairing] = useState(null);
       const [draft, setDraft] = useState({});
-      const [accessMode, setAccessMode] = useState(ch.accessMode === "open" ? "open" : "pair");
       const [busy, setBusy] = useState(false);
       const [error, setError] = useState("");
       const alive = useRef(true);
@@ -265,14 +270,14 @@ window.__ModuleLoader__.load({
         api(`/channels/${ch.id}/qr/${refresh ? "refresh" : "start"}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(ch.id === "dingtalk" ? { accessMode } : {}),
+          body: JSON.stringify({}),
         }).then((data) => {
           if (!alive.current) return;
           if (!data.ok && !data.pairing) setError(data.error || "无法生成二维码");
           setPairing(data.pairing || null);
         }).catch(() => { if (alive.current) setError("无法生成二维码"); })
           .finally(() => { if (alive.current) setBusy(false); });
-      }, [ch.id, hasQr, accessMode]);
+      }, [ch.id, hasQr]);
 
       useEffect(() => {
         alive.current = true;
@@ -296,13 +301,27 @@ window.__ModuleLoader__.load({
 
       const close = () => {
         alive.current = false;
-        if (hasQr) api(`/channels/${ch.id}/qr/cancel`, { method: "POST" }).catch(() => undefined);
+        if (hasQr) api("/channels/" + ch.id + "/qr/cancel", { method: "POST" }).catch(() => undefined);
         onClose();
       };
+      const onCloseRef = useRef(onClose);
+      onCloseRef.current = onClose;
+      useEffect(() => {
+        const onKeyDown = (event) => {
+          if (event.key !== "Escape") return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+          alive.current = false;
+          if (hasQr) api("/channels/" + ch.id + "/qr/cancel", { method: "POST" }).catch(() => undefined);
+          onCloseRef.current();
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+      }, [hasQr, ch.id]);
 
       const saveManual = () => {
         const config = { ...draft };
-        if (ch.id === "dingtalk") config.accessMode = accessMode;
         setBusy(true);
         setError("");
         api(`/channels/${ch.id}/connect`, {
@@ -326,7 +345,7 @@ window.__ModuleLoader__.load({
       const src = qrSrc(pairing);
       const remain = pairing && pairing.remainingSeconds;
 
-      return h("div", { className: "ima-mask", onClick: close },
+      return h("div", { className: "ima-mask", role: "presentation", onClick: close, onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } } },
         h("div", { className: "ima-modal", onClick: (e) => e.stopPropagation() },
           h("div", { className: "ima-modal-h" },
             h("h2", null, "配置" + ch.label),
@@ -348,16 +367,6 @@ window.__ModuleLoader__.load({
                   remain > 0 && h("p", { className: "ima-hint" }, "二维码 " + Math.floor(remain / 60) + ":" + String(remain % 60).padStart(2, "0") + " 后过期"),
                   status === "scanned" && h("p", { className: "ima-hint" }, "已扫码，请在手机上确认"),
                   (status === "expired" || status === "failed") && h("p", { className: "ima-error" }, (pairing && pairing.error) || "请重新生成二维码"),
-                  ch.id === "dingtalk" && h("div", { className: "ima-radio" },
-                    h("label", null,
-                      h("input", { type: "radio", name: "am", checked: accessMode === "pair", onChange: () => setAccessMode("pair") }),
-                      h("span", null, "配对模式", h("small", null, "仅批准过的用户可以驱动本机助手")),
-                    ),
-                    h("label", null,
-                      h("input", { type: "radio", name: "am", checked: accessMode === "open", onChange: () => setAccessMode("open") }),
-                      h("span", null, "开放模式", h("small", null, "该渠道消息默认放行，适合企业内部共用")),
-                    ),
-                  ),
                   h("button", { className: "ima-link", disabled: busy, onClick: () => startQr(true) }, "重新生成二维码"),
                 )
           ),
@@ -371,16 +380,6 @@ window.__ModuleLoader__.load({
                 onChange: (e) => setDraft({ ...draft, [f.key]: e.target.value }),
               }),
             )),
-            ch.id === "dingtalk" && h("div", { className: "ima-radio" },
-              h("label", null,
-                h("input", { type: "radio", name: "am2", checked: accessMode === "pair", onChange: () => setAccessMode("pair") }),
-                h("span", null, "配对模式", h("small", null, "仅批准过的用户可以驱动本机助手")),
-              ),
-              h("label", null,
-                h("input", { type: "radio", name: "am2", checked: accessMode === "open", onChange: () => setAccessMode("open") }),
-                h("span", null, "开放模式", h("small", null, "该渠道消息默认放行，适合企业内部共用")),
-              ),
-            ),
             h("div", { style: { display: "flex", justifyContent: "flex-end" } },
               h("button", { className: "ima-btn primary", disabled: busy, onClick: saveManual }, busy ? "保存中…" : "确认"),
             ),
@@ -391,14 +390,32 @@ window.__ModuleLoader__.load({
 
     function ChannelCard({ ch, busy, onAction, onConfigure }) {
       const [menu, setMenu] = useState(false);
+      const menuRoot = useRef(null);
+      useEffect(() => {
+        if (!menu) return undefined;
+        const close = (event) => {
+          if (menuRoot.current && menuRoot.current.contains(event.target)) return;
+          setMenu(false);
+        };
+        const onKey = (event) => {
+          if (event.key === "Escape") setMenu(false);
+        };
+        document.addEventListener("pointerdown", close, true);
+        document.addEventListener("keydown", onKey);
+        return () => {
+          document.removeEventListener("pointerdown", close, true);
+          document.removeEventListener("keydown", onKey);
+        };
+      }, [menu]);
+
       const configuring = !ch.connected;
       const meta = configuring ? "未配置" : (ch.status && ch.status !== "未连接" ? ch.status : "已连接");
-      const right = h("div", { className: "ima-actions" },
+      const right = h("div", { className: "ima-actions", ref: menuRoot },
         configuring
           ? h("button", { className: "ima-btn", disabled: busy, onClick: onConfigure }, busy ? "接入中…" : "配置")
           : [
-            h("button", { key: "more", className: "ima-more", "aria-label": ch.label + " 更多", onClick: () => setMenu(!menu) }, "…"),
-            menu && h("div", { key: "menu", className: "ima-menu" },
+            h("button", { key: "more", className: "ima-more", "aria-label": ch.label + " 更多", "aria-expanded": menu, onClick: (event) => { event.stopPropagation(); setMenu(!menu); } }, "…"),
+            menu && h("div", { key: "menu", className: "ima-menu", "data-ima-card-menu": "", onClick: (event) => event.stopPropagation() },
               h("button", { onClick: () => { setMenu(false); onConfigure(); } }, "重新接入"),
               h("button", { onClick: () => { setMenu(false); onAction(ch.id, "disconnect"); } }, "断开"),
               h("button", { onClick: () => { setMenu(false); onAction(ch.id, "remove"); } }, "删除配置"),
@@ -724,24 +741,18 @@ window.__ModuleLoader__.load({
 
     function SettingsPage(props) {
       const [channels, setChannels] = useState(null);
-      const [pending, setPending] = useState([]);
       const [error, setError] = useState("");
       const [busy, setBusy] = useState({});
       const [editing, setEditing] = useState(null);
 
       const refresh = useCallback(() => {
         api("/channels").then((data) => {
-          if (data.ok) { setChannels(data.channels); setPending(data.pending || []); setError(""); }
+          if (data.ok) { setChannels(data.channels); setError(""); }
           else setError(data.error || "加载失败");
         }).catch(() => setError("无法连接本机 IM 助理接口"));
       }, []);
 
       useEffect(() => { ensureStyle(); refresh(); }, [refresh]);
-      useEffect(() => {
-        if (!(pending || []).length) return;
-        const timer = setInterval(refresh, 4000);
-        return () => clearInterval(timer);
-      }, [pending, refresh]);
 
       const onAction = (id, action, body) => {
         setBusy((prev) => ({ ...prev, [id]: true }));
@@ -767,14 +778,6 @@ window.__ModuleLoader__.load({
         ),
         h(ComposerBar, { useWorkspaces: props.useWorkspaces, createWorkspace: props.createWorkspace, pickDirectory: props.pickDirectory }),
         error && h("div", { className: "ima-error" }, error),
-        pending && pending.length > 0 && h("div", { className: "ima-pending" },
-          h("div", null, "有访问请求（仅在关闭全局放行时需要批准）"),
-          ...pending.map((p) => h("div", { key: p.channelId + p.userId, className: "ima-pending-row" },
-            h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + p.channelId),
-            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "approve", { userId: p.userId }) }, "批准"),
-            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "deny", { userId: p.userId }) }, "拒绝"),
-          )),
-        ),
         channels == null
           ? h("div", { className: "ima-empty" }, "加载中…")
           : h("div", { className: "ima-list" },
@@ -808,7 +811,7 @@ window.__ModuleLoader__.load({
 .dcu-wb-session:hover .dcu-wb-actions,.dcu-wb-session.dcu-wb-menu-open .dcu-wb-actions,.ima-native-session:hover .ima-native-actions,.ima-native-session.menu-on .ima-native-actions{display:flex}
 .dcu-wb-more,.ima-native-more{display:grid;place-items:center;width:20px;height:20px;border:0;border-radius:4px;padding:0;background:transparent;color:var(--dsw-alias-label-secondary,var(--ima-muted));cursor:pointer}
 .dcu-wb-empty,.ima-native-empty{padding:14px 8px;color:var(--dsw-alias-label-tertiary,var(--ima-muted));font-size:13px}
-.ima-sess-menu{position:absolute;right:8px;top:30px;min-width:132px;padding:6px;border:1px solid var(--dsw-alias-stroke-primary,var(--ima-line));border-radius:10px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));z-index:8}
+.ima-sess-menu{position:fixed;right:auto;top:auto;min-width:132px;padding:6px;border:1px solid var(--dsw-alias-stroke-primary,var(--ima-line));border-radius:10px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));z-index:4000}
 .ima-sess-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:inherit;padding:7px 10px;border-radius:6px;cursor:pointer;font:13px/18px inherit}
 .ima-sess-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 .ima-sess-menu button.danger{color:var(--dsw-alias-state-error-primary,var(--ima-danger))}
@@ -831,7 +834,7 @@ window.__ModuleLoader__.load({
 .ima-n-sess:hover .ima-n-time,.ima-n-sess.menu-on .ima-n-time{display:none}
 .ima-n-ico{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:0;border-radius:4px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-tertiary,#81858C)}
 .ima-n-ico:hover{color:var(--dsw-alias-label-primary,var(--ima-text))}
-.ima-n-menu{position:absolute;right:8px;top:calc(100% + 4px);z-index:1100;min-width:218px;max-width:360px;box-sizing:border-box;padding:4px;display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.36))}
+.ima-n-menu{position:fixed;right:auto;top:auto;z-index:4000;min-width:218px;max-width:360px;box-sizing:border-box;padding:4px;display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.36))}
 .ima-n-menu button{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:8px 10px;border:0;border-radius:10px;background:transparent;cursor:pointer;font-size:14px;line-height:22px;color:var(--dsw-alias-label-primary,var(--ima-text));text-align:left}
 .ima-n-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 .ima-n-mi{display:inline-flex;flex:none;width:16px;height:16px;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#81858C)}
@@ -900,8 +903,50 @@ window.__ModuleLoader__.load({
     }
 
 
-    function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById }) {
-      const [menu, setMenu] = useState(false);
+    function pointerPoint(event) {
+      const x = Number(event && event.clientX);
+      const y = Number(event && event.clientY);
+      return {
+        x: Number.isFinite(x) ? x : 8,
+        y: Number.isFinite(y) ? y : 8,
+      };
+    }
+    function clampMenuPoint(x, y, width, height) {
+      const pad = 8;
+      const vw = window.innerWidth || width + pad * 2;
+      const vh = window.innerHeight || height + pad * 2;
+      return {
+        x: Math.max(pad, Math.min(x, Math.max(pad, vw - width - pad))),
+        y: Math.max(pad, Math.min(y, Math.max(pad, vh - height - pad))),
+      };
+    }
+    function SessionPointerMenu({ native, x, y, items, onPick }) {
+      const ref = useRef(null);
+      const [pos, setPos] = useState(() => clampMenuPoint(x, y, native ? 218 : 132, native ? 176 : 140));
+      useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        setPos(clampMenuPoint(x, y, rect.width, rect.height));
+      }, [x, y]);
+      const node = h("div", {
+        ref,
+        className: native ? "ima-n-menu" : "ima-sess-menu",
+        "data-ima-session-menu": "",
+        style: { left: pos.x + "px", top: pos.y + "px" },
+        onClick: (event) => event.stopPropagation(),
+      }, items.map((item) => h("button", {
+        key: item.id,
+        type: "button",
+        className: item.danger ? "danger" : undefined,
+        onClick: () => onPick(item),
+      }, native && h("span", { className: "ima-n-mi" }, item.icon), item.label)));
+      return ReactDOM.createPortal(node, document.body);
+    }
+
+    function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange }) {
+      const menu = !!menuOpen;
+      const setMenu = (next) => onMenuChange(!!next);
       const [renaming, setRenaming] = useState(false);
       const [draft, setDraft] = useState(sess.title || sess.chatId || "");
       const title = sess.title || sess.chatId;
@@ -979,9 +1024,9 @@ window.__ModuleLoader__.load({
         role: "treeitem",
         tabIndex: 0,
         "aria-selected": selected,
-        onClick: () => onOpen(sess.sessionId),
-        onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(sess.sessionId); } },
-        onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); setMenu(!menu); },
+        onClick: () => { setMenu(false); onOpen(sess.sessionId); },
+        onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMenu(false); onOpen(sess.sessionId); } },
+        onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); onMenuChange(true, e); },
       },
         native && h("span", { className: "ima-n-slot" }, (sess.running || (sessionById && sessionById[sess.sessionId] && sessionById[sess.sessionId].running)) ? h(RunningStateDot) : null),
         h("span", { className: native ? "ima-n-title" : "dcu-wb-session-title" }, title),
@@ -990,18 +1035,19 @@ window.__ModuleLoader__.load({
           h("button", {
             type: "button",
             className: native ? "ima-n-ico" : "dcu-wb-more",
+            "data-ima-session-more": "",
+            "aria-expanded": menu,
             "aria-label": title + " 更多",
-            onClick: (e) => { e.stopPropagation(); setMenu(!menu); },
+            onClick: (e) => { e.stopPropagation(); onMenuChange(!menu, e); },
           }, native ? h(IconEllipsis) : h(MoreIcon)),
         ),
-        menu && h("div", { className: native ? "ima-n-menu" : "ima-sess-menu", onClick: (e) => e.stopPropagation() },
-          ...menuItems.map((item) => h("button", {
-            key: item.id,
-            type: "button",
-            className: item.danger ? "danger" : undefined,
-            onClick: () => { setMenu(false); item.go(); },
-          }, native && h("span", { className: "ima-n-mi" }, item.icon), item.label)),
-        ),
+        menu && h(SessionPointerMenu, {
+          native,
+          x: menuOpen && menuOpen.x,
+          y: menuOpen && menuOpen.y,
+          items: menuItems,
+          onPick: (item) => { setMenu(false); item.go(); },
+        }),
       );
     }
 
@@ -1031,6 +1077,7 @@ window.__ModuleLoader__.load({
       const [groups, setGroups] = useState([]);
       const [folded, setFolded] = useState({});
       const [error, setError] = useState("");
+      const [openMenu, setOpenMenu] = useState(null);
       const selectedId = props.selectedId;
       const archived = new Set(props.archivedIds || []);
       const skin = props.skin || channelSkin;
@@ -1046,6 +1093,23 @@ window.__ModuleLoader__.load({
         const timer = setInterval(load, 4000);
         return () => clearInterval(timer);
       }, []);
+      useEffect(() => {
+        if (!openMenu) return undefined;
+        const onPointerDown = (event) => {
+          const target = event.target;
+          if (target && target.closest && target.closest("[data-ima-session-menu],[data-ima-session-more]")) return;
+          setOpenMenu(null);
+        };
+        const onKeyDown = (event) => {
+          if (event.key === "Escape") setOpenMenu(null);
+        };
+        document.addEventListener("pointerdown", onPointerDown, true);
+        document.addEventListener("keydown", onKeyDown);
+        return () => {
+          document.removeEventListener("pointerdown", onPointerDown, true);
+          document.removeEventListener("keydown", onKeyDown);
+        };
+      }, [openMenu]);
       return h("div", { className: native ? "ima-native ima-rail" : "dcu-wb ima-rail" },
         h("style", null, WB_CSS),
         h("div", { className: native ? "ima-native-tree" : "dcu-wb-tree", role: "tree" },
@@ -1065,7 +1129,7 @@ window.__ModuleLoader__.load({
             },
               native
                 ? [
-                  h("span", { key: "folder", className: "ima-n-slot ima-n-folder" }, expanded ? h(IconFolderOpen) : h(IconFolderClose)),
+                  h("span", { key: "folder", className: "ima-n-slot ima-n-folder" }, h(Logo, { id: g.id, small: true })),
                   h("span", { key: "chev", className: "ima-n-slot ima-n-chevron" }, h("span", { className: expanded ? "ima-n-arrow open" : "ima-n-arrow" }, h(IconChevron))),
                   h("span", { key: "title", className: "ima-n-title" }, g.label),
                 ]
@@ -1080,6 +1144,12 @@ window.__ModuleLoader__.load({
                 sess,
                 selected: selectedId === sess.sessionId,
                 sessionById: props.sessionById,
+                menuOpen: openMenu && openMenu.id === sess.sessionId ? openMenu : null,
+                onMenuChange: (open, event) => setOpenMenu((cur) => {
+                  if (!open) return cur && cur.id === sess.sessionId ? null : cur;
+                  const point = pointerPoint(event);
+                  return { id: sess.sessionId, x: point.x, y: point.y };
+                }),
                 onOpen: open,
                 onChanged: (next) => setGroups(next),
                 skin,
@@ -1463,6 +1533,8 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
+
+
 
 
 

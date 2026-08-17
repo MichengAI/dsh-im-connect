@@ -18,7 +18,6 @@ export interface PluginConfig {
   provider: string
   model: string
   agentPreset: string
-  allowAllUsers: boolean
   mergeTimeoutSecs: number
 }
 
@@ -28,7 +27,6 @@ export const Config: Schema<PluginConfig> = Schema.object({
   provider: Schema.string().default(''),
   model: Schema.string().default(''),
   agentPreset: Schema.string().default('standard'),
-  allowAllUsers: Schema.boolean().default(true),
   mergeTimeoutSecs: Schema.number().default(5),
 })
 
@@ -49,7 +47,6 @@ export function apply(ctx: Context, config: PluginConfig): void {
     provider: config.provider,
     model: config.model,
     agentPreset: config.agentPreset || 'standard',
-    allowAllUsers: config.allowAllUsers,
     mergeTimeoutSecs: config.mergeTimeoutSecs || 5,
     permissionPreset: 'full-access',
   }

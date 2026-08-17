@@ -7,10 +7,13 @@ import { beginDingtalkQr } from './dingtalk.js'
 import { beginFeishuQr } from './feishu.js'
 import { beginWecomQr } from './wecom.js'
 import { beginWeixinQr } from './weixin.js'
+import { beginQqQr } from './qq.js'
 
 export interface PairingHubOptions {
   onSuccess?: (channelId: ChannelId, credentials: Record<string, string>) => Promise<void>
   log?: (line: string) => void
+  /** 测试注入：替换真实扫码连接器的创建过程。 */
+  beginFn?: (channelId: ChannelId, signal: AbortSignal) => Promise<PairingBegin>
 }
 
 interface Session {
@@ -19,6 +22,7 @@ interface Session {
   qrUrl?: string
   qrImage?: string
   expiresAt?: number
+  expiryWindowMs?: number
   pollIntervalMs: number
   hint?: string
   error?: string
@@ -30,10 +34,12 @@ interface Session {
 export class PairingHub {
   private readonly sessions = new Map<string, Session>()
   private readonly onSuccess?: PairingHubOptions['onSuccess']
+  private readonly beginFn?: PairingHubOptions['beginFn']
   private readonly log: (line: string) => void
 
   constructor(options: PairingHubOptions = {}) {
     this.onSuccess = options.onSuccess
+    this.beginFn = options.beginFn
     this.log = options.log ?? (() => undefined)
   }
 
@@ -79,6 +85,9 @@ export class PairingHub {
         try { session.qrImage = await renderQrDataUrl(session.qrUrl) } catch { /* 前端再兜底 */ }
       }
       session.expiresAt = begun.expiresAt
+      // 记住初始有效期窗口：连接器自动换码时按同一窗口顺延，而不是被固定 5 分钟误杀
+      const windowMs = (begun.expiresAt ?? 0) - Date.now()
+      if (windowMs > 0) session.expiryWindowMs = windowMs
       session.pollIntervalMs = begun.pollIntervalMs
       session.status = 'waiting'
       session.hint = hintOf(id)
@@ -101,6 +110,7 @@ export class PairingHub {
   cancel(id: ChannelId): PairingView {
     const session = this.sessions.get(id)
     if (!session) return this.view(id)
+    session.begin?.dispose?.()
     session.controller.abort()
     if (session.status !== 'success') {
       session.status = 'cancelled'
@@ -116,6 +126,7 @@ export class PairingHub {
   }
 
   private async begin(id: ChannelId, signal: AbortSignal): Promise<PairingBegin> {
+    if (this.beginFn) return this.beginFn(id, signal)
     switch (id) {
       case 'wecom':
         return beginWecomQr(signal)
@@ -127,6 +138,8 @@ export class PairingHub {
         return beginFeishuQr('lark', signal)
       case 'weixin':
         return beginWeixinQr(signal)
+      case 'qq':
+        return beginQqQr(signal)
       default:
         throw new Error(`${id} 不支持扫码绑定`)
     }
@@ -141,10 +154,16 @@ export class PairingHub {
         session.error = '二维码已过期'
         session.qrUrl = undefined
         session.qrImage = undefined
+        session.begin?.dispose?.()
         return
       }
       try {
         const polled = await begun.poll(session.controller.signal)
+        if (polled.qrUrl && polled.qrUrl !== session.qrUrl) {
+          session.qrUrl = polled.qrUrl
+          if (session.expiryWindowMs) session.expiresAt = Date.now() + session.expiryWindowMs
+          try { session.qrImage = await renderQrDataUrl(polled.qrUrl) } catch { session.qrImage = undefined }
+        }
         if (this.sessions.get(session.channelId) !== session) return
         if (polled.pollIntervalMs) session.pollIntervalMs = polled.pollIntervalMs
         if (polled.status === 'success' && polled.credentials) {
@@ -170,6 +189,7 @@ export class PairingHub {
           session.error = polled.error
           session.qrUrl = undefined
           session.qrImage = undefined
+          session.begin?.dispose?.()
           return
         } else if (session.status !== 'scanned') {
           session.status = 'waiting'
@@ -199,8 +219,12 @@ function hintOf(id: ChannelId): string {
       return '请使用企业微信扫描二维码，快捷绑定机器人'
     case 'dingtalk':
       return '请使用钉钉扫描二维码，自动创建机器人'
+    case 'qq':
+      return '请使用手机 QQ 扫描二维码，创建开放平台机器人'
     default:
       return '请使用对应 App 扫描二维码'
   }
 }
+
+
 

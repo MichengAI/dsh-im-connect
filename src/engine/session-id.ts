@@ -2,7 +2,7 @@
 export const IM_ORIGIN = 'im'
 export const IM_SESSION_PREFIX = 'im:'
 
-export type ChannelId = 'dingtalk' | 'feishu' | 'lark' | 'weixin' | 'wecom' | 'telegram'
+export type ChannelId = 'dingtalk' | 'feishu' | 'lark' | 'weixin' | 'wecom' | 'qq' | 'telegram'
 export type ChatKind = 'dm' | 'group'
 
 export interface SessionRecord {
@@ -31,7 +31,7 @@ export function isImSessionId(sessionId: string): boolean {
   return sessionId.startsWith(IM_SESSION_PREFIX)
 }
 
-const CHANNEL_IDS: readonly ChannelId[] = ['dingtalk', 'feishu', 'lark', 'weixin', 'wecom', 'telegram']
+const CHANNEL_IDS: readonly ChannelId[] = ['dingtalk', 'feishu', 'lark', 'weixin', 'wecom', 'qq', 'telegram']
 const STAMP_RE = /^\d{13,}$/
 
 export function parseImSessionId(sessionId: string): { channel: ChannelId; kind: ChatKind; chatId: string } | undefined {
@@ -63,3 +63,4 @@ export function isTaskSession(input: { id?: string; origin?: string; blank?: boo
   if (input.origin === 'subagent') return false
   return true
 }
+

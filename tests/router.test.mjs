@@ -48,7 +48,6 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
     provider: 'deepseek',
     model: 'deepseek-chat',
     agentPreset: 'standard',
-    allowAllUsers: true,
     mergeTimeoutSecs: 5,
     permissionPreset: 'full-access',
   }, () => undefined)

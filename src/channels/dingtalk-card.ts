@@ -64,6 +64,7 @@ export class DingtalkCardClient {
   constructor(
     private readonly clientId: string,
     private readonly clientSecret: string,
+    private readonly log: (line: string) => void = () => undefined,
   ) {}
 
   async create(target: CardTarget, initialText: string): Promise<string> {
@@ -96,10 +97,15 @@ export class DingtalkCardClient {
     const token = await this.accessToken()
     const headers = { 'x-acs-dingtalk-access-token': token }
     await this.stream(cardInstanceId, text, true, headers)
-    await this.request('v1.0/card/instances', {
-      outTrackId: cardInstanceId,
-      cardData: cardData(text, '3'),
-    }, headers, 'PUT')
+    try {
+      await this.request('v1.0/card/instances', {
+        outTrackId: cardInstanceId,
+        cardData: cardData(text, '3'),
+      }, headers, 'PUT')
+    } catch (error) {
+      // 流式已经把全文写进卡片，收口 PUT 失败不再抛，避免上层再 webhook 发一条；但要留日志便于排障
+      this.log(`[dingtalk-card] 收口 PUT 失败（卡片仍以流式全文收尾）: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   private async stream(cardInstanceId: string, text: string, finalize: boolean, headers: Record<string, string>): Promise<void> {
@@ -188,4 +194,5 @@ export async function openDingtalkCardStream(
     },
   }
 }
+
 
