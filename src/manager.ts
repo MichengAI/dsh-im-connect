@@ -206,20 +206,20 @@ export class ChannelManager {
       res.end(JSON.stringify(body))
     }
     const MAX_BODY_CHARS = 1024 * 1024
-    const readBody = (req: import('node:http').IncomingMessage): Promise<Record<string, unknown>> =>
+    const readBody = (req: import('node:http').IncomingMessage): Promise<{ body: Record<string, unknown>; oversized: boolean }> =>
       new Promise((resolve) => {
         let raw = ''
         let oversized = false
-        // 超限后停止累计但不掐断连接，等 end 后按空体处理，防止内存被撑爆
+        // 超限后停止累计但不掐断连接，等 end 后统一按 413 拒绝，防止内存被撑爆
         req.on('data', (chunk) => {
           if (oversized) return
           raw += chunk
           if (raw.length > MAX_BODY_CHARS) oversized = true
         })
-        req.on('error', () => resolve({}))
+        req.on('error', () => resolve({ body: {}, oversized }))
         req.on('end', () => {
-          if (oversized) { resolve({}); return }
-          try { resolve(raw ? JSON.parse(raw) as Record<string, unknown> : {}) } catch { resolve({}) }
+          if (oversized) { resolve({ body: {}, oversized }); return }
+          try { resolve({ body: raw ? JSON.parse(raw) as Record<string, unknown> : {}, oversized: false }) } catch { resolve({ body: {}, oversized: false }) }
         })
       })
     const payload = () => ({
@@ -241,7 +241,8 @@ export class ChannelManager {
             return
           }
           if (req.method === 'POST') {
-            const body = await readBody(req)
+            const { body, oversized } = await readBody(req)
+            if (oversized) { send(res, 413, { ok: false, error: '请求体超过 1MB 上限' }); return }
             const result = this.setAssistant(body)
             send(res, result.ok ? 200 : 400, result)
             return
@@ -251,7 +252,8 @@ export class ChannelManager {
         }
         if (parts[2] === 'sessions' && parts.length === 4 && req.method === 'POST') {
           const action = parts[3]
-          const body = await readBody(req)
+          const { body, oversized } = await readBody(req)
+          if (oversized) { send(res, 413, { ok: false, error: '请求体超过 1MB 上限' }); return }
           const sessionId = String(body.sessionId ?? '')
           if (!sessionId) { send(res, 400, { ok: false, error: '缺少 sessionId' }); return }
           if (action === 'rename') {
@@ -288,7 +290,8 @@ export class ChannelManager {
             return
           }
           if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'method not allowed' }); return }
-          const body = await readBody(req)
+          const { oversized } = await readBody(req)
+          if (oversized) { send(res, 413, { ok: false, error: '请求体超过 1MB 上限' }); return }
           if (action === 'start') {
             const pairing = await this.pairing.start(id)
             send(res, pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
@@ -309,7 +312,8 @@ export class ChannelManager {
         if (parts[2] === 'channels' && parts.length === 5 && req.method === 'POST') {
           const id = parts[3] as ChannelId
           const action = parts[4]
-          const body = await readBody(req)
+          const { body, oversized } = await readBody(req)
+          if (oversized) { send(res, 413, { ok: false, error: '请求体超过 1MB 上限' }); return }
           if (action === 'connect') {
             const result = await this.connect(id, body.config as Record<string, string> | undefined)
             send(res, result.ok ? 200 : 400, result.ok ? { ok: true, channel: this.list().find((item) => item.id === id) } : result)
