@@ -1,0 +1,196 @@
+<p align="center">
+  <img src="assets/branding/dsh-banner.png" alt="DSH IM Connect" width="100%">
+</p>
+
+<div align="center">
+
+  # DSH IM Connect
+
+  **Connect Feishu, DingTalk, WeCom, WeChat, QQ, and Telegram to local DeepSeek Harness**
+
+  [简体中文](README.md) · [Apache-2.0](LICENSE)
+
+  [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+  [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-im-connect.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-im-connect)
+  [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-im-connect)
+  [![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%20or%20later-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+</div>
+
+> DSH IM Connect is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
+
+## Features
+
+- Connect DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram from **Settings → IM Assistant**.
+- Each IM chat maps to an independent DSH session under the workspace **Channels** tab, never mixed into web **Tasks**.
+- Send work, read replies, and approve tools from the phone; model and permission follow the local DSH profile.
+- Bind by QR code or credentials. Secrets go into DSH `ctx.credentials`, not `channels.json`.
+- Paste one sentence into DSH, Codex, or WorkBuddy and let that agent install the plugin locally.
+
+## Screenshots
+
+Connect channels in **Settings → IM Assistant**. Unconnected cards show **Configure**; connected cards show a toggle and status:
+
+![IM Assistant settings](assets/screenshots/settings-channels.png)
+
+The workspace splits **Tasks** and **Channels**. IM sessions appear only under **Channels**:
+
+![Workspace channel sidebar](assets/screenshots/workspace-channels.png)
+
+WeCom and other QR channels support scan-to-bind:
+
+![WeCom QR binding](assets/screenshots/wecom-qr.png)
+
+After connecting, drive the local assistant from each IM:
+
+| WeCom | WeChat | DingTalk |
+| :---: | :---: | :---: |
+| ![WeCom chat](assets/screenshots/wecom-chat.jpg) | ![WeChat chat](assets/screenshots/weixin-chat.jpg) | ![DingTalk chat](assets/screenshots/dingtalk-chat.jpg) |
+
+| Feishu | QQ | Telegram |
+| :---: | :---: | :---: |
+| ![Feishu chat](assets/screenshots/feishu-chat.jpg) | ![QQ chat](assets/screenshots/qq-chat.jpg) | ![Telegram chat](assets/screenshots/telegram-chat.jpg) |
+
+## Prerequisites
+
+- A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
+- Examples use the `web` profile; replace it with the target profile.
+- Source installation and development require Node.js 22+. npm installation does not require running `npm install` in an arbitrary directory.
+- After install, restart `dsh web` and hard-refresh the browser before opening **Settings → IM Assistant**.
+
+## Installation
+
+`dsh plugin add` forwards to `pnpm add` in the profile directory. Without a version and official registry, a local mirror or minimum-release-age policy can leave you on an older build.
+
+### Ask another agent to install it
+
+This plugin runs inside DeepSeek Harness Web. Copy one of the sentences below into DSH, Codex, or WorkBuddy and let that agent install it into your local `web` profile.
+
+From npm:
+
+```text
+Install the latest DSH plugin @michengai/dsh-im-connect into my local web profile using the official npm registry: dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/. Then run dsh --profile web --dump-config, confirm im-connect is mounted, and remind me to restart DSH Web, hard-refresh the browser, and open Settings → IM Assistant.
+```
+
+From source:
+
+```text
+Install the DSH plugin from source at https://github.com/MichengAI/dsh-im-connect: clone it, run npm install and npm test, then run dsh plugin --profile web add . from that directory. Do not copy lib by itself. Then run dsh --profile web --dump-config, confirm im-connect is mounted, and remind me to restart DSH Web, hard-refresh the browser, and open Settings → IM Assistant.
+```
+
+| Product | How to use it |
+| --- | --- |
+| DSH | Send one of the sentences above to the current session. |
+| Codex | Send one of the sentences above to Codex and let it install locally. |
+| WorkBuddy | Send one of the sentences above to WorkBuddy; for a source install you can also paste `https://github.com/MichengAI/dsh-im-connect`. |
+
+Codex and WorkBuddy only install the plugin. After that, open DSH Web and use **Settings → IM Assistant**.
+
+You can also run the same npm command yourself:
+
+```powershell
+dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/
+```
+
+If `dsh` is not on PATH, replace the leading `dsh` with `npx --yes @deepseek-ai/dsh`.
+
+### Install the latest package from the official npm registry
+
+Run this from any PowerShell directory:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/
+dsh --profile web --dump-config
+```
+
+To pin a release, replace `@latest` with a version such as `@0.1.1`.
+
+The configuration output should contain `im-connect`. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: `dsh plugin add` also applies `cordis.patch.yml`.
+
+### Install from source
+
+Use this for debugging or unpublished changes. The cloned directory becomes the plugin source path:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+Set-Location D:\Repository\deepseek-harness-plugin
+git clone https://github.com/MichengAI/dsh-im-connect.git
+Set-Location .\dsh-im-connect
+npm install
+npm test
+dsh plugin --profile web add .
+dsh --profile web --dump-config
+```
+
+Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
+
+## Usage
+
+Open **Settings → IM Assistant**, choose the workspace, permission, and model, then connect a channel. The full guide is [使用说明](docs/02-产品与业务/04-使用说明.md).
+
+| Goal | Action | Notes |
+| --- | --- | --- |
+| Connect a channel | Select **Configure** on an unconnected card, then scan or enter credentials | Feishu / Lark / WeChat are QR-only; Telegram needs a Bot Token |
+| Pause receiving | Turn off the connected-card toggle | Credentials stay; inbound messages pause |
+| Send work from IM | Type in a DM; in groups, mention the bot | Each chat has its own channel session |
+| Split input | End with `..` to continue, `!!` to flush now | Default merge window is about 5 seconds |
+| Start a new session | Send `/new` or `/clear` | Affects only the current IM chat |
+| Status / help | Send `/status` or `/help` | Scoped to the current channel session |
+| Approve a tool | Reply `批准` or `拒绝` | Also accepts `yes` / `no` / `allow` / `reject` |
+| Review on the web | Open the workspace **Channels** tab | IM sessions never appear under **Tasks** |
+
+DingTalk replies prefer official AI Card streaming and fall back to plain text. Do not enable Webhook on the same Telegram bot.
+
+## Permissions and safety limits
+
+| Item | Current behavior |
+| --- | --- |
+| Access | Open. Anyone in a DM or group can drive the assistant; groups still require a mention |
+| Management API | Loopback only (`localhost`, `127.0.0.1`, `[::1]`) |
+| Secrets | Prefer DSH `ctx.credentials`; otherwise `%DSH_HOME%\dsh-im-connect\secrets.json` |
+| Channel state | `channels.json` stores enablement and credential refs, not raw secrets |
+| Browser payloads | Never include tokens, secrets, App Secrets, or raw user identifiers |
+| WeChat protocol | Official iLink only; no reverse-engineered personal WeChat protocol |
+| Tool approval | Reply in the same IM chat; cross-chat approval is rejected |
+
+Do not expose DSH Web beyond this machine. Permission presets follow the host sandbox-policy; `full-access` does not wrap a sandbox.
+
+## Secondary development
+
+This repository develops in `src` and builds to `lib`:
+
+- [src\index.ts](src/index.ts): host entry, config, and lifecycle.
+- [src\manager.ts](src/manager.ts): channel start/stop, loopback API, and credential persistence.
+- [src\engine](src/engine): session routing, slash commands, approval, splitting, and outbound push.
+- [src\channels](src/channels): DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram adapters.
+- `client.js`: settings page and workspace channel sidebar.
+- `tests\*.test.mjs`: routing, QR, credentials, QQ, delivery, and sidebar tests.
+
+After changing the source, test and install from the local directory:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+npm test
+dsh plugin --profile web add .
+```
+
+When changing channel or session logic, keep the engine platform-agnostic, keep adapters from creating agents, and keep web tasks separate from IM channels.
+
+## Validation
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+npm test
+```
+
+`prepublishOnly` runs the tests before publishing.
+
+## Documentation and license
+
+Project status, usage boundaries, architecture, and iteration records begin at the [documentation entry point](docs/00-交接入口/00-阅读导航.md). The detailed operational guide is [使用说明](docs/02-产品与业务/04-使用说明.md).
+
+Licensed under [Apache License 2.0](LICENSE).

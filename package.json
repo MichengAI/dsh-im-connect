@@ -19,14 +19,24 @@
     "src",
     "client.js",
     "cordis.patch.yml",
-    "README.md"
+    "assets",
+    "README.md",
+    "README.en.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MichengAI/dsh-im-connect.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MichengAI/dsh-im-connect/issues"
+  },
+  "homepage": "https://github.com/MichengAI/dsh-im-connect#readme",
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-client.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
     "prepublishOnly": "npm test"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22.19"
   },
