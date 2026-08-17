@@ -67,13 +67,16 @@ WeCom and other QR channels support scan-to-bind:
 
 After connecting, drive the local assistant from each IM:
 
-| WeCom | WeChat | DingTalk |
-| :---: | :---: | :---: |
-| ![WeCom chat](assets/screenshots/wecom-chat.jpg) | ![WeChat chat](assets/screenshots/weixin-chat.jpg) | ![DingTalk chat](assets/screenshots/dingtalk-chat.jpg) |
-
-| Feishu | QQ | Telegram |
-| :---: | :---: | :---: |
-| ![Feishu chat](assets/screenshots/feishu-chat.jpg) | ![QQ chat](assets/screenshots/qq-chat.jpg) | ![Telegram chat](assets/screenshots/telegram-chat.jpg) |
+<p align="center">
+  <img src="assets/screenshots/wecom-chat.jpg" width="220" alt="WeCom chat">
+  <img src="assets/screenshots/weixin-chat.jpg" width="220" alt="WeChat chat">
+  <img src="assets/screenshots/dingtalk-chat.jpg" width="220" alt="DingTalk chat">
+</p>
+<p align="center">
+  <img src="assets/screenshots/feishu-chat.jpg" width="220" alt="Feishu chat">
+  <img src="assets/screenshots/qq-chat.jpg" width="220" alt="QQ chat">
+  <img src="assets/screenshots/telegram-chat.jpg" width="220" alt="Telegram chat">
+</p>
 
 ## Prerequisites
 

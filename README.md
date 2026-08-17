@@ -67,13 +67,16 @@
 
 连上后，可在各 IM 里直接驱动本机助手：
 
-| 企业微信 | 微信 | 钉钉 |
-| :---: | :---: | :---: |
-| ![企业微信对话](assets/screenshots/wecom-chat.jpg) | ![微信对话](assets/screenshots/weixin-chat.jpg) | ![钉钉对话](assets/screenshots/dingtalk-chat.jpg) |
-
-| 飞书 | QQ | Telegram |
-| :---: | :---: | :---: |
-| ![飞书对话](assets/screenshots/feishu-chat.jpg) | ![QQ 对话](assets/screenshots/qq-chat.jpg) | ![Telegram 对话](assets/screenshots/telegram-chat.jpg) |
+<p align="center">
+  <img src="assets/screenshots/wecom-chat.jpg" width="220" alt="企业微信对话">
+  <img src="assets/screenshots/weixin-chat.jpg" width="220" alt="微信对话">
+  <img src="assets/screenshots/dingtalk-chat.jpg" width="220" alt="钉钉对话">
+</p>
+<p align="center">
+  <img src="assets/screenshots/feishu-chat.jpg" width="220" alt="飞书对话">
+  <img src="assets/screenshots/qq-chat.jpg" width="220" alt="QQ 对话">
+  <img src="assets/screenshots/telegram-chat.jpg" width="220" alt="Telegram 对话">
+</p>
 
 ## 前置条件
 
