@@ -14,6 +14,7 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-im-connect.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-im-connect)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-im-connect)
   [![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%20or%20later-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+  [![Channels](https://img.shields.io/badge/channels-7-238636.svg)](#-supported-channels)
 </div>
 
 > DSH IM Connect is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
@@ -25,6 +26,30 @@
 - Send work, read replies, and approve tools from the phone; model and permission follow the local DSH profile.
 - Bind by QR code or credentials. Secrets go into DSH `ctx.credentials`, not `channels.json`.
 - Paste one sentence into DSH, Codex, or WorkBuddy and let that agent install the plugin locally.
+
+## 📡 Supported channels
+
+<p align="center">
+  <code>🔔 DingTalk</code>&nbsp;
+  <code>🐦 Feishu</code>&nbsp;
+  <code>🌐 Lark</code>&nbsp;
+  <code>💬 WeChat</code>&nbsp;
+  <code>🏢 WeCom</code>&nbsp;
+  <code>🐧 QQ</code>&nbsp;
+  <code>✈️ Telegram</code>
+</p>
+
+| Channel | Status | How to connect | You need |
+|---|---|---|---|
+| 🔔 **DingTalk** | ✅ Ready | QR, or Client ID / Secret | DingTalk open-platform bot; replies prefer AI Card |
+| 🐦 **Feishu** | ✅ Ready | QR only; creates the bot automatically | Feishu account |
+| 🌐 **Lark** | ✅ Ready | QR only | Lark account |
+| 💬 **WeChat** | ✅ Ready* | Official iLink QR | Dedicated account recommended; DM only |
+| 🏢 **WeCom** | ✅ Ready | QR (recommended), or Bot ID / Secret | WeCom intelligent bot |
+| 🐧 **QQ** | ✅ Ready | QR, or AppID / AppSecret | QQ Open Platform bot, not a personal QQ account |
+| ✈️ **Telegram** | ✅ Ready | Bot Token only | `@BotFather`; do not enable Webhook on the same bot |
+
+✅ Ready = text in and out works ｜ *WeChat = official iLink only, no reverse-engineered personal protocol ｜ Groups still require an @ mention
 
 ## Screenshots
 

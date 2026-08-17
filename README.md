@@ -14,6 +14,7 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-im-connect.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-im-connect)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-im-connect)
   [![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%20or%20later-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+  [![Channels](https://img.shields.io/badge/channels-7-238636.svg)](#-支持的渠道)
 </div>
 
 > DSH IM Connect 是社区维护的 DeepSeek Harness（DSH）插件，并非 DeepSeek AI 官方产品。
@@ -25,6 +26,30 @@
 - 手机里直接下任务、看回复、批准工具；模型和权限跟随本机 DSH。
 - 支持扫码绑定或手动填凭据；敏感字段写入 DSH `ctx.credentials`，不会进 `channels.json`。
 - 可把一句话复制到 DSH、Codex 或 WorkBuddy，让对方代装到本机 DSH。
+
+## 📡 支持的渠道
+
+<p align="center">
+  <code>🔔 钉钉</code>&nbsp;
+  <code>🐦 飞书</code>&nbsp;
+  <code>🌐 Lark</code>&nbsp;
+  <code>💬 微信</code>&nbsp;
+  <code>🏢 企业微信</code>&nbsp;
+  <code>🐧 QQ</code>&nbsp;
+  <code>✈️ Telegram</code>
+</p>
+
+| 渠道 | 状态 | 接入方式 | 需要 |
+|---|---|---|---|
+| 🔔 **钉钉** | ✅ 可用 | 扫码，或 Client ID / Secret | 钉钉开放平台机器人；回复优先走 AI Card |
+| 🐦 **飞书** | ✅ 可用 | 仅扫码，自动创建机器人 | 飞书账号 |
+| 🌐 **Lark** | ✅ 可用 | 仅扫码 | Lark 国际版账号 |
+| 💬 **微信** | ✅ 可用* | 官方 iLink 扫码 | 建议专用小号；仅私聊 |
+| 🏢 **企业微信** | ✅ 可用 | 扫码（推荐），或 Bot ID / Secret | 企业微信智能机器人 |
+| 🐧 **QQ** | ✅ 可用 | 扫码，或 AppID / AppSecret | QQ 开放平台机器人，不是个人号 |
+| ✈️ **Telegram** | ✅ 可用 | 仅填 Bot Token | `@BotFather`；同一 Bot 不要同时开 Webhook |
+
+✅ 可用 = 文字收发可用 ｜ *微信 = 只走腾讯官方 iLink，不做逆向个人号 ｜ 群聊都需要 @ 机器人才回复
 
 ## 界面预览
 
