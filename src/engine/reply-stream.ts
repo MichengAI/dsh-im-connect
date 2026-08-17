@@ -50,6 +50,10 @@ export class ReplyStreamHub {
   }
 
   reset(key: string): void {
+    // 新回合开始：清掉上一回合可能残留的流与累计文本，避免新内容拼进旧卡片
+    this.streams.delete(key)
+    this.texts.delete(key)
+    this.tails.delete(key)
     this.delivered.delete(key)
   }
 }

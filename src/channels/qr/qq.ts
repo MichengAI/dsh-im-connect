@@ -14,15 +14,14 @@ export type QqQrStart = (
   options: { displayQrCodeToConsole: boolean; source: string; signal?: AbortSignal },
 ) => (() => void) | Promise<() => void>
 
-export function parseQqQrSuccess(raw: unknown): { appId: string; appSecret: string; allowedUserId?: string } | undefined {
+export function parseQqQrSuccess(raw: unknown): { appId: string; appSecret: string } | undefined {
   const first = Array.isArray(raw) ? raw[0] : raw
   if (!first || typeof first !== 'object') return undefined
   const rec = first as Record<string, unknown>
   const appId = cleanString(rec.appId)
   const appSecret = cleanString(rec.appSecret)
-  const allowedUserId = cleanString(rec.userOpenid) ?? cleanString(rec.ownerUserOpenid)
   if (!appId || !appSecret) return undefined
-  return allowedUserId ? { appId, appSecret, allowedUserId } : { appId, appSecret }
+  return { appId, appSecret }
 }
 
 export async function beginQqQr(signal?: AbortSignal, start: QqQrStart = startQrConnect, firstQrTimeoutMs = 15_000): Promise<PairingBegin> {

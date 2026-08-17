@@ -52,6 +52,8 @@ export class ChannelManager {
   private store: Persisted = { channels: {} }
   private readonly running = new Map<string, ChannelAdapter>()
   private apiDisposers: Array<() => void> = []
+  // dispose 后阻止 initEnabled/startOne 再拉起渠道，避免插件重载时新旧双实例并存
+  private disposed = false
 
   constructor(options: { ctx: Context; stateDir: string; log: (line: string) => void; engineConfig: EngineConfig }) {
     this.ctx = options.ctx
@@ -175,6 +177,7 @@ export class ChannelManager {
   async initEnabled(): Promise<void> {
     const started = Date.now()
     for (const id of CHANNEL_ORDER) {
+      if (this.disposed) return
       const state = this.store.channels[id]
       if (state?.enabled && state.receiveEnabled !== false) {
         const one = Date.now()
@@ -202,11 +205,20 @@ export class ChannelManager {
       res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify(body))
     }
+    const MAX_BODY_CHARS = 1024 * 1024
     const readBody = (req: import('node:http').IncomingMessage): Promise<Record<string, unknown>> =>
       new Promise((resolve) => {
         let raw = ''
-        req.on('data', (chunk) => { raw += chunk })
+        let oversized = false
+        // 超限后停止累计但不掐断连接，等 end 后按空体处理，防止内存被撑爆
+        req.on('data', (chunk) => {
+          if (oversized) return
+          raw += chunk
+          if (raw.length > MAX_BODY_CHARS) oversized = true
+        })
+        req.on('error', () => resolve({}))
         req.on('end', () => {
+          if (oversized) { resolve({}); return }
           try { resolve(raw ? JSON.parse(raw) as Record<string, unknown> : {}) } catch { resolve({}) }
         })
       })
@@ -335,6 +347,7 @@ export class ChannelManager {
   }
 
   disposeApi(): void {
+    this.disposed = true
     for (const dispose of this.apiDisposers) dispose()
     this.apiDisposers = []
     this.pairing.dispose()
@@ -435,14 +448,23 @@ export class ChannelManager {
 
   private async startOne(id: ChannelId): Promise<void> {
     await this.stopOne(id)
+    if (this.disposed) return
     const state = this.store.channels[id]
     const resolved = await this.resolveSecrets(id, state?.config ?? {})
     const adapter = createChannelAdapter(id, resolved, this.log, join(this.stateDir, id))
     if (!adapter) throw new Error('凭据不足，无法启动渠道')
     this.engine.register(adapter)
     this.running.set(id, adapter)
+    // 渠道网络异常时 start 可能永久挂起，超时按启动失败处理（catch 会顺带 stop）
+    const START_TIMEOUT_MS = 30_000
+    let startTimer: ReturnType<typeof setTimeout> | undefined
     try {
-      await adapter.start()
+      await Promise.race([
+        adapter.start(),
+        new Promise<never>((_, reject) => {
+          startTimer = setTimeout(() => reject(new Error('渠道启动超时')), START_TIMEOUT_MS)
+        }),
+      ])
     } catch (error) {
       this.engine.unregister(id)
       this.running.delete(id)
@@ -453,6 +475,8 @@ export class ChannelManager {
         this.flush()
       }
       throw error
+    } finally {
+      if (startTimer) clearTimeout(startTimer)
     }
     if (state) {
       state.lastError = undefined

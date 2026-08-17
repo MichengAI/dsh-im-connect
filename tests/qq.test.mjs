@@ -13,7 +13,7 @@ test('QQ 文本去掉官方 @ 标记', () => {
 
 test('QQ 扫码成功结果解析 AppID 和 AppSecret', () => {
   const ok = parseQqQrSuccess([{ appId: '1023', appSecret: 'sec', userOpenid: 'owner-1' }])
-  assert.deepEqual(ok, { appId: '1023', appSecret: 'sec', allowedUserId: 'owner-1' })
+  assert.deepEqual(ok, { appId: '1023', appSecret: 'sec' })
   assert.equal(parseQqQrSuccess({ appId: 'x' }), undefined)
 })
 
@@ -215,6 +215,82 @@ test('QQ 收到网关 Reconnect(op 7) 时主动断开旧连接', async () => {
     assert.equal(socket.closed, false)
     socket.onmessage?.({ data: JSON.stringify({ op: 7 }) })
     assert.equal(socket.closed, true)
+    await channel.stop()
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.WebSocket = originalWebSocket
+  }
+})
+
+test('QQ 收到 401 时清缓存重取 token 并重试一次', async () => {
+  const originalFetch = globalThis.fetch
+  const tokens = []
+  const posts = []
+  let postCalls = 0
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input)
+    if (url.endsWith('/app/getAppAccessToken')) {
+      tokens.push(JSON.parse(String(init.body)))
+      return Response.json({ access_token: `token-${tokens.length}`, expires_in: 7200 })
+    }
+    postCalls += 1
+    posts.push({ url, auth: init.headers.Authorization })
+    if (postCalls === 1) return new Response('{"code":4004}', { status: 401 })
+    return Response.json({})
+  }
+  try {
+    const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
+    await channel.send('user-1', '答案')
+    assert.equal(tokens.length, 2)
+    assert.equal(posts.length, 2)
+    assert.equal(posts[0].auth, 'QQBot token-1')
+    assert.equal(posts[1].auth, 'QQBot token-2')
+    await channel.stop()
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('QQ 纯图片/文件消息不再静默丢弃，回复文字提示', async () => {
+  const originalFetch = globalThis.fetch
+  const originalWebSocket = globalThis.WebSocket
+  const posts = []
+  let socket
+
+  class MockWebSocket {
+    constructor() { socket = this }
+    send() {}
+    close() {}
+  }
+  globalThis.fetch = async (input, init) => {
+    const url = String(input)
+    if (url.endsWith('/app/getAppAccessToken')) return Response.json({ access_token: 't', expires_in: 7200 })
+    if (url.endsWith('/gateway')) return Response.json({ url: 'ws://qq.test' })
+    posts.push({ url, body: JSON.parse(String(init.body)) })
+    return Response.json({})
+  }
+  globalThis.WebSocket = MockWebSocket
+  try {
+    const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
+    await channel.start()
+    socket.onmessage?.({
+      data: JSON.stringify({
+        op: 0,
+        t: 'GROUP_AT_MESSAGE_CREATE',
+        d: {
+          id: 'media-message',
+          group_openid: 'group-openid',
+          attachments: [{ content_type: 1 }],
+          author: { member_openid: 'member-openid', username: 'tester' },
+        },
+      }),
+    })
+    await waitForImmediate()
+    assert.equal(posts.length, 1)
+    assert.match(posts[0].url, /\/v2\/groups\/group-openid\/messages$/)
+    assert.match(posts[0].body.content, /暂不支持/)
+    assert.equal(posts[0].body.msg_id, 'media-message')
     await channel.stop()
   } finally {
     globalThis.fetch = originalFetch

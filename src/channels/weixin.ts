@@ -459,7 +459,13 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
             const parsed = parseInbound(raw)
             if (!parsed) continue
             if (parsed.contextToken) state.contextTokens[parsed.fromUserId] = parsed.contextToken
-            const media = await Promise.all(parsed.media)
+            // 单个媒体失败只降级丢媒体，不再连累文本整条丢弃
+            const settled = await Promise.allSettled(parsed.media)
+            const media = []
+            for (const item of settled) {
+              if (item.status === 'fulfilled') media.push(item.value)
+              else log(`[weixin] 媒体下载失败，降级为纯文本: ${item.reason instanceof Error ? item.reason.message : String(item.reason)}`)
+            }
             if (parsed.text === '' && media.length === 0) continue
             void handler?.({
               chatId: parsed.fromUserId,

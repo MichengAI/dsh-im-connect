@@ -16,6 +16,7 @@ interface GatewayPayload {
 interface QQMessage {
   id: string
   content?: string
+  attachments?: unknown[]
   author?: {
     id?: string
     user_openid?: string
@@ -97,8 +98,7 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
   }
 
   async function qqFetch<T>(path: string, init?: RequestInit): Promise<T> {
-    await ensureToken()
-    const res = await fetch(`${API}${path}`, {
+    const request = () => fetch(`${API}${path}`, {
       ...init,
       headers: {
         Authorization: `QQBot ${accessToken}`,
@@ -106,6 +106,15 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
         ...(init?.headers ?? {}),
       },
     })
+    await ensureToken()
+    let res = await request()
+    if (res.status === 401) {
+      // token 可能被吊销或时钟漂移提前过期：清缓存强制重取后再试一次
+      accessToken = ''
+      tokenExpireAt = 0
+      await ensureToken()
+      res = await request()
+    }
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       throw new Error(`qq ${path}: HTTP ${res.status} ${body.slice(0, 200)}`)
@@ -177,7 +186,6 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
             const msg = payload.d as QQMessage
             if (!msg?.author) return
             const text = cleanQqText(msg.content ?? '')
-            if (!text) return
             const isGroup = t === 'GROUP_AT_MESSAGE_CREATE'
             const userId = isGroup
               ? (msg.author.member_openid ?? msg.author.id)
@@ -187,6 +195,16 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
               ? `g:${msg.group_openid ?? ''}`
               : (msg.author.user_openid ?? msg.author.id ?? '')
             if (!chatId || !userId) return
+            if (!text) {
+              // 纯图片/文件消息静默丢弃会让用户以为机器人没收到，回一条文字提示
+              if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+                remember(chatId, isGroup ? 'group' : 'dm', msg.id)
+                void sendText(chatId, '暂不支持图片/文件，请发送文字。').catch((error) => {
+                  log(`[qq] 媒体提示发送失败: ${error instanceof Error ? error.message : String(error)}`)
+                })
+              }
+              return
+            }
             remember(chatId, isGroup ? 'group' : 'dm', msg.id)
             void handler?.({
               chatId,

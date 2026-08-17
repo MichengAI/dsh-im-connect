@@ -251,10 +251,14 @@ export class ImEngine {
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
         const failed = `助手没有生成回复：${detail}`
         const taken = await this.streams.take(streamKey)
-        if (taken.stream) await taken.stream.finish(failed).catch(() => this.deliver(channel, binding.chatId, failed))
-        else await this.deliver(channel, binding.chatId, failed)
-        // 失败收口也算已投递，避免同回合残留的 assistant/message 再补一条内容冲突的消息
-        this.streams.markDelivered(streamKey)
+        let failureDelivered: boolean
+        if (taken.stream) {
+          failureDelivered = await taken.stream.finish(failed).then(() => true).catch(() => this.deliver(channel, binding.chatId, failed))
+        } else {
+          failureDelivered = await this.deliver(channel, binding.chatId, failed)
+        }
+        // 仅在确已送达时标记，失败后同回合残留的 assistant/message 还有机会补发
+        if (failureDelivered) this.streams.markDelivered(streamKey)
       }
       return
     }
@@ -268,14 +272,15 @@ export class ImEngine {
       if (taken.stream) {
         const finalText = text || taken.text
         if (finalText) {
+          let delivered = true
           try {
             await taken.stream.finish(finalText)
           } catch (error) {
             // 收口失败时大概率没送出去，宁可小概率重复也不能让用户收不到回复
             this.log(`[${channel.id}] 流式收口失败，改走普通投递: ${error instanceof Error ? error.message : String(error)}`)
-            await this.deliver(channel, binding.chatId, finalText)
+            delivered = await this.deliver(channel, binding.chatId, finalText)
           }
-          this.streams.markDelivered(streamKey)
+          if (delivered) this.streams.markDelivered(streamKey)
         }
         return
       }
@@ -292,15 +297,19 @@ export class ImEngine {
     }
   }
 
-  private async deliver(channel: ChannelAdapter, chatId: string, text: string): Promise<void> {
+  /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
+  private async deliver(channel: ChannelAdapter, chatId: string, text: string): Promise<boolean> {
+    let deliveredAny = false
     for (const chunk of splitText(text, channel.maxMessageLength)) {
       try {
         await channel.send(chatId, chunk)
+        deliveredAny = true
         this.log(`[${channel.id}] 已投递 ${chatId}，长度 ${chunk.length}`)
       } catch (error) {
         this.log(`[${channel.id}] 回复失败: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
+    return deliveredAny
   }
 }
 

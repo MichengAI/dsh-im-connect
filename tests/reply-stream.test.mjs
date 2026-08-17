@@ -35,6 +35,21 @@ test('并发增量只开一次流，并累加成全文再更新', async () => {
   assert.ok(taken.stream)
 })
 
+test('reset 清掉残留流，新回合从空白开始不拼接旧文本', async () => {
+  const hub = new ReplyStreamHub()
+  const updates = []
+  const start = async (tag) => ({
+    async update(text) { updates.push([tag, text]) },
+    async finish() {},
+  })
+  await hub.onTextDelta('k', '旧', () => start('旧'))
+  hub.reset('k')
+  await hub.onTextDelta('k', '新', () => start('新'))
+  const taken = await hub.take('k')
+  assert.equal(taken.text, '新')
+  assert.deepEqual(updates, [['旧', '旧'], ['新', '新']])
+})
+
 test('流式收口后标记已投递，重复助手消息不再发', async () => {
   const hub = new ReplyStreamHub()
   await hub.onTextDelta('dingtalk:c1', '完', async () => ({

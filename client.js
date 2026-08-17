@@ -744,12 +744,16 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState("");
       const [busy, setBusy] = useState({});
       const [editing, setEditing] = useState(null);
+      // 请求序号守卫：快速连续操作时丢弃旧 GET 响应，避免旧状态覆盖新状态
+      const refreshSeq = useRef(0);
 
       const refresh = useCallback(() => {
+        const seq = ++refreshSeq.current;
         api("/channels").then((data) => {
+          if (seq !== refreshSeq.current) return;
           if (data.ok) { setChannels(data.channels); setError(""); }
           else setError(data.error || "加载失败");
-        }).catch(() => setError("无法连接本机 IM 助理接口"));
+        }).catch(() => { if (seq === refreshSeq.current) setError("无法连接本机 IM 助理接口"); });
       }, []);
 
       useEffect(() => { ensureStyle(); refresh(); }, [refresh]);
