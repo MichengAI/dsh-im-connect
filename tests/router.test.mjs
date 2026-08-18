@@ -175,3 +175,17 @@ test('对账时禁止直接读 ctx.sessions', () => {
   assert.match(src, /this\.ctx\.get\?\.\('sessions'\)/)
   assert.doesNotMatch(src, /this\.ctx\.sessions/)
 })
+test('配置重载 dispose 不应删除频道映射', async (t) => {
+  const { router, store } = makeRouter(t)
+  const first = await router.getOrCreate('wecom', 'dm', 'user-1', '你好')
+  await router.disposeAll()
+  assert.equal(await router.onHostDisposed(first.sessionId), false)
+  assert.equal(store.get('wecom:dm:user-1')?.sessionId, first.sessionId)
+})
+
+test('宿主真正销毁会话时才删除频道映射', async (t) => {
+  const { router, store } = makeRouter(t)
+  const first = await router.getOrCreate('wecom', 'dm', 'user-1', '你好')
+  assert.equal(await router.onHostDisposed(first.sessionId), true)
+  assert.equal(store.get('wecom:dm:user-1'), undefined)
+})

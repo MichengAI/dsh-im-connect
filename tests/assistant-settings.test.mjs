@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel } from '../lib/engine/assistant-settings.js'
 
 test('助手模型必须同时有提供商和模型 id', () => {
@@ -47,4 +48,13 @@ test('思考强度空值和 none 视为未设置', () => {
     normalizeAssistantModel({ provider: 'deepseek', model: 'v4', reasoningEffort: 'high' }),
     { provider: 'deepseek', model: 'v4', reasoningEffort: 'high' },
   )
+})
+test('权限默认是最小权限 read-only', () => {
+  const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
+  const manager = readFileSync(new URL('../src/manager.ts', import.meta.url), 'utf8')
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(index, /permissionPreset: 'read-only'/)
+  assert.match(manager, /permissionPreset \|\| 'read-only'/)
+  assert.match(client, /useState\("read-only"\)/)
+  assert.match(client, /data\.permission \|\| "read-only"/)
 })

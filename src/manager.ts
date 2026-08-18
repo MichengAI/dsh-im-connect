@@ -427,7 +427,7 @@ export class ChannelManager {
   }
 
   currentPermission(): PermissionPreset {
-    return this.store.permission || this.engineConfig.permissionPreset || 'full-access'
+    return this.store.permission || this.engineConfig.permissionPreset || 'read-only'
   }
 
   private applyPermission(permission?: PermissionPreset): void {

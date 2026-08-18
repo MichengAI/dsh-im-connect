@@ -48,7 +48,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     model: config.model,
     agentPreset: config.agentPreset || 'standard',
     mergeTimeoutSecs: config.mergeTimeoutSecs || 5,
-    permissionPreset: 'full-access',
+    permissionPreset: 'read-only',
   }
 
   const applyStarted = Date.now()

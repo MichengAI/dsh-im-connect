@@ -34,6 +34,7 @@ type AgentHost = Context & {
 
 export class SessionRouter {
   private readonly live = new Map<string, ChatBinding>()
+  private readonly reloadDisposed = new Set<string>()
 
   constructor(
     private readonly ctx: AgentHost,
@@ -170,9 +171,21 @@ export class SessionRouter {
 
   async disposeAll(): Promise<void> {
     for (const item of this.live.values()) {
+      this.reloadDisposed.add(item.sessionId)
       await item.handle?.dispose().catch(() => undefined)
     }
     this.live.clear()
+  }
+
+  /** 配置重载触发的 dispose 只卸活句柄；归档/宿主删除才清映射。 */
+  async onHostDisposed(sessionId: string): Promise<boolean> {
+    if (this.reloadDisposed.delete(sessionId)) {
+      for (const [key, item] of this.live) {
+        if (item.sessionId === sessionId) this.live.delete(key)
+      }
+      return false
+    }
+    return this.remove(sessionId)
   }
 
   followup(binding: ChatBinding, message: unknown): void {

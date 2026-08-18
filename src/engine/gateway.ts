@@ -58,7 +58,7 @@ export class ImEngine {
       this.disposeEvents.push(on('session/disposed', (...args: unknown[]) => {
         const id = String((args[0] as { id?: string } | undefined)?.id ?? '')
         if (id === '') return
-        void this.removeSession(id)
+        void this.router.onHostDisposed(id)
       }, { global: true }))
       this.disposeEvents.push(on('approval/request', (...args: unknown[]) => {
         const req = args[0] as { session?: { id?: string } }

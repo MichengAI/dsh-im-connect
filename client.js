@@ -530,7 +530,7 @@ window.__ModuleLoader__.load({
       const [model, setModel] = useState("");
       const [effort, setEffort] = useState("");
       const [cwd, setCwd] = useState("");
-      const [permission, setPermission] = useState("full-access");
+      const [permission, setPermission] = useState("read-only");
       const [open, setOpen] = useState("");
       const [modelPane, setModelPane] = useState("root");
       const [hint, setHint] = useState("");
@@ -552,7 +552,7 @@ window.__ModuleLoader__.load({
           setModel(nextModel);
           setEffort(current.reasoningEffort || (found && found.reasoning && found.reasoning.defaultEffort) || "");
           setCwd(data.cwd || "");
-          setPermission(data.permission || "full-access");
+          setPermission(data.permission || "read-only");
           if (!list.length) setHint("当前 Host 还没有可用模型，请先在网页里配置提供商");
         }).catch(() => setHint("无法加载全局配置"));
       }, []);
@@ -581,7 +581,7 @@ window.__ModuleLoader__.load({
         ? currentModel.reasoning.efforts.map((item) => ({ id: item.id, name: item.name || item.id }))
         : DEFAULT_EFFORTS;
       const effortLabel = (efforts.find((item) => item.id === effort) || {}).name || "";
-      const perm = PERMISSIONS.find((item) => item.value === permission) || PERMISSIONS[2];
+      const perm = PERMISSIONS.find((item) => item.value === permission) || PERMISSIONS[0];
 
       const addWorkspace = (path) => {
         const next = (path || "").trim();
