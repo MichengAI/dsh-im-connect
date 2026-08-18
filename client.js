@@ -1240,7 +1240,7 @@ window.__ModuleLoader__.load({
         if (!needle) return Object.assign({}, g, { sessions });
         const nameHit = String(g.label || "").toLowerCase().includes(needle);
         return Object.assign({}, g, { sessions: nameHit ? sessions : sessions.filter((sess) => String(sess.title || sess.chatId || "").toLowerCase().includes(needle)) });
-      });
+      }).filter((g) => (g.sessions || []).length > 0);
       if (sort === "time") {
         visibleGroups.sort((a, b) => {
           const latest = (g) => Math.max(0, ...(g.sessions || []).map((sess) => Date.parse(sess.updatedAt || "") || 0));
@@ -1250,14 +1250,15 @@ window.__ModuleLoader__.load({
       if (groupMode === "list") {
         const sessions = visibleGroups.flatMap((g) => g.sessions || []);
         if (sort === "time") sessions.sort((a, b) => (Date.parse(b.updatedAt || "") || 0) - (Date.parse(a.updatedAt || "") || 0));
-        visibleGroups.splice(0, visibleGroups.length, { id: "__flat__", label: "", sessions });
+        visibleGroups.splice(0, visibleGroups.length);
+        if (sessions.length) visibleGroups.push({ id: "__flat__", label: "", sessions });
       }
       return h("div", { className: native ? "ima-native ima-rail" : "dcu-wb ima-rail" },
         h("style", null, WB_CSS),
         h(ChannelWorkspaceHead, { query, sort, groupMode, onQuery: setQuery, onSort: setSort, onGroupMode: setGroupMode }),
         h("div", { className: native ? "ima-native-tree" : "dcu-wb-tree", role: "tree" },
           error && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, error),
-          !error && groups.length === 0 && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。"),
+          !error && visibleGroups.length === 0 && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。"),
           ...visibleGroups.map((g) => {
             const visible = g.sessions || [];
             const expanded = !folded[g.id];

@@ -130,19 +130,24 @@ export class SessionRouter {
   }
 
   private async knownSessionIds(): Promise<Set<string> | undefined> {
-    const live = this.ctx.sessions as { list?: () => readonly { readonly id: string }[] } | undefined
-    const persistence = this.ctx.get?.("sessionPersistence") as { list?: () => Promise<readonly { readonly id: string }[]> } | undefined
-    const canListLive = typeof live?.list === "function"
-    const canListStored = typeof persistence?.list === "function"
-    if (!canListLive && !canListStored) return undefined
-    const ids = new Set<string>()
-    if (canListLive && live.list) {
-      for (const session of live.list()) ids.add(String(session.id))
+    try {
+      // 未 inject sessions 时不能读 ctx.sessions，否则 Cordis 会直接把 Host 打挂
+      const live = this.ctx.get?.('sessions') as { list?: () => readonly { readonly id: string }[] } | undefined
+      const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { readonly id: string }[]> } | undefined
+      const canListLive = typeof live?.list === "function"
+      const canListStored = typeof persistence?.list === "function"
+      if (!canListLive && !canListStored) return undefined
+      const ids = new Set<string>()
+      if (canListLive && live.list) {
+        for (const session of live.list()) ids.add(String(session.id))
+      }
+      if (canListStored && persistence.list) {
+        for (const header of await persistence.list()) ids.add(String(header.id))
+      }
+      return ids
+    } catch {
+      return undefined
     }
-    if (canListStored && persistence.list) {
-      for (const header of await persistence.list()) ids.add(String(header.id))
-    }
-    return ids
   }
 
   async remove(sessionId: string): Promise<boolean> {

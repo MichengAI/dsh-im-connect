@@ -57,3 +57,16 @@ test('频道列表不展示宿主已不存在的会话', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(client, /present.has\(sess.sessionId\)/)
 })
+test('频道页只渲染有可见会话的渠道文件夹', () => {
+  const src = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(src, /\.filter\(\(g\) => \(g\.sessions \|\| \[\]\)\.length > 0\)/)
+  assert.match(src, /!error && visibleGroups\.length === 0/)
+  assert.match(src, /if \(sessions\.length\) visibleGroups\.push/)
+})
+
+test('频道接口不因渠道已连接而返回空文件夹', () => {
+  const manager = readFileSync(new URL('../src/manager.ts', import.meta.url), 'utf8')
+  assert.match(manager, /archived\.has\(item\.sessionId\)/)
+  assert.match(manager, /filter\(\(group\) => group\.sessions\.length > 0\)/)
+  assert.doesNotMatch(manager, /connected\.has\(group\.id\)/)
+})

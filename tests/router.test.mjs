@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionRouter } from '../lib/engine/router.js'
@@ -138,12 +138,40 @@ test('宿主已删除的会话要从频道映射里拿掉', async (t) => {
     title: '已删',
     updatedAt: '2026-08-16T00:00:00.000Z',
   })
-  router.ctx.sessions = { list() { return [{ id: 'im:wecom:dm:alive' }] } }
+  Object.defineProperty(router.ctx, 'sessions', {
+    configurable: true,
+    get() { throw new Error('cannot get property "sessions" without inject') },
+  })
   router.ctx.get = (name) => {
+    if (name === 'sessions') return { list() { return [{ id: 'im:wecom:dm:alive' }] } }
     if (name === 'sessionPersistence') return { async list() { return [{ id: 'im:wecom:dm:alive' }] } }
     if (name === 'workspaceRegistry') return { list() { return [] }, get archivedSessionIds() { return [] } }
     return undefined
   }
   assert.equal(await router.pruneMissingSessions(), 1)
   assert.equal(store.get('wecom:dm:user-1'), undefined)
+})
+
+test('未 inject sessions 时对账不能把 Host 打挂', async (t) => {
+  const { router, store } = makeRouter(t)
+  store.upsert('wecom:dm:user-1', {
+    sessionId: 'im:wecom:dm:deleted',
+    channel: 'wecom',
+    kind: 'dm',
+    chatId: 'user-1',
+    title: '已删',
+    updatedAt: '2026-08-16T00:00:00.000Z',
+  })
+  Object.defineProperty(router.ctx, 'sessions', {
+    configurable: true,
+    get() { throw new Error('cannot get property "sessions" without inject') },
+  })
+  assert.equal(await router.pruneMissingSessions(), 0)
+  assert.equal(store.get('wecom:dm:user-1')?.sessionId, 'im:wecom:dm:deleted')
+})
+
+test('对账时禁止直接读 ctx.sessions', () => {
+  const src = readFileSync(new URL('../src/engine/router.ts', import.meta.url), 'utf8')
+  assert.match(src, /this\.ctx\.get\?\.\('sessions'\)/)
+  assert.doesNotMatch(src, /this\.ctx\.sessions/)
 })
