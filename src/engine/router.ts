@@ -20,13 +20,14 @@ type WorkspaceLookup = {
 }
 
 type AgentHost = Context & {
+  sessions?: { list(): readonly { readonly id: string }[] }
   agents?: {
     create(opts: Record<string, unknown>): Promise<{ agent?: { followup(message: unknown): void; session?: { id?: string } }; dispose(): Promise<void> }>
     get?(id: string): { followup(message: unknown): void; session?: { id?: string } } | undefined
     resume?(opts: Record<string, unknown>): Promise<{ agent?: { followup(message: unknown): void }; dispose(): Promise<void> }>
     withoutInitiator?<T>(operation: () => T): T
   }
-  get?(name: string): WorkspaceLookup | undefined
+  get?(name: string): WorkspaceLookup | { list?: () => Promise<readonly { readonly id: string }[]> } | undefined
   agentPresets?: { mount(agentCtx: unknown, presetId: string): Promise<void> }
   agentDefaultModel?: { currentSelection(): { provider?: string; model?: string } }
 }
@@ -113,6 +114,35 @@ export class SessionRouter {
       updatedAt: new Date().toISOString(),
     })
     return true
+  }
+
+  async pruneMissingSessions(): Promise<number> {
+    const known = await this.knownSessionIds()
+    if (known === undefined) return 0
+    let removed = 0
+    for (const rec of this.store.list()) {
+      if (known.has(rec.sessionId)) continue
+      await this.remove(rec.sessionId)
+      removed += 1
+    }
+    if (removed > 0) this.log(`[router] 已清理 ${removed} 条宿主已删除的频道映射`)
+    return removed
+  }
+
+  private async knownSessionIds(): Promise<Set<string> | undefined> {
+    const live = this.ctx.sessions as { list?: () => readonly { readonly id: string }[] } | undefined
+    const persistence = this.ctx.get?.("sessionPersistence") as { list?: () => Promise<readonly { readonly id: string }[]> } | undefined
+    const canListLive = typeof live?.list === "function"
+    const canListStored = typeof persistence?.list === "function"
+    if (!canListLive && !canListStored) return undefined
+    const ids = new Set<string>()
+    if (canListLive && live.list) {
+      for (const session of live.list()) ids.add(String(session.id))
+    }
+    if (canListStored && persistence.list) {
+      for (const header of await persistence.list()) ids.add(String(header.id))
+    }
+    return ids
   }
 
   async remove(sessionId: string): Promise<boolean> {
@@ -233,6 +263,7 @@ export class SessionRouter {
 
   async attachMappedSessions(): Promise<void> {
     const started = Date.now()
+    await this.pruneMissingSessions()
     for (const record of this.store.list()) {
       await this.attachWorkspace(record.sessionId)
     }

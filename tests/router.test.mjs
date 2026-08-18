@@ -126,3 +126,24 @@ test('原 id 与磁盘日志冲突时改为新建', async (t) => {
   assert.match(current, /^im:wecom:dm:\d+:user-1$/)
   assert.deepEqual(created, [current])
 })
+
+
+test('宿主已删除的会话要从频道映射里拿掉', async (t) => {
+  const { router, store } = makeRouter(t)
+  store.upsert('wecom:dm:user-1', {
+    sessionId: 'im:wecom:dm:deleted',
+    channel: 'wecom',
+    kind: 'dm',
+    chatId: 'user-1',
+    title: '已删',
+    updatedAt: '2026-08-16T00:00:00.000Z',
+  })
+  router.ctx.sessions = { list() { return [{ id: 'im:wecom:dm:alive' }] } }
+  router.ctx.get = (name) => {
+    if (name === 'sessionPersistence') return { async list() { return [{ id: 'im:wecom:dm:alive' }] } }
+    if (name === 'workspaceRegistry') return { list() { return [] }, get archivedSessionIds() { return [] } }
+    return undefined
+  }
+  assert.equal(await router.pruneMissingSessions(), 1)
+  assert.equal(store.get('wecom:dm:user-1'), undefined)
+})

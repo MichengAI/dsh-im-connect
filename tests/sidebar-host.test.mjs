@@ -52,3 +52,8 @@ test('频道会话菜单由列表统一开关，同一时间只开一个', () =>
   assert.match(client, /function ChannelSessionRow\(\{ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange \}\)/)
   assert.doesNotMatch(client, /function ChannelSessionRow\([^\)]*\) \{\s*const \[menu, setMenu\] = useState\(false\)/)
 })
+
+test('频道列表不展示宿主已不存在的会话', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /present.has\(sess.sessionId\)/)
+})

@@ -55,6 +55,11 @@ export class ImEngine {
       this.disposeEvents.push(on('session/event', (...args: unknown[]) => {
         void this.onSessionEvent(args[0] as { id?: string }, args[1] as { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } })
       }, { global: true }))
+      this.disposeEvents.push(on('session/disposed', (...args: unknown[]) => {
+        const id = String((args[0] as { id?: string } | undefined)?.id ?? '')
+        if (id === '') return
+        void this.removeSession(id)
+      }, { global: true }))
       this.disposeEvents.push(on('approval/request', (...args: unknown[]) => {
         const req = args[0] as { session?: { id?: string } }
         const next = args[1] as () => Promise<unknown>
