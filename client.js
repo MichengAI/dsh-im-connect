@@ -103,11 +103,10 @@ window.__ModuleLoader__.load({
 .ima-empty{color:var(--ima-muted);font-size:12px;padding:12px 8px}
 .ima-logo{width:28px;height:28px;flex:none;display:block;line-height:0;background:transparent}
 .ima-logo svg{width:28px;height:28px;display:block}
-.ima-logo.sm{width:16px;height:16px;overflow:visible}
-.ima-logo.sm svg{width:16px;height:16px}
-.ima-logo.sm[data-brand="weixin"] svg,.ima-logo.sm[data-brand="feishu"] svg,.ima-logo.sm[data-brand="lark"] svg,.ima-logo.sm[data-brand="telegram"] svg,.ima-logo.sm[data-brand="qq"] svg{transform:scale(1.2);transform-origin:center}
+.ima-logo.sm{width:16px;height:16px;overflow:hidden;display:grid;place-items:center}
+.ima-logo.sm svg{width:16px;height:16px;transform:none}
 .ima-logo[data-brand="wecom"]{border-radius:6px;box-shadow:inset 0 0 0 1px rgba(15,23,42,.12);overflow:hidden;background:#fff}
-.ima-logo.sm[data-brand="wecom"]{border-radius:4px}
+.ima-logo.sm[data-brand="wecom"]{border-radius:4px;box-shadow:none;background:transparent}
 .ima-mask{position:fixed;inset:0;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.45));backdrop-filter:var(--dsw-mask-blur,blur(8px));display:grid;place-items:center;z-index:80;padding:24px}
 .ima-modal{width:min(440px,100%);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--ima-text);border:1px solid var(--ima-line);border-radius:16px;padding:20px 22px 22px;text-align:left;box-shadow:var(--dsw-shadow-lv3,0 16px 48px rgba(0,0,0,.18))}
 .ima-modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -150,7 +149,7 @@ window.__ModuleLoader__.load({
       }, children);
 
       if (id === "dingtalk") {
-        return svg("0 0 48 48", [
+        return svg("6 6 36 36", [
           h("rect", { key: "bg", x: 6, y: 6, width: 36, height: 36, rx: 8, fill: "#0285fc" }),
           h("path", { key: "mark", d: "m20.178 37.577 3.5-6h-3l2-3c-5.5-1-6.281-3.938-6-4.5.162-.325 2.5 1 6.281 1-8.281-.5-8.281-7-7.781-7.5.423-.424 2.44 1.666 6.564 3.53-9.126-4.314-6.453-11.956-5.064-11.03 3.344 3 9.5 8.5 15 13 .658.538 1 2 0 3.25s-2.5 2.75-3 3.25h2.5z", fill: "#fff" }),
         ]);
@@ -801,7 +800,7 @@ window.__ModuleLoader__.load({
       );
     }
 
-    const WB_CSS = `.dcu-wb,.ima-native{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;padding-right:var(--dsh-sidebar-inline-padding,12px);box-sizing:border-box;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-head{flex:none;display:flex;align-items:center;height:36px;padding-left:4px;margin:2px 0 4px;color:var(--dsw-alias-label-tertiary,#81858C);font:14px/20px inherit}.ima-native-tree,.dcu-wb-tree{padding:0 0 16px 4px;scrollbar-gutter:stable}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}
+    const WB_CSS = `.dcu-wb,.ima-native{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;padding-right:var(--dsh-sidebar-inline-padding,12px);box-sizing:border-box;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-toolbar{box-sizing:border-box;flex:none;height:36px;margin:2px -4px 4px 0;padding-left:4px;display:flex;justify-content:flex-end;align-items:center;gap:4px;overflow:visible;position:relative;z-index:2;color:var(--dsw-alias-label-tertiary,#81858C);border-radius:12px}.ima-n-head-label{white-space:nowrap;min-width:0;max-width:45%;flex:none;line-height:20px;font-size:14px;overflow:hidden;transition:max-width .18s var(--ds-ease-in-out,ease),margin-right .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear}.ima-n-toolbar.is-search .ima-n-head-label{opacity:0;visibility:hidden;max-width:0;margin-right:-4px;transform:translate(-4px);transition-delay:0s,0s,0s,0s,.18s}.ima-n-search-slot{box-sizing:border-box;min-width:28px;max-width:28px;transition:max-width .18s var(--ds-ease-in-out,ease);flex:none;align-items:center;margin-left:auto;display:flex;position:relative;z-index:2}.ima-n-toolbar.is-search .ima-n-search-slot{flex:1;min-width:0;max-width:100%}.ima-n-search{box-sizing:border-box;cursor:text;width:100%;height:28px;color:var(--dsw-alias-label-secondary);transition:width .18s var(--ds-ease-in-out,ease),padding .18s var(--ds-ease-in-out,ease),border-color .18s var(--ds-ease-in-out,ease);background:transparent;border:none;border-radius:50%;flex:none;align-items:center;margin:0;padding:0;display:flex;overflow:hidden}.ima-n-toolbar.is-search .ima-n-search{border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.10));width:calc(100% + 4px);height:30px;border-radius:10px;margin-inline:-2px;padding:0 4px 0 0}.ima-n-search-btn,.ima-n-head-btn{cursor:pointer;width:28px;height:28px;min-width:28px;min-height:28px;position:relative;z-index:1;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-toolbar.is-search .ima-n-search-btn{width:28px;height:30px}.ima-n-search-btn:hover,.ima-n-head-btn:hover,.ima-n-head-btn.on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,var(--ima-text))}.ima-n-toolbar.is-search .ima-n-search-btn:hover{background:transparent}.ima-n-head-acts{opacity:1;visibility:visible;max-width:32px;transition:max-width .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear;flex:none;align-items:center;gap:4px;display:flex;overflow:visible;position:relative}.ima-n-toolbar.is-search .ima-n-head-acts{opacity:0;visibility:hidden;pointer-events:none;max-width:0;transform:translate(4px);transition-delay:0s,0s,0s,.18s}.ima-n-head-filter{position:relative}.ima-n-search-input{display:none;opacity:0;pointer-events:none;width:0;min-width:0;flex:none;color:var(--dsw-alias-label-primary,var(--ima-text));transition:opacity .12s var(--ds-ease-in-out,ease);background:transparent;border:none;outline:none;flex:1;font-size:13px;line-height:18px}.ima-n-toolbar.is-search .ima-n-search-input{display:block;opacity:1;pointer-events:auto;margin-left:-2px;width:auto;flex:1;min-width:0}.ima-n-search-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-search-clear{cursor:pointer;width:24px;height:24px;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-search-clear:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}@media (prefers-reduced-motion:reduce){.ima-n-head-label,.ima-n-search-slot,.ima-n-search,.ima-n-head-acts,.ima-n-search-input{transition:none}}.ima-n-filter-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:196px;padding:8px 6px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2,#1c2128));box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.36))}.ima-n-filter-label{padding:6px 10px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-filter-split{height:1px;margin:6px 8px;background:var(--dsw-alias-border-l2,rgba(255,255,255,.1))}.ima-n-filter-menu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:36px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:inherit;font:14px/20px inherit;cursor:pointer;text-align:left}.ima-n-filter-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}.ima-n-filter-tick{width:16px;height:16px;flex:none}.ima-native-tree,.dcu-wb-tree{padding:0 0 16px;scrollbar-gutter:stable}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}
 .dcu-wb *,.ima-native *{box-sizing:border-box}
 .dcu-wb-tree,.ima-native-tree{flex:1;min-height:0;overflow-y:auto;padding-bottom:16px;user-select:none}
 .dcu-wb-project-head,.ima-native-head,.dcu-wb-session,.ima-native-session{display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:8px;padding:0 8px;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
@@ -820,16 +819,20 @@ window.__ModuleLoader__.load({
 .ima-sess-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 .ima-sess-menu button.danger{color:var(--dsw-alias-state-error-primary,var(--ima-danger))}
 .ima-rename{flex:1;min-width:0;min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid var(--dsw-alias-stroke-primary,var(--ima-line));background:transparent;color:inherit;font:inherit}
-.ima-n-row,.ima-n-sess{display:flex;align-items:center;gap:6px;border-radius:8px;padding:0 8px;cursor:pointer;user-select:none;width:100%;border:0;background:transparent;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit;text-align:left;box-sizing:border-box}
+.ima-n-row,.ima-n-sess{display:flex;align-items:center;gap:6px;border-radius:8px;padding:0 8px 0 12px;cursor:pointer;user-select:none;width:100%;border:0;background:transparent;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit;text-align:left;box-sizing:border-box}
 .ima-n-row{height:34px}
 .ima-n-sess{height:32px;gap:0;position:relative}
 .ima-n-row:hover,.ima-n-sess:hover,.ima-n-sess.on,.ima-n-row.menu-on,.ima-n-sess.menu-on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 .ima-n-slot{flex:none;width:16px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#81858C)}.ima-run-dot{flex:none;color:var(--dsw-static-deepseek-450,#4c8dff)}.ima-run-dot-cell{fill:currentColor;opacity:.15;animation:ima-run-chase 1s infinite}@keyframes ima-run-chase{0%,12.4%{opacity:1}12.5%,24.9%{opacity:.6}25%,37.4%{opacity:.35}37.5%,100%{opacity:.15}}
-.ima-n-row .ima-n-chevron{display:none;color:var(--dsw-alias-label-caption,#ADB2B8)}
-.ima-n-row:hover .ima-n-chevron{display:inline-flex}
-.ima-n-row:hover .ima-n-folder{display:none}
-.ima-n-arrow{transition:transform .15s ease}
-.ima-n-arrow.open{transform:rotate(90deg)}
+.ima-n-folder{color:var(--dsw-alias-label-secondary,#9ca39f)}
+.ima-n-lead{color:var(--dsw-alias-label-tertiary,#81858C)}
+.ima-n-corner{color:var(--dsw-alias-label-caption,#ADB2B8);width:8px}
+.ima-n-hover{position:fixed;z-index:4100;min-width:188px;max-width:280px;padding:12px 14px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2,#1c2128));box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.36));color:var(--dsw-alias-label-primary,var(--ima-text))}
+.ima-n-hover-title{font-size:14px;line-height:20px;font-weight:500}
+.ima-n-hover-time{margin-top:4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858C)}
+.ima-n-hover-state{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary,#9ca39f)}
+.ima-n-hover-dot{width:8px;height:8px;border-radius:50%;background:#34c759;flex:none}
+.ima-n-hover-dot.is-run{background:#4c8dff}
 .ima-n-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;flex:1;font-weight:400}
 .ima-n-sess .ima-n-title{margin:0 6px 0 4px}
 .ima-n-time{flex:none;font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary,#81858C)}
@@ -875,13 +878,92 @@ window.__ModuleLoader__.load({
       return NativeSvg("0 0 16 16", 16, NativePath("M14.478 4.841 14.214 10.115c-.104 2.072-.147 2.896-.827 3.846a3.53 3.53 0 0 1-1.044.993c-.519.333-1.101.478-1.784.546-.671.067-1.509.066-2.559.066s-1.887.001-2.558-.066c-.683-.068-1.266-.213-1.784-.546a3.53 3.53 0 0 1-1.044-.993c-.681-.95-.724-1.774-.828-3.846L1.522 4.841l1.368-.068.263 5.273c.109 2.176.171 2.556.573 3.117a2.16 2.16 0 0 0 .673.64c.263.169.603.277 1.179.334.587.059 1.345.06 2.422.06s1.834-.001 2.422-.06c.575-.057.916-.165 1.179-.335.262-.168.49-.386.672-.64.402-.56.464-.94.573-3.116l.263-5.273 1.369.068ZM5.43 6.228h1.37v5.163H5.43V6.228Zm3.77 0h1.37v5.163H9.2V6.228ZM8.536.434c.644 0 1.116-.007 1.56.137.14.045.276.101.406.168.416.212.745.552 1.2 1.007l.796.795h2.876v1.37H.626V2.541h2.876l.796-.795c.456-.455.784-.795 1.2-1.007.13-.067.266-.123.405-.168C6.348.427 6.82.434 7.464.434h1.072Zm-1.072 1.37c-.732 0-.948.008-1.138.07a2.2 2.2 0 0 0-.206.085c-.156.08-.296.204-.678.583h5.117c-.382-.379-.522-.503-.679-.583a2.2 2.2 0 0 0-.205-.085c-.191-.062-.406-.07-1.138-.07H7.464Z"));
     }
     function IconFolderClose() {
-      return NativeSvg("0 0 16 16", 16, NativePath("M6.556 3.377 6.007 3.725l.549-.348ZM14.5 12.342h.65V6.397h-.65-.65v5.945h.65Zm-1.674-7.618v-.65H8.023v.65h4.803Zm-5.746-.519.55-.347-.525-.828-.549.348-.549.348.525.828.55-.348ZM5.613 2.858h0H3.174v.65h2.439v-.65ZM3 4.532v8.46h.65V4.532H3Zm11.326 9.484v-.65H4.674v.65h9.652ZM3 12.342h-.65A2.324 2.324 0 0 0 4.674 14.666v-1.3A.824.824 0 0 1 3.65 12.342H3Zm.174-9.484h0A2.324 2.324 0 0 0 2.35 4.532h1.3A.824.824 0 0 1 4.674 3.508h0V2.858Zm3.382.519.549-.348A1.824 1.824 0 0 0 5.613 2.208v1.3c.16 0 .308.082.394.217l.549-.348Zm1.467 1.347h0c-.16 0-.308-.082-.393-.216l-.55.347-.549.348A1.824 1.824 0 0 0 8.023 5.374v-1.3ZM14.5 6.397h.65A2.324 2.324 0 0 0 12.826 4.073v1.3c.565 0 1.024.458 1.024 1.024h.65Zm0 5.945h-.65c0 .565-.458 1.024-1.024 1.024v1.3A2.324 2.324 0 0 0 15.15 12.342h-.65Z"));
+      return NativeSvg("0 0 16 16", 16, h("path", { fill: "currentColor", transform: "translate(1.5 2.429)", d: "M5.05582 0.518756L4.50669 0.86654L5.05582 0.518756ZM13 9.4837L13.65 9.4837L13.65 3.53962L13 3.53962L12.35 3.53962L12.35 9.4837L13 9.4837ZM11.3264 1.86603L11.3264 1.21603L6.52313 1.21603L6.52313 1.86603L6.52313 2.51603L11.3264 2.51603L11.3264 1.86603ZM5.58054 1.34727L6.12968 0.999489L5.60495 0.170972L5.05582 0.518756L4.50669 0.86654L5.03141 1.69506L5.58054 1.34727ZM4.11323 1.23058e-13L4.11323 -0.65L1.67359 -0.65L1.67359 5.00699e-14L1.67359 0.65L4.11323 0.65L4.11323 1.23058e-13ZM0 1.67359L-0.65 1.67359L-0.65 9.4837L0 9.4837L0.65 9.4837L0.65 1.67359L0 1.67359ZM11.3264 11.1573L11.3264 10.5073L1.67359 10.5073L1.67359 11.1573L1.67359 11.8073L11.3264 11.8073L11.3264 11.1573ZM0 9.4837L-0.65 9.4837C-0.65 10.767 0.390308 11.8073 1.67359 11.8073L1.67359 11.1573L1.67359 10.5073C1.10828 10.5073 0.65 10.049 0.65 9.4837L0 9.4837ZM1.67359 5.00699e-14L1.67359 -0.65C0.390307 -0.65 -0.65 0.390309 -0.65 1.67359L0 1.67359L0.65 1.67359C0.65 1.10828 1.10828 0.65 1.67359 0.65L1.67359 5.00699e-14ZM5.05582 0.518756L5.60495 0.170972C5.28121 -0.340193 4.71829 -0.65 4.11323 -0.65L4.11323 1.23058e-13L4.11323 0.65C4.27282 0.65 4.4213 0.731715 4.50669 0.86654L5.05582 0.518756ZM6.52313 1.86603L6.52313 1.21603C6.36354 1.21603 6.21507 1.13431 6.12968 0.999489L5.58054 1.34727L5.03141 1.69506C5.35515 2.20622 5.91808 2.51603 6.52313 2.51603L6.52313 1.86603ZM13 3.53962L13.65 3.53962C13.65 2.25634 12.6097 1.21603 11.3264 1.21603L11.3264 1.86603L11.3264 2.51603C11.8917 2.51603 12.35 2.97431 12.35 3.53962L13 3.53962ZM13 9.4837L12.35 9.4837C12.35 10.049 11.8917 10.5073 11.3264 10.5073L11.3264 11.1573L11.3264 11.8073C12.6097 11.8073 13.65 10.767 13.65 9.4837L13 9.4837Z" }));
     }
     function IconFolderOpen() {
-      return NativeSvg("0 0 16 16", 16, NativePath("M5.196 1.571c.615 0 1.19.308 1.532.819l.471.708c.086.128.23.205.383.205h4.588A2.666 2.666 0 0 1 14.586 5.72v.907c.683.4 1.074 1.223.852 2.06l-1.053 3.971A2.666 2.666 0 0 1 12.05 14.453H2.917A2.416 2.416 0 0 1 .502 11.952V3.987A2.416 2.416 0 0 1 2.918 1.571h2.278Zm-1.417 6.185c-.469 0-.88.316-1.001.77l-.862 3.247c-.174.657.322 1.301 1.001 1.301H12.05c.469 0 .88-.316 1.001-.77l1.053-3.97c.078-.291-.142-.577-.444-.577H3.779Zm-.861-4.804c-.572 0-1.035.464-1.035 1.035v3.307a2.67 2.67 0 0 1 1.896-.919h9.426V5.72c0-.572-.464-1.035-1.035-1.035H7.582c-.615 0-1.19-.309-1.531-.82L5.579 3.156a.666.666 0 0 0-.383-.204H2.918Z"));
+      return NativeSvg("0 0 16 16", 16, [
+        NativePath("M5.19629 1.57104C5.81144 1.5711 6.38623 1.8786 6.72754 2.39038L7.19922 3.09839C7.28454 3.22635 7.42824 3.30344 7.58203 3.30347H12.1699C13.5039 3.30348 14.5859 4.38548 14.5859 5.71948V6.62671C15.2694 7.02689 15.6605 7.85012 15.4385 8.68726L14.3848 12.658C14.1037 13.7164 13.1449 14.4527 12.0498 14.4529H2.91699C1.51651 14.4529 0.451662 13.2814 0.501954 11.9519V3.98706C0.501954 2.65305 1.58396 1.57104 2.91797 1.57104H5.19629ZM3.7793 7.75562C3.30994 7.75562 2.89883 8.07153 2.77832 8.52515L1.91602 11.7722C1.74167 12.4291 2.23734 13.073 2.91699 13.073H12.0498C12.5191 13.0728 12.9304 12.757 13.0508 12.3035L14.1045 8.33374C14.1819 8.04202 13.9619 7.756 13.6602 7.75562H3.7793ZM2.91797 2.9519C2.34625 2.9519 1.88281 3.41534 1.88281 3.98706V7.2937C2.33068 6.7269 3.02249 6.37476 3.7793 6.37476H13.2051V5.71948C13.2051 5.14777 12.7416 4.68434 12.1699 4.68433H7.58203C6.96675 4.6843 6.39209 4.37595 6.05078 3.86401L5.5791 3.15601C5.49379 3.02821 5.34995 2.95196 5.19629 2.9519H2.91797Z"),
+        h("path", { fill: "currentColor", opacity: "0.2", d: "M13.6602 7.75525C13.9618 7.7556 14.1815 8.04179 14.1045 8.33337L13.0508 12.3031C12.9304 12.7567 12.5191 13.0725 12.0498 13.0726H2.91701C2.23744 13.0725 1.7417 12.4287 1.91603 11.7719L2.77834 8.52478C2.89898 8.07146 3.31018 7.75532 3.77931 7.75525H13.6602ZM5.1963 2.95154C5.34985 2.95159 5.49377 3.02803 5.57912 3.15564L6.0508 3.86365C6.39205 4.37553 6.96685 4.68385 7.58205 4.68396H12.1699C12.7416 4.68396 13.2049 5.14754 13.2051 5.71912V6.37439H3.77931C3.02267 6.37444 2.33067 6.72671 1.88283 7.29333V3.98669C1.88299 3.4152 2.34649 2.95168 2.91798 2.95154H5.1963Z" }),
+      ]);
     }
     function IconChevron() {
       return NativeSvg("0 0 14 14", 14, NativePath("M4.25 2.828v8.344c0 .49.592.735.939.389l4.172-4.172a.55.55 0 0 0 0-.778L5.189 2.439c-.347-.347-.939-.101-.939.389Z"));
+    }
+    function IconSearchOutline(props) {
+      const size = props && props.size ? props.size : 16;
+      return NativeSvg("0 0 16 16", size, [
+        NativePath("M11.894845 6.647401C11.894845 3.725463 9.534486 1.356779 6.623219 1.35657C3.711786 1.35657 1.351635 3.725338 1.351635 6.647401C1.351843 9.569296 3.711911 11.938273 6.623219 11.938273C9.534361 11.938064 11.894637 9.569171 11.894845 6.647401ZM13.245462 6.647401C13.245254 10.317935 10.280401 13.293613 6.623219 13.293821C2.965871 13.293821 0.000204 10.31806 0 6.647401C0 2.976574 2.965746 0 6.623219 0C10.280526 0.000205 13.245462 2.9767 13.245462 6.647401Z"),
+        NativePath("M16.000417 15.041079L15.044449 16.000433L11.530434 12.473588L12.486298 11.514234L16.000417 15.041079Z"),
+      ]);
+    }
+    function IconSliders() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M2.2 3.4h6.05a1.85 1.85 0 0 0 3.5 0H13.8v1.3H11.75a1.85 1.85 0 0 0-3.5 0H2.2V3.4Zm8.6 1.15A.75.75 0 1 1 10.05 4.55.75.75 0 0 1 10.8 4.55ZM2.2 7.35h2.35a1.85 1.85 0 0 0 3.5 0H13.8v1.3H8.05a1.85 1.85 0 0 0-3.5 0H2.2V7.35Zm4.1 1.15A.75.75 0 1 1 5.55 8.5a.75.75 0 0 1 .75-.75ZM2.2 11.3h7.35a1.85 1.85 0 0 0 3.5 0H13.8v1.3h-.75a1.85 1.85 0 0 0-3.5 0H2.2v-1.3Zm9.9 1.15a.75.75 0 1 1-.75-.75.75.75 0 0 1 .75.75Z"));
+    }
+    function IconCloseOutline(props) {
+      const size = props && props.size ? props.size : 16;
+      return NativeSvg("0 0 16 16", size, [
+        NativePath("M14.1168 13.197L13.197 14.1167L1.8833 2.80303L2.80309 1.88324L14.1168 13.197Z"),
+        NativePath("M13.197 1.88326L14.1168 2.80305L2.80309 14.1168L1.8833 13.197L13.197 1.88326Z"),
+      ]);
+    }
+    function IconCheckOutline() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M15.0498 3.92579L8.49512 12.3818C8.25774 12.6881 8.04517 12.9645 7.84668 13.1689C7.63957 13.3823 7.38732 13.5841 7.04492 13.6719C6.86373 13.7183 6.6757 13.7346 6.48926 13.7197C6.13666 13.6915 5.8528 13.5355 5.6123 13.3604C5.38201 13.1926 5.12573 12.9567 4.83984 12.6953L1.03125 9.21289L1.96875 8.1875L5.77734 11.6699C6.08684 11.9529 6.27773 12.1249 6.43066 12.2363C6.50183 12.2882 6.54699 12.3135 6.57324 12.3252C6.58525 12.3305 6.59269 12.3322 6.5957 12.333C6.59802 12.3336 6.59961 12.334 6.59961 12.334C6.63317 12.3367 6.66758 12.3335 6.7002 12.3252C6.7002 12.3252 6.70211 12.3251 6.7041 12.3242C6.70698 12.3229 6.71348 12.319 6.72461 12.3115C6.74849 12.2956 6.78843 12.2642 6.84961 12.2012C6.98138 12.0654 7.13957 11.8628 7.39648 11.5313L13.9502 3.07422L15.0498 3.92579Z"));
+    }
+    function FilterRow({ label, selected, onSelect }) {
+      return h("button", { type: "button", className: selected ? "on" : undefined, onClick: onSelect },
+        h("span", null, label),
+        selected ? h(IconCheckOutline) : h("span", { className: "ima-n-filter-tick" }),
+      );
+    }
+    function ChannelWorkspaceHead({ query, sort, groupMode, onQuery, onSort, onGroupMode }) {
+      const [searching, setSearching] = useState(!!query);
+      const [open, setOpen] = useState(false);
+      const searchSize = searching ? 11 : 14;
+      return h("div", { className: searching ? "ima-n-toolbar is-search" : "ima-n-toolbar" },
+        h("span", { className: "ima-n-head-label" }, "工作区"),
+        h("div", { className: "ima-n-search-slot" },
+          h("div", { className: "ima-n-search", onClick: () => { setOpen(false); setSearching(true); } },
+            h("button", { type: "button", className: "ima-n-search-btn", "aria-label": "搜索", "aria-expanded": searching, onClick: () => { setOpen(false); setSearching(true); } }, h(IconSearchOutline, { size: searchSize })),
+            h("input", { className: "ima-n-search-input", value: query, placeholder: "搜索会话...", "aria-label": "搜索会话", tabIndex: searching ? 0 : -1, onChange: (e) => onQuery(e.target.value), onKeyDown: (e) => { if (e.key === "Escape") { onQuery(""); setSearching(false); } } }),
+            searching && h("button", { type: "button", className: "ima-n-search-clear", "aria-label": "清除搜索", onClick: (e) => { e.stopPropagation(); onQuery(""); setSearching(false); } }, h(IconCloseOutline, { size: 14 })),
+          ),
+        ),
+        h("div", { className: "ima-n-head-acts" },
+          h("div", { className: "ima-n-head-filter" },
+            h("button", { type: "button", className: open ? "ima-n-head-btn on" : "ima-n-head-btn", "aria-label": "筛选", onClick: () => setOpen(!open) }, h(IconSliders)),
+            open && h("div", { className: "ima-n-filter-menu" },
+              h("div", { className: "ima-n-filter-label" }, "分组方式"),
+              h(FilterRow, { label: "按工作区", selected: groupMode === "workspace", onSelect: () => { onGroupMode("workspace"); setOpen(false); } }),
+              h(FilterRow, { label: "单列表", selected: groupMode === "list", onSelect: () => { onGroupMode("list"); setOpen(false); } }),
+              h("div", { className: "ima-n-filter-split" }),
+              h("div", { className: "ima-n-filter-label" }, "排序方式"),
+              h(FilterRow, { label: "手动排序", selected: sort === "manual", onSelect: () => { onSort("manual"); setOpen(false); } }),
+              h(FilterRow, { label: "最近更新", selected: sort === "time", onSelect: () => { onSort("time"); setOpen(false); } }),
+            ),
+          ),
+        ),
+      );
+    }
+    function IconPlayOutline() {
+      return NativeSvg("0 0 16 16", 16, [
+        NativePath("M14.1446 8C14.1446 4.6062 11.3938 1.85539 8 1.85539C4.6062 1.85539 1.85539 4.6062 1.85539 8C1.85539 11.3938 4.6062 14.1446 8 14.1446C11.3938 14.1446 14.1446 11.3938 14.1446 8ZM15.511 8C15.511 12.148 12.148 15.511 8 15.511C3.85202 15.511 0.489014 12.148 0.489014 8C0.489014 3.85202 3.85202 0.489014 8 0.489014C12.148 0.489014 15.511 3.85202 15.511 8Z"),
+        NativePath("M10.5617 8.42578C10.852 8.21614 10.852 7.78386 10.5617 7.57422L7.25708 5.18751C6.90974 4.93666 6.42436 5.18484 6.42436 5.61329V10.3867C6.42436 10.8152 6.90974 11.0633 7.25708 10.8125L10.5617 8.42578Z"),
+      ]);
+    }
+    function IconTreeCorner() {
+      return h("svg", { viewBox: "-0.5 0 8.5 10.5", width: 8, height: 10, fill: "none", xmlns: "http://www.w3.org/2000/svg", "aria-hidden": "true" },
+        NativePath("M0 0L-0.5 0L-0.5 7L0 7L0.5 7L0.5 0L0 0ZM3 10L3 10.5L8 10.5L8 10L8 9.5L3 9.5L3 10ZM0 7L-0.5 7C-0.5 8.933 1.067 10.5 3 10.5L3 10L3 9.5C1.61929 9.5 0.5 8.38071 0.5 7L0 7Z"),
+      );
+    }
+    function SessionHoverCard({ title, time, running, style, cardRef }) {
+      return h("div", { className: "ima-n-hover", style, ref: cardRef },
+        h("div", { className: "ima-n-hover-title" }, title),
+        time ? h("div", { className: "ima-n-hover-time" }, time) : null,
+        h("div", { className: "ima-n-hover-state" },
+          h("span", { className: running ? "ima-n-hover-dot is-run" : "ima-n-hover-dot" }),
+          running ? "运行中" : "空闲",
+        ),
+      );
     }
     function MoreIcon() {
       return h(IconEllipsis);
@@ -900,10 +982,10 @@ window.__ModuleLoader__.load({
       const delta = Math.max(0, Date.now() - ts);
       const min = Math.floor(delta / 60000);
       if (min < 1) return "刚刚";
-      if (min < 60) return min + "分钟";
+      if (min < 60) return min + "分钟前";
       const hour = Math.floor(min / 60);
-      if (hour < 24) return hour + "小时";
-      return Math.floor(hour / 24) + "天";
+      if (hour < 24) return hour + "小时前";
+      return Math.floor(hour / 24) + "天前";
     }
 
 
@@ -953,8 +1035,32 @@ window.__ModuleLoader__.load({
       const setMenu = (next) => onMenuChange(!!next);
       const [renaming, setRenaming] = useState(false);
       const [draft, setDraft] = useState(sess.title || sess.chatId || "");
+      const rowRef = useRef(null);
+      const hoverRef = useRef(null);
+      const hoverTimer = useRef(null);
+      const [hoverOpen, setHoverOpen] = useState(false);
+      const [hoverStyle, setHoverStyle] = useState({});
       const title = sess.title || sess.chatId;
       const native = skin !== "codex";
+      const running = !!(sess.running || (sessionById && sessionById[sess.sessionId] && sessionById[sess.sessionId].running));
+      const showHover = () => {
+        if (menu || !native) return;
+        if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+        hoverTimer.current = window.setTimeout(() => setHoverOpen(true), 500);
+      };
+      const hideHover = () => {
+        if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+        setHoverOpen(false);
+      };
+      useLayoutEffect(() => {
+        if (!hoverOpen || menu || !rowRef.current) return;
+        const row = rowRef.current.getBoundingClientRect();
+        const card = hoverRef.current;
+        const height = card && card.offsetHeight ? card.offsetHeight : 96;
+        const top = row.top + height > window.innerHeight - 8 ? Math.max(8, window.innerHeight - height - 8) : Math.max(8, row.top);
+        setHoverStyle({ position: "fixed", zIndex: 4100, left: Math.round(row.right + 8) + "px", top: Math.round(top) + "px" });
+      }, [hoverOpen, menu, title, running]);
+      useEffect(() => () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current); }, []);
       const rowClass = native
         ? ("ima-native-session" + (selected ? " on" : "") + (menu ? " menu-on" : ""))
         : ("dcu-wb-session" + (selected ? " dcu-wb-selected" : "") + (menu ? " dcu-wb-menu-open" : ""));
@@ -1021,18 +1127,20 @@ window.__ModuleLoader__.load({
         { id: "rename", label: "重命名", icon: h(IconEdit), go: () => { setRenaming(true); } },
         { id: "fork", label: "分叉会话", icon: h(IconBranch), go: () => run("fork") },
         { id: "archive", label: "归档会话", icon: h(IconArchive), go: () => run("archive") },
-        { id: "delete", label: "删除会话", icon: h(IconTrash), danger: true, go: () => run("delete") },
       ];
       return h("div", {
+        ref: rowRef,
         className: native ? ("ima-n-sess" + (selected ? " on" : "") + (menu ? " menu-on" : "")) : rowClass,
         role: "treeitem",
         tabIndex: 0,
         "aria-selected": selected,
-        onClick: () => { setMenu(false); onOpen(sess.sessionId); },
+        onClick: () => { setMenu(false); hideHover(); onOpen(sess.sessionId); },
+        onMouseEnter: showHover,
+        onMouseLeave: hideHover,
         onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMenu(false); onOpen(sess.sessionId); } },
-        onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); onMenuChange(true, e); },
+        onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); hideHover(); onMenuChange(true, e); },
       },
-        native && h("span", { className: "ima-n-slot" }, (sess.running || (sessionById && sessionById[sess.sessionId] && sessionById[sess.sessionId].running)) ? h(RunningStateDot) : null),
+        native && h("span", { className: "ima-n-slot" }, running ? h(RunningStateDot) : null),
         h("span", { className: native ? "ima-n-title" : "dcu-wb-session-title" }, title),
         native && h("span", { className: "ima-n-time" }, relativeTime(sess.updatedAt)),
         h("span", { className: native ? "ima-n-acts" : "dcu-wb-actions" },
@@ -1045,6 +1153,13 @@ window.__ModuleLoader__.load({
             onClick: (e) => { e.stopPropagation(); onMenuChange(!menu, e); },
           }, native ? h(IconEllipsis) : h(MoreIcon)),
         ),
+        hoverOpen && !menu && native && h(SessionHoverCard, {
+          title,
+          time: relativeTime(sess.updatedAt),
+          running,
+          style: hoverStyle,
+          cardRef: hoverRef,
+        }),
         menu && h(SessionPointerMenu, {
           native,
           x: menuOpen && menuOpen.x,
@@ -1082,6 +1197,9 @@ window.__ModuleLoader__.load({
       const [folded, setFolded] = useState({});
       const [error, setError] = useState("");
       const [openMenu, setOpenMenu] = useState(null);
+      const [query, setQuery] = useState("");
+      const [sort, setSort] = useState("time");
+      const [groupMode, setGroupMode] = useState("workspace");
       const selectedId = props.selectedId;
       const archived = new Set(props.archivedIds || []);
       const skin = props.skin || channelSkin;
@@ -1114,17 +1232,35 @@ window.__ModuleLoader__.load({
           document.removeEventListener("keydown", onKeyDown);
         };
       }, [openMenu]);
+      const needle = query.trim().toLowerCase();
+      const visibleGroups = groups.map((g) => {
+        const sessions = (g.sessions || []).filter((sess) => !archived.has(sess.sessionId));
+        if (!needle) return Object.assign({}, g, { sessions });
+        const nameHit = String(g.label || "").toLowerCase().includes(needle);
+        return Object.assign({}, g, { sessions: nameHit ? sessions : sessions.filter((sess) => String(sess.title || sess.chatId || "").toLowerCase().includes(needle)) });
+      });
+      if (sort === "time") {
+        visibleGroups.sort((a, b) => {
+          const latest = (g) => Math.max(0, ...(g.sessions || []).map((sess) => Date.parse(sess.updatedAt || "") || 0));
+          return latest(b) - latest(a);
+        });
+      }
+      if (groupMode === "list") {
+        const sessions = visibleGroups.flatMap((g) => g.sessions || []);
+        if (sort === "time") sessions.sort((a, b) => (Date.parse(b.updatedAt || "") || 0) - (Date.parse(a.updatedAt || "") || 0));
+        visibleGroups.splice(0, visibleGroups.length, { id: "__flat__", label: "", sessions });
+      }
       return h("div", { className: native ? "ima-native ima-rail" : "dcu-wb ima-rail" },
         h("style", null, WB_CSS),
+        h(ChannelWorkspaceHead, { query, sort, groupMode, onQuery: setQuery, onSort: setSort, onGroupMode: setGroupMode }),
         h("div", { className: native ? "ima-native-tree" : "dcu-wb-tree", role: "tree" },
           error && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, error),
           !error && groups.length === 0 && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。"),
-          ...groups.map((g) => {
-            const visible = (g.sessions || []).filter((sess) => !archived.has(sess.sessionId));
-            if (!visible.length) return null;
+          ...visibleGroups.map((g) => {
+            const visible = g.sessions || [];
             const expanded = !folded[g.id];
             return h("div", { key: g.id, className: native ? "ima-native-project" : "dcu-wb-project" },
-            h("button", {
+            groupMode !== "list" && h("button", {
               className: native ? "ima-n-row" : "dcu-wb-project-head",
               type: "button",
               role: "treeitem",
@@ -1134,7 +1270,6 @@ window.__ModuleLoader__.load({
               native
                 ? [
                   h("span", { key: "folder", className: "ima-n-slot ima-n-folder" }, h(Logo, { id: g.id, small: true })),
-                  h("span", { key: "chev", className: "ima-n-slot ima-n-chevron" }, h("span", { className: expanded ? "ima-n-arrow open" : "ima-n-arrow" }, h(IconChevron))),
                   h("span", { key: "title", className: "ima-n-title" }, g.label),
                 ]
                 : [
@@ -1142,8 +1277,7 @@ window.__ModuleLoader__.load({
                   h("span", { key: "title", className: "dcu-wb-project-title" }, g.label),
                 ],
             ),
-            !folded[g.id] && (visible.length
-              ? visible.map((sess) => h(ChannelSessionRow, {
+            (groupMode === "list" || !folded[g.id]) && visible.length > 0 && visible.map((sess) => h(ChannelSessionRow, {
                 key: sess.sessionId,
                 sess,
                 selected: selectedId === sess.sessionId,
@@ -1164,8 +1298,7 @@ window.__ModuleLoader__.load({
                   forkSession: props.forkSession,
                   openPath: props.openPath,
                 },
-              }))
-              : h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "暂无会话")),
+              })),
           );
           }),
         ),
@@ -1229,14 +1362,31 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function filterSessionsByIm(state, keepIm) {
-      const src = state || { ids: [], byId: {}, current: null };
-      const ids = (src.ids || []).filter((id) => String(id).startsWith("im:") === keepIm);
+    const imSessionFilterCache = new WeakMap();
+    const registryFilterCache = new WeakMap();
+    function cacheFilteredSessions(src, ids) {
+      if (ids.length === (src.ids || []).length) return src;
       const byId = {};
       for (const id of ids) {
         if (src.byId && src.byId[id]) byId[id] = src.byId[id];
       }
       return Object.assign({}, src, { ids, byId });
+    }
+    function filterSessionsByIm(state, keepIm) {
+      const src = state || { ids: [], byId: {}, current: null };
+      const key = keepIm ? "im" : "task";
+      if (src && typeof src === "object") {
+        const hit = imSessionFilterCache.get(src);
+        if (hit && hit[key]) return hit[key];
+      }
+      const ids = (src.ids || []).filter((id) => String(id).startsWith("im:") === keepIm);
+      const result = cacheFilteredSessions(src, ids);
+      if (src && typeof src === "object") {
+        const bucket = imSessionFilterCache.get(src) || {};
+        bucket[key] = result;
+        imSessionFilterCache.set(src, bucket);
+      }
+      return result;
     }
 
     function filterTaskSessions(state) {
@@ -1292,12 +1442,14 @@ window.__ModuleLoader__.load({
       const src = state || { ids: [], byId: {}, current: null };
       const filters = registry && registry.sessionFilters ? registry.sessionFilters : [];
       if (!filters.length) return src;
-      const ids = (src.ids || []).filter((id) => filters.every((fn) => fn(String(id))));
-      const byId = {};
-      for (const id of ids) {
-        if (src.byId && src.byId[id]) byId[id] = src.byId[id];
+      if (src && typeof src === "object") {
+        const hit = registryFilterCache.get(src);
+        if (hit && hit.filters === filters) return hit.result;
       }
-      return Object.assign({}, src, { ids, byId });
+      const ids = (src.ids || []).filter((id) => filters.every((fn) => fn(String(id))));
+      const result = cacheFilteredSessions(src, ids);
+      if (src && typeof src === "object") registryFilterCache.set(src, { filters, result });
+      return result;
     }
 
     function SessionSwitcher(props) {
@@ -1315,22 +1467,30 @@ window.__ModuleLoader__.load({
       const currentId = typeof rawUseSessions === "function"
         ? rawUseSessions((state) => (state && state.current) || null)
         : (props.selectedId || null);
-      const useTaskSessions = useCallback((selector) => {
+      const useTaskSessions = useCallback((selector, eq) => {
         if (typeof rawUseSessions !== "function") return selector({ ids: [], byId: {}, current: null });
-        return rawUseSessions((state) => selector(applyRegistryFilters(filterTaskSessions(state), nativeTabs)));
+        return rawUseSessions((state) => selector(applyRegistryFilters(filterTaskSessions(state), nativeTabs)), eq);
       }, [rawUseSessions, nativeTabs]);
-      const useChannelSessions = useCallback((selector) => {
+      const useChannelSessions = useCallback((selector, eq) => {
         if (typeof rawUseSessions !== "function") return selector({ ids: [], byId: {}, current: null });
-        return rawUseSessions((state) => selector(filterChannelSessions(state)));
+        return rawUseSessions((state) => selector(filterChannelSessions(state)), eq);
       }, [rawUseSessions]);
       useEffect(() => { ensureStyle(); }, []);
       useEffect(() => { try { localStorage.setItem(TAB_KEY, tab); } catch { /* ignore */ } }, [tab]);
+      const previousCurrentId = useRef(currentId);
+      const tabFollowReady = useRef(false);
       useEffect(() => {
-        if (typeof currentId === "string" && currentId.startsWith("im:")) setTab("channels");
-        if (typeof currentId === "string") {
-          const matched = extraTabs.find((item) => item.matchSession && item.matchSession(currentId));
-          if (matched) setTab(matched.id);
+        if (!tabFollowReady.current) {
+          tabFollowReady.current = true;
+          previousCurrentId.current = currentId;
+          return;
         }
+        const previous = previousCurrentId.current;
+        previousCurrentId.current = currentId;
+        if (typeof currentId !== "string" || currentId === "" || currentId === previous) return;
+        if (currentId.startsWith("im:")) setTab("channels");
+        const matched = extraTabs.find((item) => item.matchSession && item.matchSession(currentId));
+        if (matched && matched.id !== "schedule") setTab(matched.id);
       }, [currentId, extraTabs]);
       const openSession = (id) => openListedSession(id, props.openSession || props.open);
       const officialProps = Object.assign({}, props, { useSessions: useTaskSessions });
