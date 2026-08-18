@@ -26,6 +26,24 @@
 - Send work, read replies, and approve tools from the phone; model and permission follow the local DSH profile.
 - Bind by QR code or credentials. Secrets go into DSH `ctx.credentials`, not `channels.json`.
 - Paste one sentence into DSH, Codex, or WorkBuddy and let that agent install the plugin locally.
+- Groups need no binding, only a mention. DMs allow the QR scanner automatically; everyone else must be approved on the settings page.
+- After a successful bind, the configure dialog closes by itself and Settings stays open.
+
+## Who can drive the assistant
+
+Inbound messages are identified before commands, tool approvals, or injection.
+
+| Case | Behavior |
+|---|---|
+| Group without @ | Ignored; no reply and no pending request |
+| Group with @ | No binding. Anyone can send work |
+| DM from the QR scanner | WeChat / Feishu / Lark scanners are allowlisted automatically |
+| DM from anyone else | Appears on the settings pending list until approved |
+| DM on credential-only channels | Telegram, and DingTalk / WeCom / QQ bound with secrets only, require approval for every DM |
+| DM without a userId | Denied |
+| Tool approval | Only an allowlisted user in a DM can reply 批准 / 拒绝; group replies do not grant |
+
+WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk immediately. A different WeChat account DMing the bot waits for settings approval.
 
 ## 📡 Supported channels
 
@@ -160,12 +178,13 @@ Open **Settings → IM Assistant**, choose the workspace, permission, and model,
 
 | Goal | Action | Notes |
 | --- | --- | --- |
-| Connect a channel | Select **Configure** on an unconnected card, then scan or enter credentials | Feishu / Lark / WeChat are QR-only; Telegram needs a Bot Token |
+| Connect a channel | Select **Configure** on an unconnected card, then scan or enter credentials | Feishu / Lark / WeChat are QR-only; Telegram needs a Bot Token; the dialog closes after success |
 | Pause receiving | Turn off the connected-card toggle | Credentials stay; inbound messages pause |
-| Send work from IM | Type in a DM; in groups, mention the bot | Each chat has its own channel session |
+| Send work from IM | The QR scanner can DM immediately; other DMs need settings approval. Groups only need a mention | Each chat has its own channel session |
 | Split input | End with `..` to continue, `!!` to flush now | Default merge window is about 5 seconds |
 | Start a new session | Send `/new` or `/clear` | Affects only the current IM chat |
 | Status / help | Send `/status` or `/help` | Scoped to the current channel session |
+| Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
 | Approve a tool | Reply `批准` or `拒绝` in a DM | Also accepts `yes` / `no` / `allow` / `reject`; group replies cannot grant |
 | Review on the web | Open the workspace **Channels** tab | IM sessions never appear under **Tasks** |
 
@@ -175,7 +194,7 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 
 | Item | Current behavior |
 | --- | --- |
-| Access | Fail closed. Unknown users cannot drive the assistant; a stranger DM appears as a pending request on the settings page; WeChat / Feishu / Lark QR scanners are allowlisted automatically; groups still require a mention |
+| Access | Groups need no binding, only a mention. DMs fail closed: the QR scanner is allowlisted automatically; other DM users must be approved on the settings page |
 | Management API | Loopback only (`localhost`, `127.0.0.1`, `[::1]`) |
 | Secrets | Prefer DSH `ctx.credentials`; otherwise `%DSH_HOME%\dsh-im-connect\secrets.json` |
 | Channel state | `channels.json` stores enablement and credential refs, not raw secrets |
@@ -219,6 +238,6 @@ npm test
 
 ## Documentation and license
 
-Project status, usage boundaries, architecture, and iteration records begin at the [documentation entry point](docs/00-交接入口/00-阅读导航.md). The detailed operational guide is [使用说明](docs/02-产品与业务/04-使用说明.md).
+Project status, usage boundaries, architecture, and iteration records begin at the [documentation entry point](docs/00-交接入口/00-阅读导航.md). The detailed operational guide is [使用说明](docs/02-产品与业务/04-使用说明.md). The default security posture is in [SECURITY.md](SECURITY.md).
 
 Licensed under [Apache License 2.0](LICENSE).

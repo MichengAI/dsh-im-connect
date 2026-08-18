@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-im-connect",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "DeepSeek Harness IM 助理：把本机 agent 接到微信、企微、钉钉、飞书、QQ、Telegram，会话与网页任务分列。",
   "type": "module",
   "main": "lib/index.js",

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { canAnswerToolApproval, decideAccess, isUserAllowed } from '../lib/engine/access.js'
 
-test('未配置白名单或缺 userId 一律拒绝', () => {
+test('私聊未配置白名单或缺 userId 一律拒绝', () => {
   assert.equal(isUserAllowed([], 'u1'), false)
   assert.equal(isUserAllowed(['u1'], ''), false)
   assert.equal(isUserAllowed(['u1'], undefined), false)
@@ -11,9 +11,9 @@ test('未配置白名单或缺 userId 一律拒绝', () => {
   assert.equal(decideAccess({ userAllowed: true, kind: 'dm' }), 'allow')
 })
 
-test('群聊未 @ 直接忽略；@ 后仍要在白名单', () => {
+test('群聊不用绑定：未 @ 忽略，@ 后直接放行', () => {
   assert.equal(decideAccess({ userAllowed: false, kind: 'group', addressed: false }), 'ignore')
-  assert.equal(decideAccess({ userAllowed: false, kind: 'group', addressed: true }), 'deny')
+  assert.equal(decideAccess({ userAllowed: false, kind: 'group', addressed: true }), 'allow')
   assert.equal(decideAccess({ userAllowed: true, kind: 'group', addressed: true }), 'allow')
 })
 

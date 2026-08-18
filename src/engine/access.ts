@@ -1,4 +1,4 @@
-/** 谁可以驱动本机助手。未配置白名单一律拒绝，缺 userId 也拒绝。 */
+/** 群聊不用绑定；私聊只有白名单用户可驱动，缺 userId 拒绝。 */
 export type AccessDecision = 'allow' | 'deny' | 'ignore'
 
 export function normalizeUserId(userId?: string): string {
@@ -19,7 +19,9 @@ export function decideAccess(input: {
   kind?: 'dm' | 'group'
   addressed?: boolean
 }): AccessDecision {
-  if (input.kind === 'group' && input.addressed === false) return 'ignore'
+  if (input.kind === 'group') {
+    return input.addressed === false ? 'ignore' : 'allow'
+  }
   return input.userAllowed ? 'allow' : 'deny'
 }
 

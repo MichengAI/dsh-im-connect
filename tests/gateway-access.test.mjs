@@ -100,6 +100,21 @@ test('缺 userId 或空白名单默认拒绝', async (t) => {
   }
 })
 
+test('群聊 @ 后无需绑定', async (t) => {
+  const pending = []
+  const { engine, inbound, sent } = makeEngine(t, (_channelId, msg) => {
+    pending.push(msg.userId)
+    return '未授权'
+  })
+  try {
+    inbound({ chatId: 'chat-9', userId: 'stranger', text: '/help', kind: 'group', addressed: true, messageId: 'g1' })
+    await waitFor(() => sent.some((item) => item.text.includes('IM 助理已连接')))
+    assert.deepEqual(pending, [])
+  } finally {
+    engine.dispose()
+  }
+})
+
 test('白名单用户可通过命令；群聊不能批准工具', async (t) => {
   const { engine, inbound, sent, handlers, dmSessionId, groupSessionId } = makeEngine(t)
   engine.addAllowed('telegram', 'user-1')

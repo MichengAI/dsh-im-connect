@@ -286,21 +286,30 @@ window.__ModuleLoader__.load({
         return () => { alive.current = false; };
       }, []);
 
+      const finished = useRef(false);
+      const onConnectedRef = useRef(onConnected);
+      onConnectedRef.current = onConnected;
+      const finish = (delayMs) => {
+        if (finished.current) return;
+        finished.current = true;
+        alive.current = false;
+        window.setTimeout(() => onConnectedRef.current(), delayMs);
+      };
+
       useEffect(() => {
         if (tab !== "qr") return undefined;
         const timer = setInterval(() => {
           api(`/channels/${ch.id}/qr/status`).then((data) => {
-            if (!alive.current || !data.ok) return;
+            if (finished.current || !alive.current || !data.ok) return;
             setPairing(data.pairing);
-            if (data.pairing && data.pairing.status === "success") {
-              onConnected();
-            }
+            if (data.pairing && data.pairing.status === "success") finish(800);
           }).catch(() => undefined);
         }, 2000);
         return () => clearInterval(timer);
-      }, [tab, ch.id, onConnected]);
+      }, [tab, ch.id]);
 
       const close = () => {
+        if (finished.current) return;
         alive.current = false;
         if (hasQr) api("/channels/" + ch.id + "/qr/cancel", { method: "POST" }).catch(() => undefined);
         onClose();
@@ -331,7 +340,7 @@ window.__ModuleLoader__.load({
           body: JSON.stringify({ config }),
         }).then((data) => {
           if (!data.ok) setError(data.error || "保存失败");
-          else onConnected();
+          else finish(400);
         }).catch(() => setError("保存失败")).finally(() => setBusy(false));
       };
 
@@ -346,7 +355,7 @@ window.__ModuleLoader__.load({
       const src = qrSrc(pairing);
       const remain = pairing && pairing.remainingSeconds;
 
-      return h("div", { className: "ima-mask", role: "presentation", onClick: close, onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } } },
+      return h("div", { className: "ima-mask", role: "presentation", onMouseDown: (event) => event.stopPropagation(), onClick: (event) => { event.stopPropagation(); close(); }, onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } } },
         h("div", { className: "ima-modal", onClick: (e) => e.stopPropagation() },
           h("div", { className: "ima-modal-h" },
             h("h2", null, "配置" + ch.label),

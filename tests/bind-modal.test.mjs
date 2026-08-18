@@ -11,3 +11,9 @@ test('bind modal captures escape before settings', () => {
   assert.match(client, /addEventListener\(.keydown., onKeyDown, true\)/)
 })
 
+
+test('绑定成功后自动关闭配置弹窗，不连带关设置页', () => {
+  assert.match(client, /finish\(800\)/)
+  assert.match(client, /finished\.current/)
+  assert.match(client, /onMouseDown: \(event\) => event\.stopPropagation\(\)/)
+})
