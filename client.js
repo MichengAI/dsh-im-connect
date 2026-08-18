@@ -1202,8 +1202,6 @@ window.__ModuleLoader__.load({
       const [groupMode, setGroupMode] = useState("workspace");
       const selectedId = props.selectedId;
       const archived = new Set(props.archivedIds || []);
-      const presentKeys = Object.keys(props.sessionById || {});
-      const present = presentKeys.length > 0 ? new Set(presentKeys) : undefined;
       const skin = props.skin || channelSkin;
       const native = skin !== "codex";
       const open = (id) => openListedSession(id, props.openSession || props.open);
@@ -1236,7 +1234,7 @@ window.__ModuleLoader__.load({
       }, [openMenu]);
       const needle = query.trim().toLowerCase();
       const visibleGroups = groups.map((g) => {
-        const sessions = (g.sessions || []).filter((sess) => !archived.has(sess.sessionId) && (!present || present.has(sess.sessionId)));
+        const sessions = (g.sessions || []).filter((sess) => !archived.has(sess.sessionId));
         if (!needle) return Object.assign({}, g, { sessions });
         const nameHit = String(g.label || "").toLowerCase().includes(needle);
         return Object.assign({}, g, { sessions: nameHit ? sessions : sessions.filter((sess) => String(sess.title || sess.chatId || "").toLowerCase().includes(needle)) });

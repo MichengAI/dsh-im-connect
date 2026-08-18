@@ -53,9 +53,10 @@ test('频道会话菜单由列表统一开关，同一时间只开一个', () =>
   assert.doesNotMatch(client, /function ChannelSessionRow\([^\)]*\) \{\s*const \[menu, setMenu\] = useState\(false\)/)
 })
 
-test('频道列表不展示宿主已不存在的会话', () => {
+test('频道列表改模型后仍显示映射会话，只隐藏已归档', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  assert.match(client, /present.has\(sess.sessionId\)/)
+  assert.match(client, /!archived.has\(sess.sessionId\)/)
+  assert.doesNotMatch(client, /present.has\(sess.sessionId\)/)
 })
 test('频道页只渲染有可见会话的渠道文件夹', () => {
   const src = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
