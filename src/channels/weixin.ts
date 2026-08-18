@@ -253,6 +253,13 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
           state.botToken = token
           const newBaseUrl = pickStr(st, 'baseurl', 'base_url')
           if (newBaseUrl) state.baseUrl = newBaseUrl
+          if (!state.allowedUserId) {
+            state.allowedUserId = userId
+            log(`[weixin] 已绑定白名单用户 ${userId}`)
+          } else if (state.allowedUserId !== userId) {
+            log(`[weixin] 扫码用户 ${userId} 不在白名单（白名单=${state.allowedUserId}）`)
+            return false
+          }
           flush()
           statusText = '已登录'
           currentLoginUrl = undefined
@@ -459,6 +466,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
             const parsed = parseInbound(raw)
             if (!parsed) continue
             if (parsed.contextToken) state.contextTokens[parsed.fromUserId] = parsed.contextToken
+            if (state.allowedUserId && parsed.fromUserId !== state.allowedUserId) continue
             // 单个媒体失败只降级丢媒体，不再连累文本整条丢弃
             const settled = await Promise.allSettled(parsed.media)
             const media = []
@@ -651,6 +659,10 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     loginUrl() {
       return currentLoginUrl
     },
+    authorizes(userId: string) {
+      if (state.allowedUserId) return state.allowedUserId === userId
+      return undefined
+    },
     setMessageHandler(h) {
       handler = h
     },
@@ -667,6 +679,16 @@ function sleep(ms: number): Promise<void> {
 
 export function weixinStatePath(stateDir: string): string {
   return join(stateDir, 'wechat-state.json')
+}
+
+export function readWeixinAllowedUserId(stateDir: string): string | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(weixinStatePath(stateDir), 'utf8')) as Partial<WechatState>
+    const id = parsed.allowedUserId?.trim()
+    return id || undefined
+  } catch {
+    return undefined
+  }
 }
 
 export function persistWeixinLogin(stateDir: string, data: { botToken: string; allowedUserId?: string; baseUrl?: string }): void {

@@ -82,6 +82,8 @@ window.__ModuleLoader__.load({
 .ima-switch i{position:absolute;top:2px;left:20px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .16s ease}
 .ima-switch.off i{left:2px}
 .ima-error{color:var(--ima-danger);font-size:12px;margin:0 0 12px}
+.ima-pending{margin:0 0 14px;padding:10px 12px;border:1px solid rgba(210,153,34,.35);border-radius:12px}
+.ima-pending-row{display:flex;gap:8px;align-items:center;margin-top:8px}
 .ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}.ima-official-tree{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}.ima-native,.ima-rail.ima-native,.ima-rail.dcu-wb{box-sizing:border-box;padding-right:var(--dsh-sidebar-inline-padding,12px)}
 .ima-tabs{display:flex;gap:18px;padding:4px 12px 0;border-bottom:1px solid var(--ima-line)}
 .ima-tab{appearance:none;border:0;background:transparent;color:var(--ima-muted);padding:8px 0;font-size:13px;cursor:pointer}
@@ -740,6 +742,7 @@ window.__ModuleLoader__.load({
 
     function SettingsPage(props) {
       const [channels, setChannels] = useState(null);
+      const [pending, setPending] = useState([]);
       const [error, setError] = useState("");
       const [busy, setBusy] = useState({});
       const [editing, setEditing] = useState(null);
@@ -750,12 +753,17 @@ window.__ModuleLoader__.load({
         const seq = ++refreshSeq.current;
         api("/channels").then((data) => {
           if (seq !== refreshSeq.current) return;
-          if (data.ok) { setChannels(data.channels); setError(""); }
+          if (data.ok) { setChannels(data.channels); setPending(data.pending || []); setError(""); }
           else setError(data.error || "加载失败");
         }).catch(() => { if (seq === refreshSeq.current) setError("无法连接本机 IM 助理接口"); });
       }, []);
 
       useEffect(() => { ensureStyle(); refresh(); }, [refresh]);
+      useEffect(() => {
+        if (!(pending || []).length) return;
+        const timer = setInterval(refresh, 4000);
+        return () => clearInterval(timer);
+      }, [pending, refresh]);
 
       const onAction = (id, action, body) => {
         setBusy((prev) => ({ ...prev, [id]: true }));
@@ -781,6 +789,14 @@ window.__ModuleLoader__.load({
         ),
         h(ComposerBar, { useWorkspaces: props.useWorkspaces, createWorkspace: props.createWorkspace, pickDirectory: props.pickDirectory }),
         error && h("div", { className: "ima-error" }, error),
+        pending && pending.length > 0 && h("div", { className: "ima-pending" },
+          h("div", null, "有访问请求。批准后该用户才能驱动本机助手。"),
+          ...pending.map((p) => h("div", { key: p.channelId + p.userId, className: "ima-pending-row" },
+            h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + p.channelId),
+            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "approve", { userId: p.userId }) }, "批准"),
+            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "deny", { userId: p.userId }) }, "拒绝"),
+          )),
+        ),
         channels == null
           ? h("div", { className: "ima-empty" }, "加载中…")
           : h("div", { className: "ima-list" },

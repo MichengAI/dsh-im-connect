@@ -5,6 +5,7 @@ import { SessionRouter } from './router.js'
 import { SeenStore } from './seen-store.js'
 import { SessionMapStore } from './session-store.js'
 import { isImSessionId, type ChannelId, type ChatKind } from './session-id.js'
+import { canAnswerToolApproval, decideAccess } from './access.js'
 import { splitText } from './split.js'
 import { ReplyStreamHub, isAssistantTextDelta } from './reply-stream.js'
 import type { ChannelAdapter, EngineConfig, ImMessage } from './types.js'
@@ -24,6 +25,7 @@ export class ImEngine {
   private readonly router: SessionRouter
   private readonly broker = new ApprovalBroker()
   private readonly merger: SessionMerger
+  private readonly extraAllow = new Map<string, Set<string>>()
   private readonly queues = new Map<string, Promise<void>>()
   private readonly streams = new ReplyStreamHub()
   private readonly disposeEvents: Array<() => void> = []
@@ -34,6 +36,7 @@ export class ImEngine {
     private readonly seen: SeenStore,
     private readonly config: EngineConfig,
     private readonly log: (line: string) => void,
+    private readonly onUnauthorized?: (channelId: string, msg: ImMessage) => string,
   ) {
     this.router = new SessionRouter(ctx, store, config, log)
     this.merger = new SessionMerger((config.mergeTimeoutSecs || 5) * 1000, (key, text) => {
@@ -110,6 +113,17 @@ export class ImEngine {
     this.channels.delete(channelId)
   }
 
+  addAllowed(channelId: string, userId: string): void {
+    const id = userId.trim()
+    if (!id) return
+    let set = this.extraAllow.get(channelId)
+    if (!set) {
+      set = new Set()
+      this.extraAllow.set(channelId, set)
+    }
+    set.add(id)
+  }
+
   dispose(): void {
     for (const off of this.disposeEvents) off()
     this.broker.dispose()
@@ -127,24 +141,61 @@ export class ImEngine {
     })
   }
 
+  private userAllowed(channelId: string, userId?: string): boolean {
+    if (!userId) return false
+    return this.extraAllow.get(channelId)?.has(userId) === true
+  }
+
+  private isAuthorized(channelId: string, channel: ChannelAdapter, msg: ImMessage): boolean {
+    const local = channel.authorizes?.(msg.userId ?? '')
+    if (local === false) return false
+    if (local === true) return true
+    return this.userAllowed(channelId, msg.userId)
+  }
+
+  private async rejectUnauthorized(channelId: string, channel: ChannelAdapter, msg: ImMessage): Promise<void> {
+    this.log(`[${channelId}] 拒绝未授权用户 ${msg.userId || '(无 userId)'}`)
+    const hint = this.onUnauthorized?.(channelId, msg) ?? '未授权：请管理员在设置 → IM助理 中批准你的访问。'
+    if (msg.kind !== 'group') {
+      await channel.send(msg.chatId, hint).catch(() => undefined)
+    }
+  }
+
   private async handleInbound(channelId: string, msg: ImMessage): Promise<void> {
     const channel = this.channels.get(channelId)
     if (!channel) return
     try {
       if (msg.messageId && this.seen.has(`${channelId}:${msg.messageId}`)) return
       if (msg.messageId) this.seen.add(`${channelId}:${msg.messageId}`)
-      if (msg.kind === 'group' && msg.addressed === false) return
+      const decision = decideAccess({
+        userAllowed: this.isAuthorized(channelId, channel, msg),
+        kind: msg.kind === 'group' ? 'group' : 'dm',
+        addressed: msg.addressed,
+      })
+      if (decision === 'ignore') return
+      if (decision === 'deny') {
+        await this.rejectUnauthorized(channelId, channel, msg)
+        return
+      }
       const text = msg.text.trim()
       if (text.startsWith('/')) {
         const reply = await this.handleCommand(channel, msg)
         if (reply) await this.deliver(channel, msg.chatId, reply)
         return
       }
-      if (['批准', '同意', 'yes', 'y', 'allow'].includes(text.toLowerCase())) {
-        if (await this.answerApproval(channelId, msg, true)) return
-      }
-      if (['拒绝', 'no', 'n', 'reject', 'deny'].includes(text.toLowerCase())) {
-        if (await this.answerApproval(channelId, msg, false)) return
+      const allowWords = ['批准', '同意', 'yes', 'y', 'allow']
+      const denyWords = ['拒绝', 'no', 'n', 'reject', 'deny']
+      const verdict = allowWords.includes(text.toLowerCase()) ? true : denyWords.includes(text.toLowerCase()) ? false : undefined
+      if (verdict !== undefined) {
+        if (!canAnswerToolApproval({ userAllowed: true, kind: msg.kind === 'group' ? 'group' : 'dm' })) {
+          const binding = this.router.lookup(channelId as ChannelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
+          if (binding && this.broker.has(binding.sessionId)) {
+            await channel.send(msg.chatId, '请在私聊中批准或拒绝工具调用。').catch(() => undefined)
+            return
+          }
+        } else if (await this.answerApproval(channelId, msg, verdict)) {
+          return
+        }
       }
       if (msg.media && msg.media.length > 0) {
         await this.inject(channel, msg)
@@ -209,7 +260,7 @@ export class ImEngine {
   }
 
   private async answerApproval(channelId: string, msg: ImMessage, allow: boolean): Promise<boolean> {
-    const binding = this.router.get(channelId as ChannelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
+    const binding = this.router.lookup(channelId as ChannelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
     if (!binding) return false
     const ok = this.broker.answer(binding.sessionId, allow)
     if (ok) await this.channels.get(channelId)?.send(msg.chatId, allow ? '已批准。' : '已拒绝。')

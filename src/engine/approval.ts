@@ -28,6 +28,10 @@ export class ApprovalBroker {
     })
   }
 
+  has(key: string): boolean {
+    return this.pending.has(key)
+  }
+
   answer(key: string, allow: boolean): boolean {
     const entry = this.pending.get(key)
     if (!entry) return false

@@ -47,6 +47,20 @@ export class SessionRouter {
     return this.live.get(sessionKeyOf(channelId, kind, chatId))
   }
 
+  lookup(channelId: ChannelId, kind: ChatKind, chatId: string): ChatBinding | undefined {
+    const live = this.get(channelId, kind, chatId)
+    if (live) return live
+    const rec = this.store.get(sessionKeyOf(channelId, kind, chatId))
+    if (!rec) return undefined
+    return {
+      key: sessionKeyOf(channelId, kind, chatId),
+      channelId,
+      kind,
+      chatId,
+      sessionId: rec.sessionId,
+    }
+  }
+
   bindingForSession(sessionId: string): ChatBinding | undefined {
     for (const item of this.live.values()) {
       if (item.sessionId === sessionId) return item

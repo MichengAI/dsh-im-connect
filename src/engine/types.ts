@@ -37,6 +37,8 @@ export interface ChannelAdapter {
   loginUrl?(): string | undefined
   sendAction?(chatId: string, action: 'typing'): Promise<void>
   sendMedia?(chatId: string, filePath: string, caption?: string): Promise<void>
+  /** 渠道本地白名单。true 放行，false 硬拒绝，undefined 交给引擎白名单。 */
+  authorizes?(userId: string): boolean | undefined
   beginReply?(chatId: string): Promise<ReplyStream>
   /** 企业微信等回调通道不能等合并窗口，必须立刻处理。 */
   skipMerge?: boolean

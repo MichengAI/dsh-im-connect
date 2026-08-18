@@ -9,9 +9,9 @@ import { SessionMapStore } from './engine/session-store.js'
 import { createFileVault, createServiceVault, credentialRef, type CredentialService, type CredentialVault } from './engine/credentials.js'
 import { ImEngine } from './engine/gateway.js'
 import { SeenStore } from './engine/seen-store.js'
-import { clearWeixinLogin, persistWeixinLogin } from './channels/weixin.js'
+import { clearWeixinLogin, persistWeixinLogin, readWeixinAllowedUserId } from './channels/weixin.js'
 import { normalizeAssistantModel, normalizePermission, normalizeWorkspacePath, type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js'
-import type { ChannelAdapter, EngineConfig } from './engine/types.js'
+import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
 
 export interface ChannelState {
   enabled?: boolean
@@ -32,8 +32,17 @@ export interface ChannelView {
   status: string
 }
 
+interface PendingRequest {
+  userId: string
+  username?: string
+  chatId?: string
+  time: number
+}
+
 interface Persisted {
   channels: Record<string, ChannelState>
+  allowlist: Record<string, string[]>
+  pending: Record<string, PendingRequest[]>
   assistant?: AssistantModel
   cwd?: string
   permission?: PermissionPreset
@@ -49,7 +58,7 @@ export class ChannelManager {
   private readonly log: (line: string) => void
   private readonly ctx: Context
   private readonly engineConfig: EngineConfig
-  private store: Persisted = { channels: {} }
+  private store: Persisted = { channels: {}, allowlist: {}, pending: {} }
   private readonly running = new Map<string, ChannelAdapter>()
   private apiDisposers: Array<() => void> = []
   // dispose 后阻止 initEnabled/startOne 再拉起渠道，避免插件重载时新旧双实例并存
@@ -71,7 +80,13 @@ export class ChannelManager {
     this.vault = credentials
       ? createServiceVault(credentials)
       : createFileVault(join(options.stateDir, 'secrets.json'))
-    this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log)
+    this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log, (channelId, msg) => {
+      this.requestAuthorization(channelId, msg)
+      return '未授权：请管理员在设置 → IM助理 中批准你的访问。'
+    })
+    for (const [channelId, users] of Object.entries(this.store.allowlist)) {
+      for (const userId of users) this.engine.addAllowed(channelId, userId)
+    }
     this.pairing = new PairingHub({
       log: options.log,
       onSuccess: async (id, creds) => {
@@ -140,6 +155,7 @@ export class ChannelManager {
     const nextConfig = await this.persistSecrets(id, { ...(prev.config ?? {}), ...incoming })
     this.store.channels[id] = { ...prev, enabled: true, receiveEnabled: true, config: nextConfig }
     this.flush()
+    this.seedAllowedUser(id, incoming.allowedUserId || incoming.ownerOpenId || nextConfig.allowedUserId || nextConfig.ownerOpenId)
     try {
       await this.startOne(id)
       return { ok: true }
@@ -174,6 +190,8 @@ export class ChannelManager {
     await this.stopOne(id)
     this.pairing.cancel(id)
     delete this.store.channels[id]
+    delete this.store.allowlist[id]
+    delete this.store.pending[id]
     this.flush()
     if (id === 'weixin') clearWeixinLogin(join(this.stateDir, 'weixin'))
     for (const field of CHANNEL_META[id].fields.filter((item) => item.secret)) {
@@ -237,6 +255,7 @@ export class ChannelManager {
       ok: true,
       channels: this.list(),
       groups: this.channelSessions(),
+      pending: this.pendingRequests(),
       assistant: this.currentAssistant(),
     })
     const dispose = webServer.register({
@@ -343,6 +362,14 @@ export class ChannelManager {
           if (action === 'remove') {
             await this.remove(id)
             send(res, 200, { ok: true, channel: this.list().find((item) => item.id === id) })
+            return
+          }
+          if (action === 'approve' || action === 'deny') {
+            const userId = String(body.userId ?? '')
+            if (!userId) { send(res, 400, { ok: false, error: '缺少 userId' }); return }
+            if (action === 'approve') this.approve(id, userId)
+            else this.deny(id, userId)
+            send(res, 200, { ok: true, pending: this.pendingRequests() })
             return
           }
           send(res, 404, { ok: false, error: `未知操作 ${action}` })
@@ -468,6 +495,10 @@ export class ChannelManager {
     const resolved = await this.resolveSecrets(id, state?.config ?? {})
     const adapter = createChannelAdapter(id, resolved, this.log, join(this.stateDir, id))
     if (!adapter) throw new Error('凭据不足，无法启动渠道')
+    if (id === 'weixin') {
+      this.seedAllowedUser(id, readWeixinAllowedUserId(join(this.stateDir, 'weixin')) || resolved.allowedUserId)
+    }
+    this.seedAllowedUser(id, resolved.ownerOpenId || resolved.allowedUserId)
     this.engine.register(adapter)
     this.running.set(id, adapter)
     // 渠道网络异常时 start 可能永久挂起，超时按启动失败处理（catch 会顺带 stop）
@@ -538,12 +569,55 @@ export class ChannelManager {
       const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<Persisted>
       this.store = {
         channels: parsed.channels ?? {},
+        allowlist: parsed.allowlist ?? {},
+        pending: parsed.pending ?? {},
         assistant: normalizeAssistantModel(parsed.assistant ?? {}),
         cwd: normalizeWorkspacePath(parsed.cwd),
         permission: normalizePermission(parsed.permission),
       }
     } catch {
-      this.store = { channels: {} }
+      this.store = { channels: {}, allowlist: {}, pending: {} }
+    }
+  }
+
+
+  pendingRequests(): Array<PendingRequest & { channelId: string }> {
+    return Object.entries(this.store.pending).flatMap(([channelId, list]) =>
+      list.map((item) => ({ channelId, ...item })),
+    )
+  }
+
+  approve(id: string, userId: string): void {
+    const uid = userId.trim()
+    if (!uid) return
+    const list = this.store.allowlist[id] ?? []
+    if (!list.includes(uid)) list.push(uid)
+    this.store.allowlist[id] = list
+    this.store.pending[id] = (this.store.pending[id] ?? []).filter((item) => item.userId !== uid)
+    this.engine.addAllowed(id, uid)
+    this.flush()
+  }
+
+  deny(id: string, userId: string): void {
+    const uid = userId.trim()
+    this.store.pending[id] = (this.store.pending[id] ?? []).filter((item) => item.userId !== uid)
+    this.flush()
+  }
+
+  private seedAllowedUser(id: string, userId?: string): void {
+    const uid = userId?.trim()
+    if (!uid) return
+    this.approve(id, uid)
+  }
+
+  private requestAuthorization(channelId: string, msg: ImMessage): void {
+    const userId = msg.userId?.trim()
+    if (!userId) return
+    const list = this.store.pending[channelId] ?? []
+    if (!list.some((item) => item.userId === userId)) {
+      list.push({ userId, username: msg.username, chatId: msg.chatId, time: Date.now() })
+      this.store.pending[channelId] = list
+      this.flush()
     }
   }
 

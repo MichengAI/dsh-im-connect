@@ -166,7 +166,7 @@ Open **Settings → IM Assistant**, choose the workspace, permission, and model,
 | Split input | End with `..` to continue, `!!` to flush now | Default merge window is about 5 seconds |
 | Start a new session | Send `/new` or `/clear` | Affects only the current IM chat |
 | Status / help | Send `/status` or `/help` | Scoped to the current channel session |
-| Approve a tool | Reply `批准` or `拒绝` | Also accepts `yes` / `no` / `allow` / `reject` |
+| Approve a tool | Reply `批准` or `拒绝` in a DM | Also accepts `yes` / `no` / `allow` / `reject`; group replies cannot grant |
 | Review on the web | Open the workspace **Channels** tab | IM sessions never appear under **Tasks** |
 
 DingTalk replies prefer official AI Card streaming and fall back to plain text. Do not enable Webhook on the same Telegram bot.
@@ -175,13 +175,13 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 
 | Item | Current behavior |
 | --- | --- |
-| Access | Open. Anyone in a DM or group can drive the assistant; groups still require a mention |
+| Access | Fail closed. Unknown users cannot drive the assistant; a stranger DM appears as a pending request on the settings page; WeChat / Feishu / Lark QR scanners are allowlisted automatically; groups still require a mention |
 | Management API | Loopback only (`localhost`, `127.0.0.1`, `[::1]`) |
 | Secrets | Prefer DSH `ctx.credentials`; otherwise `%DSH_HOME%\dsh-im-connect\secrets.json` |
 | Channel state | `channels.json` stores enablement and credential refs, not raw secrets |
 | Browser payloads | Never include tokens, secrets, App Secrets, or raw user identifiers |
 | WeChat protocol | Official iLink only; no reverse-engineered personal WeChat protocol |
-| Tool approval | Reply in the same IM chat; cross-chat approval is rejected |
+| Tool approval | Only an allowlisted user in a DM can grant or deny; group chats cannot approve |
 
 Do not expose DSH Web beyond this machine. Permission presets follow the host sandbox-policy; `full-access` does not wrap a sandbox.
 

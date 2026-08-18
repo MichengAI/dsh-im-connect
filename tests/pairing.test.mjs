@@ -53,6 +53,7 @@ test('飞书注册解析与 Lark 域名', () => {
   assert.equal(done.status, 'success')
   assert.equal(done.baseUrl, 'https://accounts.larksuite.com')
   assert.equal(done.credentials.appId, 'cli')
+  assert.equal(done.credentials.ownerOpenId, 'ou_1')
 })
 
 test('微信二维码与确认登录', () => {
