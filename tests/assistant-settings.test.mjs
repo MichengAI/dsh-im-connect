@@ -51,6 +51,7 @@ test('完全访问必须经风险确认后才保存', () => {
   assert.match(client, /我已了解风险，并愿意继续/)
   assert.match(client, /disabled: !props\.acknowledged/)
   assert.match(client, /if \(next === "full-access"\)/)
+  assert.match(client, /if \(!props\.open\) return null;\s+return ReactDOM\.createPortal\(/)
 })
 
 

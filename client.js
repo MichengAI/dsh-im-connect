@@ -546,7 +546,7 @@ window.__ModuleLoader__.load({
         return () => window.removeEventListener("keydown", onKey, true);
       }, [props.open, props.onCancel]);
       if (!props.open) return null;
-      return h("div", {
+      return ReactDOM.createPortal(h("div", {
         className: "ima-mask",
         role: "presentation",
         onMouseDown: (event) => event.stopPropagation(),
@@ -579,7 +579,7 @@ window.__ModuleLoader__.load({
           h("button", { className: "ima-btn", onClick: props.onCancel }, "取消"),
           h("button", { className: "ima-btn primary", disabled: !props.acknowledged, onClick: props.onConfirm }, "启用 完全访问"),
         ),
-      ));
+      )), document.body);
     }
 
     function ComposerBar(props) {
@@ -1804,9 +1804,6 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
-
-
-
 
 
 
