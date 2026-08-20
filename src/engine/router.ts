@@ -3,6 +3,7 @@ import type { ChannelId, ChatKind, SessionRecord } from './session-id.js'
 import { createImSessionId, sessionKeyOf } from './session-id.js'
 import { SessionMapStore } from './session-store.js'
 import { readHostDefaultModel, resolveImAgentOptions } from './agent-options.js'
+import { sandboxModeForPermission } from './assistant-settings.js'
 import type { EngineConfig } from './types.js'
 
 export interface ChatBinding {
@@ -376,11 +377,11 @@ export class SessionRouter {
           // Host 未暴露该接口时，仍把 reasoningEffort 放在 agentOptions 里。
         }
       }
-      if (permission && permission !== 'full-access') {
+      if (permission) {
         try {
           const { setSandboxMode } = await import('@deepseek-ai/dsh-sandbox-policy')
           const agent = (agentCtx as { agent?: { session?: unknown } }).agent
-          if (agent?.session) setSandboxMode(agent.session, permission)
+          if (agent?.session) setSandboxMode(agent.session, sandboxModeForPermission(permission))
         } catch (error) {
           this.log(`[router] 无法应用权限 ${permission}: ${error instanceof Error ? error.message : String(error)}`)
         }

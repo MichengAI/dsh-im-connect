@@ -129,6 +129,7 @@ window.__ModuleLoader__.load({
 .ima-radio small{display:block;color:var(--ima-muted);margin-top:2px}
 .ima-ok{color:var(--ima-ok);font-size:14px;text-align:center;padding:24px 0}
 .ima-modal .ima-error{color:var(--ima-danger)}
+.ima-risk-warning{display:flex;gap:10px;align-items:flex-start;margin:0 0 16px;color:var(--ima-muted);font-size:14px;line-height:1.6}.ima-risk-warning b{display:grid;place-items:center;width:18px;height:18px;flex:none;border:1.5px solid var(--ima-danger);border-radius:50%;color:var(--ima-danger);font-size:12px;line-height:1}.ima-risk-warning p{margin:0}.ima-risk-check{display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer}.ima-risk-check input{width:16px;height:16px;margin:0;accent-color:var(--ima-accent)}.ima-risk-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}.ima-risk-actions .ima-btn{border-radius:999px}.ima-risk-actions .ima-btn.primary:disabled{opacity:.48;cursor:not-allowed}
 @media (prefers-reduced-motion:reduce){.ima-switch i{transition:none}}
 `;
 
@@ -532,6 +533,55 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function FullAccessConfirmation(props) {
+      useEffect(() => {
+        if (!props.open) return undefined;
+        const onKey = (event) => {
+          if (event.key !== "Escape") return;
+          event.preventDefault();
+          event.stopPropagation();
+          props.onCancel();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [props.open, props.onCancel]);
+      if (!props.open) return null;
+      return h("div", {
+        className: "ima-mask",
+        role: "presentation",
+        onMouseDown: (event) => event.stopPropagation(),
+        onClick: props.onCancel,
+      }, h("div", {
+        className: "ima-modal",
+        role: "dialog",
+        "aria-modal": true,
+        "aria-label": "确认启用 完全访问？",
+        onClick: (event) => event.stopPropagation(),
+      },
+        h("div", { className: "ima-modal-h" },
+          h("h2", null, "确认启用 完全访问？"),
+          h("button", { className: "ima-x", onClick: props.onCancel, "aria-label": "关闭" }, "×"),
+        ),
+        h("div", { className: "ima-risk-warning" },
+          h("b", { "aria-hidden": true }, "!"),
+          h("p", null, "启用 完全访问 后，agent 将减少确认步骤，并且可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任当前任务时使用。"),
+        ),
+        h("label", { className: "ima-risk-check" },
+          h("input", {
+            type: "checkbox",
+            checked: props.acknowledged,
+            autoFocus: true,
+            onChange: (event) => props.onAcknowledgedChange(event.currentTarget.checked),
+          }),
+          h("span", null, "我已了解风险，并愿意继续"),
+        ),
+        h("div", { className: "ima-risk-actions" },
+          h("button", { className: "ima-btn", onClick: props.onCancel }, "取消"),
+          h("button", { className: "ima-btn primary", disabled: !props.acknowledged, onClick: props.onConfirm }, "启用 完全访问"),
+        ),
+      ));
+    }
+
     function ComposerBar(props) {
       const items = typeof props.useWorkspaces === "function"
         ? (props.useWorkspaces((state) => (state && state.items) || []) || [])
@@ -542,6 +592,8 @@ window.__ModuleLoader__.load({
       const [effort, setEffort] = useState("");
       const [cwd, setCwd] = useState("");
       const [permission, setPermission] = useState("read-only");
+      const [confirmingFullAccess, setConfirmingFullAccess] = useState(false);
+      const [fullAccessAcknowledged, setFullAccessAcknowledged] = useState(false);
       const [open, setOpen] = useState("");
       const [modelPane, setModelPane] = useState("root");
       const [hint, setHint] = useState("");
@@ -611,6 +663,28 @@ window.__ModuleLoader__.load({
         }).finally(() => setAddBusy(false));
       };
 
+      const selectPermission = (next) => {
+        setOpen("");
+        if (next === permission) return;
+        if (next === "full-access") {
+          setFullAccessAcknowledged(false);
+          setConfirmingFullAccess(true);
+          return;
+        }
+        setPermission(next);
+        save({ permission: next });
+      };
+      const cancelFullAccessConfirmation = () => {
+        setFullAccessAcknowledged(false);
+        setConfirmingFullAccess(false);
+      };
+      const confirmFullAccess = () => {
+        if (!fullAccessAcknowledged) return;
+        setPermission("full-access");
+        save({ permission: "full-access" });
+        cancelFullAccessConfirmation();
+      };
+
       const onAddWorkspace = () => {
         setOpen("");
         if (typeof props.pickDirectory === "function") {
@@ -664,7 +738,7 @@ window.__ModuleLoader__.load({
                 icon: h(ShieldIcon),
                 label: item.label,
                 active: item.value === permission,
-                onClick: () => { setPermission(item.value); save({ permission: item.value }); setOpen(""); },
+                onClick: () => selectPermission(item.value),
               })),
             ),
           ),
@@ -967,6 +1041,13 @@ window.__ModuleLoader__.load({
             ),
           ),
         ),
+        h(FullAccessConfirmation, {
+          open: confirmingFullAccess,
+          acknowledged: fullAccessAcknowledged,
+          onAcknowledgedChange: setFullAccessAcknowledged,
+          onCancel: cancelFullAccessConfirmation,
+          onConfirm: confirmFullAccess,
+        }),
       );
     }
     function IconPlayOutline() {
@@ -1723,7 +1804,6 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
-
 
 
 

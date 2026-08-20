@@ -3,7 +3,7 @@ declare module '@wecom/aibot-node-sdk'
 declare module 'dingtalk-stream'
 declare module 'qrcode'
 declare module '@deepseek-ai/dsh-sandbox-policy' {
-  export function setSandboxMode(session: unknown, mode: 'read-only' | 'workspace-write'): void
+  export function setSandboxMode(session: unknown, mode: 'read-only' | 'workspace-write' | 'danger-full-access'): void
 }
 declare module '@deepseek-ai/dsh-agent' {
   export function installModelSelection(agentCtx: unknown, selection: {

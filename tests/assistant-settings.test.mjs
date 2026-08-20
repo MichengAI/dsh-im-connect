@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel } from '../lib/engine/assistant-settings.js'
+import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel, sandboxModeForPermission } from '../lib/engine/assistant-settings.js'
 
 test('助手模型必须同时有提供商和模型 id', () => {
   assert.equal(normalizeAssistantModel({ provider: ' deepseek ', model: ' ' }), undefined)
@@ -37,6 +37,20 @@ test('权限只接受三种预设', () => {
   assert.equal(normalizePermission('full-access'), 'full-access')
   assert.equal(normalizePermission('admin'), undefined)
   assert.equal(normalizePermission(''), undefined)
+})
+
+test('完全访问必须转换为 Chat 标准沙箱模式', () => {
+  assert.equal(sandboxModeForPermission('read-only'), 'read-only')
+  assert.equal(sandboxModeForPermission('workspace-write'), 'workspace-write')
+  assert.equal(sandboxModeForPermission('full-access'), 'danger-full-access')
+})
+
+test('完全访问必须经风险确认后才保存', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /function FullAccessConfirmation/)
+  assert.match(client, /我已了解风险，并愿意继续/)
+  assert.match(client, /disabled: !props\.acknowledged/)
+  assert.match(client, /if \(next === "full-access"\)/)
 })
 
 

@@ -7,6 +7,11 @@ export interface AssistantModel {
 
 export type PermissionPreset = 'read-only' | 'workspace-write' | 'full-access'
 
+/** IM 保存的权限名需转换为 Chat 识别的沙箱模式。 */
+export function sandboxModeForPermission(permission: PermissionPreset): 'read-only' | 'workspace-write' | 'danger-full-access' {
+  return permission === 'full-access' ? 'danger-full-access' : permission
+}
+
 export function normalizeAssistantModel(input: { provider?: unknown; model?: unknown; reasoningEffort?: unknown }): AssistantModel | undefined {
   const provider = typeof input.provider === 'string' ? input.provider.trim() : ''
   const model = typeof input.model === 'string' ? input.model.trim() : ''
