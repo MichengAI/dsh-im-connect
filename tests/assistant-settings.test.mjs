@@ -47,11 +47,12 @@ test('完全访问必须转换为 Chat 标准沙箱模式', () => {
 
 test('完全访问必须经风险确认后才保存', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  assert.match(client, /function FullAccessConfirmation/)
+  assert.match(client, /function openFullAccessConfirmation/)
   assert.match(client, /我已了解风险，并愿意继续/)
-  assert.match(client, /disabled: !props\.acknowledged/)
+  assert.match(client, /dialog\.showModal\(\)/)
+  assert.match(client, /confirmButton\.disabled = !acknowledgement\.checked/)
   assert.match(client, /if \(next === "full-access"\)/)
-  assert.match(client, /if \(!props\.open\) return null;\s+return ReactDOM\.createPortal\(/)
+  assert.match(client, /openFullAccessConfirmation\(\(\) => \{/)
 })
 
 
