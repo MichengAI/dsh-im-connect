@@ -87,6 +87,15 @@ window.__ModuleLoader__.load({
 .ima-chip-next{width:7px;height:7px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(-45deg);opacity:.55;flex:none}
 .ima-chip-split{height:1px;margin:6px 8px;background:var(--ima-line)}
 .ima-chip-effort{color:var(--ima-muted);font-weight:500}
+.ima-model-select .ima-chip-btn{border-radius:24px;gap:4px}
+.ima-model-select .ima-chip-menu{width:min(240px,calc(100vw - 32px));min-width:240px;max-height:min(360px,calc(100vh - 96px));padding:4px;border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-base,#fff))}
+.ima-model-select .ima-chip-row{min-height:40px;padding:0 10px;font-size:14px}
+.ima-model-select .ima-chip-row-side{font-size:13px;color:var(--dsw-alias-label-tertiary,var(--ima-muted))}
+.ima-model-group+.ima-model-group{margin-top:4px}
+.ima-model-group-title{position:sticky;top:0;z-index:1;padding:5px 8px 3px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-base,#fff));color:var(--dsw-alias-label-tertiary,var(--ima-muted));font-size:12px;font-weight:500;line-height:18px}
+.ima-model-option{display:flex;width:100%;min-height:38px;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,var(--ima-text));text-align:left;cursor:pointer}
+.ima-model-option:hover,.ima-model-option:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08));outline:none}
+.ima-model-option-copy{display:flex;min-width:0;flex:1;flex-direction:column}.ima-model-name{overflow:hidden;font-size:14px;font-weight:500;line-height:20px;text-overflow:ellipsis;white-space:nowrap}.ima-model-description{overflow:hidden;color:var(--dsw-alias-label-tertiary,var(--ima-muted));font-size:12px;line-height:18px;text-overflow:ellipsis;white-space:nowrap}.ima-model-check{display:grid;flex:0 0 18px;place-items:center;color:var(--dsw-alias-label-primary,var(--ima-text))}
 .ima-chip-dialog{margin-top:10px;padding:12px;border:1px solid var(--ima-line);border-radius:12px;background:var(--dsw-alias-bg-layer-3,transparent)}
 .ima-chip-dialog strong{display:block;margin:0 0 8px;font-size:13px}
 .ima-chip-dialog input{width:100%;min-height:36px;padding:8px 10px;border-radius:8px;border:1px solid var(--ima-line);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill,transparent));color:var(--ima-text);box-sizing:border-box}
@@ -525,12 +534,6 @@ window.__ModuleLoader__.load({
       if (builtIn && (option.name === option.value || option.name === builtIn[1])) return t(builtIn[0]);
       return option.name || option.value;
     }
-    const DEFAULT_EFFORTS = [
-      { id: "low", name: "Low" },
-      { id: "medium", name: "Medium" },
-      { id: "high", name: "High" },
-    ];
-
     function FolderIcon() {
       return h("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", "aria-hidden": "true" },
         h("path", { d: "M5.196 1.571c.615 0 1.19.308 1.532.819l.471.708c.086.128.23.205.383.205h4.588A2.666 2.666 0 0 1 14.586 5.72v.907c.683.4 1.074 1.223.852 2.06l-1.053 3.971A2.666 2.666 0 0 1 12.05 14.453H2.917A2.416 2.416 0 0 1 .502 11.952V3.987A2.416 2.416 0 0 1 2.918 1.571h2.278Z", fill: "currentColor" }),
@@ -561,7 +564,7 @@ window.__ModuleLoader__.load({
         document.addEventListener("mousedown", close);
         return () => document.removeEventListener("mousedown", close);
       }, [props.open]);
-      return h("div", { className: "ima-chip" + (props.open ? " is-open" : ""), ref: root },
+      return h("div", { className: "ima-chip" + (props.className ? " " + props.className : "") + (props.open ? " is-open" : ""), ref: root },
         h("button", {
           type: "button",
           className: "ima-chip-btn",
@@ -575,7 +578,23 @@ window.__ModuleLoader__.load({
           props.suffix && h("span", { className: "ima-chip-effort" }, props.suffix),
           h("em"),
         ),
-        props.open && h("div", { className: "ima-chip-menu" + (props.align === "end" ? " is-end" : ""), role: "menu" }, props.children),
+        props.open && h("div", { className: "ima-chip-menu" + (props.menuClassName ? " " + props.menuClassName : "") + (props.align === "end" ? " is-end" : ""), role: "menu", "aria-label": props.menuAria }, props.children),
+      );
+    }
+
+    function ModelChoiceRow(props) {
+      return h("button", {
+        type: "button",
+        className: "ima-model-option",
+        role: "menuitemradio",
+        "aria-checked": props.active,
+        onClick: props.onClick,
+      },
+        h("span", { className: "ima-model-option-copy" },
+          h("span", { className: "ima-model-name" }, props.label),
+          props.description && h("span", { className: "ima-model-description" }, props.description),
+        ),
+        h("span", { className: "ima-model-check" }, props.active && h("i", { className: "ima-chip-tick" })),
       );
     }
 
@@ -651,18 +670,32 @@ window.__ModuleLoader__.load({
       };
 
       const workspace = items.find((item) => item.path === cwd);
-      const models = providers.flatMap((item) => (item.models || []).map((entry) => ({
+      const modelGroups = providers.map((item) => ({
+        id: item.id,
+        name: item.name || item.id,
+        models: (item.models || []).map((entry) => ({
         value: item.id + "::" + entry.id,
         provider: item.id,
+        providerName: item.name || item.id,
         model: entry.id,
         label: entry.name || entry.id,
+        description: entry.description,
         reasoning: entry.reasoning,
-      })));
+        })),
+      })).filter((item) => item.models.length > 0);
+      const models = modelGroups.flatMap((item) => item.models);
       const currentModel = models.find((item) => item.provider === provider && item.model === model);
-      const efforts = (currentModel && currentModel.reasoning && currentModel.reasoning.efforts && currentModel.reasoning.efforts.length)
-        ? currentModel.reasoning.efforts.map((item) => ({ id: item.id, name: item.name || item.id }))
-        : DEFAULT_EFFORTS;
-      const effortLabel = (efforts.find((item) => item.id === effort) || {}).name || (effort ? props.modelT("effort.providerDefault") : "");
+      const reasoning = currentModel && currentModel.reasoning;
+      const effectiveEffort = effort || (reasoning && reasoning.defaultEffort) || "";
+      const efforts = reasoning
+        ? [
+            ...(reasoning.defaultEffort ? [] : [{ id: "", name: props.modelT("effort.providerDefault") }]),
+            ...((reasoning.efforts || []).map((item) => ({ id: item.id, name: item.name || item.id, description: item.description }))),
+          ]
+        : [];
+      const effortLabel = reasoning
+        ? ((efforts.find((item) => item.id === effectiveEffort) || {}).name || effectiveEffort || props.modelT("effort.providerDefault"))
+        : "";
       const permissionOptions = permissions.map((item) => ({
         ...item,
         label: permissionLabel(item, props.permissionT),
@@ -764,6 +797,9 @@ window.__ModuleLoader__.load({
                 if (next) setModelPane("root");
               },
               align: "end",
+              className: "ima-model-select",
+              menuClassName: "ima-model-menu",
+              menuAria: props.modelT("menu.aria"),
               label: (currentModel && currentModel.label) || modelFallback,
               suffix: effortLabel,
               ariaLabel: props.modelT("trigger.selectAria"),
@@ -777,7 +813,7 @@ window.__ModuleLoader__.load({
                   chevron: true,
                   onClick: () => setModelPane("model"),
                 }),
-                h(ChipRow, {
+                reasoning && h(ChipRow, {
                   key: "effort",
                   kv: true,
                   label: props.modelT("menu.effort"),
@@ -788,28 +824,33 @@ window.__ModuleLoader__.load({
               ],
               modelPane === "model" && (
                 models.length === 0
-                  ? h("div", { className: "ima-chip-empty" }, t("composer.noModels"))
-                  : models.map((item) => h(ChipRow, {
-                      key: item.value,
-                      label: item.label,
-                      active: item.provider === provider && item.model === model,
-                      onClick: () => {
-                        const nextEffort = (item.reasoning && item.reasoning.defaultEffort) || effort || "high";
-                        setProvider(item.provider);
-                        setModel(item.model);
-                        setEffort(nextEffort);
-                        save({ provider: item.provider, model: item.model, reasoningEffort: nextEffort });
-                        setOpen("");
-                      },
-                    }))
+                  ? h("div", { className: "ima-chip-empty" }, props.modelT("empty.models"))
+                  : modelGroups.map((group) => h("section", { key: group.id, className: "ima-model-group", role: "group", "aria-label": group.name },
+                      h("div", { className: "ima-model-group-title" }, group.name),
+                      ...group.models.map((item) => h(ModelChoiceRow, {
+                        key: item.value,
+                        label: item.label,
+                        description: item.description,
+                        active: item.provider === provider && item.model === model,
+                        onClick: () => {
+                          const nextEffort = (item.reasoning && item.reasoning.defaultEffort) || "";
+                          setProvider(item.provider);
+                          setModel(item.model);
+                          setEffort(nextEffort);
+                          save({ provider: item.provider, model: item.model, reasoningEffort: nextEffort || null });
+                          setOpen("");
+                        },
+                      })),
+                    ))
               ),
-              modelPane === "effort" && efforts.map((item) => h(ChipRow, {
+              modelPane === "effort" && efforts.map((item) => h(ModelChoiceRow, {
                 key: item.id,
                 label: item.name,
-                active: item.id === effort,
+                description: item.description,
+                active: item.id === effectiveEffort,
                 onClick: () => {
                   setEffort(item.id);
-                  if (provider && model) save({ provider, model, reasoningEffort: item.id });
+                  if (provider && model) save({ provider, model, reasoningEffort: item.id || null });
                   setOpen("");
                 },
               })),
@@ -1730,6 +1771,10 @@ window.__ModuleLoader__.load({
         useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
         return h(SessionSwitcher, Object.assign({}, props, { t }));
       }
+      function LocalizedSettingsPage(props) {
+        useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
+        return h(SettingsPage, Object.assign({}, props, { t, permissionT, modelT }));
+      }
       openImSession = (id) => {
         try { ctx.sessions.open(id); return true; }
         catch (error) { console.warn("[dsh-im-connect] 无法打开会话", id, error); return false; }
@@ -1747,7 +1792,7 @@ window.__ModuleLoader__.load({
           permissionT,
           modelT,
         }),
-      }, SettingsPage));
+      }, LocalizedSettingsPage));
 
       ctx.slots.inject("sidebar.channels", () => ctx.slots.register({
           name: "sidebar.channels",

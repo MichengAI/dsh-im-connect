@@ -76,10 +76,24 @@ test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
   assert.match(client, /label: \(\) => t\("settings\.label"\)/, '设置菜单必须在 Host 语言确定后再解析标签')
   assert.match(client, /function LocalizedChannelRail\(props\)[\s\S]*useSyncExternalStore/)
   assert.match(client, /function LocalizedSessionSwitcher\(props\)[\s\S]*useSyncExternalStore/)
+  assert.match(client, /function LocalizedSettingsPage\(props\)[\s\S]*useSyncExternalStore/)
+  assert.match(client, /}, LocalizedSettingsPage\)\)/, '设置页本身必须订阅语言变化，模型词条才能立即刷新')
   assert.match(client, /"settings\.label": "IM Assistant"/)
   assert.match(client, /"settings\.label": "IM助理"/, '中文设置区标题是 Codex UI 的跨插件导航兼容标识')
   assert.match(client, /"rail\.channels": "Channels"/)
   assert.match(client, /t\("error\.detailsInLog"\)/)
+})
+
+test('IM 模型菜单只使用适配器声明的模型与推理等级', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const manager = readFileSync(new URL('../src/manager.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(client, /DEFAULT_EFFORTS/, '不能在客户端伪造 Low、Medium、High')
+  assert.match(client, /const modelGroups = providers\.map/)
+  assert.match(client, /reasoning && h\(ChipRow/)
+  assert.match(client, /props\.modelT\("empty\.models"\)/)
+  assert.match(client, /reasoning\.defaultEffort \? \[\] : \[\{ id: "", name: props\.modelT\("effort\.providerDefault"\) \}\]/)
+  assert.match(manager, /resolveModelInfo\?/)
+  assert.match(manager, /resolved\.reasoning\.efforts\.map/)
 })
 
 

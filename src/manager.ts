@@ -493,11 +493,30 @@ export class ChannelManager {
     return (this.ctx as Context & { permissionPresets: PermissionPresetService }).permissionPresets
   }
 
-  private async listModelCatalog(): Promise<Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>> {
+  private async listModelCatalog(): Promise<Array<{
+    id: string
+    name: string
+    models: Array<{
+      id: string
+      name: string
+      description?: string
+      reasoning?: {
+        efforts: Array<{ id: string; name: string; description?: string }>
+        defaultEffort?: string
+      }
+    }>
+  }>> {
     const llm = (this.ctx as Context & {
       get?(name: string): {
         listProviders?: () => Array<{ id: string; name?: string }>
-        listModels?: (provider: string) => Promise<Array<{ id: string; name?: string }>>
+        listModels?: (provider: string) => Promise<Array<{ id: string; name?: string; description?: string }>>
+        resolveModelInfo?: (provider: string, model: string) => Promise<{
+          description?: string
+          reasoning?: {
+            efforts: ReadonlyArray<{ id: string; name: string; description?: string }>
+            defaultEffort?: string
+          }
+        }>
       } | undefined
     }).get?.('llm')
     const providers = llm?.listProviders?.() ?? []
@@ -507,10 +526,28 @@ export class ChannelManager {
       out.push({
         id: item.id,
         name: item.name || item.id,
-        models: models.map((model: { id: string; name?: string; reasoning?: { defaultEffort?: string; efforts?: Array<{ id: string; name?: string }> } }) => ({
-          id: model.id,
-          name: model.name || model.id,
-          reasoning: model.reasoning,
+        models: await Promise.all(models.map(async (model: { id: string; name?: string; description?: string }) => {
+          const resolved = llm?.resolveModelInfo === undefined
+            ? undefined
+            : await llm.resolveModelInfo(item.id, model.id).catch(() => undefined)
+          const reasoning = resolved?.reasoning === undefined
+            ? undefined
+            : {
+                efforts: resolved.reasoning.efforts.map((effort: { id: string; name: string; description?: string }) => ({
+                  id: effort.id,
+                  name: effort.name,
+                  ...(effort.description === undefined ? {} : { description: effort.description }),
+                })),
+                ...(resolved.reasoning.defaultEffort === undefined ? {} : { defaultEffort: resolved.reasoning.defaultEffort }),
+              }
+          return {
+            id: model.id,
+            name: model.name || model.id,
+            ...(resolved?.description ?? model.description) === undefined
+              ? {}
+              : { description: resolved?.description ?? model.description },
+            ...(reasoning === undefined ? {} : { reasoning }),
+          }
         })),
       })
     }
