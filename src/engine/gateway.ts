@@ -50,7 +50,7 @@ export class ImEngine {
       void this.inject(channel, merged).catch((error) => {
         const detail = error instanceof Error ? error.message : String(error)
         this.log(`[${channelId}] 合并投递失败: ${detail}`)
-        channel.send(merged.chatId, `消息处理失败：${detail}`).catch(() => undefined)
+        channel.send(merged.chatId, '消息处理失败，请查看本机日志。').catch(() => undefined)
       })
     })
     const on = (this.ctx as unknown as { on: (name: string, fn: (...args: unknown[]) => unknown, opts?: unknown) => () => void }).on
@@ -213,7 +213,7 @@ export class ImEngine {
       }
     } catch (error) {
       this.log(`[${channelId}] 处理失败: ${error instanceof Error ? error.message : String(error)}`)
-      await channel.send(msg.chatId, `消息处理失败：${error instanceof Error ? error.message : String(error)}`).catch(() => undefined)
+      await channel.send(msg.chatId, '消息处理失败，请查看本机日志。').catch(() => undefined)
     }
   }
 
@@ -305,7 +305,7 @@ export class ImEngine {
       if (reason?.kind === 'error') {
         const detail = reason.error?.message || '模型调用失败'
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
-        const failed = `助手没有生成回复：${detail}`
+        const failed = '助手没有生成回复，请查看本机日志。'
         const taken = await this.streams.take(streamKey)
         let failureDelivered: boolean
         if (taken.stream) {

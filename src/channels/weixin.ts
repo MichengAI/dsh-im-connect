@@ -15,12 +15,17 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, basename } from 'node:path'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { writePrivateFileSync } from '../engine/secure-file.js'
 
 export interface WeixinChannelConfig {
   enabled?: boolean
   /** 登录/上下文/媒体落盘目录。 */
   stateDir?: string
   pollTimeoutSecs?: number
+  /** 由 Host credentials vault 注入，不写入微信状态文件。 */
+  botToken?: string
+  /** 登录态刷新或失效时同步回 Host credentials vault。 */
+  onBotToken?: (token: string | undefined) => void | Promise<void>
 }
 
 const BASE_URL = 'https://ilinkai.weixin.qq.com'
@@ -42,7 +47,7 @@ const UPLOAD_FILE = 3
 interface WechatState {
   allowedUserId?: string
   contextTokens: Record<string, string>
-  /** 登录 bot_token（持久化后重启免扫码）。 */
+  /** 旧版本遗留字段；读取后由 manager 迁移到 credentials vault。 */
   botToken?: string
   /** 服务端下发的 base URL（可能变化）。 */
   baseUrl?: string
@@ -124,6 +129,20 @@ export function mimeFromExt(ext: string): string {
   return map[ext] ?? 'application/octet-stream'
 }
 
+/** 为每个入站媒体生成不可复用的安全文件名，避免同名附件互相覆盖。 */
+export function uniqueMediaFileName(prefix: string, ext: string, name?: string): string {
+  const safePrefix = prefix.replace(/[^\w-]+/g, '_') || 'media'
+  const normalizedName = (name ?? `${safePrefix}${ext}`).replace(/[^\w.\-\u4e00-\u9fa5]+/g, '_')
+  const safeName = normalizedName.replace(/^\.+/, '') || `${safePrefix}${ext}`
+  const withExt = safeName.endsWith(ext) || safeName.includes('.') ? safeName : `${safeName}${ext}`
+  return `${safePrefix}-${Date.now()}-${randomBytes(6).toString('hex')}-${withExt}`
+}
+
+export function isStaleWeixinTokenError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /(?:ret|errcode)\s*=\s*-14(?:\D|$)/i.test(message)
+}
+
 /** 从 CDNMedia 取下载 URL（encrypt_query_param 优先，full_url 兜底）。 */
 function cdnUrlOf(mediaRef: Json | undefined): string | undefined {
   if (!mediaRef) return undefined
@@ -144,7 +163,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   let state: WechatState = loadState()
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let stopped = false
-  let botToken = ''
+  let botToken = config.botToken?.trim() ?? ''
   let statusText = '未登录'
   /** 当前登录二维码 URL（UI 轮询用）。 */
   let currentLoginUrl: string | undefined
@@ -172,7 +191,9 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   function flush(): void {
     try {
       mkdirSync(dir, { recursive: true })
-      writeFileSync(statePath, JSON.stringify(state, null, 2))
+      // botToken 只允许存在于 credentials vault；兼容读取旧状态但绝不再次落回本文件。
+      const { botToken: _legacyToken, ...publicState } = state
+      writePrivateFileSync(statePath, `${JSON.stringify(publicState, null, 2)}\n`)
     } catch (err) {
       log(`[weixin] 状态落盘失败: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -249,8 +270,10 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
           const userId = pickStr(st, 'ilink_user_id')
           if (!token || !userId) throw new Error('weixin confirmed 但缺少 token/user')
           botToken = token
-          // 持久化登录态：重启后免扫码
-          state.botToken = token
+          state.botToken = undefined
+          try { await config.onBotToken?.(token) } catch (error) {
+            log(`[weixin] token 写入凭据服务失败: ${error instanceof Error ? error.message : String(error)}`)
+          }
           const newBaseUrl = pickStr(st, 'baseurl', 'base_url')
           if (newBaseUrl) state.baseUrl = newBaseUrl
           if (!state.allowedUserId) {
@@ -295,8 +318,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   /** 保存媒体字节到媒体目录。 */
   function saveMediaBuf(buf: Buffer, ext: string, prefix: string, name?: string): string {
     mkdirSync(mediaDir, { recursive: true })
-    const fileName = name ? name.replace(/[^\w.\-\u4e00-\u9fa5]+/g, '_') : `${prefix}-${Date.now()}${ext}`
-    const filePath = join(mediaDir, fileName.endsWith(ext) || fileName.includes('.') ? fileName : `${fileName}${ext}`)
+    const filePath = join(mediaDir, uniqueMediaFileName(prefix, ext, name))
     writeFileSync(filePath, buf)
     return filePath
   }
@@ -411,8 +433,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
 
   async function pollLoop(): Promise<void> {
     // 已有保存的登录态 → 跳过扫码直接轮询（重启免扫码）
-    if (state.botToken) {
-      botToken = state.botToken
+    if (botToken) {
       statusText = '已登录（自动恢复）'
       log('[weixin] 检测到已保存的登录态，跳过扫码直接轮询')
     } else if (!(await loginLoop())) {
@@ -432,12 +453,16 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         if (stopped) return
         const msg = err instanceof Error ? err.message : String(err)
         // token 失效（服务端 errcode -14，与官方插件 STALE_TOKEN_ERRCODE 一致）
-        if (msg.includes('ret=-14') || msg.includes('errcode=-14') || msg.includes('-14')) {
+        if (isStaleWeixinTokenError(err)) {
           staleCount += 1
           if (staleCount >= 3) {
             log('[weixin] 登录态已失效（连续 3 次），清除登录信息，需要重新扫码')
+            botToken = ''
             state.botToken = undefined
             state.syncBuf = undefined
+            try { await config.onBotToken?.(undefined) } catch (error) {
+              log(`[weixin] 清除失效 token 失败: ${error instanceof Error ? error.message : String(error)}`)
+            }
             flush()
             if (!(await loginLoop())) return
             staleCount = 0
@@ -691,7 +716,17 @@ export function readWeixinAllowedUserId(stateDir: string): string | undefined {
   }
 }
 
-export function persistWeixinLogin(stateDir: string, data: { botToken: string; allowedUserId?: string; baseUrl?: string }): void {
+/** 读取旧版本明文登录 token，仅供 manager 一次性迁移到 credentials vault。 */
+export function readLegacyWeixinBotToken(stateDir: string): string | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(weixinStatePath(stateDir), 'utf8')) as Partial<WechatState>
+    return parsed.botToken?.trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function persistWeixinLogin(stateDir: string, data: { allowedUserId?: string; baseUrl?: string }): void {
   mkdirSync(stateDir, { recursive: true })
   const file = weixinStatePath(stateDir)
   let prev: WechatState = { contextTokens: {} }
@@ -700,27 +735,25 @@ export function persistWeixinLogin(stateDir: string, data: { botToken: string; a
     prev = {
       allowedUserId: parsed.allowedUserId,
       contextTokens: parsed.contextTokens ?? {},
-      botToken: parsed.botToken,
       baseUrl: parsed.baseUrl,
       syncBuf: parsed.syncBuf,
     }
   } catch { /* 首次写入 */ }
   const next: WechatState = {
     ...prev,
-    botToken: data.botToken,
     allowedUserId: data.allowedUserId || prev.allowedUserId,
     baseUrl: data.baseUrl || prev.baseUrl,
   }
-  writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
+  writePrivateFileSync(file, `${JSON.stringify(next, null, 2)}\n`)
 }
 
 export function clearWeixinLogin(stateDir: string): void {
   const file = weixinStatePath(stateDir)
   try {
     const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<WechatState>
-    writeFileSync(file, `${JSON.stringify({
+    writePrivateFileSync(file, `${JSON.stringify({
       allowedUserId: parsed.allowedUserId,
       contextTokens: parsed.contextTokens ?? {},
-    }, null, 2)}\n`, 'utf8')
+    }, null, 2)}\n`)
   } catch { /* 无登录态 */ }
 }

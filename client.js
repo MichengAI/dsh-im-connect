@@ -184,7 +184,14 @@ window.__ModuleLoader__.load({
       document.head.appendChild(styleEl);
     };
 
-    const api = (path, opts) => fetch(API_BASE + path, opts).then((r) => r.json());
+    const api = (path, opts) => {
+      const request = Object.assign({}, opts || {});
+      const method = String(request.method || "GET").toUpperCase();
+      if (method !== "GET" && method !== "HEAD") {
+        request.headers = Object.assign({}, request.headers || {}, { "x-dsh-im-connect-client": "1" });
+      }
+      return fetch(API_BASE + path, request).then((r) => r.json());
+    };
 
     function BrandMark({ id }) {
       const svg = (viewBox, children) => h("svg", {

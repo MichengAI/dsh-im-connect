@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createChannelAdapter } from './channels/factory.js'
 import { CHANNEL_META, CHANNEL_ORDER, supportsQr } from './channels/meta.js'
@@ -9,9 +9,58 @@ import { SessionMapStore } from './engine/session-store.js'
 import { createFileVault, createServiceVault, credentialRef, type CredentialService, type CredentialVault } from './engine/credentials.js'
 import { ImEngine } from './engine/gateway.js'
 import { SeenStore } from './engine/seen-store.js'
-import { clearWeixinLogin, persistWeixinLogin, readWeixinAllowedUserId } from './channels/weixin.js'
+import { clearWeixinLogin, persistWeixinLogin, readLegacyWeixinBotToken, readWeixinAllowedUserId } from './channels/weixin.js'
 import { normalizeAssistantModel, normalizePermission, normalizeWorkspacePath, type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js'
 import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
+import { KeyedSerialQueue } from './engine/keyed-queue.js'
+
+export const API_CLIENT_HEADER = 'x-dsh-im-connect-client'
+
+interface ApiRequestErrorShape {
+  status: number
+  error: string
+}
+
+class ApiRequestError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message)
+  }
+}
+
+/** 管理面只接受回环 Host；写请求再用自定义头 + JSON 阻断简单跨站请求。 */
+export function validateApiRequest(request: {
+  method?: string
+  headers: Record<string, string | string[] | undefined>
+  remoteAddress?: string
+}): ApiRequestErrorShape | undefined {
+  const remote = request.remoteAddress ?? ''
+  if (!(remote === '::1' || /^127\./.test(remote) || /^::ffff:127\./i.test(remote))) {
+    return { status: 403, error: 'forbidden client address' }
+  }
+  const hostValue = request.headers.host
+  const host = String(Array.isArray(hostValue) ? hostValue[0] ?? '' : hostValue ?? '').toLowerCase()
+  if (!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) {
+    return { status: 403, error: 'forbidden host' }
+  }
+  const method = (request.method ?? 'GET').toUpperCase()
+  if (method === 'GET' || method === 'HEAD') return undefined
+  const markerValue = request.headers[API_CLIENT_HEADER]
+  const marker = Array.isArray(markerValue) ? markerValue[0] : markerValue
+  if (marker !== '1') return { status: 403, error: 'forbidden mutation request' }
+  const typeValue = request.headers['content-type']
+  const contentType = String(Array.isArray(typeValue) ? typeValue[0] ?? '' : typeValue ?? '').split(';', 1)[0]!.trim().toLowerCase()
+  if (contentType !== 'application/json') return { status: 415, error: 'content-type must be application/json' }
+  return undefined
+}
+
+/** 把不可解析的配置移走后再回到空配置，避免下一次 flush 覆盖唯一副本。 */
+export function backupCorruptConfig(file: string): string | undefined {
+  if (!existsSync(file)) return undefined
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const backup = `${file}.corrupt-${stamp}-${process.pid}`
+  renameSync(file, backup)
+  return backup
+}
 
 export interface ChannelState {
   enabled?: boolean
@@ -72,6 +121,7 @@ export class ChannelManager {
   private readonly engineConfig: EngineConfig
   private store: Persisted = { channels: {}, allowlist: {}, pending: {} }
   private readonly running = new Map<string, ChannelAdapter>()
+  private readonly channelOperations = new KeyedSerialQueue()
   private apiDisposers: Array<() => void> = []
   // dispose 后阻止 initEnabled/startOne 再拉起渠道，避免插件重载时新旧双实例并存
   private disposed = false
@@ -153,10 +203,14 @@ export class ChannelManager {
 
   async connect(id: ChannelId, config?: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
     if (!CHANNEL_META[id]) return { ok: false, error: '未知渠道' }
+    return this.channelOperations.run(id, () => this.connectNow(id, config))
+  }
+
+  private async connectNow(id: ChannelId, config?: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
     const incoming = { ...(config ?? {}) }
     if (id === 'weixin' && incoming.botToken) {
+      await this.vault.set(credentialRef('weixin', 'botToken'), incoming.botToken)
       persistWeixinLogin(join(this.stateDir, 'weixin'), {
-        botToken: incoming.botToken,
         allowedUserId: incoming.allowedUserId,
         baseUrl: incoming.baseUrl,
       })
@@ -172,11 +226,17 @@ export class ChannelManager {
       await this.startOne(id)
       return { ok: true }
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      this.log(`[manager] ${id} 连接失败: ${error instanceof Error ? error.message : String(error)}`)
+      return { ok: false, error: '渠道连接失败，请查看本机日志' }
     }
   }
 
   async setReceive(id: ChannelId, receiveEnabled: boolean): Promise<{ ok: boolean; error?: string }> {
+    if (!CHANNEL_META[id]) return { ok: false, error: '未知渠道' }
+    return this.channelOperations.run(id, () => this.setReceiveNow(id, receiveEnabled))
+  }
+
+  private async setReceiveNow(id: ChannelId, receiveEnabled: boolean): Promise<{ ok: boolean; error?: string }> {
     const state = this.store.channels[id]
     if (!state?.enabled) return { ok: false, error: '渠道未配置' }
     state.receiveEnabled = receiveEnabled
@@ -187,6 +247,11 @@ export class ChannelManager {
   }
 
   async disconnect(id: ChannelId): Promise<void> {
+    if (!CHANNEL_META[id]) return
+    await this.channelOperations.run(id, () => this.disconnectNow(id))
+  }
+
+  private async disconnectNow(id: ChannelId): Promise<void> {
     const state = this.store.channels[id]
     if (state) {
       state.enabled = false
@@ -199,6 +264,10 @@ export class ChannelManager {
 
   async remove(id: ChannelId): Promise<void> {
     if (!CHANNEL_META[id]) return
+    await this.channelOperations.run(id, () => this.removeNow(id))
+  }
+
+  private async removeNow(id: ChannelId): Promise<void> {
     await this.stopOne(id)
     this.pairing.cancel(id)
     delete this.store.channels[id]
@@ -206,6 +275,7 @@ export class ChannelManager {
     delete this.store.pending[id]
     this.flush()
     if (id === 'weixin') clearWeixinLogin(join(this.stateDir, 'weixin'))
+    if (id === 'weixin') await this.vault.unset(credentialRef('weixin', 'botToken')).catch(() => undefined)
     for (const field of CHANNEL_META[id].fields.filter((item) => item.secret)) {
       await this.vault.unset(credentialRef(id, field.key)).catch(() => undefined)
     }
@@ -217,12 +287,15 @@ export class ChannelManager {
 
   async initEnabled(): Promise<void> {
     const started = Date.now()
+    await this.migrateLegacyWeixinToken().catch((error) => {
+      this.log(`[manager] 迁移旧版微信 token 失败，已保留原文件: ${error instanceof Error ? error.message : String(error)}`)
+    })
     for (const id of CHANNEL_ORDER) {
       if (this.disposed) return
       const state = this.store.channels[id]
       if (state?.enabled && state.receiveEnabled !== false) {
         const one = Date.now()
-        await this.startOne(id).catch((error) => {
+        await this.channelOperations.run(id, () => this.startOne(id)).catch((error) => {
           this.log(`[manager] 启动 ${id} 失败: ${error instanceof Error ? error.message : String(error)}`)
         })
         this.log(`[boot] 渠道 ${id} 启动 ${Date.now() - one}ms`)
@@ -246,23 +319,35 @@ export class ChannelManager {
       res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify(body))
     }
-    const MAX_BODY_CHARS = 1024 * 1024
-    const readBody = (req: import('node:http').IncomingMessage): Promise<{ body: Record<string, unknown>; oversized: boolean }> =>
+    const MAX_BODY_BYTES = 1024 * 1024
+    const readBody = (req: import('node:http').IncomingMessage): Promise<{ body: Record<string, unknown>; oversized: boolean; invalidJson: boolean }> =>
       new Promise((resolve) => {
         let raw = ''
+        let bytes = 0
         let oversized = false
         // 超限后停止累计但不掐断连接，等 end 后统一按 413 拒绝，防止内存被撑爆
         req.on('data', (chunk) => {
           if (oversized) return
+          bytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk))
+          if (bytes > MAX_BODY_BYTES) { oversized = true; return }
           raw += chunk
-          if (raw.length > MAX_BODY_CHARS) oversized = true
         })
-        req.on('error', () => resolve({ body: {}, oversized }))
+        req.on('error', () => resolve({ body: {}, oversized, invalidJson: true }))
         req.on('end', () => {
-          if (oversized) { resolve({ body: {}, oversized }); return }
-          try { resolve({ body: raw ? JSON.parse(raw) as Record<string, unknown> : {}, oversized: false }) } catch { resolve({ body: {}, oversized: false }) }
+          if (oversized) { resolve({ body: {}, oversized, invalidJson: false }); return }
+          try {
+            const parsed = raw ? JSON.parse(raw) as unknown : {}
+            const valid = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+            resolve({ body: valid ? parsed as Record<string, unknown> : {}, oversized: false, invalidJson: !valid })
+          } catch { resolve({ body: {}, oversized: false, invalidJson: true }) }
         })
       })
+    const readJson = async (req: import('node:http').IncomingMessage): Promise<Record<string, unknown>> => {
+      const { body, oversized, invalidJson } = await readBody(req)
+      if (oversized) throw new ApiRequestError(413, '请求体超过 1MB 上限')
+      if (invalidJson) throw new ApiRequestError(400, '请求体不是合法 JSON')
+      return body
+    }
     const payload = () => ({
       ok: true,
       channels: this.list(),
@@ -275,6 +360,8 @@ export class ChannelManager {
       path: '/dsh-im-connect/api',
       handler: async (req, res) => {
         try {
+          const requestError = validateApiRequest({ method: req.method, headers: req.headers, remoteAddress: req.socket.remoteAddress })
+          if (requestError) { send(res, requestError.status, { ok: false, error: requestError.error }); return }
           const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
         const parts = url.pathname.split('/').filter(Boolean)
         if (parts[2] === 'assistant' && parts.length === 3) {
@@ -290,8 +377,7 @@ export class ChannelManager {
             return
           }
           if (req.method === 'POST') {
-            const { body, oversized } = await readBody(req)
-            if (oversized) { send(res, 413, { ok: false, error: '请求体超过 1MB 上限' }); return }
+            const body = await readJson(req)
             const result = this.setAssistant(body)
             send(res, result.ok ? 200 : 400, result)
             return
@@ -301,8 +387,7 @@ export class ChannelManager {
         }
         if (parts[2] === 'sessions' && parts.length === 4 && req.method === 'POST') {
           const action = parts[3]
-          const { body, oversized } = await readBody(req)
-          if (oversized) { send(res, 413, { ok: false, error: '请求体超过 1MB 上限' }); return }
+          const body = await readJson(req)
           const sessionId = String(body.sessionId ?? '')
           if (!sessionId) { send(res, 400, { ok: false, error: '缺少 sessionId' }); return }
           if (action === 'rename') {
@@ -339,8 +424,7 @@ export class ChannelManager {
             return
           }
           if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'method not allowed' }); return }
-          const { oversized } = await readBody(req)
-          if (oversized) { send(res, 413, { ok: false, error: '请求体超过 1MB 上限' }); return }
+          await readJson(req)
           if (action === 'start') {
             const pairing = await this.pairing.start(id)
             send(res, pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
@@ -361,8 +445,7 @@ export class ChannelManager {
         if (parts[2] === 'channels' && parts.length === 5 && req.method === 'POST') {
           const id = parts[3] as ChannelId
           const action = parts[4]
-          const { body, oversized } = await readBody(req)
-          if (oversized) { send(res, 413, { ok: false, error: '请求体超过 1MB 上限' }); return }
+          const body = await readJson(req)
           if (action === 'connect') {
             const result = await this.connect(id, body.config as Record<string, string> | undefined)
             send(res, result.ok ? 200 : 400, result.ok ? { ok: true, channel: this.list().find((item) => item.id === id) } : result)
@@ -397,9 +480,13 @@ export class ChannelManager {
         send(res, 404, { ok: false, error: 'not found' })
         } catch (error) {
           // 单个路由异常不能让 HTTP 连接悬死，统一回 500 并落日志
+          if (error instanceof ApiRequestError) {
+            send(res, error.status, { ok: false, error: error.message })
+            return
+          }
           const detail = error instanceof Error ? error.message : String(error)
           this.log(`[manager] API 处理失败: ${detail}`)
-          send(res, 500, { ok: false, error: detail })
+          send(res, 500, { ok: false, error: '操作失败，请查看本机日志' })
         }
       },
     })
@@ -412,7 +499,8 @@ export class ChannelManager {
     for (const dispose of this.apiDisposers) dispose()
     this.apiDisposers = []
     this.pairing.dispose()
-    for (const id of [...this.running.keys()]) void this.stopOne(id as ChannelId)
+    const activeIds = new Set([...this.running.keys(), ...this.channelOperations.keys()])
+    for (const id of activeIds) void this.channelOperations.run(id, () => this.stopOne(id as ChannelId))
     this.engine.dispose()
   }
 
@@ -558,8 +646,16 @@ export class ChannelManager {
     await this.stopOne(id)
     if (this.disposed) return
     const state = this.store.channels[id]
+    if (id === 'weixin') await this.migrateLegacyWeixinToken()
     const resolved = await this.resolveSecrets(id, state?.config ?? {})
-    const adapter = createChannelAdapter(id, resolved, this.log, join(this.stateDir, id))
+    if (this.disposed) return
+    const adapter = createChannelAdapter(id, resolved, this.log, join(this.stateDir, id), {
+      onWeixinBotToken: async (token) => {
+        const ref = credentialRef('weixin', 'botToken')
+        if (token) await this.vault.set(ref, token)
+        else await this.vault.unset(ref)
+      },
+    })
     if (!adapter) throw new Error('凭据不足，无法启动渠道')
     if (id === 'weixin') {
       this.seedAllowedUser(id, readWeixinAllowedUserId(join(this.stateDir, 'weixin')) || resolved.allowedUserId)
@@ -577,13 +673,19 @@ export class ChannelManager {
           startTimer = setTimeout(() => reject(new Error('渠道启动超时')), START_TIMEOUT_MS)
         }),
       ])
+      if (this.disposed) {
+        this.engine.unregister(id)
+        this.running.delete(id)
+        await Promise.resolve(adapter.stop()).catch(() => undefined)
+        return
+      }
     } catch (error) {
       this.engine.unregister(id)
       this.running.delete(id)
       await Promise.resolve(adapter.stop()).catch(() => undefined)
       const message = error instanceof Error ? error.message : String(error)
       if (state) {
-        state.lastError = message
+        state.lastError = '连接失败，请查看本机日志'
         this.flush()
       }
       throw error
@@ -627,12 +729,28 @@ export class ChannelManager {
       const value = await this.vault.resolve(ref)
       if (value) out[key] = value
     }
+    if (id === 'weixin') {
+      const token = await this.vault.resolve(credentialRef('weixin', 'botToken'))
+      if (token) out.botToken = token
+    }
     return out
+  }
+
+  private async migrateLegacyWeixinToken(): Promise<void> {
+    const dir = join(this.stateDir, 'weixin')
+    const token = readLegacyWeixinBotToken(dir)
+    if (!token) return
+    await this.vault.set(credentialRef('weixin', 'botToken'), token)
+    // 只有 vault 写入成功后才重写旧文件，避免迁移失败导致登录态丢失。
+    persistWeixinLogin(dir, {})
+    this.log('[manager] 已把旧版微信明文 token 迁移到凭据服务')
   }
 
   private load(): void {
     try {
-      const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<Persisted>
+      const value = JSON.parse(readFileSync(this.file, 'utf8')) as unknown
+      if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('channels.json 顶层必须是对象')
+      const parsed = value as Partial<Persisted>
       this.store = {
         channels: parsed.channels ?? {},
         allowlist: parsed.allowlist ?? {},
@@ -641,7 +759,14 @@ export class ChannelManager {
         cwd: normalizeWorkspacePath(parsed.cwd),
         permission: normalizePermission(parsed.permission),
       }
-    } catch {
+    } catch (error) {
+      try {
+        const backup = backupCorruptConfig(this.file)
+        if (backup) this.log(`[manager] channels.json 损坏，已备份到 ${backup}: ${error instanceof Error ? error.message : String(error)}`)
+      } catch (backupError) {
+        this.log(`[manager] channels.json 无法读取且备份失败，拒绝覆盖原文件: ${backupError instanceof Error ? backupError.message : String(backupError)}`)
+        throw backupError
+      }
       this.store = { channels: {}, allowlist: {}, pending: {} }
     }
   }

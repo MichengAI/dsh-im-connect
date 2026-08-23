@@ -96,8 +96,9 @@ export class PairingHub {
     } catch (error) {
       if (this.sessions.get(id) !== session) return this.view(id)
       session.status = 'failed'
-      session.error = error instanceof Error ? error.message : String(error)
-      this.log(`[pairing] ${id} 生成二维码失败：${session.error}`)
+      const detail = error instanceof Error ? error.message : String(error)
+      session.error = '二维码生成失败，请查看本机日志'
+      this.log(`[pairing] ${id} 生成二维码失败：${detail}`)
       return this.view(id)
     }
   }
@@ -176,8 +177,9 @@ export class PairingHub {
             await this.onSuccess?.(session.channelId, credentials)
           } catch (error) {
             session.status = 'failed'
-            session.error = error instanceof Error ? error.message : String(error)
-            this.log(`[pairing] ${session.channelId} 保存凭据失败：${session.error}`)
+            const detail = error instanceof Error ? error.message : String(error)
+            session.error = '保存凭据失败，请查看本机日志'
+            this.log(`[pairing] ${session.channelId} 保存凭据失败：${detail}`)
           }
           return
         }
@@ -186,7 +188,12 @@ export class PairingHub {
           session.hint = '已扫码，请在手机上确认'
         } else if (polled.status === 'expired' || polled.status === 'failed') {
           session.status = polled.status
-          session.error = polled.error
+          if (polled.status === 'failed') {
+            if (polled.error) this.log(`[pairing] ${session.channelId} 绑定失败：${polled.error}`)
+            session.error = '绑定失败，请查看本机日志'
+          } else {
+            session.error = polled.error
+          }
           session.qrUrl = undefined
           session.qrImage = undefined
           session.begin?.dispose?.()
@@ -225,6 +232,4 @@ function hintOf(id: ChannelId): string {
       return '请使用对应 App 扫描二维码'
   }
 }
-
-
 

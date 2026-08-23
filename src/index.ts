@@ -5,9 +5,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { ChannelManager } from './manager.js'
 import type { EngineConfig } from './engine/types.js'
+import { createRotatingFileAppender } from './engine/file-log.js'
 
 export const name = 'dsh-im-connect'
 export const inject = ['webServer', 'credentials', 'agents', 'agentPresets', 'agentDefaultModel', 'llm', 'permissionPresets']
@@ -37,10 +38,11 @@ export function apply(ctx: Context, config: PluginConfig): void {
     : join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'dsh-im-connect')
   mkdirSync(stateDir, { recursive: true })
   const logFile = join(stateDir, 'gateway.log')
+  const fileLog = createRotatingFileAppender(logFile)
   const log = (line: string) => {
     const stamped = `${new Date().toISOString()} ${line}`
     ctx.logger(name).info(line)
-    try { writeFileSync(logFile, `${stamped}\n`, { flag: 'a' }) } catch { /* 忽略 */ }
+    fileLog.append(`${stamped}\n`)
   }
 
   const engineConfig: EngineConfig = {
@@ -59,7 +61,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     manager.registerApi(ctx)
     void manager.initEnabled().finally(() => { void manager.attachMappedSessions() })
     log(`[boot] apply 完成 ${Date.now() - applyStarted}ms`)
-    return () => { manager.disposeApi() }
+    return () => { manager.disposeApi(); void fileLog.flush() }
   }, 'im-connect.serve')
 }
 
@@ -74,5 +76,4 @@ export {
   sessionKeyOf,
 } from './engine/session-id.js'
 export { splitText } from './engine/split.js'
-
 

@@ -67,6 +67,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         })
         lastError = ''
         for (const update of updates) {
+          // Telegram offset 是 at-most-once 取舍：先确认游标可避免崩溃重启后重复驱动 agent，代价是极端情况下丢一条未完成消息。
           offset = update.update_id + 1
           if (persist) cursorFile.write({ offset })
           const message = update.message
@@ -169,7 +170,6 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       }
     },
     setMessageHandler(h) { handler = h },
-    status() { return stopped ? '已停止' : lastError ? `轮询中（${lastError}）` : '轮询中' },
+    status() { return stopped ? '已停止' : lastError ? '轮询异常（详情见本机日志）' : '轮询中' },
   }
 }
-

@@ -207,10 +207,10 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 | Item | Current behavior |
 | --- | --- |
 | Access | Groups need no binding, only a mention. DMs fail closed: the QR scanner is allowlisted automatically; other DM users must be approved on the settings page |
-| Management API | Loopback only (`localhost`, `127.0.0.1`, `[::1]`) |
-| Secrets | Prefer DSH `ctx.credentials`; otherwise `%DSH_HOME%\dsh-im-connect\secrets.json` |
+| Management API | Enforces both a loopback peer and loopback host (`localhost`, `127.0.0.1`, `[::1]`); mutations require JSON and the plugin client header |
+| Secrets | WeChat tokens and other secrets prefer DSH `ctx.credentials`; otherwise they use plaintext `%DSH_HOME%\dsh-im-connect\secrets.json`, restricted to the current user and never safe to sync or share |
 | Channel state | `channels.json` stores enablement and credential refs, not raw secrets |
-| Browser payloads | Never include tokens, secrets, App Secrets, or raw user identifiers |
+| Browser payloads | Never include tokens, secrets, App Secrets, or internal error details |
 | WeChat protocol | Official iLink only; no reverse-engineered personal WeChat protocol |
 | Tool approval | Only an allowlisted user in a DM can grant or deny; group chats cannot approve |
 

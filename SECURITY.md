@@ -20,9 +20,16 @@
 
 ## 管理面
 
-- 设置页与 `/dsh-im-connect/api` 只应监听本机回环。
+- 设置页与 `/dsh-im-connect/api` 同时校验回环来源地址与回环 Host；即使 Host webServer 误绑到局域网地址，远程请求也会被拒绝。
+- 所有写接口必须使用 `application/json`，并携带插件客户端专用请求头；普通跨站表单不能触发连接、批准、删除或权限修改。
 - 待批准列表保存在 `channels.json` 的 `pending`，白名单保存在 `allowlist`。
-- 浏览器回包不返回 token、secret 或原始凭据。
+- 浏览器回包不返回 token、secret、原始凭据或内部异常详情。
+
+## 本地凭据
+
+- 微信 `botToken` 与其他渠道 Secret 一样优先写入 Host `ctx.credentials`，不会继续写入 `wechat-state.json`；旧版本明文 token 会在首次启动时迁移。
+- Host 没有 credentials 服务时会回退到 `secrets.json`。POSIX 文件权限强制为 `0600`；Windows 继承当前用户目录 ACL。该文件仍含明文凭据，不应同步、共享或提交到版本库。
+- `gateway.log` 只保留当前文件和一个轮转归档；对外聊天只显示通用错误，详细异常仅写本机日志。
 
 ## 报告
 

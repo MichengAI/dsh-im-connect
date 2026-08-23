@@ -12,6 +12,7 @@ export function createChannelAdapter(
   config: Record<string, string>,
   log: (line: string) => void,
   stateDir: string,
+  options?: { onWeixinBotToken?: (token: string | undefined) => void | Promise<void> },
 ): ChannelAdapter | undefined {
   switch (id) {
     case 'telegram':
@@ -21,7 +22,7 @@ export function createChannelAdapter(
     case 'lark':
       return createFeishuChannel('lark', { appId: config.appId, appSecret: config.appSecret, domain: 'lark' }, log)
     case 'weixin':
-      return createWeixinChannel({ enabled: true, stateDir }, log, stateDir)
+      return createWeixinChannel({ enabled: true, stateDir, botToken: config.botToken, onBotToken: options?.onWeixinBotToken }, log, stateDir)
     case 'wecom':
       return createWecomChannel({ botId: config.botId, secret: config.secret }, log)
     case 'dingtalk':
@@ -32,7 +33,5 @@ export function createChannelAdapter(
       return undefined
   }
 }
-
-
 
 

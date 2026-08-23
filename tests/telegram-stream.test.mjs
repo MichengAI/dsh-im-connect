@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createTelegramChannel } from '../lib/channels/telegram.js'
 
 function mockFetch(handler) {
@@ -7,6 +10,39 @@ function mockFetch(handler) {
   globalThis.fetch = handler
   return () => { globalThis.fetch = previous }
 }
+
+test('Telegram 长轮询解析入站消息并在分发前持久化 offset', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'dsh-telegram-poll-'))
+  let pollCount = 0
+  let releaseSecondPoll
+  const restore = mockFetch(async (url) => {
+    const method = String(url).split('/').pop()
+    if (method === 'getMe') return { json: async () => ({ ok: true, result: { id: 99, username: 'test_bot', is_bot: true } }) }
+    if (method === 'getWebhookInfo') return { json: async () => ({ ok: true, result: { url: '' } }) }
+    if (method === 'getUpdates' && pollCount++ === 0) {
+      return { json: async () => ({ ok: true, result: [{ update_id: 41, message: { message_id: 7, chat: { id: 123, type: 'private' }, from: { id: 456, username: 'alice' }, text: 'hello' } }] }) }
+    }
+    await new Promise((resolve) => { releaseSecondPoll = resolve })
+    return { json: async () => ({ ok: true, result: [] }) }
+  })
+  try {
+    const channel = createTelegramChannel({ token: 'test-token', stateDir }, () => undefined)
+    assert.ok(channel)
+    const received = new Promise((resolve) => channel.setMessageHandler((message) => resolve(message)))
+    await channel.start()
+    const message = await received
+    assert.deepEqual(message, {
+      chatId: '123', userId: '456', username: 'alice', text: 'hello', kind: 'dm', addressed: true, messageId: '41',
+    })
+    assert.equal(JSON.parse(readFileSync(join(stateDir, 'cursor.json'), 'utf8')).offset, 42)
+    await channel.stop()
+    releaseSecondPoll?.()
+    await new Promise((resolve) => setImmediate(resolve))
+  } finally {
+    restore()
+    rmSync(stateDir, { recursive: true, force: true })
+  }
+})
 
 test('Telegram 流式只发一条占位，后续只编辑同一条', async () => {
   const calls = []

@@ -207,10 +207,10 @@ dsh --profile web --dump-config
 | 项 | 当前行为 |
 | --- | --- |
 | 用户准入 | 群聊不用绑定，只需 @。私聊默认拒绝：扫码用户自动放行，其他私聊用户需在设置页批准 |
-| 管理接口 | 仅本机回环（`localhost` / `127.0.0.1` / `[::1]`） |
-| 敏感字段 | 优先写入 DSH `ctx.credentials`；没有该服务时落到 `%DSH_HOME%\dsh-im-connect\secrets.json` |
+| 管理接口 | 强制校验本机回环来源及 Host（`localhost` / `127.0.0.1` / `[::1]`）；写接口要求 JSON 和插件客户端请求头 |
+| 敏感字段 | 包括微信 token 在内均优先写入 DSH `ctx.credentials`；没有该服务时落到 `%DSH_HOME%\dsh-im-connect\secrets.json`（明文，仅限当前用户，禁止同步或分享） |
 | 渠道状态 | `channels.json` 只保存启用状态和凭据引用，不保存明文 Secret |
-| 浏览器回包 | 不返回 token、secret、App Secret 或原始用户标识 |
+| 浏览器回包 | 不返回 token、secret、App Secret 或内部异常详情 |
 | 微信协议 | 只走腾讯官方 iLink，不使用逆向个人微信协议 |
 | 工具批准 | 仅私聊且发送者已在白名单时生效，不能跨会话、也不能在群里批准 |
 

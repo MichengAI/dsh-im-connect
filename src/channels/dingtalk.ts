@@ -42,6 +42,14 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
   const webhooks = new Map<string, string>()
   const targets = new Map<string, CardTarget>()
   const cards = new DingtalkCardClient(clientId, clientSecret, log)
+  const remember = <T>(map: Map<string, T>, key: string, value: T) => {
+    map.delete(key)
+    map.set(key, value)
+    if (map.size > 1000) {
+      const oldest = map.keys().next().value
+      if (oldest !== undefined) map.delete(oldest)
+    }
+  }
 
   return {
     id: 'dingtalk',
@@ -65,9 +73,9 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
           }
           try { payload = JSON.parse(res.data) as typeof payload } catch { return }
           const parsed = parseDingtalkRobotEvent(payload)
-          if (payload.sessionWebhook && parsed?.chatId) webhooks.set(parsed.chatId, payload.sessionWebhook)
+          if (payload.sessionWebhook && parsed?.chatId) remember(webhooks, parsed.chatId, payload.sessionWebhook)
           if (parsed?.chatId) {
-            targets.set(parsed.chatId, parsed.kind === 'group'
+            remember(targets, parsed.chatId, parsed.kind === 'group'
               ? { type: 'group', openConversationId: payload.conversationId ?? parsed.chatId }
               : { type: 'user', userId: parsed.userId })
           }
@@ -94,6 +102,8 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
     async stop() {
       client?.disconnect()
       client = undefined
+      webhooks.clear()
+      targets.clear()
       statusText = '已停止'
     },
     async send(chatId, text) {
@@ -132,7 +142,6 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
     status() { return statusText },
   }
 }
-
 
 
 

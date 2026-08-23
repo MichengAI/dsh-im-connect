@@ -1,5 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { writePrivateFileSync } from './secure-file.js'
 
 export interface CredentialService {
   set(ref: string, value: string): Promise<unknown>
@@ -18,13 +19,15 @@ export function createFileVault(file: string): CredentialVault {
     try {
       const parsed = JSON.parse(readFileSync(file, 'utf8')) as Record<string, string>
       return parsed && typeof parsed === 'object' ? parsed : {}
-    } catch {
-      return {}
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+      // 损坏或不可读时拒绝继续，不能把空对象写回去覆盖唯一凭据副本。
+      throw new Error(`本地凭据文件无法读取: ${file}`, { cause: error })
     }
   }
   const write = (data: Record<string, string>) => {
     mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+    writePrivateFileSync(file, `${JSON.stringify(data, null, 2)}\n`)
   }
   return {
     async set(ref, value) {
