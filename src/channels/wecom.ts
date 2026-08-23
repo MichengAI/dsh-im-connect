@@ -180,8 +180,8 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
           log(`[wecom] 忽略一帧 chattype=${chattype || '-'} msgtype=${String(body.msgtype ?? '-')}`)
           return
         }
-        const addressed = chattype !== 'group' || text.includes('@')
-        if (!addressed) return
+        // 企微长连接模式只会在群聊中 @ 当前机器人时推送回调，这里无需也无法校验 mention；
+        // 不做 text.includes('@') 兜底，避免正文不含 ASCII @ 时误丢合法消息。
         log(`[wecom] 收到 ${chattype} ${senderId}: ${text.slice(0, 80)}`)
         broker?.remember(chatId, frame)
         void handler?.({
@@ -189,7 +189,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
           userId: senderId,
           text,
           kind: chattype === 'group' ? 'group' : 'dm',
-          addressed,
+          addressed: true,
           messageId: typeof body.msgid === 'string' ? body.msgid : undefined,
         })
       })
