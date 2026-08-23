@@ -9,6 +9,7 @@ window.__ModuleLoader__.load({
     const React = require("react");
     const { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } = React;
     const ReactDOM = require("react-dom");
+    const { RiskConfirmation } = require("@deepseek-ai/dsh-client-ui-primitives");
     const EMPTY_EXTRA_TABS = [];
     const inject = ["slots", "sessions", "workspaces", "locale"];
     const API_BASE = "/dsh-im-connect/api";
@@ -129,7 +130,6 @@ window.__ModuleLoader__.load({
 .ima-radio small{display:block;color:var(--ima-muted);margin-top:2px}
 .ima-ok{color:var(--ima-ok);font-size:14px;text-align:center;padding:24px 0}
 .ima-modal .ima-error{color:var(--ima-danger)}
-.ima-risk-warning{display:flex;gap:10px;align-items:flex-start;margin:0 0 16px;color:var(--ima-muted);font-size:14px;line-height:1.6}.ima-risk-warning b{display:grid;place-items:center;width:18px;height:18px;flex:none;border:1.5px solid var(--ima-danger);border-radius:50%;color:var(--ima-danger);font-size:12px;line-height:1}.ima-risk-warning p{margin:0}.ima-risk-check{display:flex;gap:8px;align-items:center;font-size:14px;cursor:pointer}.ima-risk-check input{width:16px;height:16px;margin:0;accent-color:var(--ima-accent)}.ima-risk-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}.ima-risk-actions .ima-btn{border-radius:999px}.ima-risk-actions .ima-btn.primary:disabled{opacity:.48;cursor:not-allowed}.ima-full-access-dialog{margin:auto}.ima-full-access-dialog::backdrop{background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.45));backdrop-filter:var(--dsw-mask-blur,blur(8px))}
 @media (prefers-reduced-motion:reduce){.ima-switch i{transition:none}}
 `;
 
@@ -539,36 +539,6 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function openFullAccessConfirmation(onConfirm, t) {
-      document.getElementById("ima-full-access-confirmation")?.remove();
-      const dialog = document.createElement("dialog");
-      dialog.id = "ima-full-access-confirmation";
-      dialog.className = "ima-modal ima-full-access-dialog";
-      dialog.setAttribute("aria-label", t("confirm.title"));
-      dialog.innerHTML = '<div class="ima-modal-h"><h2 data-copy="title"></h2><button class="ima-x" type="button" aria-label="关闭">×</button></div><div class="ima-risk-warning"><b aria-hidden="true">!</b><p data-copy="description"></p></div><label class="ima-risk-check"><input type="checkbox"><span data-copy="acknowledge"></span></label><div class="ima-risk-actions"><button class="ima-btn" type="button" data-copy="cancel"></button><button class="ima-btn primary" type="button" data-copy="confirm" disabled></button></div>';
-      dialog.querySelector('[data-copy="title"]').textContent = t("confirm.title");
-      dialog.querySelector('[data-copy="description"]').textContent = t("confirm.description");
-      dialog.querySelector('[data-copy="acknowledge"]').textContent = t("confirm.acknowledge");
-      dialog.querySelector('[data-copy="cancel"]').textContent = t("confirm.cancel");
-      dialog.querySelector('[data-copy="confirm"]').textContent = t("confirm.enable");
-      const acknowledgement = dialog.querySelector("input");
-      const [closeButton, cancelButton, confirmButton] = dialog.querySelectorAll("button");
-      const close = (confirmed) => dialog.close(confirmed ? "confirm" : "cancel");
-      acknowledgement.addEventListener("change", () => { confirmButton.disabled = !acknowledgement.checked; });
-      closeButton.addEventListener("click", () => close(false));
-      cancelButton.addEventListener("click", () => close(false));
-      confirmButton.addEventListener("click", () => close(true));
-      dialog.addEventListener("cancel", (event) => { event.preventDefault(); close(false); });
-      dialog.addEventListener("close", () => {
-        const confirmed = dialog.returnValue === "confirm";
-        dialog.remove();
-        if (confirmed) onConfirm();
-      }, { once: true });
-      document.body.append(dialog);
-      dialog.showModal();
-      acknowledgement.focus();
-    }
-
     function ComposerBar(props) {
       const items = typeof props.useWorkspaces === "function"
         ? (props.useWorkspaces((state) => (state && state.items) || []) || [])
@@ -580,6 +550,8 @@ window.__ModuleLoader__.load({
       const [effort, setEffort] = useState("");
       const [cwd, setCwd] = useState("");
       const [permission, setPermission] = useState("");
+      const [confirmingFullAccess, setConfirmingFullAccess] = useState(false);
+      const [fullAccessAcknowledged, setFullAccessAcknowledged] = useState(false);
       const [open, setOpen] = useState("");
       const [modelPane, setModelPane] = useState("root");
       const [hint, setHint] = useState("");
@@ -658,10 +630,8 @@ window.__ModuleLoader__.load({
         setOpen("");
         if (next === permission) return;
         if (next === "danger-full-access") {
-          openFullAccessConfirmation(() => {
-            setPermission("danger-full-access");
-            save({ permission: "danger-full-access" });
-          }, props.permissionT);
+          setFullAccessAcknowledged(false);
+          setConfirmingFullAccess(true);
           return;
         }
         setPermission(next);
@@ -803,6 +773,23 @@ window.__ModuleLoader__.load({
           ),
         ),
         hint && h("div", { className: "ima-composer-hint" }, hint),
+        h(RiskConfirmation, {
+          open: confirmingFullAccess,
+          title: props.permissionT("confirm.title"),
+          description: props.permissionT("confirm.description"),
+          acknowledgeLabel: props.permissionT("confirm.acknowledge"),
+          cancelLabel: props.permissionT("confirm.cancel"),
+          confirmLabel: props.permissionT("confirm.enable"),
+          acknowledged: fullAccessAcknowledged,
+          onAcknowledgedChange: setFullAccessAcknowledged,
+          onCancel: () => { setFullAccessAcknowledged(false); setConfirmingFullAccess(false); },
+          onConfirm: () => {
+            setPermission("danger-full-access");
+            save({ permission: "danger-full-access" });
+            setFullAccessAcknowledged(false);
+            setConfirmingFullAccess(false);
+          },
+        }),
       );
     }
 
@@ -1782,8 +1769,6 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
-
-
 
 
 
