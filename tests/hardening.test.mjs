@@ -1,14 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { isStaleWeixinTokenError, uniqueMediaFileName, persistWeixinLogin, readLegacyWeixinBotToken } from '../lib/channels/weixin.js'
+import { createWeixinChannel, isStaleWeixinTokenError, uniqueMediaFileName, persistWeixinLogin, readLegacyWeixinBotToken, readResponseBufferLimited } from '../lib/channels/weixin.js'
 import { API_CLIENT_HEADER, backupCorruptConfig, readApiJsonBody, validateApiRequest } from '../lib/manager.js'
 import { createFileVault } from '../lib/engine/credentials.js'
 import { createRotatingFileAppender } from '../lib/engine/file-log.js'
 import { KeyedSerialQueue } from '../lib/engine/keyed-queue.js'
+import { writeFileAtomicSync } from '../lib/engine/atomic-file.js'
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), 'dsh-im-hardening-'))
@@ -28,6 +29,82 @@ test('微信只把明确的 ret/errcode=-14 识别为登录态失效', () => {
   assert.equal(isStaleWeixinTokenError(new Error('微信 getupdates ret=-14 errcode=0')), true)
   assert.equal(isStaleWeixinTokenError('微信 getupdates ret=1 errcode=-14'), true)
   assert.equal(isStaleWeixinTokenError('download http://127.0.0.1:514 failed -14ms'), false)
+})
+
+test('微信登录确认缺字段时安全结束轮询，不产生 unhandled rejection', async () => {
+  const dir = tempDir()
+  const previousFetch = globalThis.fetch
+  const logs = []
+  let unhandled
+  const onUnhandled = (error) => { unhandled = error }
+  process.on('unhandledRejection', onUnhandled)
+  globalThis.fetch = async (url) => {
+    const body = String(url).includes('get_bot_qrcode')
+      ? { ret: 0, qrcode: 'qr-1', qrcode_img_content: 'https://example.test/qr' }
+      : { ret: 0, status: 'confirmed' }
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  try {
+    const channel = createWeixinChannel({ enabled: true }, (line) => logs.push(line), dir)
+    assert.ok(channel)
+    await channel.start()
+    for (let i = 0; i < 20 && channel.status() !== '连接失败'; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    assert.equal(channel.status(), '连接失败')
+    assert.match(logs.join('\n'), /confirmed 但缺少 token\/user/)
+    await channel.stop()
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(unhandled, undefined)
+  } finally {
+    process.off('unhandledRejection', onUnhandled)
+    globalThis.fetch = previousFetch
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('微信停止时会中断在途长轮询', async () => {
+  const dir = tempDir()
+  const previousFetch = globalThis.fetch
+  let started
+  let aborted = false
+  globalThis.fetch = async (_url, init) => new Promise((resolve, reject) => {
+    started = true
+    init.signal.addEventListener('abort', () => {
+      aborted = true
+      reject(init.signal.reason)
+    }, { once: true })
+  })
+  try {
+    const channel = createWeixinChannel({ enabled: true, botToken: 'saved-token' }, () => undefined, dir)
+    assert.ok(channel)
+    await channel.start()
+    while (!started) await new Promise((resolve) => setImmediate(resolve))
+    await channel.stop()
+    assert.equal(aborted, true)
+    assert.equal(channel.status(), '已停止')
+  } finally {
+    globalThis.fetch = previousFetch
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('微信媒体按实际流量执行大小上限，不信任缺失的 content-length', async () => {
+  const response = new Response(new Uint8Array([1, 2, 3, 4, 5, 6]))
+  await assert.rejects(readResponseBufferLimited(response, 5), /超过 5 字节上限/)
+})
+
+test('原子写替换完整文件且不残留临时文件', () => {
+  const dir = tempDir()
+  try {
+    const file = join(dir, 'state.json')
+    writeFileAtomicSync(file, '{"version":1}\n')
+    writeFileAtomicSync(file, '{"version":2}\n')
+    assert.equal(readFileSync(file, 'utf8'), '{"version":2}\n')
+    assert.deepEqual(readdirSync(dir), ['state.json'])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('管理 API 强制回环 Host，并用自定义头和 JSON 保护写请求', () => {

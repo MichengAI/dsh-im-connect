@@ -36,8 +36,8 @@ Inbound messages are identified before commands, tool approvals, or injection.
 
 | Case | Behavior |
 |---|---|
-| Group without @ | Ignored; no reply and no pending request |
-| Group with @ | No binding. Anyone can send work |
+| Group without a mention of this bot | Ignored; mentioning someone else also does not trigger it |
+| Group explicitly mentioning this bot | No binding. Anyone can send work |
 | DM from the QR scanner | WeChat / Feishu / Lark scanners are allowlisted automatically |
 | DM from anyone else | Appears on the settings pending list until approved |
 | DM on credential-only channels | Telegram, and DingTalk / WeCom / QQ bound with secrets only, require approval for every DM |

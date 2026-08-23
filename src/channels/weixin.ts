@@ -16,6 +16,8 @@ import { readFile } from 'node:fs/promises'
 import { join, basename } from 'node:path'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { writePrivateFileSync } from '../engine/secure-file.js'
+import { isAbortError, sleepWithSignal, timeoutSignal } from '../engine/abort.js'
+import { backupCorruptFileSync } from '../engine/atomic-file.js'
 
 export interface WeixinChannelConfig {
   enabled?: boolean
@@ -31,6 +33,7 @@ export interface WeixinChannelConfig {
 const BASE_URL = 'https://ilinkai.weixin.qq.com'
 /** CDN 基址（官方插件同款）。 */
 export const CDN_BASE_URL = 'https://novac2c.cdn.weixin.qq.com/c2c'
+export const MAX_WEIXIN_MEDIA_BYTES = 50 * 1024 * 1024
 
 /** 消息 item 类型：1=文本 2=图片 3=语音 4=文件 5=视频。 */
 const ITEM_TEXT = 1
@@ -143,6 +146,35 @@ export function isStaleWeixinTokenError(error: unknown): boolean {
   return /(?:ret|errcode)\s*=\s*-14(?:\D|$)/i.test(message)
 }
 
+/** 即使响应未提供可信 content-length，也按实际读取字节数执行硬上限。 */
+export async function readResponseBufferLimited(response: Response, maxBytes: number): Promise<Buffer> {
+  const declared = Number(response.headers.get('content-length') ?? '')
+  if (Number.isFinite(declared) && declared > maxBytes) throw new Error(`媒体超过 ${maxBytes} 字节上限`)
+  if (!response.body) {
+    const buf = Buffer.from(await response.arrayBuffer())
+    if (buf.length > maxBytes) throw new Error(`媒体超过 ${maxBytes} 字节上限`)
+    return buf
+  }
+  const reader = response.body.getReader()
+  const chunks: Buffer[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined)
+        throw new Error(`媒体超过 ${maxBytes} 字节上限`)
+      }
+      chunks.push(Buffer.from(value))
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  return Buffer.concat(chunks, total)
+}
+
 /** 从 CDNMedia 取下载 URL（encrypt_query_param 优先，full_url 兜底）。 */
 function cdnUrlOf(mediaRef: Json | undefined): string | undefined {
   if (!mediaRef) return undefined
@@ -163,10 +195,13 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   let state: WechatState = loadState()
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let stopped = false
+  let lifecycle: AbortController | undefined
+  let pollTask: Promise<void> | undefined
   let botToken = config.botToken?.trim() ?? ''
   let statusText = '未登录'
   /** 当前登录二维码 URL（UI 轮询用）。 */
   let currentLoginUrl: string | undefined
+  let lastFlushed = ''
 
   const uin = Buffer.from(String(Math.floor(Math.random() * 0xffffffff)), 'utf8').toString('base64')
   /** typing_ticket 按用户缓存。 */
@@ -184,6 +219,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         syncBuf: parsed.syncBuf,
       }
     } catch {
+      backupCorruptFileSync(statePath)
       return { contextTokens: {} }
     }
   }
@@ -193,7 +229,10 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       mkdirSync(dir, { recursive: true })
       // botToken 只允许存在于 credentials vault；兼容读取旧状态但绝不再次落回本文件。
       const { botToken: _legacyToken, ...publicState } = state
-      writePrivateFileSync(statePath, `${JSON.stringify(publicState, null, 2)}\n`)
+      const serialized = `${JSON.stringify(publicState, null, 2)}\n`
+      if (serialized === lastFlushed) return
+      writePrivateFileSync(statePath, serialized)
+      lastFlushed = serialized
     } catch (err) {
       log(`[weixin] 状态落盘失败: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -218,7 +257,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       method: 'POST',
       headers: headers(),
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: timeoutSignal(timeoutMs, lifecycle?.signal),
     })
     if (!res.ok) throw new Error(`weixin ${path} http ${res.status}`)
     const data = (await res.json()) as Json
@@ -238,14 +277,14 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         qr = await request('/ilink/bot/get_bot_qrcode?bot_type=3', {}, 15_000)
       } catch (err) {
         log(`[weixin] 获取二维码失败，5s 后重试: ${err instanceof Error ? err.message : String(err)}`)
-        await sleep(5000)
+        await sleepWithSignal(5000, lifecycle?.signal)
         continue
       }
       const qrcodeId = pickStr(qr, 'qrcode', 'qrcode_id')
       const qrUrl = pickStr(qr, 'qrcode_img_content', 'qrcode_url', 'url')
       if (!qrcodeId || !qrUrl) {
         log('[weixin] 二维码字段缺失，5s 后重试')
-        await sleep(5000)
+        await sleepWithSignal(5000, lifecycle?.signal)
         continue
       }
       statusText = '等待扫码'
@@ -261,7 +300,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         try {
           st = await request(`/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcodeId)}`, {}, 40_000, true)
         } catch {
-          await sleep(2000)
+          await sleepWithSignal(2000, lifecycle?.signal)
           continue
         }
         const status = String(st.status ?? '')
@@ -293,7 +332,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
           log('[weixin] 二维码已过期，重新获取')
           break
         }
-        await sleep(2000)
+        await sleepWithSignal(2000, lifecycle?.signal)
       }
     }
     return false
@@ -304,9 +343,9 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     const url = cdnUrlOf(mediaRef)
     if (!url) return undefined
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(60_000) })
+      const res = await fetch(url, { signal: timeoutSignal(60_000, lifecycle?.signal) })
       if (!res.ok) throw new Error(`CDN 下载 HTTP ${res.status}`)
-      const buf = Buffer.from(await res.arrayBuffer())
+      const buf = await readResponseBufferLimited(res, MAX_WEIXIN_MEDIA_BYTES)
       const plain = aesKey ? decryptAesEcb(buf, aesKey) : buf
       return { buf: plain, contentType: res.headers.get('content-type') ?? undefined }
     } catch (err) {
@@ -470,12 +509,12 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
             continue
           }
           log(`[weixin] 登录态失效（${staleCount}/3），5 分钟后重试（若持续失效请重新扫码）`)
-          await sleep(300_000)
+          await sleepWithSignal(300_000, lifecycle?.signal)
           continue
         }
         staleCount = 0
         log(`[weixin] 长轮询失败，5s 后重试: ${msg}`)
-        await sleep(5000)
+        await sleepWithSignal(5000, lifecycle?.signal)
         continue
       }
       staleCount = 0
@@ -598,7 +637,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
       body: new Uint8Array(ciphertext),
-      signal: AbortSignal.timeout(120_000),
+      signal: timeoutSignal(120_000, lifecycle?.signal),
     })
     if (upRes.status !== 200) {
       const errMsg = upRes.headers.get('x-error-message') ?? `HTTP ${upRes.status}`
@@ -664,12 +703,24 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     label: '微信',
     maxMessageLength: 1200,
     async start() {
+      lifecycle?.abort()
+      lifecycle = new AbortController()
       stopped = false
       statusText = '登录中'
-      void pollLoop()
+      pollTask = pollLoop().catch((error) => {
+        if (stopped || isAbortError(error)) return
+        statusText = '连接失败'
+        currentLoginUrl = undefined
+        log(`[weixin] 轮询循环退出: ${error instanceof Error ? error.message : String(error)}`)
+      })
     },
     async stop() {
       stopped = true
+      lifecycle?.abort()
+      await pollTask?.catch(() => undefined)
+      pollTask = undefined
+      lifecycle = undefined
+      statusText = '已停止'
       flush()
     },
     async send(chatId, text) {
@@ -696,11 +747,6 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     },
   }
 }
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 
 export function weixinStatePath(stateDir: string): string {
   return join(stateDir, 'wechat-state.json')

@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { readFileSync } from 'node:fs'
 import type { SessionRecord } from './session-id.js'
+import { backupCorruptFileSync, writeFileAtomicSync } from './atomic-file.js'
 
 export class SessionMapStore {
   private readonly file: string
@@ -32,14 +32,15 @@ export class SessionMapStore {
   private load(): void {
     try {
       const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as Record<string, SessionRecord>
-      this.records = parsed && typeof parsed === 'object' ? parsed : {}
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TypeError('会话映射顶层必须是对象')
+      this.records = parsed
     } catch {
+      backupCorruptFileSync(this.file)
       this.records = {}
     }
   }
 
   private flush(): void {
-    mkdirSync(dirname(this.file), { recursive: true })
-    writeFileSync(this.file, `${JSON.stringify(this.records, null, 2)}\n`, 'utf8')
+    writeFileAtomicSync(this.file, `${JSON.stringify(this.records, null, 2)}\n`)
   }
 }

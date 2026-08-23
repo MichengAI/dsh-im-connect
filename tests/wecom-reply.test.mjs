@@ -107,4 +107,30 @@ test('回调回复失败时才退回主动推送', async () => {
     'replyStream',
     ['sendMessage', 'user-3', { msgtype: 'markdown', markdown: { content: '兜底文本' } }],
   ])
+  assert.equal(broker.pendingCount(), 0)
+})
+
+test('未消费的企业微信回调帧会过期释放', async () => {
+  const client = fakeClient()
+  const broker = new WecomReplyBroker(client, () => undefined, () => 'stream-expiring', 5)
+  try {
+    broker.remember('group-1', { headers: { req_id: 'ignored' } })
+    assert.equal(broker.pendingCount(), 1)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(broker.pendingCount(), 0)
+  } finally {
+    broker.dispose()
+  }
+})
+
+test('单个企业微信聊天的待回复帧有硬上限', () => {
+  const client = fakeClient()
+  let seq = 0
+  const broker = new WecomReplyBroker(client, () => undefined, () => `stream-${++seq}`)
+  try {
+    for (let i = 0; i < 30; i += 1) broker.remember('group-1', { headers: { req_id: `req-${i}` } })
+    assert.equal(broker.pendingCount(), 20)
+  } finally {
+    broker.dispose()
+  }
 })

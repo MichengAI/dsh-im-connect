@@ -1,5 +1,6 @@
 import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
 import { JsonStateFile } from '../engine/json-state.js'
+import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 
 export interface TelegramConfig {
   token?: string
@@ -33,12 +34,15 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   let lastError = ''
   let botId = ''
   let username = ''
+  let lifecycle: AbortController | undefined
+  let pollTask: Promise<void> | undefined
 
-  async function api<T>(method: string, body: Record<string, unknown>): Promise<T> {
+  async function api<T>(method: string, body: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
     const res = await fetch(`${API}/bot${token}/${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      signal: timeoutSignal(timeoutMs, lifecycle?.signal),
     })
     const data = (await res.json()) as { ok: boolean; description?: string; error_code?: number; result: T }
     if (!data.ok) {
@@ -64,7 +68,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           offset,
           timeout: 25,
           allowed_updates: ['message'],
-        })
+        }, 35_000)
         lastError = ''
         for (const update of updates) {
           // Telegram offset 是 at-most-once 取舍：先确认游标可避免崩溃重启后重复驱动 agent，代价是极端情况下丢一条未完成消息。
@@ -93,7 +97,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         lastError = error instanceof Error ? error.message : String(error)
         log(`[telegram] 轮询错误: ${lastError}`)
         if (stopped) break
-        await new Promise((resolve) => setTimeout(resolve, 3000))
+        await sleepWithSignal(3000, lifecycle?.signal).catch(() => undefined)
       }
     }
   }
@@ -103,6 +107,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     label: 'Telegram',
     maxMessageLength: 4000,
     async start() {
+      lifecycle?.abort()
+      lifecycle = new AbortController()
       stopped = false
       const me = await api<{ id: number; username?: string; is_bot: boolean }>('getMe', {})
       botId = String(me.id)
@@ -110,10 +116,16 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       const hook = await api<{ url?: string }>('getWebhookInfo', {})
       if (hook.url) throw Object.assign(new Error('该 Telegram 机器人已配置 Webhook，请先在原服务中移除。'), { code: 'webhook-configured' })
       log('[telegram] 开始长轮询')
-      void pollLoop()
+      pollTask = pollLoop().catch((error) => {
+        if (!stopped) log(`[telegram] 轮询循环退出: ${error instanceof Error ? error.message : String(error)}`)
+      })
     },
     async stop() {
       stopped = true
+      lifecycle?.abort()
+      await pollTask?.catch(() => undefined)
+      pollTask = undefined
+      lifecycle = undefined
       if (persist) cursorFile.write({ offset })
     },
     async send(chatId, text) {

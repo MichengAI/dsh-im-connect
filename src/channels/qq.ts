@@ -1,5 +1,6 @@
 /** QQ 开放平台机器人：官方 WebSocket 网关，不是个人 QQ 号。 */
 import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
+import { timeoutSignal } from '../engine/abort.js'
 
 export interface QqChannelConfig {
   appId?: string
@@ -58,6 +59,7 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
   // 提前 5 分钟刷新；WebSocket 靠心跳可长期在线，不主动换 token 会在两小时后全线 401
   let tokenExpireAt = 0
   let statusText = '未连接'
+  let lifecycle: AbortController | undefined
   const targets = new Map<string, ChatTarget>()
 
   function scheduleReconnect(): void {
@@ -81,6 +83,7 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ appId, clientSecret: appSecret }),
+      signal: timeoutSignal(30_000, lifecycle?.signal),
     })
     const body = await res.text()
     let data: { access_token?: string; expires_in?: number; message?: string }
@@ -105,6 +108,7 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
         'content-type': 'application/json',
         ...(init?.headers ?? {}),
       },
+      signal: timeoutSignal(30_000, lifecycle?.signal),
     })
     await ensureToken()
     let res = await request()
@@ -258,7 +262,14 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
     const path = kind === 'group'
       ? `/v2/groups/${openid}/messages`
       : `/v2/users/${openid}/messages`
-    await qqFetch(path, { method: 'POST', body: JSON.stringify(body) })
+    try {
+      await qqFetch(path, { method: 'POST', body: JSON.stringify(body) })
+    } catch (error) {
+      if (!target?.lastMsgId) {
+        throw new Error(`QQ 发送失败，当前没有可用的被动回复 msg_id；请让用户重新发送一条消息。${error instanceof Error ? ` ${error.message}` : ''}`, { cause: error })
+      }
+      throw error
+    }
   }
 
   return {
@@ -267,6 +278,8 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
     maxMessageLength: 2000,
     async start() {
       if (!stopped && (ws || reconnectTimer)) return
+      lifecycle?.abort()
+      lifecycle = new AbortController()
       stopped = false
       reconnectAttempts = 0
       try {
@@ -279,6 +292,8 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
     },
     async stop() {
       stopped = true
+      lifecycle?.abort()
+      lifecycle = undefined
       clearInterval(heartbeat)
       clearTimeout(reconnectTimer)
       reconnectTimer = undefined

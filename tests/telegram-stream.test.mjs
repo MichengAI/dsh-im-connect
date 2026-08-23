@@ -14,16 +14,20 @@ function mockFetch(handler) {
 test('Telegram 长轮询解析入站消息并在分发前持久化 offset', async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'dsh-telegram-poll-'))
   let pollCount = 0
-  let releaseSecondPoll
-  const restore = mockFetch(async (url) => {
+  let secondPollAborted = false
+  const restore = mockFetch(async (url, init) => {
     const method = String(url).split('/').pop()
     if (method === 'getMe') return { json: async () => ({ ok: true, result: { id: 99, username: 'test_bot', is_bot: true } }) }
     if (method === 'getWebhookInfo') return { json: async () => ({ ok: true, result: { url: '' } }) }
     if (method === 'getUpdates' && pollCount++ === 0) {
       return { json: async () => ({ ok: true, result: [{ update_id: 41, message: { message_id: 7, chat: { id: 123, type: 'private' }, from: { id: 456, username: 'alice' }, text: 'hello' } }] }) }
     }
-    await new Promise((resolve) => { releaseSecondPoll = resolve })
-    return { json: async () => ({ ok: true, result: [] }) }
+    return new Promise((resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        secondPollAborted = true
+        reject(init.signal.reason)
+      }, { once: true })
+    })
   })
   try {
     const channel = createTelegramChannel({ token: 'test-token', stateDir }, () => undefined)
@@ -36,8 +40,7 @@ test('Telegram 长轮询解析入站消息并在分发前持久化 offset', asyn
     })
     assert.equal(JSON.parse(readFileSync(join(stateDir, 'cursor.json'), 'utf8')).offset, 42)
     await channel.stop()
-    releaseSecondPoll?.()
-    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(secondPollAborted, true)
   } finally {
     restore()
     rmSync(stateDir, { recursive: true, force: true })

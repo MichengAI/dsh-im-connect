@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createChannelAdapter } from './channels/factory.js'
 import { CHANNEL_META, CHANNEL_ORDER, supportsQr } from './channels/meta.js'
@@ -13,6 +13,7 @@ import { clearWeixinLogin, persistWeixinLogin, readLegacyWeixinBotToken, readWei
 import { normalizeAssistantModel, normalizePermission, normalizeWorkspacePath, type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js'
 import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
 import { KeyedSerialQueue } from './engine/keyed-queue.js'
+import { backupCorruptFileSync, writeFileAtomicSync } from './engine/atomic-file.js'
 
 export const API_CLIENT_HEADER = 'x-dsh-im-connect-client'
 const MAX_API_BODY_BYTES = 1024 * 1024
@@ -107,11 +108,7 @@ export function readApiJsonBody(
 
 /** 把不可解析的配置移走后再回到空配置，避免下一次 flush 覆盖唯一副本。 */
 export function backupCorruptConfig(file: string): string | undefined {
-  if (!existsSync(file)) return undefined
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const backup = `${file}.corrupt-${stamp}-${process.pid}`
-  renameSync(file, backup)
-  return backup
+  return backupCorruptFileSync(file)
 }
 
 export interface ChannelState {
@@ -842,8 +839,7 @@ export class ChannelManager {
   }
 
   private flush(): void {
-    mkdirSync(this.stateDir, { recursive: true })
-    writeFileSync(this.file, `${JSON.stringify(this.store, null, 2)}\n`, 'utf8')
+    writeFileAtomicSync(this.file, `${JSON.stringify(this.store, null, 2)}\n`)
   }
 }
 

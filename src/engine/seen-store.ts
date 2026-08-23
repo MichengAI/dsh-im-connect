@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { backupCorruptFileSync, writeFileAtomicSync } from './atomic-file.js'
 
 /** 去重最近见过的消息 id，避免重启或重复投递打两次。 */
 export class SeenStore {
@@ -31,13 +31,13 @@ export class SeenStore {
       this.ids = Array.isArray(parsed.ids) ? parsed.ids.filter((item) => typeof item === 'string') : []
       this.known = new Set(this.ids)
     } catch {
+      backupCorruptFileSync(this.file)
       this.ids = []
       this.known.clear()
     }
   }
 
   private flush(): void {
-    mkdirSync(dirname(this.file), { recursive: true })
-    writeFileSync(this.file, `${JSON.stringify({ ids: this.ids }, null, 2)}\n`, 'utf8')
+    writeFileAtomicSync(this.file, `${JSON.stringify({ ids: this.ids }, null, 2)}\n`)
   }
 }

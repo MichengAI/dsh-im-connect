@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ReplyStream } from '../engine/types.js'
+import { timeoutSignal } from '../engine/abort.js'
 
 const API = 'https://api.dingtalk.com/'
 const TEMPLATE_ID = '02fcf2f4-5e02-4a85-b672-46d1f715543e.schema'
@@ -126,6 +127,7 @@ export class DingtalkCardClient {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ appKey: this.clientId, appSecret: this.clientSecret }),
+      signal: timeoutSignal(30_000),
     })
     const data = await res.json() as { accessToken?: string; expireIn?: number }
     if (!data.accessToken) throw new Error('钉钉没有返回 accessToken')
@@ -139,6 +141,7 @@ export class DingtalkCardClient {
       method,
       headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),
+      signal: timeoutSignal(30_000),
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')

@@ -1,5 +1,6 @@
 import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
 import { DingtalkCardClient, openDingtalkCardStream, type CardTarget } from './dingtalk-card.js'
+import { timeoutSignal } from '../engine/abort.js'
 
 export interface DingtalkConfig {
   clientId?: string
@@ -113,6 +114,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ msgtype: 'markdown', markdown: { title: 'IM助理', text } }),
+        signal: timeoutSignal(30_000),
       })
       if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)
     },
@@ -126,11 +128,13 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
         const sendText = async (text: string) => {
           const webhook = webhooks.get(chatId)
           if (!webhook) throw new Error('dingtalk: 没有可回复的 webhook')
-          await fetch(webhook, {
+          const res = await fetch(webhook, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ msgtype: 'markdown', markdown: { title: 'IM助理', text } }),
+            signal: timeoutSignal(30_000),
           })
+          if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)
         }
         return {
           async update() { /* 普通文本无法中途改 */ },

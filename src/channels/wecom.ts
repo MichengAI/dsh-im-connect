@@ -36,34 +36,69 @@ export function messageText(body: Record<string, unknown>): string {
 /** 企业微信智能机器人必须按回调帧 replyStream，主动 sendMessage 用户看不到。 */
 export class WecomReplyBroker {
   // 同一聊天可能连续来多条消息，每条都有独立的回调帧，必须排队而不是单槽覆盖
-  private readonly pending = new Map<string, Array<{ frame: unknown; streamId: string; started: boolean }>>()
+  private readonly pending = new Map<string, Array<{ frame: unknown; streamId: string; started: boolean; expiresAt: number }>>()
+  private readonly sweepTimer: ReturnType<typeof setInterval>
 
   constructor(
     private readonly client: Pick<WecomSdkClient, 'replyStream' | 'sendMessage'>,
     private readonly log: (line: string) => void,
     private readonly newStreamId: () => string = () => `stream_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
-  ) {}
+    private readonly ttlMs = 120_000,
+  ) {
+    this.sweepTimer = setInterval(() => this.pruneAll(), Math.max(1000, Math.min(ttlMs, 30_000)))
+    this.sweepTimer.unref?.()
+  }
+
+  private prune(chatId: string, now = Date.now()): void {
+    const list = this.pending.get(chatId)?.filter((item) => item.expiresAt > now) ?? []
+    if (list.length > 0) this.pending.set(chatId, list)
+    else this.pending.delete(chatId)
+  }
+
+  private pruneAll(): void {
+    const now = Date.now()
+    for (const chatId of this.pending.keys()) this.prune(chatId, now)
+  }
 
   remember(chatId: string, frame: unknown): string {
+    this.prune(chatId)
     const list = this.pending.get(chatId) ?? []
     const streamId = this.newStreamId()
-    list.push({ frame, streamId, started: false })
+    list.push({ frame, streamId, started: false, expiresAt: Date.now() + this.ttlMs })
+    // 单个聊天异常突发时也要有硬上限，避免 TTL 窗口内无限增长。
+    if (list.length > 20) list.splice(0, list.length - 20)
     this.pending.set(chatId, list)
     return streamId
   }
 
-  private shift(chatId: string): { frame: unknown; streamId: string; started: boolean } | undefined {
+  private shift(chatId: string): { frame: unknown; streamId: string; started: boolean; expiresAt: number } | undefined {
+    this.prune(chatId)
     const list = this.pending.get(chatId)
     if (!list?.length) return undefined
-    return list.shift()
+    const item = list.shift()
+    if (list.length === 0) this.pending.delete(chatId)
+    return item
   }
 
   async startThinking(chatId: string): Promise<void> {
+    this.prune(chatId)
     for (const item of this.pending.get(chatId) ?? []) {
       if (item.started) continue
       await this.client.replyStream(item.frame, item.streamId, '正在思考中…', false)
       item.started = true
     }
+  }
+
+  pendingCount(): number {
+    this.pruneAll()
+    let count = 0
+    for (const list of this.pending.values()) count += list.length
+    return count
+  }
+
+  dispose(): void {
+    clearInterval(this.sweepTimer)
+    this.pending.clear()
   }
 
   async send(chatId: string, text: string): Promise<void> {
@@ -75,9 +110,6 @@ export class WecomReplyBroker {
         return
       } catch (error) {
         this.log(`[wecom] 回调回复失败，改走主动推送：${error instanceof Error ? error.message : String(error)}`)
-        // 帧先放回去，后续回复仍可尝试回调通道
-        const list = this.pending.get(chatId)
-        if (list) list.unshift(item)
       }
     }
     await this.client.sendMessage(chatId, { msgtype: 'markdown', markdown: { content: text } })
@@ -148,17 +180,16 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
           log(`[wecom] 忽略一帧 chattype=${chattype || '-'} msgtype=${String(body.msgtype ?? '-')}`)
           return
         }
+        const addressed = chattype !== 'group' || text.includes('@')
+        if (!addressed) return
         log(`[wecom] 收到 ${chattype} ${senderId}: ${text.slice(0, 80)}`)
         broker?.remember(chatId, frame)
-        void broker?.startThinking(chatId).catch((error) => {
-          log(`[wecom] 无法发送思考中提示：${error instanceof Error ? error.message : String(error)}`)
-        })
         void handler?.({
           chatId,
           userId: senderId,
           text,
           kind: chattype === 'group' ? 'group' : 'dm',
-          addressed: chattype !== 'group' || text.includes('@'),
+          addressed,
           messageId: typeof body.msgid === 'string' ? body.msgid : undefined,
         })
       })
@@ -185,6 +216,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     async stop() {
       client?.disconnect()
       client = undefined
+      broker?.dispose()
       broker = undefined
       statusText = '已停止'
     },
