@@ -923,10 +923,9 @@ window.__ModuleLoader__.load({
 
       useEffect(() => { ensureStyle(); refresh(); }, [refresh]);
       useEffect(() => {
-        if (!(pending || []).length) return;
         const timer = setInterval(refresh, 4000);
         return () => clearInterval(timer);
-      }, [pending, refresh]);
+      }, [refresh]);
 
       const onAction = (id, action, body) => {
         setBusy((prev) => ({ ...prev, [id]: true }));

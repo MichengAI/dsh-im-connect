@@ -11,9 +11,10 @@ test('QQ 文本去掉官方 @ 标记', () => {
   assert.equal(cleanQqText('@机器人 继续'), '继续')
 })
 
-test('QQ 扫码成功结果解析 AppID 和 AppSecret', () => {
+test('QQ 扫码成功结果解析凭据并保留扫码用户作为所有者', () => {
   const ok = parseQqQrSuccess([{ appId: '1023', appSecret: 'sec', userOpenid: 'owner-1' }])
-  assert.deepEqual(ok, { appId: '1023', appSecret: 'sec' })
+  assert.deepEqual(ok, { appId: '1023', appSecret: 'sec', ownerOpenId: 'owner-1' })
+  assert.deepEqual(parseQqQrSuccess([{ appId: '1023', appSecret: 'sec' }]), { appId: '1023', appSecret: 'sec' })
   assert.equal(parseQqQrSuccess({ appId: 'x' }), undefined)
 })
 

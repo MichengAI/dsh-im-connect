@@ -27,7 +27,7 @@
 - Send work, read replies, and approve tools from the phone; model and permission follow the local DSH profile.
 - Bind by QR code or credentials. Secrets go into DSH `ctx.credentials`, not `channels.json`.
 - Paste one sentence into DSH, Codex, or WorkBuddy and let that agent install the plugin locally.
-- Groups need no binding, only a mention. DMs allow the QR scanner automatically; everyone else must be approved on the settings page.
+- Groups need no binding, only a mention. In DMs, QR scanners are auto-allowed only when the platform returns their identity; everyone else must be approved on the settings page.
 - After a successful bind, the configure dialog closes by itself and Settings stays open.
 
 ## Who can drive the assistant
@@ -38,9 +38,10 @@ Inbound messages are identified before commands, tool approvals, or injection.
 |---|---|
 | Group without a mention of this bot | Ignored; mentioning someone else also does not trigger it |
 | Group explicitly mentioning this bot | No binding. Anyone can send work |
-| DM from the QR scanner | WeChat / Feishu / Lark scanners are allowlisted automatically |
+| DM from the QR scanner | WeChat / Feishu / Lark / QQ scanners are allowlisted automatically |
 | DM from anyone else | Appears on the settings pending list until approved |
-| DM on credential-only channels | Telegram, and DingTalk / WeCom / QQ bound with secrets only, require approval for every DM |
+| DM after identity-less QR binding | DingTalk / WeCom QR setup returns bot credentials only, so the scanner still needs settings approval |
+| DM after manual credentials | Telegram, and DingTalk / WeCom / QQ bound manually, require approval for every DM |
 | DM without a userId | Denied |
 | Tool approval | Only an allowlisted user in a DM can reply `Approve` / `Deny` (or `批准` / `拒绝`); group replies do not grant |
 
@@ -192,7 +193,7 @@ Open **Settings → IM Assistant**, choose the workspace, permission, and model,
 | --- | --- | --- |
 | Connect a channel | Select **Configure** on an unconnected card, then scan or enter credentials | Feishu / Lark / WeChat are QR-only; Telegram needs a Bot Token; the dialog closes after success |
 | Pause receiving | Turn off the connected-card toggle | Credentials stay; inbound messages pause |
-| Send work from IM | The QR scanner can DM immediately; other DMs need settings approval. Groups only need a mention | Each chat has its own channel session |
+| Send work from IM | WeChat / Feishu / Lark / QQ QR scanners can DM immediately; DingTalk / WeCom scanners and other users need approval. Groups only need a mention | Each chat has its own channel session |
 | Split input | End with `..` to continue, `!!` to flush now | Default merge window is about 5 seconds |
 | Start a new session | Send `/new` or `/clear` | Affects only the current IM chat |
 | Status / help | Send `/status` or `/help` | Scoped to the current channel session |
@@ -206,7 +207,7 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 
 | Item | Current behavior |
 | --- | --- |
-| Access | Groups need no binding, only a mention. DMs fail closed: the QR scanner is allowlisted automatically; other DM users must be approved on the settings page |
+| Access | Groups need no binding, only a mention. DMs fail closed: WeChat / Feishu / Lark / QQ QR scanners are auto-allowlisted; DingTalk / WeCom QR APIs do not return user identity, so their scanners still need settings approval |
 | Management API | Enforces both a loopback peer and loopback host (`localhost`, `127.0.0.1`, `[::1]`); mutations require JSON and the plugin client header |
 | Secrets | WeChat tokens and other secrets prefer DSH `ctx.credentials`; otherwise they use plaintext `%DSH_HOME%\dsh-im-connect\secrets.json`, restricted to the current user and never safe to sync or share |
 | Channel state | `channels.json` stores enablement and credential refs, not raw secrets |
