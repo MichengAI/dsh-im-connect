@@ -3,8 +3,9 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import { isStaleWeixinTokenError, uniqueMediaFileName, persistWeixinLogin, readLegacyWeixinBotToken } from '../lib/channels/weixin.js'
-import { API_CLIENT_HEADER, backupCorruptConfig, validateApiRequest } from '../lib/manager.js'
+import { API_CLIENT_HEADER, backupCorruptConfig, readApiJsonBody, validateApiRequest } from '../lib/manager.js'
 import { createFileVault } from '../lib/engine/credentials.js'
 import { createRotatingFileAppender } from '../lib/engine/file-log.js'
 import { KeyedSerialQueue } from '../lib/engine/keyed-queue.js'
@@ -36,6 +37,18 @@ test('管理 API 强制回环 Host，并用自定义头和 JSON 保护写请求'
   assert.deepEqual(validateApiRequest({ method: 'POST', headers: { host: 'localhost:10406', 'content-type': 'application/json' }, remoteAddress: '::1' }), { status: 403, error: 'forbidden mutation request' })
   assert.deepEqual(validateApiRequest({ method: 'POST', headers: { host: '[::1]:10406', [API_CLIENT_HEADER]: '1', 'content-type': 'text/plain' }, remoteAddress: '::1' }), { status: 415, error: 'content-type must be application/json' })
   assert.equal(validateApiRequest({ method: 'POST', headers: { host: 'localhost:10406', [API_CLIENT_HEADER]: '1', 'content-type': 'application/json; charset=utf-8' }, remoteAddress: '127.0.0.1' }), undefined)
+})
+
+test('管理 API 请求体在 UTF-8 多字节字符跨 chunk 时仍能正确解析', async () => {
+  const encoded = Buffer.from(JSON.stringify({ title: '你好，DSH' }), 'utf8')
+  const characterStart = encoded.indexOf(Buffer.from('你', 'utf8'))
+  const splitAt = characterStart + 1
+  const req = Readable.from([encoded.subarray(0, splitAt), encoded.subarray(splitAt)], { objectMode: false })
+  assert.deepEqual(await readApiJsonBody(req), {
+    body: { title: '你好，DSH' },
+    oversized: false,
+    invalidJson: false,
+  })
 })
 
 test('损坏配置会被原样改名备份', () => {

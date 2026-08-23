@@ -15,6 +15,13 @@ import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
 import { KeyedSerialQueue } from './engine/keyed-queue.js'
 
 export const API_CLIENT_HEADER = 'x-dsh-im-connect-client'
+const MAX_API_BODY_BYTES = 1024 * 1024
+
+interface ApiBodyReadResult {
+  body: Record<string, unknown>
+  oversized: boolean
+  invalidJson: boolean
+}
 
 interface ApiRequestErrorShape {
   status: number
@@ -51,6 +58,51 @@ export function validateApiRequest(request: {
   const contentType = String(Array.isArray(typeValue) ? typeValue[0] ?? '' : typeValue ?? '').split(';', 1)[0]!.trim().toLowerCase()
   if (contentType !== 'application/json') return { status: 415, error: 'content-type must be application/json' }
   return undefined
+}
+
+/** 累计原始字节后一次性解码，避免 UTF-8 多字节字符跨 data chunk 时被替换字符破坏。 */
+export function readApiJsonBody(
+  req: import('node:stream').Readable,
+  maxBodyBytes = MAX_API_BODY_BYTES,
+): Promise<ApiBodyReadResult> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = []
+    let bytes = 0
+    let oversized = false
+    let settled = false
+    const finish = (result: ApiBodyReadResult): void => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+    // 超限后停止累计但不掐断连接，等 end 后统一按 413 拒绝，防止内存被撑爆
+    req.on('data', (chunk: Buffer | string) => {
+      if (oversized) return
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      bytes += buffer.length
+      if (bytes > maxBodyBytes) {
+        oversized = true
+        chunks.length = 0
+        return
+      }
+      chunks.push(buffer)
+    })
+    req.on('error', () => finish({ body: {}, oversized, invalidJson: true }))
+    req.on('end', () => {
+      if (oversized) {
+        finish({ body: {}, oversized: true, invalidJson: false })
+        return
+      }
+      try {
+        const raw = Buffer.concat(chunks, bytes).toString('utf8')
+        const parsed = raw ? JSON.parse(raw) as unknown : {}
+        const valid = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+        finish({ body: valid ? parsed as Record<string, unknown> : {}, oversized: false, invalidJson: !valid })
+      } catch {
+        finish({ body: {}, oversized: false, invalidJson: true })
+      }
+    })
+  })
 }
 
 /** 把不可解析的配置移走后再回到空配置，避免下一次 flush 覆盖唯一副本。 */
@@ -319,31 +371,8 @@ export class ChannelManager {
       res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify(body))
     }
-    const MAX_BODY_BYTES = 1024 * 1024
-    const readBody = (req: import('node:http').IncomingMessage): Promise<{ body: Record<string, unknown>; oversized: boolean; invalidJson: boolean }> =>
-      new Promise((resolve) => {
-        let raw = ''
-        let bytes = 0
-        let oversized = false
-        // 超限后停止累计但不掐断连接，等 end 后统一按 413 拒绝，防止内存被撑爆
-        req.on('data', (chunk) => {
-          if (oversized) return
-          bytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk))
-          if (bytes > MAX_BODY_BYTES) { oversized = true; return }
-          raw += chunk
-        })
-        req.on('error', () => resolve({ body: {}, oversized, invalidJson: true }))
-        req.on('end', () => {
-          if (oversized) { resolve({ body: {}, oversized, invalidJson: false }); return }
-          try {
-            const parsed = raw ? JSON.parse(raw) as unknown : {}
-            const valid = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-            resolve({ body: valid ? parsed as Record<string, unknown> : {}, oversized: false, invalidJson: !valid })
-          } catch { resolve({ body: {}, oversized: false, invalidJson: true }) }
-        })
-      })
     const readJson = async (req: import('node:http').IncomingMessage): Promise<Record<string, unknown>> => {
-      const { body, oversized, invalidJson } = await readBody(req)
+      const { body, oversized, invalidJson } = await readApiJsonBody(req)
       if (oversized) throw new ApiRequestError(413, '请求体超过 1MB 上限')
       if (invalidJson) throw new ApiRequestError(400, '请求体不是合法 JSON')
       return body
