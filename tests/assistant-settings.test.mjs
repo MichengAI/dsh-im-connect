@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel, sandboxModeForPermission } from '../lib/engine/assistant-settings.js'
+import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel } from '../lib/engine/assistant-settings.js'
 
 test('助手模型必须同时有提供商和模型 id', () => {
   assert.equal(normalizeAssistantModel({ provider: ' deepseek ', model: ' ' }), undefined)
@@ -31,27 +31,34 @@ test('工作区路径去掉空白，空值视为未设置', () => {
   assert.equal(normalizeWorkspacePath(1), undefined)
 })
 
-test('权限只接受三种预设', () => {
-  assert.equal(normalizePermission('read-only'), 'read-only')
-  assert.equal(normalizePermission('workspace-write'), 'workspace-write')
-  assert.equal(normalizePermission('full-access'), 'full-access')
-  assert.equal(normalizePermission('admin'), undefined)
+test('权限接受 Host 官方列表并迁移旧值', () => {
+  const official = ['review', 'workspace-write', 'danger-full-access']
+  assert.equal(normalizePermission('review', official), 'review')
+  assert.equal(normalizePermission('workspace-write', official), 'workspace-write')
+  assert.equal(normalizePermission('danger-full-access', official), 'danger-full-access')
+  assert.equal(normalizePermission('full-access', official), 'danger-full-access')
+  assert.equal(normalizePermission('admin', official), undefined)
   assert.equal(normalizePermission(''), undefined)
 })
 
-test('完全访问必须转换为 Chat 标准沙箱模式', () => {
-  assert.equal(sandboxModeForPermission('read-only'), 'read-only')
-  assert.equal(sandboxModeForPermission('workspace-write'), 'workspace-write')
-  assert.equal(sandboxModeForPermission('full-access'), 'danger-full-access')
-})
-
-test('完全访问必须经风险确认后才保存', () => {
+test('权限菜单直接使用 Host 官方列表与官方文案', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const manager = readFileSync(new URL('../src/manager.ts', import.meta.url), 'utf8')
+  const router = readFileSync(new URL('../src/engine/router.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(client, /const PERMISSIONS =/)
+  assert.match(client, /setPermissions\(data\.permissions \|\| \[\]\)/)
+  assert.match(client, /permissionLabel\(item, props\.permissionT\)/)
+  assert.match(client, /ctx\.locale\.bind\("permission\.access"\)/)
+  assert.match(manager, /official\.names\.map\(\(name\) => official\.optionOf\(name\)\)/)
+  assert.match(manager, /permissions: this\.permissionOptions\(\)/)
+  assert.match(router, /permissionPresets\.set\(agent\.session, permission\)/)
+  assert.doesNotMatch(router, /setSandboxMode/)
   assert.match(client, /function openFullAccessConfirmation/)
-  assert.match(client, /我已了解风险，并愿意继续/)
+  assert.match(client, /t\("confirm\.acknowledge"\)/)
   assert.match(client, /dialog\.showModal\(\)/)
   assert.match(client, /confirmButton\.disabled = !acknowledgement\.checked/)
-  assert.match(client, /if \(next === "full-access"\)/)
+  assert.match(client, /if \(next === "danger-full-access"\)/)
+  assert.doesNotMatch(client, /\.ima-chip-row\.is-risk|is-risk/, '权限菜单必须完全沿用官方样式')
   assert.match(client, /openFullAccessConfirmation\(\(\) => \{/)
 })
 
@@ -65,12 +72,8 @@ test('思考强度空值和 none 视为未设置', () => {
     { provider: 'deepseek', model: 'v4', reasoningEffort: 'high' },
   )
 })
-test('权限默认是最小权限 read-only', () => {
+test('权限默认值直接取 Host 官方默认预设', () => {
   const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
-  const manager = readFileSync(new URL('../src/manager.ts', import.meta.url), 'utf8')
-  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  assert.match(index, /permissionPreset: 'read-only'/)
-  assert.match(manager, /permissionPreset \|\| 'read-only'/)
-  assert.match(client, /useState\("read-only"\)/)
-  assert.match(client, /data\.permission \|\| "read-only"/)
+  assert.match(index, /permissionPreset: permissionPresets\.defaultPreset/)
+  assert.match(index, /'permissionPresets'/)
 })

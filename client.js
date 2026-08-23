@@ -10,7 +10,7 @@ window.__ModuleLoader__.load({
     const { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } = React;
     const ReactDOM = require("react-dom");
     const EMPTY_EXTRA_TABS = [];
-    const inject = ["slots", "sessions", "workspaces"];
+    const inject = ["slots", "sessions", "workspaces", "locale"];
     const API_BASE = "/dsh-im-connect/api";
     const TAB_KEY = "dsh-im-connect.sidebar-tab";
     const h = React.createElement;
@@ -455,12 +455,17 @@ window.__ModuleLoader__.load({
       );
     }
 
+    const BUILT_IN_PERMISSION_LABELS = new Map([
+      ["read-only", ["preset.readOnly", "Read Only"]],
+      ["workspace-write", ["preset.workspaceWrite", "Workspace Write"]],
+      ["danger-full-access", ["preset.fullAccess", "Full access"]],
+    ]);
 
-    const PERMISSIONS = [
-      { value: "read-only", label: "Read Only" },
-      { value: "workspace-write", label: "Workspace Write" },
-      { value: "full-access", label: "Full access" },
-    ];
+    function permissionLabel(option, t) {
+      const builtIn = BUILT_IN_PERMISSION_LABELS.get(option.value);
+      if (builtIn && (option.name === option.value || option.name === builtIn[1])) return t(builtIn[0]);
+      return option.name || option.value;
+    }
     const DEFAULT_EFFORTS = [
       { id: "low", name: "Low" },
       { id: "medium", name: "Medium" },
@@ -511,7 +516,7 @@ window.__ModuleLoader__.load({
           props.suffix && h("span", { className: "ima-chip-effort" }, props.suffix),
           h("em"),
         ),
-        props.open && h("div", { className: "ima-chip-menu" + (props.align === "end" ? " is-end" : "") }, props.children),
+        props.open && h("div", { className: "ima-chip-menu" + (props.align === "end" ? " is-end" : ""), role: "menu" }, props.children),
       );
     }
 
@@ -519,6 +524,7 @@ window.__ModuleLoader__.load({
       return h("button", {
         type: "button",
         className: "ima-chip-row" + (props.active ? " is-on" : "") + (props.kv ? " is-kv" : ""),
+        role: "menuitem",
         onClick: props.onClick,
       },
         h("span", { className: "ima-chip-row-main" },
@@ -533,13 +539,18 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function openFullAccessConfirmation(onConfirm) {
+    function openFullAccessConfirmation(onConfirm, t) {
       document.getElementById("ima-full-access-confirmation")?.remove();
       const dialog = document.createElement("dialog");
       dialog.id = "ima-full-access-confirmation";
       dialog.className = "ima-modal ima-full-access-dialog";
-      dialog.setAttribute("aria-label", "确认启用 完全访问？");
-      dialog.innerHTML = '<div class="ima-modal-h"><h2>确认启用 完全访问？</h2><button class="ima-x" type="button" aria-label="关闭">×</button></div><div class="ima-risk-warning"><b aria-hidden="true">!</b><p>启用 完全访问 后，agent 将减少确认步骤，并且可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任当前任务时使用。</p></div><label class="ima-risk-check"><input type="checkbox"><span>我已了解风险，并愿意继续</span></label><div class="ima-risk-actions"><button class="ima-btn" type="button">取消</button><button class="ima-btn primary" type="button" disabled>启用 完全访问</button></div>';
+      dialog.setAttribute("aria-label", t("confirm.title"));
+      dialog.innerHTML = '<div class="ima-modal-h"><h2 data-copy="title"></h2><button class="ima-x" type="button" aria-label="关闭">×</button></div><div class="ima-risk-warning"><b aria-hidden="true">!</b><p data-copy="description"></p></div><label class="ima-risk-check"><input type="checkbox"><span data-copy="acknowledge"></span></label><div class="ima-risk-actions"><button class="ima-btn" type="button" data-copy="cancel"></button><button class="ima-btn primary" type="button" data-copy="confirm" disabled></button></div>';
+      dialog.querySelector('[data-copy="title"]').textContent = t("confirm.title");
+      dialog.querySelector('[data-copy="description"]').textContent = t("confirm.description");
+      dialog.querySelector('[data-copy="acknowledge"]').textContent = t("confirm.acknowledge");
+      dialog.querySelector('[data-copy="cancel"]').textContent = t("confirm.cancel");
+      dialog.querySelector('[data-copy="confirm"]').textContent = t("confirm.enable");
       const acknowledgement = dialog.querySelector("input");
       const [closeButton, cancelButton, confirmButton] = dialog.querySelectorAll("button");
       const close = (confirmed) => dialog.close(confirmed ? "confirm" : "cancel");
@@ -563,11 +574,12 @@ window.__ModuleLoader__.load({
         ? (props.useWorkspaces((state) => (state && state.items) || []) || [])
         : [];
       const [providers, setProviders] = useState([]);
+      const [permissions, setPermissions] = useState([]);
       const [provider, setProvider] = useState("");
       const [model, setModel] = useState("");
       const [effort, setEffort] = useState("");
       const [cwd, setCwd] = useState("");
-      const [permission, setPermission] = useState("read-only");
+      const [permission, setPermission] = useState("");
       const [open, setOpen] = useState("");
       const [modelPane, setModelPane] = useState("root");
       const [hint, setHint] = useState("");
@@ -580,6 +592,7 @@ window.__ModuleLoader__.load({
           if (!data.ok) { setHint(data.error || "无法加载全局配置"); return; }
           const list = data.providers || [];
           setProviders(list);
+          setPermissions(data.permissions || []);
           const current = data.assistant || {};
           const nextProvider = current.provider || (list[0] && list[0].id) || "";
           const models = ((list.find((item) => item.id === nextProvider) || {}).models) || [];
@@ -589,7 +602,7 @@ window.__ModuleLoader__.load({
           setModel(nextModel);
           setEffort(current.reasoningEffort || (found && found.reasoning && found.reasoning.defaultEffort) || "");
           setCwd(data.cwd || "");
-          setPermission(data.permission || "read-only");
+          setPermission(data.permission || "");
           if (!list.length) setHint("当前 Host 还没有可用模型，请先在网页里配置提供商");
         }).catch(() => setHint("无法加载全局配置"));
       }, []);
@@ -618,7 +631,11 @@ window.__ModuleLoader__.load({
         ? currentModel.reasoning.efforts.map((item) => ({ id: item.id, name: item.name || item.id }))
         : DEFAULT_EFFORTS;
       const effortLabel = (efforts.find((item) => item.id === effort) || {}).name || "";
-      const perm = PERMISSIONS.find((item) => item.value === permission) || PERMISSIONS[0];
+      const permissionOptions = permissions.map((item) => ({
+        ...item,
+        label: permissionLabel(item, props.permissionT),
+      }));
+      const perm = permissionOptions.find((item) => item.value === permission) || { label: permission || "权限" };
 
       const addWorkspace = (path) => {
         const next = (path || "").trim();
@@ -640,11 +657,11 @@ window.__ModuleLoader__.load({
       const selectPermission = (next) => {
         setOpen("");
         if (next === permission) return;
-        if (next === "full-access") {
+        if (next === "danger-full-access") {
           openFullAccessConfirmation(() => {
-            setPermission("full-access");
-            save({ permission: "full-access" });
-          });
+            setPermission("danger-full-access");
+            save({ permission: "danger-full-access" });
+          }, props.permissionT);
           return;
         }
         setPermission(next);
@@ -699,7 +716,7 @@ window.__ModuleLoader__.load({
               label: perm.label,
               ariaLabel: "权限",
             },
-              ...PERMISSIONS.map((item) => h(ChipRow, {
+              ...permissionOptions.map((item) => h(ChipRow, {
                 key: item.value,
                 icon: h(ShieldIcon),
                 label: item.label,
@@ -836,7 +853,7 @@ window.__ModuleLoader__.load({
             h("p", { className: "ima-sub" }, "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。频道配置仅保存在本机。"),
           ),
         ),
-        h(ComposerBar, { useWorkspaces: props.useWorkspaces, createWorkspace: props.createWorkspace, pickDirectory: props.pickDirectory }),
+        h(ComposerBar, { useWorkspaces: props.useWorkspaces, createWorkspace: props.createWorkspace, pickDirectory: props.pickDirectory, permissionT: props.permissionT }),
         error && h("div", { className: "ima-error" }, error),
         pending && pending.length > 0 && h("div", { className: "ima-pending" },
           h("div", null, "有访问请求。批准后该用户才能驱动本机助手。"),
@@ -1641,6 +1658,7 @@ window.__ModuleLoader__.load({
 
     function apply(ctx) {
       ensureStyle();
+      const permissionT = ctx.locale.bind("permission.access");
       openImSession = (id) => {
         try { ctx.sessions.open(id); return true; }
         catch (error) { console.warn("[dsh-im-connect] 无法打开会话", id, error); return false; }
@@ -1654,6 +1672,7 @@ window.__ModuleLoader__.load({
         inject: () => ({
           createWorkspace: (input) => ctx.workspaces.create(input),
           pickDirectory: () => ctx.workspaces.pickDirectory(),
+          permissionT,
         }),
       }, SettingsPage));
 
@@ -1763,10 +1782,6 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
-
-
-
-
 
 
 

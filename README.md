@@ -214,7 +214,7 @@ dsh --profile web --dump-config
 | 微信协议 | 只走腾讯官方 iLink，不使用逆向个人微信协议 |
 | 工具批准 | 仅私聊且发送者已在白名单时生效，不能跨会话、也不能在群里批准 |
 
-不要把 DSH Web 暴露到非本机地址。权限预设依赖 Host 的 sandbox-policy；`full-access` 不套沙箱。
+不要把 DSH Web 暴露到非本机地址。权限预设与 Chat 使用相同的 Host sandbox-policy；`danger-full-access` 不套沙箱。
 
 ## 二次开发
 

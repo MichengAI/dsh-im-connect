@@ -214,7 +214,7 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 | WeChat protocol | Official iLink only; no reverse-engineered personal WeChat protocol |
 | Tool approval | Only an allowlisted user in a DM can grant or deny; group chats cannot approve |
 
-Do not expose DSH Web beyond this machine. Permission presets follow the host sandbox-policy; `full-access` does not wrap a sandbox.
+Do not expose DSH Web beyond this machine. Permission presets use the same host sandbox-policy values as Chat; `danger-full-access` does not wrap a sandbox.
 
 ## Secondary development
 

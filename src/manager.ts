@@ -48,6 +48,18 @@ interface Persisted {
   permission?: PermissionPreset
 }
 
+export interface PermissionOptionView {
+  value: string
+  name: string
+  description?: string
+}
+
+interface PermissionPresetService {
+  readonly names: readonly string[]
+  readonly defaultPreset: string
+  optionOf(name: string): PermissionOptionView
+}
+
 export class ChannelManager {
   private readonly file: string
   private readonly stateDir: string
@@ -267,7 +279,14 @@ export class ChannelManager {
         const parts = url.pathname.split('/').filter(Boolean)
         if (parts[2] === 'assistant' && parts.length === 3) {
           if (req.method === 'GET') {
-            send(res, 200, { ok: true, assistant: this.currentAssistant(), cwd: this.currentWorkspace(), permission: this.currentPermission(), providers: await this.listModelCatalog() })
+            send(res, 200, {
+              ok: true,
+              assistant: this.currentAssistant(),
+              cwd: this.currentWorkspace(),
+              permission: this.currentPermission(),
+              permissions: this.permissionOptions(),
+              providers: await this.listModelCatalog(),
+            })
             return
           }
           if (req.method === 'POST') {
@@ -423,7 +442,7 @@ export class ChannelManager {
       this.log(`[manager] 工作区已设为 ${cwd}`)
     }
     if (hasPermission) {
-      const permission = normalizePermission(input.permission)
+      const permission = normalizePermission(input.permission, this.permissionPresets().names)
       if (!permission) return { ok: false, error: '请选择权限' }
       this.store.permission = permission
       this.applyPermission(permission)
@@ -454,14 +473,24 @@ export class ChannelManager {
   }
 
   currentPermission(): PermissionPreset {
-    return this.store.permission || this.engineConfig.permissionPreset || 'read-only'
+    const official = this.permissionPresets()
+    return normalizePermission(this.store.permission ?? this.engineConfig.permissionPreset, official.names) ?? official.defaultPreset
   }
 
   private applyPermission(permission?: PermissionPreset): void {
-    const next = normalizePermission(permission)
+    const next = normalizePermission(permission, this.permissionPresets().names)
     if (!next) return
     this.engineConfig.permissionPreset = next
     this.engine?.setPermission(next)
+  }
+
+  permissionOptions(): PermissionOptionView[] {
+    const official = this.permissionPresets()
+    return official.names.map((name) => official.optionOf(name))
+  }
+
+  private permissionPresets(): PermissionPresetService {
+    return (this.ctx as Context & { permissionPresets: PermissionPresetService }).permissionPresets
   }
 
   private async listModelCatalog(): Promise<Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>> {

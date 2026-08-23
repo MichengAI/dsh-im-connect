@@ -52,7 +52,7 @@ function makeEngine(t, onUnauthorized) {
     model: 'm',
     agentPreset: 'standard',
     mergeTimeoutSecs: 1,
-    permissionPreset: 'full-access',
+    permissionPreset: 'danger-full-access',
   }, () => undefined, onUnauthorized)
   const sent = []
   let inbound
@@ -143,4 +143,3 @@ test('白名单用户可通过命令；群聊不能批准工具', async (t) => {
     engine.dispose()
   }
 })
-

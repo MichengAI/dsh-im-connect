@@ -95,7 +95,7 @@ export class ImEngine {
     void this.router.disposeAll()
   }
 
-  setPermission(permission: 'read-only' | 'workspace-write' | 'full-access'): void {
+  setPermission(permission: string): void {
     this.config.permissionPreset = permission
     void this.router.disposeAll()
   }

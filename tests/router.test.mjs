@@ -18,7 +18,11 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const store = new SessionMapStore(join(dir, 'sessions.json'))
   const created = []
+  const permissionSelections = []
   const ctx = {
+    permissionPresets: {
+      set(session, permission) { permissionSelections.push({ sessionId: session.id, permission }) },
+    },
     agents: {
       async create(opts) {
         const id = String(opts.sessionId)
@@ -26,12 +30,14 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
           throw new Error(`session "${id}" already has a persisted log on disk that does not match this live session (id collision)`)
         }
         created.push(id)
+        await opts.setup?.({ agent: { session: { id } } })
         return createHandle(id)
       },
       get() { return undefined },
       async resume(opts) {
         const id = String(opts.resumeSessionId)
         if (resumeFails.has(id)) throw new Error('session missing')
+        await opts.setup?.({ agent: { session: { id } } })
         return createHandle(id)
       },
     },
@@ -49,10 +55,16 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
     model: 'deepseek-chat',
     agentPreset: 'standard',
     mergeTimeoutSecs: 5,
-    permissionPreset: 'full-access',
+    permissionPreset: 'danger-full-access',
   }, () => undefined)
-  return { router, store, created, archivedIds }
+  return { router, store, created, archivedIds, permissionSelections }
 }
+
+test('新建 IM 会话通过 Host 官方权限服务应用所选预设', async (t) => {
+  const { router, permissionSelections } = makeRouter(t)
+  const binding = await router.getOrCreate('wecom', 'dm', 'user-permission', '你好')
+  assert.deepEqual(permissionSelections, [{ sessionId: binding.sessionId, permission: 'danger-full-access' }])
+})
 
 test('同一聊天未归档时复用当前会话', async (t) => {
   const { router, created } = makeRouter(t)

@@ -5,12 +5,7 @@ export interface AssistantModel {
   reasoningEffort?: string
 }
 
-export type PermissionPreset = 'read-only' | 'workspace-write' | 'full-access'
-
-/** IM 保存的权限名需转换为 Chat 识别的沙箱模式。 */
-export function sandboxModeForPermission(permission: PermissionPreset): 'read-only' | 'workspace-write' | 'danger-full-access' {
-  return permission === 'full-access' ? 'danger-full-access' : permission
-}
+export type PermissionPreset = string
 
 export function normalizeAssistantModel(input: { provider?: unknown; model?: unknown; reasoningEffort?: unknown }): AssistantModel | undefined {
   const provider = typeof input.provider === 'string' ? input.provider.trim() : ''
@@ -33,9 +28,12 @@ export function normalizeWorkspacePath(input: unknown): string | undefined {
   return cwd === '' ? undefined : cwd
 }
 
-export function normalizePermission(input: unknown): PermissionPreset | undefined {
-  if (input === 'read-only' || input === 'workspace-write' || input === 'full-access') return input
-  return undefined
+export function normalizePermission(input: unknown, officialNames?: readonly string[]): PermissionPreset | undefined {
+  if (typeof input !== 'string') return undefined
+  // 兼容 0.1.13 及更早版本保存的旧值，读取后统一迁移到 Chat 标准值。
+  const permission = input.trim() === 'full-access' ? 'danger-full-access' : input.trim()
+  if (!permission || (officialNames !== undefined && !officialNames.includes(permission))) return undefined
+  return permission
 }
 
 export function normalizeEffort(input: unknown): string | undefined {

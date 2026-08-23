@@ -46,7 +46,7 @@ function makeFailingEngine(t) {
     model: 'm',
     agentPreset: 'standard',
     mergeTimeoutSecs: 1,
-    permissionPreset: 'full-access',
+    permissionPreset: 'danger-full-access',
   }, (line) => logs.push(line))
 
   const sendCalls = []

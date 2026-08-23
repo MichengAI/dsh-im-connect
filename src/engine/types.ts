@@ -50,6 +50,6 @@ export interface EngineConfig {
   model: string
   agentPreset: string
   mergeTimeoutSecs: number
-  permissionPreset: 'read-only' | 'workspace-write' | 'full-access'
+  permissionPreset: string
   reasoningEffort?: string
 }

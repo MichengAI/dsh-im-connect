@@ -10,7 +10,7 @@ import { ChannelManager } from './manager.js'
 import type { EngineConfig } from './engine/types.js'
 
 export const name = 'dsh-im-connect'
-export const inject = ['webServer', 'credentials', 'agents', 'agentPresets', 'agentDefaultModel', 'llm']
+export const inject = ['webServer', 'credentials', 'agents', 'agentPresets', 'agentDefaultModel', 'llm', 'permissionPresets']
 
 export interface PluginConfig {
   stateDir: string
@@ -31,6 +31,7 @@ export const Config: Schema<PluginConfig> = Schema.object({
 })
 
 export function apply(ctx: Context, config: PluginConfig): void {
+  const permissionPresets = (ctx as Context & { permissionPresets: { defaultPreset: string } }).permissionPresets
   const stateDir = config.stateDir !== ''
     ? config.stateDir
     : join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'dsh-im-connect')
@@ -48,7 +49,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     model: config.model,
     agentPreset: config.agentPreset || 'standard',
     mergeTimeoutSecs: config.mergeTimeoutSecs || 5,
-    permissionPreset: 'read-only',
+    permissionPreset: permissionPresets.defaultPreset,
   }
 
   const applyStarted = Date.now()
@@ -73,6 +74,5 @@ export {
   sessionKeyOf,
 } from './engine/session-id.js'
 export { splitText } from './engine/split.js'
-
 
 

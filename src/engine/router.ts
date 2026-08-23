@@ -3,7 +3,6 @@ import type { ChannelId, ChatKind, SessionRecord } from './session-id.js'
 import { createImSessionId, sessionKeyOf } from './session-id.js'
 import { SessionMapStore } from './session-store.js'
 import { readHostDefaultModel, resolveImAgentOptions } from './agent-options.js'
-import { sandboxModeForPermission } from './assistant-settings.js'
 import type { EngineConfig } from './types.js'
 
 export interface ChatBinding {
@@ -20,6 +19,10 @@ type WorkspaceLookup = {
   archivedSessionIds?: readonly string[]
 }
 
+type PermissionPresetHost = {
+  set(session: unknown, name: string): void
+}
+
 type AgentHost = Context & {
   sessions?: { list(): readonly { readonly id: string }[] }
   agents?: {
@@ -31,6 +34,7 @@ type AgentHost = Context & {
   get?(name: string): WorkspaceLookup | { list?: () => Promise<readonly { readonly id: string }[]> } | undefined
   agentPresets?: { mount(agentCtx: unknown, presetId: string): Promise<void> }
   agentDefaultModel?: { currentSelection(): { provider?: string; model?: string } }
+  permissionPresets?: PermissionPresetHost
 }
 
 export class SessionRouter {
@@ -379,9 +383,10 @@ export class SessionRouter {
       }
       if (permission) {
         try {
-          const { setSandboxMode } = await import('@deepseek-ai/dsh-sandbox-policy')
           const agent = (agentCtx as { agent?: { session?: unknown } }).agent
-          if (agent?.session) setSandboxMode(agent.session, sandboxModeForPermission(permission))
+          const permissionPresets = ctx.permissionPresets
+          if (!permissionPresets) throw new Error('Host 未提供官方权限预设服务')
+          if (agent?.session) permissionPresets.set(agent.session, permission)
         } catch (error) {
           this.log(`[router] 无法应用权限 ${permission}: ${error instanceof Error ? error.message : String(error)}`)
         }
