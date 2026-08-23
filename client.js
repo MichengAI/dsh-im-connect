@@ -14,6 +14,40 @@ window.__ModuleLoader__.load({
     const inject = ["slots", "sessions", "workspaces", "locale"];
     const API_BASE = "/dsh-im-connect/api";
     const TAB_KEY = "dsh-im-connect.sidebar-tab";
+    const IM_LOCALE_NS = "im-connect";
+    const IM_LOCALES = {
+      zh: {
+        "settings.label": "IM助手", "settings.title": "IM 频道", "settings.description": "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。频道配置仅保存在本机。",
+        "settings.aria": "IM助手", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
+        "channel.dingtalk": "钉钉", "channel.feishu": "飞书", "channel.lark": "Lark", "channel.weixin": "微信", "channel.wecom": "企业微信", "channel.qq": "QQ", "channel.telegram": "Telegram",
+        "field.dingtalk.clientId": "Client ID（原 AppKey）", "field.dingtalk.clientSecret": "Client Secret（原 AppSecret）",
+        "bind.title": "配置 {channel}", "bind.close": "关闭", "bind.quick": "快捷绑定（推荐）", "bind.manual": "手动配置", "bind.success": "绑定成功，频道已连接", "bind.qrAlt": "{channel} 绑定二维码", "bind.generating": "正在生成…", "bind.waiting": "等待二维码", "bind.expire": "二维码 {time} 后过期", "bind.scanned": "已扫码，请在手机上确认", "bind.retry": "请重新生成二维码", "bind.refresh": "重新生成二维码", "action.saving": "保存中…", "action.confirm": "确认",
+        "qr.weixin": "请使用微信扫描二维码完成绑定", "qr.feishu": "请使用飞书扫描二维码，将自动创建机器人", "qr.lark": "请使用 Lark 扫描二维码完成配对", "qr.wecom": "请使用企业微信扫描二维码，快捷绑定机器人", "qr.dingtalk": "请使用钉钉扫描二维码，自动创建机器人", "qr.qq": "请使用手机 QQ 扫描二维码，创建开放平台机器人", "qr.default": "请使用对应 App 扫描二维码",
+        "status.unconfigured": "未配置", "status.connected": "已连接", "status.connecting": "接入中…", "action.configure": "配置", "action.more": "{channel} 更多", "action.reconnect": "重新接入", "action.disconnect": "断开", "action.removeConfig": "删除配置", "action.receive": "接收消息",
+        "error.loadAssistant": "无法加载全局配置", "error.noModels": "当前 Host 还没有可用模型，请先在网页里配置提供商", "error.save": "保存失败", "error.chooseWorkspace": "请选择工作区目录", "error.workspaceUnavailable": "当前 Host 无法新增工作区", "error.addWorkspace": "新增工作区失败", "error.load": "加载失败", "error.connection": "无法连接本机 IM 助理接口", "error.request": "请求失败", "error.action": "操作失败", "error.qr": "无法生成二维码", "error.detailsInLog": "操作失败，请查看服务器日志。",
+        "composer.aria": "全局会话配置", "composer.project": "选择项目", "composer.projectAria": "项目", "composer.noWorkspaces": "暂无工作区", "composer.addWorkspace": "添加工作区…", "composer.permission": "权限", "composer.noModels": "暂无模型", "composer.workspacePath": "工作区路径", "action.cancel": "取消", "action.adding": "添加中…",
+        "rail.workspace": "工作区", "rail.search": "搜索", "rail.searchPlaceholder": "搜索会话...", "rail.clearSearch": "清除搜索", "rail.filter": "筛选", "rail.group": "分组方式", "rail.byWorkspace": "按工作区", "rail.list": "单列表", "rail.sort": "排序方式", "rail.manual": "手动排序", "rail.recent": "最近更新", "rail.running": "运行中", "rail.idle": "空闲", "rail.renameAria": "重命名会话", "rail.rename": "重命名", "rail.fork": "分叉会话", "rail.archive": "归档会话", "rail.empty": "还没有频道会话。先在设置 → IM助手 里连接渠道，并给机器人发一条消息。", "rail.noTasks": "暂无网页任务", "rail.ungrouped": "未分组", "rail.tabsAria": "工作区分类", "rail.tasks": "任务", "rail.channels": "频道",
+        "time.now": "刚刚", "time.minutes": "{count}分钟前", "time.hours": "{count}小时前", "time.days": "{count}天前",
+        "server.unknownChannel": "未知渠道", "server.channelUnconfigured": "渠道未配置", "server.sessionMissing": "会话不存在", "server.qrUnsupported": "该渠道不支持扫码绑定", "server.qrExpired": "二维码已过期", "server.qrIncomplete": "扫码未完成", "server.accessDenied": "未授权：请管理员在设置 → IM助手 中批准你的访问。",
+        "status.disconnected": "已断开", "status.reconnectFailed": "重连失败", "status.connectingSocket": "连接中", "status.waitHandshake": "等待网关握手", "status.authenticating": "鉴权中", "status.reconnecting": "重连中", "status.connectionError": "连接错误", "status.connectionFailed": "连接失败", "status.streamConnected": "Stream 已连接", "status.stopped": "已停止", "status.longConnection": "长连接已建立", "status.polling": "轮询中", "status.notLoggedIn": "未登录", "status.waitQr": "等待扫码", "status.loggedIn": "已登录", "status.loggedInRecovered": "已登录（自动恢复）", "status.loggingIn": "登录中",
+      },
+      en: {
+        "settings.label": "IM Assistant", "settings.title": "IM Channels", "settings.description": "Connect IM channels so your local assistant can receive messages from DingTalk, Feishu, and more. Channel settings are stored only on this machine.",
+        "settings.aria": "IM Assistant", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
+        "channel.dingtalk": "DingTalk", "channel.feishu": "Feishu", "channel.lark": "Lark", "channel.weixin": "WeChat", "channel.wecom": "WeCom", "channel.qq": "QQ", "channel.telegram": "Telegram",
+        "field.dingtalk.clientId": "Client ID (formerly AppKey)", "field.dingtalk.clientSecret": "Client Secret (formerly AppSecret)",
+        "bind.title": "Set up {channel}", "bind.close": "Close", "bind.quick": "Quick setup (recommended)", "bind.manual": "Manual setup", "bind.success": "Connected successfully", "bind.qrAlt": "{channel} setup QR code", "bind.generating": "Generating…", "bind.waiting": "Waiting for QR code", "bind.expire": "QR code expires in {time}", "bind.scanned": "Scanned. Confirm on your phone.", "bind.retry": "Generate a new QR code", "bind.refresh": "Generate a new QR code", "action.saving": "Saving…", "action.confirm": "Confirm",
+        "qr.weixin": "Scan the QR code with WeChat to connect", "qr.feishu": "Scan with Feishu; a bot will be created automatically", "qr.lark": "Scan with Lark to pair", "qr.wecom": "Scan with WeCom to quickly connect a bot", "qr.dingtalk": "Scan with DingTalk; a bot will be created automatically", "qr.qq": "Scan with mobile QQ to create an Open Platform bot", "qr.default": "Scan the QR code with the corresponding app",
+        "status.unconfigured": "Not configured", "status.connected": "Connected", "status.connecting": "Connecting…", "action.configure": "Configure", "action.more": "More options for {channel}", "action.reconnect": "Reconnect", "action.disconnect": "Disconnect", "action.removeConfig": "Remove configuration", "action.receive": "Receive messages",
+        "error.loadAssistant": "Could not load global settings", "error.noModels": "No models are available in the Host. Configure a provider in the web app first.", "error.save": "Could not save", "error.chooseWorkspace": "Choose a workspace directory", "error.workspaceUnavailable": "This Host cannot create workspaces", "error.addWorkspace": "Could not add workspace", "error.load": "Could not load", "error.connection": "Could not connect to the local IM Assistant API", "error.request": "Request failed", "error.action": "Action failed", "error.qr": "Could not generate a QR code", "error.detailsInLog": "The operation failed. Check the server logs for details.",
+        "composer.aria": "Global session settings", "composer.project": "Select project", "composer.projectAria": "Project", "composer.noWorkspaces": "No workspaces", "composer.addWorkspace": "Add workspace…", "composer.permission": "Permission", "composer.noModels": "No models", "composer.workspacePath": "Workspace path", "action.cancel": "Cancel", "action.adding": "Adding…",
+        "rail.workspace": "Workspaces", "rail.search": "Search", "rail.searchPlaceholder": "Search sessions...", "rail.clearSearch": "Clear search", "rail.filter": "Filter", "rail.group": "Group by", "rail.byWorkspace": "By workspace", "rail.list": "Single list", "rail.sort": "Sort by", "rail.manual": "Manual", "rail.recent": "Recently updated", "rail.running": "Running", "rail.idle": "Idle", "rail.renameAria": "Rename session", "rail.rename": "Rename", "rail.fork": "Fork session", "rail.archive": "Archive session", "rail.empty": "No channel sessions yet. Connect a channel in Settings → IM Assistant, then send the bot a message.", "rail.noTasks": "No web tasks", "rail.ungrouped": "Ungrouped", "rail.tabsAria": "Workspace categories", "rail.tasks": "Tasks", "rail.channels": "Channels",
+        "time.now": "Just now", "time.minutes": "{count} min ago", "time.hours": "{count} hr ago", "time.days": "{count} days ago",
+        "server.unknownChannel": "Unknown channel", "server.channelUnconfigured": "Channel is not configured", "server.sessionMissing": "Session does not exist", "server.qrUnsupported": "This channel does not support QR setup", "server.qrExpired": "QR code has expired", "server.qrIncomplete": "QR setup was not completed", "server.accessDenied": "Access denied: ask an administrator to approve you in Settings → IM Assistant.",
+        "status.disconnected": "Disconnected", "status.reconnectFailed": "Reconnect failed", "status.connectingSocket": "Connecting", "status.waitHandshake": "Waiting for gateway handshake", "status.authenticating": "Authenticating", "status.reconnecting": "Reconnecting", "status.connectionError": "Connection error", "status.connectionFailed": "Connection failed", "status.streamConnected": "Stream connected", "status.stopped": "Stopped", "status.longConnection": "Long connection established", "status.polling": "Polling", "status.notLoggedIn": "Not signed in", "status.waitQr": "Waiting for scan", "status.loggedIn": "Signed in", "status.loggedInRecovered": "Signed in (restored)", "status.loggingIn": "Signing in",
+      },
+    };
+    const fallbackT = (key) => key;
     const h = React.createElement;
 
     const CSS = `
@@ -217,14 +251,39 @@ window.__ModuleLoader__.load({
       return "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(payload);
     }
 
-    function hintOf(ch) {
-      if (ch.id === "weixin") return "请使用微信扫描二维码完成绑定";
-      if (ch.id === "feishu") return "请使用飞书扫描二维码，将自动创建机器人";
-      if (ch.id === "lark") return "请使用 Lark 扫描二维码完成配对";
-      if (ch.id === "wecom") return "请使用企业微信扫描二维码，快捷绑定机器人";
-      if (ch.id === "dingtalk") return "请使用钉钉扫描二维码，自动创建机器人";
-      if (ch.id === "qq") return "请使用手机 QQ 扫描二维码，创建开放平台机器人";
-      return "请使用对应 App 扫描二维码";
+    const SERVER_TEXT_KEYS = new Map([
+      ["未知渠道", "server.unknownChannel"], ["渠道未配置", "server.channelUnconfigured"], ["会话不存在", "server.sessionMissing"],
+      ["该渠道不支持扫码绑定", "server.qrUnsupported"], ["二维码已过期", "server.qrExpired"], ["扫码未完成", "server.qrIncomplete"],
+      ["未授权：请管理员在设置 → IM助理 中批准你的访问。", "server.accessDenied"],
+      ["已断开", "status.disconnected"], ["重连失败", "status.reconnectFailed"], ["连接中", "status.connectingSocket"], ["等待网关握手", "status.waitHandshake"],
+      ["鉴权中", "status.authenticating"], ["已连接", "status.connected"], ["重连中", "status.reconnecting"], ["连接错误", "status.connectionError"], ["连接失败", "status.connectionFailed"],
+      ["Stream 已连接", "status.streamConnected"], ["已停止", "status.stopped"], ["长连接已建立", "status.longConnection"], ["轮询中", "status.polling"],
+      ["未登录", "status.notLoggedIn"], ["等待扫码", "status.waitQr"], ["已登录", "status.loggedIn"], ["已登录（自动恢复）", "status.loggedInRecovered"], ["登录中", "status.loggingIn"],
+    ]);
+    function serverText(value, t) {
+      const text = value == null ? "" : String(value);
+      const key = SERVER_TEXT_KEYS.get(text);
+      if (key) return t(key);
+      // Server adapters return diagnostics, not locale keys. Do not leak a
+      // Chinese diagnostic into an English UI; the detailed value remains in
+      // the server log while the browser gets a usable localized fallback.
+      if (/[\u3400-\u9fff]/.test(text) && t("settings.label") === "IM Assistant") return t("error.detailsInLog");
+      return value;
+    }
+    function channelLabel(ch, t) {
+      const key = "channel." + ch.id;
+      const translated = t(key);
+      return translated === key ? (ch.label || ch.id) : translated;
+    }
+    function fieldLabel(ch, field, t) {
+      const key = "field." + ch.id + "." + field.key;
+      const translated = t(key);
+      return translated === key ? field.label : translated;
+    }
+    function hintOf(ch, t) {
+      const key = "qr." + ch.id;
+      const translated = t(key);
+      return translated === key ? t("qr.default") : translated;
     }
 
     let openImSession = (id) => {
@@ -255,7 +314,7 @@ window.__ModuleLoader__.load({
     };
     let channelSkin = "native";
 
-    function BindModal({ ch, onClose, onConnected }) {
+    function BindModal({ ch, onClose, onConnected, t = fallbackT }) {
       const hasQr = ch.kind === "qr" || ch.kind === "qr-or-credentials";
       const hasManual = ch.kind === "credentials" || ch.kind === "qr-or-credentials";
       const [tab, setTab] = useState(hasQr ? "qr" : "manual");
@@ -275,9 +334,9 @@ window.__ModuleLoader__.load({
           body: JSON.stringify({}),
         }).then((data) => {
           if (!alive.current) return;
-          if (!data.ok && !data.pairing) setError(data.error || "无法生成二维码");
+          if (!data.ok && !data.pairing) setError(serverText(data.error, t) || t("error.qr"));
           setPairing(data.pairing || null);
-        }).catch(() => { if (alive.current) setError("无法生成二维码"); })
+        }).catch(() => { if (alive.current) setError(t("error.qr")); })
           .finally(() => { if (alive.current) setBusy(false); });
       }, [ch.id, hasQr]);
 
@@ -340,9 +399,9 @@ window.__ModuleLoader__.load({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ config }),
         }).then((data) => {
-          if (!data.ok) setError(data.error || "保存失败");
+          if (!data.ok) setError(serverText(data.error, t) || t("error.save"));
           else finish(400);
-        }).catch(() => setError("保存失败")).finally(() => setBusy(false));
+        }).catch(() => setError(t("error.save"))).finally(() => setBusy(false));
       };
 
       const switchTab = (next) => {
@@ -359,47 +418,47 @@ window.__ModuleLoader__.load({
       return h("div", { className: "ima-mask", role: "presentation", onMouseDown: (event) => event.stopPropagation(), onClick: (event) => { event.stopPropagation(); close(); }, onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } } },
         h("div", { className: "ima-modal", onClick: (e) => e.stopPropagation() },
           h("div", { className: "ima-modal-h" },
-            h("h2", null, "配置" + ch.label),
-            h("button", { className: "ima-x", onClick: close, "aria-label": "关闭" }, "×"),
+            h("h2", null, t("bind.title", { channel: channelLabel(ch, t) })),
+            h("button", { className: "ima-x", onClick: close, "aria-label": t("bind.close") }, "×"),
           ),
           hasQr && hasManual && h("div", { className: "ima-seg" },
-            h("button", { className: tab === "qr" ? "on" : "", onClick: () => switchTab("qr") }, "快捷绑定（推荐）"),
-            h("button", { className: tab === "manual" ? "on" : "", onClick: () => switchTab("manual") }, "手动配置"),
+            h("button", { className: tab === "qr" ? "on" : "", onClick: () => switchTab("qr") }, t("bind.quick")),
+            h("button", { className: tab === "manual" ? "on" : "", onClick: () => switchTab("manual") }, t("bind.manual")),
           ),
           error && h("div", { className: "ima-error" }, error),
           tab === "qr" && hasQr && (
             status === "success"
-              ? h("div", { className: "ima-ok" }, "绑定成功，频道已连接")
+              ? h("div", { className: "ima-ok" }, t("bind.success"))
               : h("div", { className: "ima-qrbox" },
-                  h("p", { className: "ima-hint" }, (pairing && pairing.hint) || hintOf(ch)),
+                  h("p", { className: "ima-hint" }, hintOf(ch, t)),
                   src
-                    ? h("img", { src, alt: ch.label + " 绑定二维码" })
-                    : h("div", { className: "ima-qrph" }, busy || status === "starting" ? "正在生成…" : (pairing && pairing.error) || "等待二维码"),
-                  remain > 0 && h("p", { className: "ima-hint" }, "二维码 " + Math.floor(remain / 60) + ":" + String(remain % 60).padStart(2, "0") + " 后过期"),
-                  status === "scanned" && h("p", { className: "ima-hint" }, "已扫码，请在手机上确认"),
-                  (status === "expired" || status === "failed") && h("p", { className: "ima-error" }, (pairing && pairing.error) || "请重新生成二维码"),
-                  h("button", { className: "ima-link", disabled: busy, onClick: () => startQr(true) }, "重新生成二维码"),
+                    ? h("img", { src, alt: t("bind.qrAlt", { channel: channelLabel(ch, t) }) })
+                    : h("div", { className: "ima-qrph" }, busy || status === "starting" ? t("bind.generating") : serverText(pairing && pairing.error, t) || t("bind.waiting")),
+                  remain > 0 && h("p", { className: "ima-hint" }, t("bind.expire", { time: Math.floor(remain / 60) + ":" + String(remain % 60).padStart(2, "0") })),
+                  status === "scanned" && h("p", { className: "ima-hint" }, t("bind.scanned")),
+                  (status === "expired" || status === "failed") && h("p", { className: "ima-error" }, serverText(pairing && pairing.error, t) || t("bind.retry")),
+                  h("button", { className: "ima-link", disabled: busy, onClick: () => startQr(true) }, t("bind.refresh")),
                 )
           ),
           tab === "manual" && hasManual && h("div", null,
             ...ch.fields.map((f) => h("label", { key: f.key, className: "ima-field" },
-              f.label,
+              fieldLabel(ch, f, t),
               h("input", {
                 type: f.secret ? "password" : "text",
                 value: draft[f.key] || "",
-                placeholder: f.label,
+                placeholder: fieldLabel(ch, f, t),
                 onChange: (e) => setDraft({ ...draft, [f.key]: e.target.value }),
               }),
             )),
             h("div", { style: { display: "flex", justifyContent: "flex-end" } },
-              h("button", { className: "ima-btn primary", disabled: busy, onClick: saveManual }, busy ? "保存中…" : "确认"),
+              h("button", { className: "ima-btn primary", disabled: busy, onClick: saveManual }, busy ? t("action.saving") : t("action.confirm")),
             ),
           ),
         ),
       );
     }
 
-    function ChannelCard({ ch, busy, onAction, onConfigure }) {
+    function ChannelCard({ ch, busy, onAction, onConfigure, t = fallbackT }) {
       const [menu, setMenu] = useState(false);
       const menuRoot = useRef(null);
       useEffect(() => {
@@ -420,34 +479,34 @@ window.__ModuleLoader__.load({
       }, [menu]);
 
       const configuring = !ch.connected;
-      const meta = configuring ? "未配置" : (ch.status && ch.status !== "未连接" ? ch.status : "已连接");
+      const meta = configuring ? t("status.unconfigured") : (ch.status && ch.status !== "未连接" ? serverText(ch.status, t) : t("status.connected"));
       const right = h("div", { className: "ima-actions", ref: menuRoot },
         configuring
-          ? h("button", { className: "ima-btn", disabled: busy, onClick: onConfigure }, busy ? "接入中…" : "配置")
+          ? h("button", { className: "ima-btn", disabled: busy, onClick: onConfigure }, busy ? t("status.connecting") : t("action.configure"))
           : [
-            h("button", { key: "more", className: "ima-more", "aria-label": ch.label + " 更多", "aria-expanded": menu, onClick: (event) => { event.stopPropagation(); setMenu(!menu); } }, "…"),
+            h("button", { key: "more", className: "ima-more", "aria-label": t("action.more", { channel: channelLabel(ch, t) }), "aria-expanded": menu, onClick: (event) => { event.stopPropagation(); setMenu(!menu); } }, "…"),
             menu && h("div", { key: "menu", className: "ima-menu", "data-ima-card-menu": "", onClick: (event) => event.stopPropagation() },
-              h("button", { onClick: () => { setMenu(false); onConfigure(); } }, "重新接入"),
-              h("button", { onClick: () => { setMenu(false); onAction(ch.id, "disconnect"); } }, "断开"),
-              h("button", { onClick: () => { setMenu(false); onAction(ch.id, "remove"); } }, "删除配置"),
+              h("button", { onClick: () => { setMenu(false); onConfigure(); } }, t("action.reconnect")),
+              h("button", { onClick: () => { setMenu(false); onAction(ch.id, "disconnect"); } }, t("action.disconnect")),
+              h("button", { onClick: () => { setMenu(false); onAction(ch.id, "remove"); } }, t("action.removeConfig")),
             ),
             h("button", {
               key: "sw",
               className: ch.receiveEnabled ? "ima-switch" : "ima-switch off",
               role: "switch",
               "aria-checked": ch.receiveEnabled,
-              "aria-label": "接收消息",
+              "aria-label": t("action.receive"),
               onClick: () => onAction(ch.id, "receive", { receiveEnabled: !ch.receiveEnabled }),
             }, h("i")),
           ],
       );
 
-      return h("div", { className: "ima-card", title: ch.description || ch.label },
+      return h("div", { className: "ima-card", title: channelLabel(ch, t) },
         h("div", { className: "ima-card-main" },
           h("div", { className: "ima-name-row" },
             h(Logo, { id: ch.id }),
-            h("span", { className: "ima-name" }, ch.label),
-            ch.connected && h("span", { className: "ima-badge" }, "已连接"),
+            h("span", { className: "ima-name" }, channelLabel(ch, t)),
+            ch.connected && h("span", { className: "ima-badge" }, t("status.connected")),
             h("span", { className: "ima-status" }, meta),
           ),
         ),
@@ -540,6 +599,7 @@ window.__ModuleLoader__.load({
     }
 
     function ComposerBar(props) {
+      const t = props.t || fallbackT;
       const items = typeof props.useWorkspaces === "function"
         ? (props.useWorkspaces((state) => (state && state.items) || []) || [])
         : [];
@@ -561,7 +621,7 @@ window.__ModuleLoader__.load({
 
       useEffect(() => {
         api("/assistant").then((data) => {
-          if (!data.ok) { setHint(data.error || "无法加载全局配置"); return; }
+          if (!data.ok) { setHint(serverText(data.error, t) || t("error.loadAssistant")); return; }
           const list = data.providers || [];
           setProviders(list);
           setPermissions(data.permissions || []);
@@ -575,8 +635,8 @@ window.__ModuleLoader__.load({
           setEffort(current.reasoningEffort || (found && found.reasoning && found.reasoning.defaultEffort) || "");
           setCwd(data.cwd || "");
           setPermission(data.permission || "");
-          if (!list.length) setHint("当前 Host 还没有可用模型，请先在网页里配置提供商");
-        }).catch(() => setHint("无法加载全局配置"));
+          if (!list.length) setHint(t("error.noModels"));
+        }).catch(() => setHint(t("error.loadAssistant")));
       }, []);
 
       const save = (body) => {
@@ -585,9 +645,9 @@ window.__ModuleLoader__.load({
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body),
         }).then((data) => {
-          if (!data.ok) setHint(data.error || "保存失败");
+          if (!data.ok) setHint(serverText(data.error, t) || t("error.save"));
           else setHint("");
-        }).catch(() => setHint("保存失败"));
+        }).catch(() => setHint(t("error.save")));
       };
 
       const workspace = items.find((item) => item.path === cwd);
@@ -602,17 +662,18 @@ window.__ModuleLoader__.load({
       const efforts = (currentModel && currentModel.reasoning && currentModel.reasoning.efforts && currentModel.reasoning.efforts.length)
         ? currentModel.reasoning.efforts.map((item) => ({ id: item.id, name: item.name || item.id }))
         : DEFAULT_EFFORTS;
-      const effortLabel = (efforts.find((item) => item.id === effort) || {}).name || "";
+      const effortLabel = (efforts.find((item) => item.id === effort) || {}).name || (effort ? props.modelT("effort.providerDefault") : "");
       const permissionOptions = permissions.map((item) => ({
         ...item,
         label: permissionLabel(item, props.permissionT),
       }));
-      const perm = permissionOptions.find((item) => item.value === permission) || { label: permission || "权限" };
+      const perm = permissionOptions.find((item) => item.value === permission) || { label: permission || t("composer.permission") };
+      const modelFallback = props.modelT("trigger.fallback");
 
       const addWorkspace = (path) => {
         const next = (path || "").trim();
-        if (!next) { setHint("请选择工作区目录"); return Promise.resolve(); }
-        if (typeof props.createWorkspace !== "function") { setHint("当前 Host 无法新增工作区"); return Promise.resolve(); }
+        if (!next) { setHint(t("error.chooseWorkspace")); return Promise.resolve(); }
+        if (typeof props.createWorkspace !== "function") { setHint(t("error.workspaceUnavailable")); return Promise.resolve(); }
         setAddBusy(true);
         return Promise.resolve(props.createWorkspace({ path: next })).then((created) => {
           const cwdPath = (created && (created.path || created.cwd)) || next;
@@ -622,7 +683,7 @@ window.__ModuleLoader__.load({
           setAddPath("");
           setOpen("");
         }).catch((error) => {
-          setHint((error && error.message) || "新增工作区失败");
+          setHint((error && error.message) || t("error.addWorkspace"));
         }).finally(() => setAddBusy(false));
       };
 
@@ -655,16 +716,16 @@ window.__ModuleLoader__.load({
       };
 
       return h("div", { className: "ima-composer-wrap" },
-        h("div", { className: "ima-composer", "aria-label": "全局会话配置" },
+        h("div", { className: "ima-composer", "aria-label": t("composer.aria") },
           h("div", { className: "ima-composer-left" },
             h(ChipMenu, {
               open: open === "ws",
               onToggle: (next) => setOpen(next ? "ws" : ""),
               icon: h(FolderIcon),
-              label: (workspace && (workspace.title || workspace.path)) || cwd || "选择项目",
-              ariaLabel: "项目",
+              label: (workspace && (workspace.title || workspace.path)) || cwd || t("composer.project"),
+              ariaLabel: t("composer.projectAria"),
             },
-              items.length === 0 && h("div", { className: "ima-chip-empty" }, "暂无工作区"),
+              items.length === 0 && h("div", { className: "ima-chip-empty" }, t("composer.noWorkspaces")),
               ...items.map((item) => h(ChipRow, {
                 key: item.path,
                 icon: h(FolderIcon),
@@ -675,7 +736,7 @@ window.__ModuleLoader__.load({
               h("div", { className: "ima-chip-split" }),
               h(ChipRow, {
                 icon: h(PlusIcon),
-                label: "添加工作区…",
+                label: t("composer.addWorkspace"),
                 onClick: onAddWorkspace,
               }),
             ),
@@ -684,7 +745,7 @@ window.__ModuleLoader__.load({
               onToggle: (next) => setOpen(next ? "perm" : ""),
               icon: h(ShieldIcon),
               label: perm.label,
-              ariaLabel: "权限",
+              ariaLabel: t("composer.permission"),
             },
               ...permissionOptions.map((item) => h(ChipRow, {
                 key: item.value,
@@ -703,31 +764,31 @@ window.__ModuleLoader__.load({
                 if (next) setModelPane("root");
               },
               align: "end",
-              label: (currentModel && currentModel.label) || "选择模型",
+              label: (currentModel && currentModel.label) || modelFallback,
               suffix: effortLabel,
-              ariaLabel: "模型",
+              ariaLabel: props.modelT("trigger.selectAria"),
             },
               modelPane === "root" && [
                 h(ChipRow, {
                   key: "model",
                   kv: true,
-                  label: "Model",
-                  hint: (currentModel && currentModel.label) || "未选择",
+                  label: props.modelT("menu.model"),
+                  hint: (currentModel && currentModel.label) || modelFallback,
                   chevron: true,
                   onClick: () => setModelPane("model"),
                 }),
                 h(ChipRow, {
                   key: "effort",
                   kv: true,
-                  label: "Effort",
-                  hint: effortLabel || "Default",
+                  label: props.modelT("menu.effort"),
+                  hint: effortLabel || props.modelT("effort.providerDefault"),
                   chevron: true,
                   onClick: () => setModelPane("effort"),
                 }),
               ],
               modelPane === "model" && (
                 models.length === 0
-                  ? h("div", { className: "ima-chip-empty" }, "暂无模型")
+                  ? h("div", { className: "ima-chip-empty" }, t("composer.noModels"))
                   : models.map((item) => h(ChipRow, {
                       key: item.value,
                       label: item.label,
@@ -756,20 +817,20 @@ window.__ModuleLoader__.load({
           ),
         ),
         adding && h("div", { className: "ima-chip-dialog" },
-          h("strong", null, "添加工作区…"),
+          h("strong", null, t("composer.addWorkspace")),
           h("input", {
             value: addPath,
-            placeholder: "工作区路径",
-            "aria-label": "工作区路径",
+            placeholder: t("composer.workspacePath"),
+            "aria-label": t("composer.workspacePath"),
             onChange: (event) => setAddPath(event.target.value),
           }),
           h("div", { className: "ima-chip-dialog-actions" },
-            h("button", { className: "ima-btn", onClick: () => { setAdding(false); setAddPath(""); } }, "取消"),
+            h("button", { className: "ima-btn", onClick: () => { setAdding(false); setAddPath(""); } }, t("action.cancel")),
             h("button", {
               className: "ima-btn primary",
               disabled: addBusy || !addPath.trim(),
               onClick: () => addWorkspace(addPath),
-            }, addBusy ? "添加中…" : "确认"),
+            }, addBusy ? t("action.adding") : t("action.confirm")),
           ),
         ),
         hint && h("div", { className: "ima-composer-hint" }, hint),
@@ -794,6 +855,7 @@ window.__ModuleLoader__.load({
     }
 
     function SettingsPage(props) {
+      const t = props.t || fallbackT;
       const [channels, setChannels] = useState(null);
       const [pending, setPending] = useState([]);
       const [error, setError] = useState("");
@@ -807,8 +869,8 @@ window.__ModuleLoader__.load({
         api("/channels").then((data) => {
           if (seq !== refreshSeq.current) return;
           if (data.ok) { setChannels(data.channels); setPending(data.pending || []); setError(""); }
-          else setError(data.error || "加载失败");
-        }).catch(() => { if (seq === refreshSeq.current) setError("无法连接本机 IM 助理接口"); });
+          else setError(serverText(data.error, t) || t("error.load"));
+        }).catch(() => { if (seq === refreshSeq.current) setError(t("error.connection")); });
       }, []);
 
       useEffect(() => { ensureStyle(); refresh(); }, [refresh]);
@@ -825,33 +887,33 @@ window.__ModuleLoader__.load({
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body || {}),
         }).then((data) => {
-          if (!data.ok) setError(data.error || "操作失败");
+          if (!data.ok) setError(serverText(data.error, t) || t("error.action"));
           else setError("");
           refresh();
-        }).catch(() => setError("请求失败")).finally(() => {
+        }).catch(() => setError(t("error.request"))).finally(() => {
           setBusy((prev) => ({ ...prev, [id]: false }));
         });
       };
 
-      return h("section", { className: "ima-page", "aria-label": "IM助理" },
+      return h("section", { className: "ima-page", "aria-label": t("settings.aria") },
         h("header", { className: "ima-head" },
           h("div", null,
-            h("h2", { className: "ima-title" }, "IM 频道"),
-            h("p", { className: "ima-sub" }, "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。频道配置仅保存在本机。"),
+            h("h2", { className: "ima-title" }, t("settings.title")),
+            h("p", { className: "ima-sub" }, t("settings.description")),
           ),
         ),
-        h(ComposerBar, { useWorkspaces: props.useWorkspaces, createWorkspace: props.createWorkspace, pickDirectory: props.pickDirectory, permissionT: props.permissionT }),
+        h(ComposerBar, { useWorkspaces: props.useWorkspaces, createWorkspace: props.createWorkspace, pickDirectory: props.pickDirectory, permissionT: props.permissionT, modelT: props.modelT, t }),
         error && h("div", { className: "ima-error" }, error),
         pending && pending.length > 0 && h("div", { className: "ima-pending" },
-          h("div", null, "有访问请求。批准后该用户才能驱动本机助手。"),
+          h("div", null, t("pending.notice")),
           ...pending.map((p) => h("div", { key: p.channelId + p.userId, className: "ima-pending-row" },
-            h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + p.channelId),
-            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "approve", { userId: p.userId }) }, "批准"),
-            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "deny", { userId: p.userId }) }, "拒绝"),
+            h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + channelLabel({ id: p.channelId, label: p.channelId }, t)),
+            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "approve", { userId: p.userId }) }, t("action.approve")),
+            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "deny", { userId: p.userId }) }, t("action.deny")),
           )),
         ),
         channels == null
-          ? h("div", { className: "ima-empty" }, "加载中…")
+          ? h("div", { className: "ima-empty" }, t("loading"))
           : h("div", { className: "ima-list" },
               ...channels.map((ch) => h(ChannelCard, {
                 key: ch.id,
@@ -859,12 +921,14 @@ window.__ModuleLoader__.load({
                 busy: busy[ch.id],
                 onAction,
                 onConfigure: () => setEditing(ch.id),
+                t,
               })),
             ),
         editing && h(BindModal, {
           ch: (channels || []).find((item) => item.id === editing) || { id: editing, label: editing, kind: "qr", fields: [] },
           onClose: () => setEditing(null),
           onConnected: () => { setEditing(null); refresh(); },
+          t,
         }),
       );
     }
@@ -984,30 +1048,30 @@ window.__ModuleLoader__.load({
         selected ? h(IconCheckOutline) : h("span", { className: "ima-n-filter-tick" }),
       );
     }
-    function ChannelWorkspaceHead({ query, sort, groupMode, onQuery, onSort, onGroupMode }) {
+    function ChannelWorkspaceHead({ query, sort, groupMode, onQuery, onSort, onGroupMode, t = fallbackT }) {
       const [searching, setSearching] = useState(!!query);
       const [open, setOpen] = useState(false);
       const searchSize = searching ? 11 : 14;
       return h("div", { className: searching ? "ima-n-toolbar is-search" : "ima-n-toolbar" },
-        h("span", { className: "ima-n-head-label" }, "工作区"),
+        h("span", { className: "ima-n-head-label" }, t("rail.workspace")),
         h("div", { className: "ima-n-search-slot" },
           h("div", { className: "ima-n-search", onClick: () => { setOpen(false); setSearching(true); } },
-            h("button", { type: "button", className: "ima-n-search-btn", "aria-label": "搜索", "aria-expanded": searching, onClick: () => { setOpen(false); setSearching(true); } }, h(IconSearchOutline, { size: searchSize })),
-            h("input", { className: "ima-n-search-input", value: query, placeholder: "搜索会话...", "aria-label": "搜索会话", tabIndex: searching ? 0 : -1, onChange: (e) => onQuery(e.target.value), onKeyDown: (e) => { if (e.key === "Escape") { onQuery(""); setSearching(false); } } }),
-            searching && h("button", { type: "button", className: "ima-n-search-clear", "aria-label": "清除搜索", onClick: (e) => { e.stopPropagation(); onQuery(""); setSearching(false); } }, h(IconCloseOutline, { size: 14 })),
+            h("button", { type: "button", className: "ima-n-search-btn", "aria-label": t("rail.search"), "aria-expanded": searching, onClick: () => { setOpen(false); setSearching(true); } }, h(IconSearchOutline, { size: searchSize })),
+            h("input", { className: "ima-n-search-input", value: query, placeholder: t("rail.searchPlaceholder"), "aria-label": t("rail.search"), tabIndex: searching ? 0 : -1, onChange: (e) => onQuery(e.target.value), onKeyDown: (e) => { if (e.key === "Escape") { onQuery(""); setSearching(false); } } }),
+            searching && h("button", { type: "button", className: "ima-n-search-clear", "aria-label": t("rail.clearSearch"), onClick: (e) => { e.stopPropagation(); onQuery(""); setSearching(false); } }, h(IconCloseOutline, { size: 14 })),
           ),
         ),
         h("div", { className: "ima-n-head-acts" },
           h("div", { className: "ima-n-head-filter" },
-            h("button", { type: "button", className: open ? "ima-n-head-btn on" : "ima-n-head-btn", "aria-label": "筛选", onClick: () => setOpen(!open) }, h(IconSliders)),
+            h("button", { type: "button", className: open ? "ima-n-head-btn on" : "ima-n-head-btn", "aria-label": t("rail.filter"), onClick: () => setOpen(!open) }, h(IconSliders)),
             open && h("div", { className: "ima-n-filter-menu" },
-              h("div", { className: "ima-n-filter-label" }, "分组方式"),
-              h(FilterRow, { label: "按工作区", selected: groupMode === "workspace", onSelect: () => { onGroupMode("workspace"); setOpen(false); } }),
-              h(FilterRow, { label: "单列表", selected: groupMode === "list", onSelect: () => { onGroupMode("list"); setOpen(false); } }),
+              h("div", { className: "ima-n-filter-label" }, t("rail.group")),
+              h(FilterRow, { label: t("rail.byWorkspace"), selected: groupMode === "workspace", onSelect: () => { onGroupMode("workspace"); setOpen(false); } }),
+              h(FilterRow, { label: t("rail.list"), selected: groupMode === "list", onSelect: () => { onGroupMode("list"); setOpen(false); } }),
               h("div", { className: "ima-n-filter-split" }),
-              h("div", { className: "ima-n-filter-label" }, "排序方式"),
-              h(FilterRow, { label: "手动排序", selected: sort === "manual", onSelect: () => { onSort("manual"); setOpen(false); } }),
-              h(FilterRow, { label: "最近更新", selected: sort === "time", onSelect: () => { onSort("time"); setOpen(false); } }),
+              h("div", { className: "ima-n-filter-label" }, t("rail.sort")),
+              h(FilterRow, { label: t("rail.manual"), selected: sort === "manual", onSelect: () => { onSort("manual"); setOpen(false); } }),
+              h(FilterRow, { label: t("rail.recent"), selected: sort === "time", onSelect: () => { onSort("time"); setOpen(false); } }),
             ),
           ),
         ),
@@ -1024,13 +1088,13 @@ window.__ModuleLoader__.load({
         NativePath("M0 0L-0.5 0L-0.5 7L0 7L0.5 7L0.5 0L0 0ZM3 10L3 10.5L8 10.5L8 10L8 9.5L3 9.5L3 10ZM0 7L-0.5 7C-0.5 8.933 1.067 10.5 3 10.5L3 10L3 9.5C1.61929 9.5 0.5 8.38071 0.5 7L0 7Z"),
       );
     }
-    function SessionHoverCard({ title, time, running, style, cardRef }) {
+    function SessionHoverCard({ title, time, running, style, cardRef, t = fallbackT }) {
       return h("div", { className: "ima-n-hover", style, ref: cardRef },
         h("div", { className: "ima-n-hover-title" }, title),
         time ? h("div", { className: "ima-n-hover-time" }, time) : null,
         h("div", { className: "ima-n-hover-state" },
           h("span", { className: running ? "ima-n-hover-dot is-run" : "ima-n-hover-dot" }),
-          running ? "运行中" : "空闲",
+          running ? t("rail.running") : t("rail.idle"),
         ),
       );
     }
@@ -1045,16 +1109,16 @@ window.__ModuleLoader__.load({
         })
       );
     }
-    function relativeTime(value) {
+    function relativeTime(value, t = fallbackT) {
       const ts = Date.parse(value || "");
       if (!Number.isFinite(ts)) return "";
       const delta = Math.max(0, Date.now() - ts);
       const min = Math.floor(delta / 60000);
-      if (min < 1) return "刚刚";
-      if (min < 60) return min + "分钟前";
+      if (min < 1) return t("time.now");
+      if (min < 60) return t("time.minutes", { count: min });
       const hour = Math.floor(min / 60);
-      if (hour < 24) return hour + "小时前";
-      return Math.floor(hour / 24) + "天前";
+      if (hour < 24) return t("time.hours", { count: hour });
+      return t("time.days", { count: Math.floor(hour / 24) });
     }
 
 
@@ -1100,6 +1164,7 @@ window.__ModuleLoader__.load({
     }
 
     function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange }) {
+      const t = arguments[0].t || fallbackT;
       const menu = !!menuOpen;
       const setMenu = (next) => onMenuChange(!!next);
       const [renaming, setRenaming] = useState(false);
@@ -1181,7 +1246,7 @@ window.__ModuleLoader__.load({
             className: "ima-rename",
             value: draft,
             autoFocus: true,
-            "aria-label": "重命名会话",
+            "aria-label": t("rail.renameAria"),
             onChange: (e) => setDraft(e.target.value),
             onClick: (e) => e.stopPropagation(),
             onKeyDown: (e) => {
@@ -1193,9 +1258,9 @@ window.__ModuleLoader__.load({
         );
       }
       const menuItems = [
-        { id: "rename", label: "重命名", icon: h(IconEdit), go: () => { setRenaming(true); } },
-        { id: "fork", label: "分叉会话", icon: h(IconBranch), go: () => run("fork") },
-        { id: "archive", label: "归档会话", icon: h(IconArchive), go: () => run("archive") },
+        { id: "rename", label: t("rail.rename"), icon: h(IconEdit), go: () => { setRenaming(true); } },
+        { id: "fork", label: t("rail.fork"), icon: h(IconBranch), go: () => run("fork") },
+        { id: "archive", label: t("rail.archive"), icon: h(IconArchive), go: () => run("archive") },
       ];
       return h("div", {
         ref: rowRef,
@@ -1211,21 +1276,22 @@ window.__ModuleLoader__.load({
       },
         native && h("span", { className: "ima-n-slot" }, running ? h(RunningStateDot) : null),
         h("span", { className: native ? "ima-n-title" : "dcu-wb-session-title" }, title),
-        native && h("span", { className: "ima-n-time" }, relativeTime(sess.updatedAt)),
+        native && h("span", { className: "ima-n-time" }, relativeTime(sess.updatedAt, t)),
         h("span", { className: native ? "ima-n-acts" : "dcu-wb-actions" },
           h("button", {
             type: "button",
             className: native ? "ima-n-ico" : "dcu-wb-more",
             "data-ima-session-more": "",
             "aria-expanded": menu,
-            "aria-label": title + " 更多",
+            "aria-label": t("action.more", { channel: title }),
             onClick: (e) => { e.stopPropagation(); onMenuChange(!menu, e); },
           }, native ? h(IconEllipsis) : h(MoreIcon)),
         ),
         hoverOpen && !menu && native && h(SessionHoverCard, {
           title,
-          time: relativeTime(sess.updatedAt),
+          time: relativeTime(sess.updatedAt, t),
           running,
+          t,
           style: hoverStyle,
           cardRef: hoverRef,
         }),
@@ -1262,6 +1328,7 @@ window.__ModuleLoader__.load({
     }
 
     function ChannelRailView(props) {
+      const t = props.t || fallbackT;
       const [groups, setGroups] = useState([]);
       const [folded, setFolded] = useState({});
       const [error, setError] = useState("");
@@ -1278,8 +1345,8 @@ window.__ModuleLoader__.load({
         ensureStyle();
         const load = () => api("/channels").then((data) => {
           if (data.ok) { setGroups(data.groups || []); setError(""); }
-          else setError(data.error || "加载失败");
-        }).catch(() => setError("无法连接本机 IM 助理接口"));
+          else setError(serverText(data.error, t) || t("error.load"));
+        }).catch(() => setError(t("error.connection")));
         load();
         const timer = setInterval(load, 4000);
         return () => clearInterval(timer);
@@ -1305,7 +1372,7 @@ window.__ModuleLoader__.load({
       const visibleGroups = groups.map((g) => {
         const sessions = (g.sessions || []).filter((sess) => !archived.has(sess.sessionId));
         if (!needle) return Object.assign({}, g, { sessions });
-        const nameHit = String(g.label || "").toLowerCase().includes(needle);
+        const nameHit = String(channelLabel(g, t)).toLowerCase().includes(needle);
         return Object.assign({}, g, { sessions: nameHit ? sessions : sessions.filter((sess) => String(sess.title || sess.chatId || "").toLowerCase().includes(needle)) });
       }).filter((g) => (g.sessions || []).length > 0);
       if (sort === "time") {
@@ -1322,10 +1389,10 @@ window.__ModuleLoader__.load({
       }
       return h("div", { className: native ? "ima-native ima-rail" : "dcu-wb ima-rail" },
         h("style", null, WB_CSS),
-        h(ChannelWorkspaceHead, { query, sort, groupMode, onQuery: setQuery, onSort: setSort, onGroupMode: setGroupMode }),
+        h(ChannelWorkspaceHead, { query, sort, groupMode, onQuery: setQuery, onSort: setSort, onGroupMode: setGroupMode, t }),
         h("div", { className: native ? "ima-native-tree" : "dcu-wb-tree", role: "tree" },
           error && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, error),
-          !error && visibleGroups.length === 0 && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。"),
+          !error && visibleGroups.length === 0 && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, t("rail.empty")),
           ...visibleGroups.map((g) => {
             const visible = g.sessions || [];
             const expanded = !folded[g.id];
@@ -1340,11 +1407,11 @@ window.__ModuleLoader__.load({
               native
                 ? [
                   h("span", { key: "folder", className: "ima-n-slot ima-n-folder" }, h(Logo, { id: g.id, small: true })),
-                  h("span", { key: "title", className: "ima-n-title" }, g.label),
+                  h("span", { key: "title", className: "ima-n-title" }, channelLabel(g, t)),
                 ]
                 : [
                   h("span", { key: "folder", className: "dcu-wb-folder" }, h(Logo, { id: g.id, small: true })),
-                  h("span", { key: "title", className: "dcu-wb-project-title" }, g.label),
+                  h("span", { key: "title", className: "dcu-wb-project-title" }, channelLabel(g, t)),
                 ],
             ),
             (groupMode === "list" || !folded[g.id]) && visible.length > 0 && visible.map((sess) => h(ChannelSessionRow, {
@@ -1368,6 +1435,7 @@ window.__ModuleLoader__.load({
                   forkSession: props.forkSession,
                   openPath: props.openPath,
                 },
+                t,
               })),
           );
           }),
@@ -1384,10 +1452,11 @@ window.__ModuleLoader__.load({
 
     function TaskList(props) {
       if (typeof props.useSessions === "function") return h(TaskListWithSessions, props);
-      return h(TaskListView, { groups: [], current: null, openSession: props.openSession });
+      return h(TaskListView, { groups: [], current: null, openSession: props.openSession, t: props.t });
     }
 
     function TaskListWithSessions(props) {
+      const t = props.t || fallbackT;
       const snap = props.useSessions((state) => state || { ids: [], byId: {}, current: null });
       const workspaces = typeof props.useWorkspaces === "function"
         ? props.useWorkspaces((state) => state || { items: [], archivedSessionIds: [] })
@@ -1401,18 +1470,18 @@ window.__ModuleLoader__.load({
           .filter((item) => isTaskSessionItem(item) && !archived.has(item.id));
         sessions.forEach((item) => assigned.add(item.id));
         if (sessions.length) {
-          groups.push({ id: ws.workspaceId || ws.id, label: ws.title || ws.path || "工作区", sessions });
+          groups.push({ id: ws.workspaceId || ws.id, label: ws.title || ws.path || t("rail.workspace"), sessions });
         }
       }
       const ungrouped = (snap.ids || [])
         .map((id) => snap.byId[id])
         .filter((item) => item && !assigned.has(item.id) && isTaskSessionItem(item) && !archived.has(item.id));
-      if (ungrouped.length) groups.push({ id: "", label: "未分组", sessions: ungrouped });
-      return h(TaskListView, { groups, current: snap.current, openSession: props.openSession });
+      if (ungrouped.length) groups.push({ id: "", label: t("rail.ungrouped"), sessions: ungrouped });
+      return h(TaskListView, { groups, current: snap.current, openSession: props.openSession, t });
     }
 
-    function TaskListView({ groups, current, openSession }) {
-      if (!groups.length) return h("div", { className: "ima-empty" }, "暂无网页任务");
+    function TaskListView({ groups, current, openSession, t = fallbackT }) {
+      if (!groups.length) return h("div", { className: "ima-empty" }, t("rail.noTasks"));
       return h("div", { className: "ima-native ima-rail" },
         h("div", { className: "ima-native-tree" },
           ...groups.map((group) => h("div", { key: group.id || "ungrouped", className: "ima-native-project" },
@@ -1523,6 +1592,7 @@ window.__ModuleLoader__.load({
     }
 
     function SessionSwitcher(props) {
+      const t = props.t || fallbackT;
       const Official = props.officialTree;
       const rawUseSessions = props.useSessions;
       const nativeTabs = props.nativeTabs;
@@ -1563,7 +1633,7 @@ window.__ModuleLoader__.load({
         if (matched && matched.id !== "schedule") setTab(matched.id);
       }, [currentId, extraTabs]);
       const openSession = (id) => openListedSession(id, props.openSession || props.open);
-      const officialProps = Object.assign({}, props, { useSessions: useTaskSessions });
+      const officialProps = Object.assign({}, props, { useSessions: useTaskSessions, t });
       const channelRail = h(ChannelRail, {
         openSession,
         open: openSession,
@@ -1576,6 +1646,7 @@ window.__ModuleLoader__.load({
         deleteSession: props.deleteSession,
         forkSession: props.forkSession,
         openPath: props.openPath,
+        t,
       });
       if (props.wide === false) return Official ? h(Official, officialProps) : null;
       const officialTree = Official
@@ -1583,9 +1654,9 @@ window.__ModuleLoader__.load({
         : null;
       const extra = extraTabs.find((item) => item.id === tab);
       return h("div", { className: "ima-wrap" },
-        h("div", { className: "ima-tabs", role: "tablist", "aria-label": "工作区分类" },
-          h("button", { type: "button", role: "tab", "aria-selected": tab === "tasks", className: tab === "tasks" ? "ima-tab on" : "ima-tab", onClick: () => setTab("tasks") }, "任务"),
-          h("button", { type: "button", role: "tab", "aria-selected": tab === "channels", className: tab === "channels" ? "ima-tab on" : "ima-tab", onClick: () => setTab("channels") }, "频道"),
+        h("div", { className: "ima-tabs", role: "tablist", "aria-label": t("rail.tabsAria") },
+          h("button", { type: "button", role: "tab", "aria-selected": tab === "tasks", className: tab === "tasks" ? "ima-tab on" : "ima-tab", onClick: () => setTab("tasks") }, t("rail.tasks")),
+          h("button", { type: "button", role: "tab", "aria-selected": tab === "channels", className: tab === "channels" ? "ima-tab on" : "ima-tab", onClick: () => setTab("channels") }, t("rail.channels")),
           ...extraTabs.map((item) => h("button", {
             key: item.id,
             type: "button",
@@ -1645,27 +1716,43 @@ window.__ModuleLoader__.load({
 
     function apply(ctx) {
       ensureStyle();
+      ctx.effect(() => ctx.locale.register(IM_LOCALE_NS, IM_LOCALES), "im-connect: dictionaries");
+      const t = ctx.locale.bind(IM_LOCALE_NS);
       const permissionT = ctx.locale.bind("permission.access");
+      const modelT = ctx.locale.bind("model");
+      const subscribeLocale = (listener) => ctx.locale.subscribe(listener);
+      const localeSnapshot = () => ctx.locale.getSnapshot();
+      function LocalizedChannelRail(props) {
+        useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
+        return h(ChannelRail, Object.assign({}, props, { t }));
+      }
+      function LocalizedSessionSwitcher(props) {
+        useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
+        return h(SessionSwitcher, Object.assign({}, props, { t }));
+      }
       openImSession = (id) => {
         try { ctx.sessions.open(id); return true; }
         catch (error) { console.warn("[dsh-im-connect] 无法打开会话", id, error); return false; }
       };
       ctx.slots.inject("settings.section", () => ctx.slots.register({
-        name: "settings.section",
-        id: "im-assistant",
-        order: 28,
-        label: "IM助理",
-        icon: "chat",
+          name: "settings.section",
+          id: "im-assistant",
+          order: 28,
+          label: t("settings.label"),
+          icon: "chat",
+          locale: IM_LOCALE_NS,
         inject: () => ({
           createWorkspace: (input) => ctx.workspaces.create(input),
           pickDirectory: () => ctx.workspaces.pickDirectory(),
           permissionT,
+          modelT,
         }),
       }, SettingsPage));
 
       ctx.slots.inject("sidebar.channels", () => ctx.slots.register({
-        name: "sidebar.channels",
-        id: "im-connect-channels",
+          name: "sidebar.channels",
+          id: "im-connect-channels",
+          locale: IM_LOCALE_NS,
         inject: () => ({
           openSession: (id) => { ctx.sessions.open(id); },
           open: (id) => { ctx.sessions.open(id); },
@@ -1682,7 +1769,7 @@ window.__ModuleLoader__.load({
             if (!result.ok) throw new Error(result.error.message);
           },
         }),
-      }, ChannelRail));
+        }, ChannelRail));
 
       // 只包一层官方任务树，绝不在通知回调里再 register，否则会把启动卡在 Loading plugins。
       ctx.slots.inject("sidebar.workspaces", () => {
@@ -1706,10 +1793,10 @@ window.__ModuleLoader__.load({
           removeInsertedTab();
           removeInsertedTab = registry.insert({
             id: "channels",
-            label: "频道",
+            label: t("rail.channels"),
             order: 20,
             matchSession: (id) => String(id).startsWith("im:"),
-            render: (props) => h(ChannelRail, Object.assign({}, props, {
+            render: (props) => h(LocalizedChannelRail, Object.assign({}, props, {
               skin: "native",
               openSession: (id) => openListedSession(id, props.openSession || props.open),
               open: (id) => openListedSession(id, props.openSession || props.open),
@@ -1743,7 +1830,7 @@ window.__ModuleLoader__.load({
             const registry = createNativeTabRegistry(originalComp);
             attachNativeTabRegistry(official, registry);
             function ImNativeWorkspaceShell(innerProps) {
-              return h(SessionSwitcher, Object.assign({}, innerProps, { officialTree: originalComp, nativeTabs: registry }));
+              return h(LocalizedSessionSwitcher, Object.assign({}, innerProps, { officialTree: originalComp, nativeTabs: registry }));
             }
             ImNativeWorkspaceShell.displayName = "ImNativeWorkspaceShell";
             ImNativeWorkspaceShell.__imConnectWrapped = true;
@@ -1769,8 +1856,3 @@ window.__ModuleLoader__.load({
     return module.exports;
   },
 });
-
-
-
-
-

@@ -42,7 +42,7 @@ Inbound messages are identified before commands, tool approvals, or injection.
 | DM from anyone else | Appears on the settings pending list until approved |
 | DM on credential-only channels | Telegram, and DingTalk / WeCom / QQ bound with secrets only, require approval for every DM |
 | DM without a userId | Denied |
-| Tool approval | Only an allowlisted user in a DM can reply 批准 / 拒绝; group replies do not grant |
+| Tool approval | Only an allowlisted user in a DM can reply `Approve` / `Deny` (or `批准` / `拒绝`); group replies do not grant |
 
 WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk immediately. A different WeChat account DMing the bot waits for settings approval.
 
@@ -186,7 +186,7 @@ Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the p
 
 ## Usage
 
-Open **Settings → IM Assistant**, choose the workspace, permission, and model, then connect a channel. The full guide is [使用说明](docs/02-产品与业务/04-使用说明.md).
+Open **Settings → IM Assistant**, choose the workspace, permission, and model, then connect a channel. The full guide is [Usage guide](docs/02-产品与业务/04-使用说明.md).
 
 | Goal | Action | Notes |
 | --- | --- | --- |
@@ -197,7 +197,7 @@ Open **Settings → IM Assistant**, choose the workspace, permission, and model,
 | Start a new session | Send `/new` or `/clear` | Affects only the current IM chat |
 | Status / help | Send `/status` or `/help` | Scoped to the current channel session |
 | Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
-| Approve a tool | Reply `批准` or `拒绝` in a DM | Also accepts `yes` / `no` / `allow` / `reject`; group replies cannot grant |
+| Approve a tool | Reply `Approve` / `Deny` or `批准` / `拒绝` in a DM | Also accepts `yes` / `no` / `allow` / `reject`; group replies cannot grant |
 | Review on the web | Open the workspace **Channels** tab | IM sessions never appear under **Tasks** |
 
 DingTalk replies prefer official AI Card streaming and fall back to plain text. Do not enable Webhook on the same Telegram bot.
@@ -250,6 +250,6 @@ npm test
 
 ## Documentation and license
 
-Project status, usage boundaries, architecture, and iteration records begin at the [documentation entry point](docs/00-交接入口/00-阅读导航.md). The detailed operational guide is [使用说明](docs/02-产品与业务/04-使用说明.md). The default security posture is in [SECURITY.md](SECURITY.md).
+Project status, usage boundaries, architecture, and iteration records begin at the [documentation entry point](docs/00-交接入口/00-阅读导航.md). The detailed operational guide is [Usage guide](docs/02-产品与业务/04-使用说明.md). The default security posture is in [SECURITY.md](SECURITY.md).
 
 Licensed under [Apache License 2.0](LICENSE).

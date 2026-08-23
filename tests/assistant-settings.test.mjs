@@ -49,6 +49,10 @@ test('权限菜单直接使用 Host 官方列表与官方文案', () => {
   assert.match(client, /setPermissions\(data\.permissions \|\| \[\]\)/)
   assert.match(client, /permissionLabel\(item, props\.permissionT\)/)
   assert.match(client, /ctx\.locale\.bind\("permission\.access"\)/)
+  assert.match(client, /ctx\.locale\.bind\("model"\)/)
+  assert.match(client, /label: props\.modelT\("menu\.model"\)/)
+  assert.match(client, /label: props\.modelT\("menu\.effort"\)/)
+  assert.doesNotMatch(client, /label: "Model"|label: "Effort"/, '模型选择器必须使用 Chat 的官方国际化词条')
   assert.match(manager, /official\.names\.map\(\(name\) => official\.optionOf\(name\)\)/)
   assert.match(manager, /permissions: this\.permissionOptions\(\)/)
   assert.match(router, /permissionPresets\.set\(agent\.session, permission\)/)
@@ -61,6 +65,20 @@ test('权限菜单直接使用 Host 官方列表与官方文案', () => {
   assert.doesNotMatch(client, /function openFullAccessConfirmation/)
   assert.doesNotMatch(client, /ima-risk-warning|ima-full-access-dialog/)
   assert.doesNotMatch(client, /\.ima-chip-row\.is-risk|is-risk/, '权限菜单必须完全沿用官方样式')
+})
+
+test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /const IM_LOCALE_NS = "im-connect"/)
+  assert.match(client, /const IM_LOCALES = \{[\s\S]*zh:[\s\S]*en:/)
+  assert.match(client, /ctx\.locale\.register\(IM_LOCALE_NS, IM_LOCALES\)/)
+  assert.match(client, /locale: IM_LOCALE_NS/)
+  assert.match(client, /label: t\("settings\.label"\)/)
+  assert.match(client, /function LocalizedChannelRail\(props\)[\s\S]*useSyncExternalStore/)
+  assert.match(client, /function LocalizedSessionSwitcher\(props\)[\s\S]*useSyncExternalStore/)
+  assert.match(client, /"settings\.label": "IM Assistant"/)
+  assert.match(client, /"rail\.channels": "Channels"/)
+  assert.match(client, /t\("error\.detailsInLog"\)/)
 })
 
 
