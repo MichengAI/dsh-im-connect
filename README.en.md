@@ -254,3 +254,7 @@ npm test
 Project status, usage boundaries, architecture, and iteration records begin at the [documentation entry point](docs/00-交接入口/00-阅读导航.md). The detailed operational guide is [Usage guide](docs/02-产品与业务/04-使用说明.md). The default security posture is in [SECURITY.md](SECURITY.md).
 
 Licensed under [Apache License 2.0](LICENSE).
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the five most recent releases.
