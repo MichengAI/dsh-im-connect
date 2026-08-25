@@ -4,6 +4,14 @@
 
 以下记录最近发布的五个版本。Git 标签与 GitHub Release 现已和这些条目同步；历史条目继续保留原始发布提交链接。
 
+## 0.1.24 — 2026-08-26
+
+- 恢复 IM 助理设置中内置权限预设的中文显示，不再暴露缺失的 `preset.*` 翻译键。
+- 完全访问风险确认继续使用宿主管理的权限翻译域，显示名称则改用 IM Connect 自己的中英文词典。
+- 将中英文 README 的更新日志入口从底部移到顶部导航。
+
+发布包：[`@michengai/dsh-im-connect@0.1.24`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.24)。
+
 ## 0.1.23 — 2026-08-23
 
 - 新增中英文更新日志，展示最近五个发布版本。
@@ -30,9 +38,3 @@
 - 在连接器 API 请求中完整保留 UTF-8 请求体。
 
 发布提交：[`21e06e6`](https://github.com/MichengAI/dsh-im-connect/commit/21e06e6)。
-
-## 0.1.19 — 2026-08-23
-
-- 加强 IM 频道启动和运行时处理。
-
-发布提交：[`92743d2`](https://github.com/MichengAI/dsh-im-connect/commit/92743d2)。

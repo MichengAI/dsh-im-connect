@@ -8,7 +8,7 @@
 
   **把飞书、钉钉、企业微信、微信、QQ、Telegram 接到本机 DeepSeek Harness**
 
-  [English](README.en.md) · [Apache-2.0](LICENSE)
+  [English](README.en.md) · [更新日志](CHANGELOG.zh-CN.md) · [Apache-2.0](LICENSE)
 
   [![许可证：Apache-2.0](https://img.shields.io/badge/许可证-Apache--2.0-blue.svg)](LICENSE)
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-im-connect.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-im-connect)
@@ -254,7 +254,3 @@ npm test
 项目状态、使用边界、技术架构和迭代记录从[文档交接入口](docs/00-交接入口/00-阅读导航.md)开始。详细操作说明见 [使用说明](docs/02-产品与业务/04-使用说明.md)。默认安全姿态见 [SECURITY.md](SECURITY.md)。
 
 本项目采用 [Apache License 2.0](LICENSE)。
-
-## 更新日志
-
-最近五个发布版本见 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)。

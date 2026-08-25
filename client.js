@@ -26,6 +26,7 @@ window.__ModuleLoader__.load({
         "status.unconfigured": "未配置", "status.connected": "已连接", "status.connecting": "接入中…", "action.configure": "配置", "action.more": "{channel} 更多", "action.reconnect": "重新接入", "action.disconnect": "断开", "action.removeConfig": "删除配置", "action.receive": "接收消息",
         "error.loadAssistant": "无法加载全局配置", "error.noModels": "当前 Host 还没有可用模型，请先在网页里配置提供商", "error.save": "保存失败", "error.chooseWorkspace": "请选择工作区目录", "error.workspaceUnavailable": "当前 Host 无法新增工作区", "error.addWorkspace": "新增工作区失败", "error.load": "加载失败", "error.connection": "无法连接本机 IM 助理接口", "error.request": "请求失败", "error.action": "操作失败", "error.qr": "无法生成二维码", "error.detailsInLog": "操作失败，请查看服务器日志。",
         "composer.aria": "全局会话配置", "composer.project": "选择项目", "composer.projectAria": "项目", "composer.noWorkspaces": "暂无工作区", "composer.addWorkspace": "添加工作区…", "composer.permission": "权限", "composer.noModels": "暂无模型", "composer.workspacePath": "工作区路径", "action.cancel": "取消", "action.adding": "添加中…",
+        "permission.readOnly": "只读", "permission.workspaceWrite": "工作区写入", "permission.fullAccess": "完全访问",
         "rail.workspace": "工作区", "rail.search": "搜索", "rail.searchPlaceholder": "搜索会话...", "rail.clearSearch": "清除搜索", "rail.filter": "筛选", "rail.group": "分组方式", "rail.byWorkspace": "按工作区", "rail.list": "单列表", "rail.sort": "排序方式", "rail.manual": "手动排序", "rail.recent": "最近更新", "rail.running": "运行中", "rail.idle": "空闲", "rail.renameAria": "重命名会话", "rail.rename": "重命名", "rail.fork": "分叉会话", "rail.archive": "归档会话", "rail.empty": "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。", "rail.noTasks": "暂无网页任务", "rail.ungrouped": "未分组", "rail.tabsAria": "工作区分类", "rail.tasks": "任务", "rail.channels": "频道",
         "time.now": "刚刚", "time.minutes": "{count}分钟前", "time.hours": "{count}小时前", "time.days": "{count}天前",
         "server.unknownChannel": "未知渠道", "server.channelUnconfigured": "渠道未配置", "server.sessionMissing": "会话不存在", "server.qrUnsupported": "该渠道不支持扫码绑定", "server.qrExpired": "二维码已过期", "server.qrIncomplete": "扫码未完成", "server.accessDenied": "未授权：请管理员在设置 → IM助理 中批准你的访问。",
@@ -41,6 +42,7 @@ window.__ModuleLoader__.load({
         "status.unconfigured": "Not configured", "status.connected": "Connected", "status.connecting": "Connecting…", "action.configure": "Configure", "action.more": "More options for {channel}", "action.reconnect": "Reconnect", "action.disconnect": "Disconnect", "action.removeConfig": "Remove configuration", "action.receive": "Receive messages",
         "error.loadAssistant": "Could not load global settings", "error.noModels": "No models are available in the Host. Configure a provider in the web app first.", "error.save": "Could not save", "error.chooseWorkspace": "Choose a workspace directory", "error.workspaceUnavailable": "This Host cannot create workspaces", "error.addWorkspace": "Could not add workspace", "error.load": "Could not load", "error.connection": "Could not connect to the local IM Assistant API", "error.request": "Request failed", "error.action": "Action failed", "error.qr": "Could not generate a QR code", "error.detailsInLog": "The operation failed. Check the server logs for details.",
         "composer.aria": "Global session settings", "composer.project": "Select project", "composer.projectAria": "Project", "composer.noWorkspaces": "No workspaces", "composer.addWorkspace": "Add workspace…", "composer.permission": "Permission", "composer.noModels": "No models", "composer.workspacePath": "Workspace path", "action.cancel": "Cancel", "action.adding": "Adding…",
+        "permission.readOnly": "Read Only", "permission.workspaceWrite": "Workspace Write", "permission.fullAccess": "Full access",
         "rail.workspace": "Workspaces", "rail.search": "Search", "rail.searchPlaceholder": "Search sessions...", "rail.clearSearch": "Clear search", "rail.filter": "Filter", "rail.group": "Group by", "rail.byWorkspace": "By workspace", "rail.list": "Single list", "rail.sort": "Sort by", "rail.manual": "Manual", "rail.recent": "Recently updated", "rail.running": "Running", "rail.idle": "Idle", "rail.renameAria": "Rename session", "rail.rename": "Rename", "rail.fork": "Fork session", "rail.archive": "Archive session", "rail.empty": "No channel sessions yet. Connect a channel in Settings → IM Assistant, then send the bot a message.", "rail.noTasks": "No web tasks", "rail.ungrouped": "Ungrouped", "rail.tabsAria": "Workspace categories", "rail.tasks": "Tasks", "rail.channels": "Channels",
         "time.now": "Just now", "time.minutes": "{count} min ago", "time.hours": "{count} hr ago", "time.days": "{count} days ago",
         "server.unknownChannel": "Unknown channel", "server.channelUnconfigured": "Channel is not configured", "server.sessionMissing": "Session does not exist", "server.qrUnsupported": "This channel does not support QR setup", "server.qrExpired": "QR code has expired", "server.qrIncomplete": "QR setup was not completed", "server.accessDenied": "Access denied: ask an administrator to approve you in Settings → IM Assistant.",
@@ -531,9 +533,9 @@ window.__ModuleLoader__.load({
     }
 
     const BUILT_IN_PERMISSION_LABELS = new Map([
-      ["read-only", ["preset.readOnly", "Read Only"]],
-      ["workspace-write", ["preset.workspaceWrite", "Workspace Write"]],
-      ["danger-full-access", ["preset.fullAccess", "Full access"]],
+      ["read-only", ["permission.readOnly", "Read Only"]],
+      ["workspace-write", ["permission.workspaceWrite", "Workspace Write"]],
+      ["danger-full-access", ["permission.fullAccess", "Full access"]],
     ]);
 
     function permissionLabel(option, t) {
@@ -705,7 +707,7 @@ window.__ModuleLoader__.load({
         : "";
       const permissionOptions = permissions.map((item) => ({
         ...item,
-        label: permissionLabel(item, props.permissionT),
+        label: permissionLabel(item, t),
       }));
       const perm = permissionOptions.find((item) => item.value === permission) || { label: permission || t("composer.permission") };
       const modelFallback = props.modelT("trigger.fallback");

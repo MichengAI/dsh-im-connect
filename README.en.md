@@ -8,7 +8,7 @@
 
   **Connect Feishu, DingTalk, WeCom, WeChat, QQ, and Telegram to local DeepSeek Harness**
 
-  [简体中文](README.md) · [Apache-2.0](LICENSE)
+  [简体中文](README.md) · [Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE)
 
   [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-im-connect.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-im-connect)
@@ -254,7 +254,3 @@ npm test
 Project status, usage boundaries, architecture, and iteration records begin at the [documentation entry point](docs/00-交接入口/00-阅读导航.md). The detailed operational guide is [Usage guide](docs/02-产品与业务/04-使用说明.md). The default security posture is in [SECURITY.md](SECURITY.md).
 
 Licensed under [Apache License 2.0](LICENSE).
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for the five most recent releases.
