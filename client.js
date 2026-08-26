@@ -1642,6 +1642,7 @@ window.__ModuleLoader__.load({
 
     function SessionSwitcher(props) {
       const t = props.t || fallbackT;
+      const officialT = props.officialT || t;
       const Official = props.officialTree;
       const rawUseSessions = props.useSessions;
       const nativeTabs = props.nativeTabs;
@@ -1682,7 +1683,7 @@ window.__ModuleLoader__.load({
         if (matched && matched.id !== "schedule") setTab(matched.id);
       }, [currentId, extraTabs]);
       const openSession = (id) => openListedSession(id, props.openSession || props.open);
-      const officialProps = Object.assign({}, props, { useSessions: useTaskSessions, t });
+      const officialProps = Object.assign({}, props, { useSessions: useTaskSessions, t: officialT });
       const channelRail = h(ChannelRail, {
         openSession,
         open: openSession,
@@ -1702,10 +1703,11 @@ window.__ModuleLoader__.load({
         ? h("div", { className: "ima-official-tree" }, h(Official, officialProps))
         : null;
       const extra = extraTabs.find((item) => item.id === tab);
+      const hasChannelTab = extraTabs.some((item) => item.id === "channels");
       return h("div", { className: "ima-wrap" },
         h("div", { className: "ima-tabs", role: "tablist", "aria-label": t("rail.tabsAria") },
           h("button", { type: "button", role: "tab", "aria-selected": tab === "tasks", className: tab === "tasks" ? "ima-tab on" : "ima-tab", onClick: () => setTab("tasks") }, t("rail.tasks")),
-          h("button", { type: "button", role: "tab", "aria-selected": tab === "channels", className: tab === "channels" ? "ima-tab on" : "ima-tab", onClick: () => setTab("channels") }, t("rail.channels")),
+          !hasChannelTab &&           h("button", { type: "button", role: "tab", "aria-selected": tab === "channels", className: tab === "channels" ? "ima-tab on" : "ima-tab", onClick: () => setTab("channels") }, t("rail.channels")),
           ...extraTabs.map((item) => h("button", {
             key: item.id,
             type: "button",
@@ -1777,7 +1779,7 @@ window.__ModuleLoader__.load({
       }
       function LocalizedSessionSwitcher(props) {
         useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
-        return h(SessionSwitcher, Object.assign({}, props, { t }));
+        return h(SessionSwitcher, Object.assign({}, props, { t, officialT: props.t }));
       }
       function LocalizedSettingsPage(props) {
         useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
