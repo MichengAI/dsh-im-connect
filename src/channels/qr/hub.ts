@@ -14,6 +14,8 @@ export interface PairingHubOptions {
   log?: (line: string) => void
   /** 测试注入：替换真实扫码连接器的创建过程。 */
   beginFn?: (channelId: ChannelId, signal: AbortSignal) => Promise<PairingBegin>
+  /** 测试注入：二维码必须在本机生成，禁止回退到外部服务。 */
+  renderQr?: (payload: string) => Promise<string>
 }
 
 interface Session {
@@ -35,11 +37,13 @@ export class PairingHub {
   private readonly sessions = new Map<string, Session>()
   private readonly onSuccess?: PairingHubOptions['onSuccess']
   private readonly beginFn?: PairingHubOptions['beginFn']
+  private readonly renderQr: NonNullable<PairingHubOptions['renderQr']>
   private readonly log: (line: string) => void
 
   constructor(options: PairingHubOptions = {}) {
     this.onSuccess = options.onSuccess
     this.beginFn = options.beginFn
+    this.renderQr = options.renderQr ?? renderQrDataUrl
     this.log = options.log ?? (() => undefined)
   }
 
@@ -82,7 +86,17 @@ export class PairingHub {
       session.qrUrl = payload.qrUrl
       session.qrImage = payload.qrImage
       if (!session.qrImage && session.qrUrl) {
-        try { session.qrImage = await renderQrDataUrl(session.qrUrl) } catch { /* 前端再兜底 */ }
+        try {
+          session.qrImage = await this.renderQr(session.qrUrl)
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error)
+          session.status = 'failed'
+          session.error = '二维码生成失败，请查看本机日志'
+          session.qrUrl = undefined
+          session.begin?.dispose?.()
+          this.log(`[pairing] ${id} 本地二维码生成失败：${detail}`)
+          return this.view(id)
+        }
       }
       session.expiresAt = begun.expiresAt
       // 记住初始有效期窗口：连接器自动换码时按同一窗口顺延，而不是被固定 5 分钟误杀
@@ -161,9 +175,22 @@ export class PairingHub {
       try {
         const polled = await begun.poll(session.controller.signal)
         if (polled.qrUrl && polled.qrUrl !== session.qrUrl) {
-          session.qrUrl = polled.qrUrl
-          if (session.expiryWindowMs) session.expiresAt = Date.now() + session.expiryWindowMs
-          try { session.qrImage = await renderQrDataUrl(polled.qrUrl) } catch { session.qrImage = undefined }
+          try {
+            const qrImage = await this.renderQr(polled.qrUrl)
+            if (this.sessions.get(session.channelId) !== session) return
+            session.qrUrl = polled.qrUrl
+            session.qrImage = qrImage
+            if (session.expiryWindowMs) session.expiresAt = Date.now() + session.expiryWindowMs
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error)
+            session.status = 'failed'
+            session.error = '二维码生成失败，请查看本机日志'
+            session.qrUrl = undefined
+            session.qrImage = undefined
+            session.begin?.dispose?.()
+            this.log(`[pairing] ${session.channelId} 本地二维码刷新失败：${detail}`)
+            return
+          }
         }
         if (this.sessions.get(session.channelId) !== session) return
         if (polled.pollIntervalMs) session.pollIntervalMs = polled.pollIntervalMs
@@ -232,4 +259,3 @@ function hintOf(id: ChannelId): string {
       return '请使用对应 App 扫描二维码'
   }
 }
-

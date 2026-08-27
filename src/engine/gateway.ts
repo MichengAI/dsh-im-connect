@@ -124,6 +124,10 @@ export class ImEngine {
     set.add(id)
   }
 
+  clearAllowed(channelId: string): void {
+    this.extraAllow.delete(channelId)
+  }
+
   dispose(): void {
     for (const off of this.disposeEvents) off()
     this.broker.dispose()

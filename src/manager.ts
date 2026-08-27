@@ -319,15 +319,20 @@ export class ChannelManager {
   private async removeNow(id: ChannelId): Promise<void> {
     await this.stopOne(id)
     this.pairing.cancel(id)
+    const state = this.store.channels[id]
+    if (id === 'weixin') {
+      clearWeixinLogin(join(this.stateDir, 'weixin'))
+      await this.vault.unset(credentialRef('weixin', 'botToken'))
+    }
+    for (const field of CHANNEL_META[id].fields.filter((item) => item.secret)) {
+      const ref = state?.config?.[`${field.key}Ref`] || credentialRef(id, field.key)
+      await this.vault.unset(ref)
+    }
     delete this.store.channels[id]
     delete this.store.allowlist[id]
     delete this.store.pending[id]
+    this.engine.clearAllowed(id)
     this.flush()
-    if (id === 'weixin') clearWeixinLogin(join(this.stateDir, 'weixin'))
-    if (id === 'weixin') await this.vault.unset(credentialRef('weixin', 'botToken')).catch(() => undefined)
-    for (const field of CHANNEL_META[id].fields.filter((item) => item.secret)) {
-      await this.vault.unset(credentialRef(id, field.key)).catch(() => undefined)
-    }
   }
 
   attachMappedSessions(): Promise<void> {
@@ -540,24 +545,28 @@ export class ChannelManager {
     const hasWorkspace = input.cwd !== undefined
     const hasPermission = input.permission !== undefined
     if (!hasModel && !hasWorkspace && !hasPermission) return { ok: false, error: '请选择提供商、模型、工作区或权限' }
+    const nextAssistant = hasModel ? normalizeAssistantModel(input) : undefined
+    if (hasModel && !nextAssistant) return { ok: false, error: '请选择提供商和模型' }
+    const nextCwd = hasWorkspace ? normalizeWorkspacePath(input.cwd) : undefined
+    if (hasWorkspace && !nextCwd) return { ok: false, error: '请选择工作区' }
+    const nextPermission = hasPermission ? normalizePermission(input.permission, this.permissionPresets().names) : undefined
+    if (hasPermission && !nextPermission) return { ok: false, error: '请选择权限' }
+
     if (hasModel) {
-      const next = normalizeAssistantModel(input)
-      if (!next) return { ok: false, error: '请选择提供商和模型' }
+      const next = nextAssistant!
       this.store.assistant = next
       this.applyAssistant(next)
       this.engine.setModel(next.provider, next.model, next.reasoningEffort)
       this.log(`[manager] 助手模型已设为 ${next.provider}/${next.model}`)
     }
     if (hasWorkspace) {
-      const cwd = normalizeWorkspacePath(input.cwd)
-      if (!cwd) return { ok: false, error: '请选择工作区' }
+      const cwd = nextCwd!
       this.store.cwd = cwd
       this.applyWorkspace(cwd)
       this.log(`[manager] 工作区已设为 ${cwd}`)
     }
     if (hasPermission) {
-      const permission = normalizePermission(input.permission, this.permissionPresets().names)
-      if (!permission) return { ok: false, error: '请选择权限' }
+      const permission = nextPermission!
       this.store.permission = permission
       this.applyPermission(permission)
       this.log(`[manager] 权限已设为 ${permission}`)

@@ -264,9 +264,7 @@ window.__ModuleLoader__.load({
     function qrSrc(pairing) {
       if (!pairing) return "";
       if (isRasterQr(pairing.qrImage)) return pairing.qrImage;
-      const payload = pairing.qrUrl || pairing.qrImage;
-      if (!payload) return "";
-      return "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(payload);
+      return "";
     }
 
     const SERVER_TEXT_KEYS = new Map([
@@ -1642,6 +1640,7 @@ window.__ModuleLoader__.load({
 
     function SessionSwitcher(props) {
       const t = props.t || fallbackT;
+      const officialT = props.officialT || t;
       const Official = props.officialTree;
       const rawUseSessions = props.useSessions;
       const nativeTabs = props.nativeTabs;
@@ -1682,7 +1681,7 @@ window.__ModuleLoader__.load({
         if (matched && matched.id !== "schedule") setTab(matched.id);
       }, [currentId, extraTabs]);
       const openSession = (id) => openListedSession(id, props.openSession || props.open);
-      const officialProps = Object.assign({}, props, { useSessions: useTaskSessions, t });
+      const officialProps = Object.assign({}, props, { useSessions: useTaskSessions, t: officialT });
       const channelRail = h(ChannelRail, {
         openSession,
         open: openSession,
@@ -1702,10 +1701,11 @@ window.__ModuleLoader__.load({
         ? h("div", { className: "ima-official-tree" }, h(Official, officialProps))
         : null;
       const extra = extraTabs.find((item) => item.id === tab);
+      const hasChannelTab = extraTabs.some((item) => item.id === "channels");
       return h("div", { className: "ima-wrap" },
         h("div", { className: "ima-tabs", role: "tablist", "aria-label": t("rail.tabsAria") },
           h("button", { type: "button", role: "tab", "aria-selected": tab === "tasks", className: tab === "tasks" ? "ima-tab on" : "ima-tab", onClick: () => setTab("tasks") }, t("rail.tasks")),
-          h("button", { type: "button", role: "tab", "aria-selected": tab === "channels", className: tab === "channels" ? "ima-tab on" : "ima-tab", onClick: () => setTab("channels") }, t("rail.channels")),
+          !hasChannelTab && h("button", { type: "button", role: "tab", "aria-selected": tab === "channels", className: tab === "channels" ? "ima-tab on" : "ima-tab", onClick: () => setTab("channels") }, t("rail.channels")),
           ...extraTabs.map((item) => h("button", {
             key: item.id,
             type: "button",
@@ -1777,7 +1777,7 @@ window.__ModuleLoader__.load({
       }
       function LocalizedSessionSwitcher(props) {
         useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
-        return h(SessionSwitcher, Object.assign({}, props, { t }));
+        return h(SessionSwitcher, Object.assign({}, props, { t, officialT: props.t }));
       }
       function LocalizedSettingsPage(props) {
         useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
@@ -1829,10 +1829,18 @@ window.__ModuleLoader__.load({
         let wrappedEntry = null;
         let originalComp = null;
         let removeInsertedTab = () => {};
+        let stopInsertedTabLocale = () => {};
+        let insertedTabRegistry = null;
         let syncing = false;
-        const unwrap = () => {
+        const clearInsertedTab = () => {
+          stopInsertedTabLocale();
+          stopInsertedTabLocale = () => {};
           removeInsertedTab();
           removeInsertedTab = () => {};
+          insertedTabRegistry = null;
+        };
+        const unwrap = () => {
+          clearInsertedTab();
           if (wrappedEntry && originalComp) {
             try { wrappedEntry.component = originalComp; } catch { /* ignore */ }
           }
@@ -1842,19 +1850,27 @@ window.__ModuleLoader__.load({
         const insertChannelTab = (entry) => {
           const registry = findNativeTabRegistry(entry);
           if (!registry) return false;
-          if (registry.getTabs().some((item) => item.id === "channels")) return true;
-          removeInsertedTab();
-          removeInsertedTab = registry.insert({
-            id: "channels",
-            label: t("rail.channels"),
-            order: 20,
-            matchSession: (id) => String(id).startsWith("im:"),
-            render: (props) => h(LocalizedChannelRail, Object.assign({}, props, {
-              skin: "native",
-              openSession: (id) => openListedSession(id, props.openSession || props.open),
-              open: (id) => openListedSession(id, props.openSession || props.open),
-            })),
-          });
+          if (registry.getTabs().some((item) => item.id === "channels")) {
+            if (insertedTabRegistry && insertedTabRegistry !== registry) clearInsertedTab();
+            return true;
+          }
+          clearInsertedTab();
+          insertedTabRegistry = registry;
+          const refreshInsertedTab = () => {
+            removeInsertedTab = registry.insert({
+              id: "channels",
+              label: t("rail.channels"),
+              order: 20,
+              matchSession: (id) => String(id).startsWith("im:"),
+              render: (props) => h(LocalizedChannelRail, Object.assign({}, props, {
+                skin: "native",
+                openSession: (id) => openListedSession(id, props.openSession || props.open),
+                open: (id) => openListedSession(id, props.openSession || props.open),
+              })),
+            });
+          };
+          refreshInsertedTab();
+          stopInsertedTabLocale = subscribeLocale(refreshInsertedTab);
           return true;
         };
         const sync = () => {

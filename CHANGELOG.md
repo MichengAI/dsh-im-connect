@@ -4,6 +4,16 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.25 — 2026-08-27
+
+- Fixed the sidebar wrapper so the official workspace tree keeps its Host translator, only one Channels tab renders, and registry labels follow live locale changes without leaking subscriptions.
+- Removed the external QR-code fallback. Pairing payloads are now rendered locally only, and pairing fails closed if local rasterization fails.
+- Revoked runtime authorization and cleared stored credentials plus WeChat identity, context, and QR state when a channel is removed.
+- Made multi-field IM Assistant settings updates atomic so invalid requests cannot partially change the active configuration.
+- Added regression coverage and pull-request CI for tests and package verification.
+
+Published package: [`@michengai/dsh-im-connect@0.1.25`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.25).
+
 ## 0.1.24 — 2026-08-26
 
 - Restored localized built-in permission labels in IM Assistant settings instead of exposing missing `preset.*` translation keys.
@@ -32,9 +42,3 @@ Release commit: [`47d1936`](https://github.com/MichengAI/dsh-im-connect/commit/4
 - Hardened IM channel runtime behavior.
 
 Release commit: [`be07643`](https://github.com/MichengAI/dsh-im-connect/commit/be07643).
-
-## 0.1.20 — 2026-08-23
-
-- Preserved UTF-8 API request bodies across connector requests.
-
-Release commit: [`21e06e6`](https://github.com/MichengAI/dsh-im-connect/commit/21e06e6).

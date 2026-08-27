@@ -20,6 +20,26 @@ test('任务页包裹官方 WorkspaceBrowser，不换掉原生树', () => {
   assert.match(client, /"频道"/)
 })
 
+test('原生任务树保留 Host 的 workspace 翻译器', () => {
+  assert.match(client, /const officialT = props\.officialT \|\| t/)
+  assert.match(client, /officialProps = Object\.assign\(\{\}, props, \{ useSessions: useTaskSessions, t: officialT \}\)/)
+  assert.match(client, /return h\(SessionSwitcher, Object\.assign\(\{\}, props, \{ t, officialT: props\.t \}\)\)/)
+  assert.doesNotMatch(client, /officialProps = Object\.assign\(\{\}, props, \{ useSessions: useTaskSessions, t \}\)/)
+})
+
+test('注册表已有频道页签时不再渲染硬编码的重复页签', () => {
+  assert.match(client, /const hasChannelTab = extraTabs\.some\(\(item\) => item\.id === "channels"\)/)
+  assert.match(client, /!hasChannelTab && h\("button", \{[^\n]+onClick: \(\) => setTab\("channels"\)[^\n]+t\("rail\.channels"\)\)/)
+  assert.doesNotMatch(client, /!hasChannelTab &&\s{2,}h\("button"/)
+})
+
+test('频道注册表页签随 Host 语言刷新且切换宿主时清理旧订阅', () => {
+  assert.match(client, /const refreshInsertedTab = \(\) => \{[\s\S]*label: t\("rail\.channels"\)[\s\S]*\};\s*refreshInsertedTab\(\);\s*stopInsertedTabLocale = subscribeLocale\(refreshInsertedTab\)/)
+  assert.match(client, /const clearInsertedTab = \(\) => \{\s*stopInsertedTabLocale\(\);[\s\S]*removeInsertedTab\(\);[\s\S]*insertedTabRegistry = null/)
+  assert.match(client, /insertedTabRegistry && insertedTabRegistry !== registry\) clearInsertedTab\(\)/)
+  assert.match(client, /const unwrap = \(\) => \{\s*clearInsertedTab\(\)/)
+})
+
 test('原生归档走官方 archiveSession，不本地删除', () => {
   assert.match(client, /归档会话/)
   assert.match(client, /ctx\.workspaces\.archiveSession/)

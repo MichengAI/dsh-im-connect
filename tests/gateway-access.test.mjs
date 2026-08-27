@@ -143,3 +143,16 @@ test('白名单用户可通过命令；群聊不能批准工具', async (t) => {
     engine.dispose()
   }
 })
+
+test('删除渠道授权后旧用户立即失去私聊访问权', async (t) => {
+  const { engine, inbound, sent } = makeEngine(t)
+  engine.addAllowed('telegram', 'user-1')
+  engine.clearAllowed('telegram')
+  try {
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '/help', kind: 'dm', messageId: 'revoked-1' })
+    await waitFor(() => sent.length === 1)
+    assert.match(sent[0].text, /未授权/)
+  } finally {
+    engine.dispose()
+  }
+})

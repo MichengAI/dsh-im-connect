@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, w
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { createWeixinChannel, isStaleWeixinTokenError, uniqueMediaFileName, persistWeixinLogin, readLegacyWeixinBotToken, readResponseBufferLimited } from '../lib/channels/weixin.js'
+import { clearWeixinLogin, createWeixinChannel, isStaleWeixinTokenError, uniqueMediaFileName, persistWeixinLogin, readLegacyWeixinBotToken, readResponseBufferLimited } from '../lib/channels/weixin.js'
 import { API_CLIENT_HEADER, backupCorruptConfig, readApiJsonBody, validateApiRequest } from '../lib/manager.js'
 import { createFileVault } from '../lib/engine/credentials.js'
 import { createRotatingFileAppender } from '../lib/engine/file-log.js'
@@ -153,6 +153,24 @@ test('微信旧明文 token 可迁移且状态重写后不再保留 token', () =
     assert.equal(readLegacyWeixinBotToken(stateDir), 'legacy-secret')
     persistWeixinLogin(stateDir, {})
     assert.equal(JSON.parse(readFileSync(file, 'utf8')).botToken, undefined)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('删除微信配置会清空绑定身份、上下文令牌和二维码记录', () => {
+  const dir = tempDir()
+  try {
+    const stateDir = join(dir, 'weixin')
+    const stateFile = join(stateDir, 'wechat-state.json')
+    const loginFile = join(stateDir, 'wechat-login.txt')
+    persistWeixinLogin(stateDir, { allowedUserId: 'old-user', baseUrl: 'https://api.test' })
+    const state = JSON.parse(readFileSync(stateFile, 'utf8'))
+    writeFileSync(stateFile, JSON.stringify({ ...state, contextTokens: { 'old-user': 'old-context' }, syncBuf: 'old-cursor' }), 'utf8')
+    writeFileSync(loginFile, 'old-qr-payload\n', 'utf8')
+    clearWeixinLogin(stateDir)
+    assert.equal(existsSync(stateFile), false)
+    assert.equal(existsSync(loginFile), false)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

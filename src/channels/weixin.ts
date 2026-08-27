@@ -11,7 +11,7 @@
  */
 
 import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, basename } from 'node:path'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
@@ -794,12 +794,6 @@ export function persistWeixinLogin(stateDir: string, data: { allowedUserId?: str
 }
 
 export function clearWeixinLogin(stateDir: string): void {
-  const file = weixinStatePath(stateDir)
-  try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<WechatState>
-    writePrivateFileSync(file, `${JSON.stringify({
-      allowedUserId: parsed.allowedUserId,
-      contextTokens: parsed.contextTokens ?? {},
-    }, null, 2)}\n`)
-  } catch { /* 无登录态 */ }
+  rmSync(weixinStatePath(stateDir), { force: true })
+  rmSync(join(stateDir, 'wechat-login.txt'), { force: true })
 }

@@ -1,7 +1,29 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel } from '../lib/engine/assistant-settings.js'
+import { ChannelManager } from '../lib/manager.js'
+
+function makeManager(t) {
+  const stateDir = mkdtempSync(join(tmpdir(), 'im-connect-assistant-'))
+  t.after(() => rmSync(stateDir, { recursive: true, force: true }))
+  const permissionPresets = {
+    names: ['review', 'workspace-write', 'danger-full-access'],
+    defaultPreset: 'review',
+    optionOf: (name) => ({ value: name, name }),
+  }
+  const engineConfig = {
+    cwd: stateDir,
+    provider: 'initial-provider',
+    model: 'initial-model',
+    agentPreset: 'standard',
+    mergeTimeoutSecs: 5,
+    permissionPreset: 'review',
+  }
+  return new ChannelManager({ ctx: { permissionPresets }, stateDir, log: () => undefined, engineConfig })
+}
 
 test('助手模型必须同时有提供商和模型 id', () => {
   assert.equal(normalizeAssistantModel({ provider: ' deepseek ', model: ' ' }), undefined)
@@ -113,4 +135,30 @@ test('权限默认值直接取 Host 官方默认预设', () => {
   const index = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
   assert.match(index, /permissionPreset: permissionPresets\.defaultPreset/)
   assert.match(index, /'permissionPresets'/)
+})
+
+test('助手多字段配置先完整校验，失败时不部分切换模型', (t) => {
+  const manager = makeManager(t)
+  const result = manager.setAssistant({
+    provider: 'next-provider',
+    model: 'next-model',
+    cwd: '   ',
+  })
+  assert.deepEqual(result, { ok: false, error: '请选择工作区' })
+  assert.deepEqual(manager.currentAssistant(), { provider: 'initial-provider', model: 'initial-model' })
+  assert.equal(manager.currentWorkspace().includes('im-connect-assistant-'), true)
+})
+
+test('助手多字段配置全部合法时一次保存完整结果', (t) => {
+  const manager = makeManager(t)
+  const result = manager.setAssistant({
+    provider: 'next-provider',
+    model: 'next-model',
+    cwd: ' D:\\repo\\next ',
+    permission: 'workspace-write',
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.assistant, { provider: 'next-provider', model: 'next-model' })
+  assert.equal(result.cwd, 'D:\\repo\\next')
+  assert.equal(result.permission, 'workspace-write')
 })
