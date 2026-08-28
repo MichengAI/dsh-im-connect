@@ -4,6 +4,12 @@
 
 以下记录最近发布的五个版本。Git 标签与 GitHub Release 现已和这些条目同步；历史条目继续保留原始发布提交链接。
 
+## 0.1.26 — 2026-08-28
+
+- 启用仓库 GitHub Actions 发布工作流的 npm Trusted Publishing。
+
+发布包：[`@michengai/dsh-im-connect@0.1.26`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.26)。
+
 ## 0.1.25 — 2026-08-27
 
 - 修复侧栏包装逻辑：官方工作区树继续使用宿主翻译器，频道页签只显示一个，注册表标签随语言实时刷新且不会残留订阅。

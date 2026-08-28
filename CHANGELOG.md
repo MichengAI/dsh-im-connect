@@ -4,6 +4,12 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.26 — 2026-08-28
+
+- Enabled npm Trusted Publishing through the repository's GitHub Actions release workflow.
+
+Published package: [`@michengai/dsh-im-connect@0.1.26`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.26).
+
 ## 0.1.25 — 2026-08-27
 
 - Fixed the sidebar wrapper so the official workspace tree keeps its Host translator, only one Channels tab renders, and registry labels follow live locale changes without leaking subscriptions.
