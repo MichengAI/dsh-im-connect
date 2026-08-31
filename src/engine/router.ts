@@ -82,6 +82,13 @@ export class SessionRouter {
     }
   }
 
+  sessionIdsForChannel(channelId: ChannelInstanceId): string[] {
+    return [...new Set([
+      ...[...this.live.values()].filter((item) => item.channelId === channelId).map((item) => item.sessionId),
+      ...this.store.list().filter((item) => item.channel === channelId).map((item) => item.sessionId),
+    ])]
+  }
+
   async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { rebuildMissing?: boolean }): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const live = this.live.get(key)

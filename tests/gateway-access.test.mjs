@@ -88,6 +88,37 @@ test('账号显式允许所有私聊用户时覆盖渠道本地白名单', async
   }
 })
 
+test('允许所有私聊用户不等于允许未批准用户审批工具', async (t) => {
+  const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t, undefined, undefined, {}, {
+    resolvePrivateAccess: () => 'all',
+  })
+  try {
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '/help', kind: 'dm', messageId: 'public-help' })
+    await waitFor(() => sent.some((item) => item.text.includes('IM 助理已连接')))
+
+    const outcome = await handlers['approval/request']({
+      agent: {
+        id: dmSessionId,
+        session: {
+          id: dmSessionId,
+          events: [{
+            type: 'tool/call',
+            data: { callId: 'public-tool', name: 'bash', arguments: JSON.stringify({ command: 'pwd' }) },
+          }],
+        },
+      },
+      toolName: 'bash',
+      callId: 'public-tool',
+    }, async () => 'browser-owned')
+
+    assert.equal(outcome, 'browser-owned')
+    assert.equal(sent.some((item) => item.text.includes('工具调用审批仅限已批准用户')), true)
+    assert.equal(sent.some((item) => item.text.includes('操作参数')), false)
+  } finally {
+    engine.dispose()
+  }
+})
+
 test('未授权用户在命令和审批之前就被拒绝', async (t) => {
   const pending = []
   const { engine, inbound, sent } = makeEngine(t, (_channelId, msg) => {
@@ -186,6 +217,49 @@ test('旧版审批请求仍返回旧格式', async (t) => {
     await waitFor(() => sent.some((item) => item.text.includes('legacy-tool')))
     inbound({ chatId: 'user-1', userId: 'user-1', text: '拒绝', kind: 'dm', messageId: 'legacy-deny' })
     assert.deepEqual(await pending, { behavior: 'reject' })
+  } finally {
+    engine.dispose()
+  }
+})
+
+test('账号配置重载会显式取消该账号等待中的工具审批', async (t) => {
+  const { engine, sent, handlers, dmSessionId } = makeEngine(t)
+  engine.addAllowed('telegram', 'user-1')
+  try {
+    const pending = handlers['approval/request']({
+      agent: {
+        id: dmSessionId,
+        session: {
+          id: dmSessionId,
+          events: [{
+            type: 'tool/call',
+            data: { callId: 'reload-tool', name: 'bash', arguments: JSON.stringify({ command: 'pwd' }) },
+          }],
+        },
+      },
+      toolName: 'bash',
+      callId: 'reload-tool',
+    }, async () => 'browser-owned')
+    await waitFor(() => sent.some((item) => item.text.includes('操作参数')))
+
+    engine.reloadChannel('telegram')
+    assert.equal(await pending, 'browser-owned')
+  } finally {
+    engine.dispose()
+  }
+})
+
+test('账号配置重载会显式取消该账号等待中的结构化问题', async (t) => {
+  const { engine, sent, handlers, dmSessionId } = makeEngine(t)
+  try {
+    const pending = handlers['user-questions/request']({
+      agent: { id: dmSessionId, session: { id: dmSessionId, events: [] } },
+      questions: [{ id: 'reload-question', question: '配置更新前的问题' }],
+    }, async () => assert.fail('账号配置更新不应把旧问题转交网页端'))
+    await waitFor(() => sent.some((item) => item.text.includes('配置更新前的问题')))
+
+    engine.reloadChannel('telegram')
+    await assert.rejects(pending, /账号配置已更新/)
   } finally {
     engine.dispose()
   }
@@ -590,6 +664,7 @@ test('审批提示发送途中取消会立即返回，并在发送结束后标�
       await promptGate
     }
   })
+  setup.engine.addAllowed('telegram', 'user-1')
   const controller = new AbortController()
   try {
     const pending = setup.handlers['approval/request']({

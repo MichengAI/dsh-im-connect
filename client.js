@@ -19,10 +19,10 @@ window.__ModuleLoader__.load({
     const IM_LOCALES = {
       zh: {
         "settings.label": "IM助理", "settings.title": "IM 频道", "settings.description": "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。频道配置仅保存在本机。",
-        "settings.aria": "IM助理", "settings.selectAccountTitle": "选择一个账号", "settings.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。", "settings.noAccountsTitle": "还没有接入账号", "settings.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
+        "settings.aria": "IM助理", "settings.selectAccountTitle": "选择一个账号", "settings.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。", "settings.noAccountsTitle": "还没有接入账号", "settings.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。", "settings.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
         "channel.dingtalk": "钉钉", "channel.feishu": "飞书", "channel.lark": "Lark", "channel.weixin": "微信", "channel.wecom": "企业微信", "channel.qq": "QQ", "channel.telegram": "Telegram",
         "field.dingtalk.clientId": "Client ID（原 AppKey）", "field.dingtalk.clientSecret": "Client Secret（原 AppSecret）",
-        "bind.title": "配置 {channel}", "bind.close": "关闭", "bind.quick": "快捷绑定（推荐）", "bind.manual": "手动配置", "bind.success": "绑定成功，频道已连接", "bind.qrAlt": "{channel} 绑定二维码", "bind.generating": "正在生成…", "bind.expire": "二维码 {time} 后过期", "bind.scanned": "已扫码，请在手机上确认", "bind.retry": "请重新生成二维码", "bind.refresh": "重新生成二维码", "action.saving": "保存中…", "action.confirm": "确认",
+        "bind.title": "配置 {channel}", "bind.close": "关闭", "bind.quick": "快捷绑定（推荐）", "bind.manual": "手动配置", "bind.success": "绑定成功，频道已连接", "bind.newIdentity": "检测到新的账号身份，已创建新账号", "bind.qrAlt": "{channel} 绑定二维码", "bind.generating": "正在生成…", "bind.expire": "二维码 {time} 后过期", "bind.scanned": "已扫码，请在手机上确认", "bind.retry": "请重新生成二维码", "bind.refresh": "重新生成二维码", "action.saving": "保存中…", "action.confirm": "确认",
         "qr.weixin": "请使用微信扫描二维码完成绑定", "qr.feishu": "请使用飞书扫描二维码，将自动创建机器人", "qr.lark": "请使用 Lark 扫描二维码完成配对", "qr.wecom": "请使用企业微信扫描二维码，快捷绑定机器人", "qr.dingtalk": "请使用钉钉扫描二维码，自动创建机器人", "qr.qq": "请使用手机 QQ 扫描二维码，创建开放平台机器人", "qr.default": "请使用对应 App 扫描二维码",
         "status.unconfigured": "未配置", "status.connected": "已连接", "status.connecting": "接入中…", "action.configure": "配置", "action.more": "{channel} 更多", "action.reconnect": "重新接入", "action.disconnect": "断开", "action.removeConfig": "删除配置", "action.receive": "接收消息",
         "error.loadAssistant": "无法加载全局配置", "error.noModels": "当前 Host 还没有可用模型，请先在网页里配置提供商", "error.save": "保存失败", "error.chooseWorkspace": "请选择工作区目录", "error.workspaceUnavailable": "当前 Host 无法新增工作区", "error.addWorkspace": "新增工作区失败", "error.load": "加载失败", "error.connection": "无法连接本机 IM 助理接口", "error.request": "请求失败", "error.action": "操作失败", "error.qr": "无法生成二维码", "error.detailsInLog": "操作失败，请查看服务器日志。",
@@ -35,10 +35,10 @@ window.__ModuleLoader__.load({
       },
       en: {
         "settings.label": "IM Assistant", "settings.title": "IM Channels", "settings.description": "Connect IM channels so your local assistant can receive messages from DingTalk, Feishu, and more. Channel settings are stored only on this machine.",
-        "settings.aria": "IM Assistant", "settings.selectAccountTitle": "Select an account", "settings.selectAccountDescription": "Choose an account on the left to view and edit its workspace, model, and permissions.", "settings.noAccountsTitle": "No accounts connected", "settings.noAccountsDescription": "Choose a channel on the left, then select Add account.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
+        "settings.aria": "IM Assistant", "settings.selectAccountTitle": "Select an account", "settings.selectAccountDescription": "Choose an account on the left to view and edit its workspace, model, and permissions.", "settings.noAccountsTitle": "No accounts connected", "settings.noAccountsDescription": "Choose a channel on the left, then select Add account.", "settings.publicChatNotice": "Unapproved users can start chats, but they cannot approve tool calls.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
         "channel.dingtalk": "DingTalk", "channel.feishu": "Feishu", "channel.lark": "Lark", "channel.weixin": "WeChat", "channel.wecom": "WeCom", "channel.qq": "QQ", "channel.telegram": "Telegram",
         "field.dingtalk.clientId": "Client ID (formerly AppKey)", "field.dingtalk.clientSecret": "Client Secret (formerly AppSecret)",
-        "bind.title": "Set up {channel}", "bind.close": "Close", "bind.quick": "Quick setup (recommended)", "bind.manual": "Manual setup", "bind.success": "Connected successfully", "bind.qrAlt": "{channel} setup QR code", "bind.generating": "Generating…", "bind.expire": "QR code expires in {time}", "bind.scanned": "Scanned. Confirm on your phone.", "bind.retry": "Generate a new QR code", "bind.refresh": "Generate a new QR code", "action.saving": "Saving…", "action.confirm": "Confirm",
+        "bind.title": "Set up {channel}", "bind.close": "Close", "bind.quick": "Quick setup (recommended)", "bind.manual": "Manual setup", "bind.success": "Connected successfully", "bind.newIdentity": "A new account identity was detected and a new account was created", "bind.qrAlt": "{channel} setup QR code", "bind.generating": "Generating…", "bind.expire": "QR code expires in {time}", "bind.scanned": "Scanned. Confirm on your phone.", "bind.retry": "Generate a new QR code", "bind.refresh": "Generate a new QR code", "action.saving": "Saving…", "action.confirm": "Confirm",
         "qr.weixin": "Scan the QR code with WeChat to connect", "qr.feishu": "Scan with Feishu; a bot will be created automatically", "qr.lark": "Scan with Lark to pair", "qr.wecom": "Scan with WeCom to quickly connect a bot", "qr.dingtalk": "Scan with DingTalk; a bot will be created automatically", "qr.qq": "Scan with mobile QQ to create an Open Platform bot", "qr.default": "Scan the QR code with the corresponding app",
         "status.unconfigured": "Not configured", "status.connected": "Connected", "status.connecting": "Connecting…", "action.configure": "Configure", "action.more": "More options for {channel}", "action.reconnect": "Reconnect", "action.disconnect": "Disconnect", "action.removeConfig": "Remove configuration", "action.receive": "Receive messages",
         "error.loadAssistant": "Could not load global settings", "error.noModels": "No models are available in the Host. Configure a provider in the web app first.", "error.save": "Could not save", "error.chooseWorkspace": "Choose a workspace directory", "error.workspaceUnavailable": "This Host cannot create workspaces", "error.addWorkspace": "Could not add workspace", "error.load": "Could not load", "error.connection": "Could not connect to the local IM Assistant API", "error.request": "Request failed", "error.action": "Action failed", "error.qr": "Could not generate a QR code", "error.detailsInLog": "The operation failed. Check the server logs for details.",
@@ -193,7 +193,7 @@ window.__ModuleLoader__.load({
 .ima-inspector-actions{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:18px;border-top:1px solid var(--ima-line)}.ima-inspector-actions .ima-btn{min-height:36px}.ima-inspector-actions .danger{margin-left:auto;color:var(--ima-danger);border-color:color-mix(in srgb,var(--ima-danger) 35%,transparent)}
 .ima-save-note{min-height:18px;color:var(--ima-muted);font-size:11px}.ima-save-note.ok{color:var(--ima-ok)}
 .ima-modal.ima-account-modal{width:min(560px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto}.ima-setup-section{margin:4px 0 14px;padding-bottom:14px;border-bottom:1px solid var(--ima-line)}
-.ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:7px}.ima-picker-field.wide{grid-column:1/-1}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-account-picker{width:100%}.ima-account-picker .ima-chip-btn{width:100%;height:auto;min-height:44px;justify-content:flex-start;padding:8px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font-size:13px;text-align:left}.ima-account-picker .ima-chip-btn:hover,.ima-account-picker.is-open .ima-chip-btn{border-color:var(--ima-accent);background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-account-picker .ima-chip-label{flex:1}.ima-account-picker .ima-chip-btn em{margin-left:auto}.ima-account-picker .ima-chip-menu{width:100%;min-width:100%;max-height:min(320px,calc(100vh - 120px))}.ima-account-picker.ima-model-select .ima-chip-btn{border-radius:9px}.ima-account-picker.ima-model-select .ima-chip-menu{width:max(100%,320px);min-width:100%}.ima-account-settings .ima-chip-dialog{grid-column:1/-1;margin-top:0}.ima-picker-note{grid-column:1/-1;color:var(--ima-muted);font-size:11px;line-height:1.5}
+.ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:7px}.ima-picker-field.wide{grid-column:1/-1}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-account-picker{width:100%}.ima-account-picker .ima-chip-btn{width:100%;height:auto;min-height:44px;justify-content:flex-start;padding:8px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font-size:13px;text-align:left}.ima-account-picker .ima-chip-btn:hover,.ima-account-picker.is-open .ima-chip-btn{border-color:var(--ima-accent);background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-account-picker .ima-chip-label{flex:1}.ima-account-picker .ima-chip-btn em{margin-left:auto}.ima-account-picker .ima-chip-menu{width:100%;min-width:100%;max-height:min(320px,calc(100vh - 120px))}.ima-account-picker.ima-model-select .ima-chip-btn{border-radius:9px}.ima-account-picker.ima-model-select .ima-chip-menu{width:max(100%,320px);min-width:100%}.ima-account-settings .ima-chip-dialog{grid-column:1/-1;margin-top:0}.ima-picker-note{grid-column:1/-1;color:var(--ima-muted);font-size:11px;line-height:1.5}.ima-picker-note.warning{color:var(--ima-warning)}
 @media(max-width:1280px){[role="dialog"][aria-labelledby]:has(.ima-account-page){width:min(920px,calc(100vw - 48px));max-width:min(920px,calc(100vw - 48px))}.ima-account-shell{grid-template-columns:minmax(300px,340px) minmax(320px,1fr)}}
 @media(max-width:850px){[role="dialog"][aria-labelledby]:has(.ima-account-page){width:calc(100vw - 32px);max-width:calc(100vw - 32px)}.ima-account-shell{grid-template-columns:1fr}.ima-platforms{border-right:0;border-bottom:1px solid var(--ima-line)}.ima-inspector{padding:18px}}
 @media(max-width:620px){.ima-account-settings{grid-template-columns:1fr}.ima-picker-field.wide{grid-column:auto}.ima-account-picker.ima-model-select .ima-chip-menu{width:100%}}
@@ -373,6 +373,7 @@ window.__ModuleLoader__.load({
       const [draft, setDraft] = useState({});
       const [busy, setBusy] = useState(false);
       const [error, setError] = useState("");
+      const [success, setSuccess] = useState("");
       const [settings, setSettings] = useState(() => ({
         cwd: defaults && defaults.cwd || "",
         provider: defaults && defaults.assistant && defaults.assistant.provider || "",
@@ -388,6 +389,7 @@ window.__ModuleLoader__.load({
         setQrStarted(true);
         setBusy(true);
         setError("");
+        setSuccess("");
         api(`/channels/${ch.id}/qr/${refresh ? "refresh" : "start"}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -453,19 +455,24 @@ window.__ModuleLoader__.load({
         const config = { ...draft };
         setBusy(true);
         setError("");
+        setSuccess("");
         api(`/channels/${ch.id}/connect`, {
           method: "POST",
           headers: { "content-type": "application/json" },
            body: JSON.stringify({ config, settings }),
         }).then((data) => {
           if (!data.ok) setError(serverText(data.error, t) || t("error.save"));
-          else finish(400);
+          else {
+            setSuccess(data.newIdentity ? t("bind.newIdentity") : t("bind.success"));
+            finish(data.newIdentity ? 1400 : 500);
+          }
         }).catch(() => setError(t("error.save"))).finally(() => setBusy(false));
       };
 
       const switchTab = (next) => {
         setTab(next);
         setError("");
+        setSuccess("");
         if (next !== "qr") {
           setQrStarted(false);
           setPairing(null);
@@ -488,6 +495,7 @@ window.__ModuleLoader__.load({
             h("button", { className: tab === "manual" ? "on" : "", onClick: () => switchTab("manual") }, t("bind.manual")),
           ),
           error && h("div", { className: "ima-error" }, error),
+          success && h("div", { className: "ima-ok" }, success),
           h("div", { className: "ima-setup-section" },
             h(AccountSettingsPicker, {
               value: settings,
@@ -876,6 +884,7 @@ window.__ModuleLoader__.load({
           h(ChipRow, { icon: h(ShieldIcon), label: "仅已批准用户", active: privateAccess === "approved", onClick: () => { update({ privateAccess: "approved" }); setOpen(""); } }),
           h(ChipRow, { icon: h(ShieldIcon), label: "允许所有私聊用户", active: privateAccess === "all", onClick: () => { update({ privateAccess: "all" }); setOpen(""); } }),
         ), true),
+        privateAccess === "all" && h("div", { className: "ima-picker-note warning" }, t("settings.publicChatNotice")),
         adding && h("div", { className: "ima-chip-dialog" },
           h("strong", null, t("composer.addWorkspace")),
           h("input", { value: addPath, placeholder: t("composer.workspacePath"), "aria-label": t("composer.workspacePath"), onChange: (event) => setAddPath(event.target.value) }),
@@ -1186,8 +1195,14 @@ window.__ModuleLoader__.load({
     function AccountInspector({ account, catalog, permissions, workspaces, createWorkspace, pickDirectory, modelT, permissionT, t, onAction, onSave }) {
       const [draft, setDraft] = useState(account);
       const [note, setNote] = useState("");
-      useEffect(() => { setDraft(account); setNote(""); }, [account.id, account.cwd, account.permission, account.privateAccess, account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model]);
+      const saveSeq = useRef(0);
+      useEffect(() => {
+        saveSeq.current += 1;
+        setDraft(account);
+        setNote("");
+      }, [account.id, account.cwd, account.permission, account.privateAccess, account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort]);
       const save = (patch) => {
+        const seq = ++saveSeq.current;
         const next = { ...draft, ...patch };
         setDraft(next);
         setNote("保存中…");
@@ -1199,7 +1214,10 @@ window.__ModuleLoader__.load({
           reasoningEffort: next.assistant.reasoningEffort || null,
           permission: next.permission,
           privateAccess: next.privateAccess,
-        }).then((ok) => setNote(ok ? "已保存" : "保存失败"));
+        }).then((ok) => {
+          if (seq === saveSeq.current) setNote(ok ? "已保存" : "保存失败");
+          return ok;
+        });
       };
       const applySettings = (patch) => {
         const hasAssistant = Object.prototype.hasOwnProperty.call(patch, "provider") || Object.prototype.hasOwnProperty.call(patch, "model") || Object.prototype.hasOwnProperty.call(patch, "reasoningEffort");

@@ -114,10 +114,7 @@ export class ImEngine {
       this.disposeEvents.push(on('session/disposed', (...args: unknown[]) => {
         const id = String((args[0] as { id?: string } | undefined)?.id ?? '')
         if (id === '') return
-        this.broker.cancel(id)
-        this.questions.cancel(id)
-        this.sessionActors.delete(id)
-        this.questionActors.delete(id)
+        this.cancelSessionInteractions(id)
         void this.router.onHostDisposed(id)
       }, { global: true }))
       this.disposeEvents.push(on('approval/request', (...args: unknown[]) => {
@@ -194,6 +191,9 @@ export class ImEngine {
   }
 
   reloadChannel(channelId: string): void {
+    for (const sessionId of this.router.sessionIdsForChannel(channelId)) {
+      this.cancelSessionInteractions(sessionId, new Error('账号配置已更新'))
+    }
     void this.router.disposeChannel(channelId)
   }
 
@@ -223,8 +223,16 @@ export class ImEngine {
 
   private userAllowed(channelId: string, userId?: string): boolean {
     if (!userId) return false
-    if (this.resolvePrivateAccess(channelId) === 'all') return true
     return this.extraAllow.get(channelId)?.has(userId) === true
+  }
+
+  private cancelSessionInteractions(sessionId: string, reason?: unknown): void {
+    this.broker.cancel(sessionId)
+    this.questions.cancel(sessionId, reason)
+    this.sessionActors.delete(sessionId)
+    this.questionActors.delete(sessionId)
+    this.questionDeliveries.delete(sessionId)
+    this.questionPromptDelivered.delete(sessionId)
   }
 
   private isAuthorized(channelId: string, channel: ChannelAdapter, msg: ImMessage): boolean {
@@ -312,9 +320,12 @@ export class ImEngine {
       const denyWords = ['拒绝', '不同意', 'no', 'n', 'reject', 'deny']
       const verdict = allowWords.includes(text.toLowerCase()) ? true : denyWords.includes(text.toLowerCase()) ? false : undefined
       if (verdict !== undefined) {
-        if (!canAnswerToolApproval({ userAllowed: true, kind: msg.kind === 'group' ? 'group' : 'dm' })) {
+        if (!canAnswerToolApproval({ userAllowed: this.userAllowed(channelId, msg.userId), kind: msg.kind === 'group' ? 'group' : 'dm' })) {
           if (binding && this.broker.has(binding.sessionId)) {
-            await channel.send(msg.chatId, '请在私聊中批准或拒绝工具调用。').catch(() => undefined)
+            const hint = msg.kind === 'group'
+              ? '请在私聊中批准或拒绝工具调用。'
+              : '工具调用审批仅限已批准用户，请在网页端处理。'
+            await channel.send(msg.chatId, hint).catch(() => undefined)
             return
           }
         } else if (await this.answerApproval(channelId, msg, verdict)) {
@@ -410,6 +421,11 @@ export class ImEngine {
       if (!binding || !channel) return DELEGATE_INTERACTION
       if (binding.kind === 'group') {
         await this.deliver(channel, binding.chatId, '当前工具审批不能在群聊中处理，请在网页端批准或拒绝。')
+        return DELEGATE_INTERACTION
+      }
+      const actor = this.sessionActors.get(sessionId) ?? binding.chatId
+      if (!actor || !this.userAllowed(binding.channelId, actor)) {
+        await this.deliver(channel, binding.chatId, '当前用户可以私聊，但工具调用审批仅限已批准用户；请在网页端处理。')
         return DELEGATE_INTERACTION
       }
       const prompt = this.approvalPrompt(req)

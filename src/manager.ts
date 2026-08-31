@@ -310,14 +310,17 @@ export class ChannelManager {
     }
   }
 
-  async connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{ ok: boolean; error?: string; accountId?: string }> {
+  async connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{ ok: boolean; error?: string; accountId?: string; created?: boolean; newIdentity?: boolean }> {
     if (!CHANNEL_META[id]) return { ok: false, error: '未知渠道' }
     const accountId = this.accountIdFor(id, config ?? {})
     return this.channelOperations.run(accountId, () => this.connectNow(id, accountId, config, settings ?? {}))
   }
 
-  private async connectNow(id: ChannelId, accountId: string, config?: Record<string, string>, settings: Record<string, unknown> = {}): Promise<{ ok: boolean; error?: string; accountId?: string }> {
+  private async connectNow(id: ChannelId, accountId: string, config?: Record<string, string>, settings: Record<string, unknown> = {}): Promise<{ ok: boolean; error?: string; accountId?: string; created?: boolean; newIdentity?: boolean }> {
     const incoming = { ...(config ?? {}) }
+    const existed = Boolean(this.store.channels[accountId])
+    const hadAnotherIdentity = !existed && Object.entries(this.store.channels)
+      .some(([existingId, state]) => existingId !== accountId && this.platformOf(existingId, state) === id)
     const prev = this.store.channels[accountId] ?? {}
     const normalized = this.normalizeAccountSettings(id, settings, prev)
     if (!normalized.ok) return normalized
@@ -348,10 +351,10 @@ export class ChannelManager {
     this.seedAllowedUser(accountId, incoming.allowedUserId || incoming.ownerOpenId || nextConfig.allowedUserId || nextConfig.ownerOpenId)
     try {
       await this.startOne(accountId)
-      return { ok: true, accountId }
+      return { ok: true, accountId, created: !existed, newIdentity: hadAnotherIdentity }
     } catch (error) {
       this.log(`[manager] ${id} 连接失败: ${error instanceof Error ? error.message : String(error)}`)
-      return { ok: false, error: '账号连接失败，请查看本机日志', accountId }
+      return { ok: false, error: '账号连接失败，请查看本机日志', accountId, created: !existed, newIdentity: hadAnotherIdentity }
     }
   }
 
@@ -577,8 +580,10 @@ export class ChannelManager {
           if (action === 'approve' || action === 'deny') {
             const userId = String(body.userId ?? '')
             if (!userId) { send(res, 400, { ok: false, error: '缺少 userId' }); return }
-            if (action === 'approve') this.approve(id, userId)
-            else this.deny(id, userId)
+            const accountId = this.resolveAccountId(id)
+            if (!accountId) { send(res, 404, { ok: false, error: '账号不存在或该渠道包含多个账号' }); return }
+            if (action === 'approve') this.approve(accountId, userId)
+            else this.deny(accountId, userId)
             send(res, 200, { ok: true, pending: this.pendingRequests() })
             return
           }
@@ -1050,21 +1055,26 @@ export class ChannelManager {
     )
   }
 
-  approve(id: string, userId: string): void {
+  approve(id: string, userId: string): boolean {
     const uid = userId.trim()
-    if (!uid) return
-    const list = this.store.allowlist[id] ?? []
+    const accountId = this.resolveAccountId(id)
+    if (!uid || !accountId) return false
+    const list = this.store.allowlist[accountId] ?? []
     if (!list.includes(uid)) list.push(uid)
-    this.store.allowlist[id] = list
-    this.store.pending[id] = (this.store.pending[id] ?? []).filter((item) => item.userId !== uid)
-    this.engine.addAllowed(id, uid)
+    this.store.allowlist[accountId] = list
+    this.store.pending[accountId] = (this.store.pending[accountId] ?? []).filter((item) => item.userId !== uid)
+    this.engine.addAllowed(accountId, uid)
     this.flush()
+    return true
   }
 
-  deny(id: string, userId: string): void {
+  deny(id: string, userId: string): boolean {
     const uid = userId.trim()
-    this.store.pending[id] = (this.store.pending[id] ?? []).filter((item) => item.userId !== uid)
+    const accountId = this.resolveAccountId(id)
+    if (!uid || !accountId) return false
+    this.store.pending[accountId] = (this.store.pending[accountId] ?? []).filter((item) => item.userId !== uid)
     this.flush()
+    return true
   }
 
   private seedAllowedUser(id: string, userId?: string): void {

@@ -8,7 +8,6 @@ import { ChannelManager } from '../lib/manager.js'
 
 function makeManager(t) {
   const stateDir = mkdtempSync(join(tmpdir(), 'im-connect-assistant-'))
-  t.after(() => rmSync(stateDir, { recursive: true, force: true }))
   const permissionPresets = {
     names: ['review', 'workspace-write', 'danger-full-access'],
     defaultPreset: 'review',
@@ -22,7 +21,12 @@ function makeManager(t) {
     mergeTimeoutSecs: 5,
     permissionPreset: 'review',
   }
-  return new ChannelManager({ ctx: { permissionPresets }, stateDir, log: () => undefined, engineConfig })
+  const manager = new ChannelManager({ ctx: { permissionPresets }, stateDir, log: () => undefined, engineConfig })
+  t.after(() => {
+    manager.disposeApi()
+    rmSync(stateDir, { recursive: true, force: true })
+  })
+  return manager
 }
 
 test('助手模型必须同时有提供商和模型 id', () => {
@@ -165,6 +169,17 @@ test('账号详情未选中时显示分层空状态并记住有效选择', () =>
   assert.match(client, /if \(action === "remove" && selected === id\) selectAccount\(removalFallback\)/)
 })
 
+test('公开私聊提示审批边界，账号详情保存只接受最新结果', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /settings\.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。"/)
+  assert.match(client, /privateAccess === "all" && h\("div", \{ className: "ima-picker-note warning" \}, t\("settings\.publicChatNotice"\)\)/)
+  assert.match(client, /account\.assistant && account\.assistant\.reasoningEffort/)
+  assert.match(client, /const saveSeq = useRef\(0\)/)
+  assert.match(client, /const seq = \+\+saveSeq\.current/)
+  assert.match(client, /if \(seq === saveSeq\.current\) setNote/)
+  assert.match(client, /data\.newIdentity \? t\("bind\.newIdentity"\) : t\("bind\.success"\)/)
+})
+
 test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(client, /const IM_LOCALE_NS = "im-connect"/)
@@ -234,4 +249,31 @@ test('助手多字段配置全部合法时一次保存完整结果', (t) => {
   assert.deepEqual(result.assistant, { provider: 'next-provider', model: 'next-model' })
   assert.equal(result.cwd, 'D:\\repo\\next')
   assert.equal(result.permission, 'workspace-write')
+})
+
+test('重复凭据复用账号，Telegram 更换 token 会明确标记新身份', async (t) => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const settings = {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    cwd: 'D:\\repo\\telegram',
+    permission: 'review',
+    privateAccess: 'approved',
+  }
+
+  const first = await manager.connect('telegram', { token: 'token-a' }, settings)
+  const repeated = await manager.connect('telegram', { token: 'token-a' }, settings)
+  const rotated = await manager.connect('telegram', { token: 'token-b' }, settings)
+
+  assert.equal(first.ok, true)
+  assert.equal(first.created, true)
+  assert.equal(first.newIdentity, false)
+  assert.equal(repeated.accountId, first.accountId)
+  assert.equal(repeated.created, false)
+  assert.equal(rotated.created, true)
+  assert.equal(rotated.newIdentity, true)
+  assert.notEqual(rotated.accountId, first.accountId)
+  assert.equal(manager.approve('telegram', 'ambiguous-user'), false)
+  assert.equal(manager.approve(first.accountId, 'approved-user'), true)
 })
