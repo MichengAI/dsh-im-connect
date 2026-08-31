@@ -44,6 +44,11 @@ interface LegacyUserQuestionService {
   ask(request: UserQuestionRequestLike): Promise<UserQuestionAnswer>
 }
 
+interface InteractionDeliveryResult {
+  status: 'delivered' | 'failed' | 'aborted'
+  deliveredAny: boolean
+}
+
 const HELP = [
   'IM 助理已连接本机 DeepSeek Harness。',
   '',
@@ -55,6 +60,7 @@ const HELP = [
 ].join('\n')
 
 const DELEGATE_INTERACTION = Symbol('delegate-interaction')
+const USER_QUESTION_WRAPPER = Symbol('dsh-im-connect.user-question-wrapper')
 
 export class ImEngine {
   private readonly channels = new Map<string, ChannelAdapter>()
@@ -65,6 +71,8 @@ export class ImEngine {
   private readonly extraAllow = new Map<string, Set<string>>()
   private readonly sessionActors = new Map<string, string>()
   private readonly questionActors = new Map<string, string>()
+  private readonly questionDeliveries = new Map<string, Promise<InteractionDeliveryResult>>()
+  private readonly questionPromptDelivered = new Set<string>()
   private readonly queues = new Map<string, Promise<void>>()
   private readonly interactionQueues = new Map<string, Promise<void>>()
   private readonly streams = new ReplyStreamHub()
@@ -275,13 +283,18 @@ export class ImEngine {
             return
           }
           if (result.next) {
-            const delivered = await this.deliverInteraction(channel, msg.chatId, formatUserQuestion(
+            const signal = this.questions.signal(binding.sessionId)
+            const delivery = await this.deliverQuestionInteraction(binding.sessionId, channel, msg.chatId, formatUserQuestion(
               result.next.question,
               result.next.index,
               result.next.total,
               { requiresMention: kind === 'group' },
-            ))
-            if (!delivered) this.questions.cancel(binding.sessionId, new Error('下一个交互问题发送失败'))
+            ), signal)
+            if (delivery.status === 'aborted') {
+              this.questions.cancel(binding.sessionId, signal?.reason ?? new DOMException('Aborted', 'AbortError'))
+            } else if (delivery.status === 'failed') {
+              this.questions.cancel(binding.sessionId, new Error('下一个交互问题发送失败'))
+            }
             else this.questions.activate(binding.sessionId)
           }
           return
@@ -398,13 +411,22 @@ export class ImEngine {
       }
       const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
       if (!wait) return DELEGATE_INTERACTION
-      if (!await this.deliverInteraction(channel, binding.chatId, prompt)) {
+      const delivery = await this.deliverInteraction(channel, binding.chatId, prompt, req.signal)
+      if (delivery.status === 'aborted' || req.signal?.aborted) {
+        this.broker.cancel(sessionId)
+        if (delivery.deliveredAny) await this.announceInteractionCancelled(channel, binding.chatId, '审批')
+        return currentContract ? 'cancelled' : DELEGATE_INTERACTION
+      }
+      if (delivery.status === 'failed') {
         this.broker.cancel(sessionId)
         return DELEGATE_INTERACTION
       }
       this.broker.activate(sessionId)
       const verdict = await wait
-      if (req.signal?.aborted) return currentContract ? 'cancelled' : DELEGATE_INTERACTION
+      if (req.signal?.aborted) {
+        if (delivery.deliveredAny) await this.announceInteractionCancelled(channel, binding.chatId, '审批')
+        return currentContract ? 'cancelled' : DELEGATE_INTERACTION
+      }
       if (verdict === 'allow') return currentContract ? 'allowed-once' : { behavior: 'allow' }
       if (verdict === 'reject') return currentContract ? 'rejected' : { behavior: 'reject' }
       return DELEGATE_INTERACTION
@@ -441,23 +463,37 @@ export class ImEngine {
       if (binding.kind === 'group' && !actor) return DELEGATE_INTERACTION
       const wait = this.questions.begin(sessionId, typedQuestions, req.signal)
       if (!wait) return DELEGATE_INTERACTION
+      // Abort can reject while the prompt send is still in flight; attach the
+      // observer now, then await the same promise after presentation completes.
+      void wait.catch(() => undefined)
       if (actor) this.questionActors.set(sessionId, actor)
       try {
-        const delivered = await this.deliverInteraction(channel, binding.chatId, formatUserQuestion(
+        const delivery = await this.deliverQuestionInteraction(sessionId, channel, binding.chatId, formatUserQuestion(
           typedQuestions[0]!,
           0,
           typedQuestions.length,
           { requiresMention: binding.kind === 'group' },
-        ))
-        if (!delivered) {
-          void wait.catch(() => undefined)
+        ), req.signal)
+        if (delivery.status === 'aborted' || req.signal?.aborted) {
+          throw req.signal?.reason ?? new DOMException('Aborted', 'AbortError')
+        }
+        if (delivery.status === 'failed') {
           this.questions.cancel(sessionId)
           return DELEGATE_INTERACTION
         }
         this.questions.activate(sessionId)
         return await wait
+      } catch (error) {
+        if (req.signal?.aborted) {
+          await this.questionDeliveries.get(sessionId)?.catch(() => undefined)
+          if (this.questionPromptDelivered.has(sessionId)) {
+            await this.announceInteractionCancelled(channel, binding.chatId, '问题')
+          }
+        }
+        throw error
       } finally {
         this.questionActors.delete(sessionId)
+        this.questionPromptDelivered.delete(sessionId)
       }
     }, req.signal, () => {
       throw req.signal?.reason ?? new DOMException('Aborted', 'AbortError')
@@ -498,28 +534,38 @@ export class ImEngine {
     }
     if (!candidate || typeof candidate !== 'object') return false
     const service = candidate as LegacyUserQuestionService
-    if (this.wrappedUserQuestionServices.has(service)) return true
+    const currentDescriptor = Reflect.getOwnPropertyDescriptor(service, 'ask')
+    const currentAsk = currentDescriptor?.value as { [USER_QUESTION_WRAPPER]?: ImEngine } | undefined
+    if (this.wrappedUserQuestionServices.has(service) || currentAsk?.[USER_QUESTION_WRAPPER] === this) return true
     if (typeof service.ask !== 'function') return false
 
     const originalAsk = service.ask
+    const originalDescriptor = currentDescriptor
     const wrappedAsk: LegacyUserQuestionService['ask'] = (request) => this.onUserQuestions(
       request,
       () => originalAsk.call(service, request),
     )
+    Object.defineProperty(wrappedAsk, USER_QUESTION_WRAPPER, { value: this })
     try {
       service.ask = wrappedAsk
     } catch {
       return false
     }
-    if (service.ask !== wrappedAsk) return false
+    if (Reflect.getOwnPropertyDescriptor(service, 'ask')?.value !== wrappedAsk) return false
     this.wrappedUserQuestionServices.add(service)
     this.log('[interaction] 已接管 userQuestions service 的 IM 会话')
     this.disposeEvents.push(() => {
-      if (service.ask === wrappedAsk) service.ask = originalAsk
+      if (Reflect.getOwnPropertyDescriptor(service, 'ask')?.value !== wrappedAsk) return
+      if (originalDescriptor) Reflect.defineProperty(service, 'ask', originalDescriptor)
+      else Reflect.deleteProperty(service, 'ask')
     })
     return true
   }
 
+  /**
+   * 同一会话的人机交互严格串行。队首只有在用户回复、AbortSignal 或会话销毁时释放；
+   * current approval 刻意不设插件超时，避免与 Host 持有的审批生命周期冲突。
+   */
   private runInteraction<T>(
     sessionId: string,
     task: () => Promise<T>,
@@ -687,18 +733,49 @@ export class ImEngine {
     return deliveredAny
   }
 
-  /** 交互提示必须完整送达；任一分片失败就不能继续在 IM 中收集决定。 */
-  private async deliverInteraction(channel: ChannelAdapter, chatId: string, text: string): Promise<boolean> {
+  private deliverQuestionInteraction(
+    sessionId: string,
+    channel: ChannelAdapter,
+    chatId: string,
+    text: string,
+    signal?: AbortSignal,
+  ): Promise<InteractionDeliveryResult> {
+    let tracked: Promise<InteractionDeliveryResult>
+    tracked = this.deliverInteraction(channel, chatId, text, signal).then((result) => {
+      if (result.deliveredAny) this.questionPromptDelivered.add(sessionId)
+      return result
+    }).finally(() => {
+      if (this.questionDeliveries.get(sessionId) === tracked) this.questionDeliveries.delete(sessionId)
+    })
+    this.questionDeliveries.set(sessionId, tracked)
+    return tracked
+  }
+
+  private async announceInteractionCancelled(channel: ChannelAdapter, chatId: string, kind: '审批' | '问题'): Promise<void> {
+    await this.deliver(channel, chatId, `该${kind}已取消，无需回复。`)
+  }
+
+  /** 交互提示必须完整送达；任一分片失败或取消就不能继续在 IM 中收集决定。 */
+  private async deliverInteraction(
+    channel: ChannelAdapter,
+    chatId: string,
+    text: string,
+    signal?: AbortSignal,
+  ): Promise<InteractionDeliveryResult> {
+    let deliveredAny = false
     for (const chunk of splitText(text, channel.maxMessageLength)) {
+      if (signal?.aborted) return { status: 'aborted', deliveredAny }
       try {
         await channel.send(chatId, chunk)
+        deliveredAny = true
         this.log(`[${channel.id}] 已投递交互 ${chatId}，长度 ${chunk.length}`)
       } catch (error) {
         this.log(`[${channel.id}] 交互提示发送失败: ${error instanceof Error ? error.message : String(error)}`)
-        return false
+        return { status: 'failed', deliveredAny }
       }
+      if (signal?.aborted) return { status: 'aborted', deliveredAny }
     }
-    return true
+    return { status: 'delivered', deliveredAny }
   }
 }
 

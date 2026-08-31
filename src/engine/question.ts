@@ -157,6 +157,10 @@ export class QuestionBroker {
     return { question, index: pending.index, total: pending.questions.length }
   }
 
+  signal(key: string): AbortSignal | undefined {
+    return this.pending.get(key)?.signal
+  }
+
   begin(key: string, questions: UserQuestionItem[], signal?: AbortSignal): Promise<UserQuestionAnswer> | undefined {
     if (this.pending.has(key) || signal?.aborted) return undefined
     return new Promise((resolve, reject) => {

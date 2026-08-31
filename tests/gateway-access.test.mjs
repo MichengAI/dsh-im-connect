@@ -564,6 +564,82 @@ test('已取消的当前交互不会再向 IM 发送过期提示', async (t) => 
   }
 })
 
+test('审批提示发送途中取消会立即返回，并在发送结束后标记提示失效', async (t) => {
+  let releasePrompt
+  let markStarted
+  const promptGate = new Promise((resolve) => { releasePrompt = resolve })
+  const promptStarted = new Promise((resolve) => { markStarted = resolve })
+  const setup = makeEngine(t, undefined, async (chatId, text, sent) => {
+    sent.push({ chatId, text })
+    if (text.includes('DeepSeek Harness 需要你的审批')) {
+      markStarted()
+      await promptGate
+    }
+  })
+  const controller = new AbortController()
+  try {
+    const pending = setup.handlers['approval/request']({
+      agent: {
+        id: setup.dmSessionId,
+        session: {
+          id: setup.dmSessionId,
+          events: [{ type: 'tool/call', data: { callId: 'abort-send', name: 'bash', arguments: '{}' } }],
+        },
+      },
+      toolName: 'bash',
+      callId: 'abort-send',
+      signal: controller.signal,
+    }, async () => 'browser-owned')
+    await promptStarted
+    controller.abort(new Error('approval stopped'))
+    assert.equal(await Promise.race([
+      pending,
+      sleep(200).then(() => 'abort timeout'),
+    ]), 'cancelled')
+
+    releasePrompt()
+    await waitFor(() => setup.sent.some((item) => item.text.includes('该审批已取消')))
+  } finally {
+    releasePrompt()
+    setup.engine.dispose()
+  }
+})
+
+test('问题提示发送途中取消会立即拒绝，并在发送结束后标记提示失效', async (t) => {
+  let releasePrompt
+  let markStarted
+  const promptGate = new Promise((resolve) => { releasePrompt = resolve })
+  const promptStarted = new Promise((resolve) => { markStarted = resolve })
+  const setup = makeEngine(t, undefined, async (chatId, text, sent) => {
+    sent.push({ chatId, text })
+    if (text.includes('发送中的问题')) {
+      markStarted()
+      await promptGate
+    }
+  })
+  const controller = new AbortController()
+  try {
+    const pending = setup.handlers['user-questions/request']({
+      agent: { id: setup.dmSessionId, session: { id: setup.dmSessionId, events: [] } },
+      questions: [{ id: 'abort-send', question: '发送中的问题' }],
+      signal: controller.signal,
+    }, async () => assert.fail('取消的问题不应转交网页端'))
+    await promptStarted
+    const rejected = assert.rejects(Promise.race([
+      pending,
+      sleep(200).then(() => { throw new Error('abort timeout') }),
+    ]), /question stopped/)
+    controller.abort(new Error('question stopped'))
+    await rejected
+
+    releasePrompt()
+    await waitFor(() => setup.sent.some((item) => item.text.includes('该问题已取消')))
+  } finally {
+    releasePrompt()
+    setup.engine.dispose()
+  }
+})
+
 test('删除渠道授权后旧用户立即失去私聊访问权', async (t) => {
   const { engine, inbound, sent } = makeEngine(t)
   engine.addAllowed('telegram', 'user-1')
