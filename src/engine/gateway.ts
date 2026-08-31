@@ -40,12 +40,8 @@ interface UserQuestionRequestLike {
   signal?: AbortSignal
 }
 
-interface LegacyUserQuestionProvider {
-  ask(request: UserQuestionRequestLike): Promise<UserQuestionAnswer>
-}
-
 interface LegacyUserQuestionService {
-  provider?: LegacyUserQuestionProvider
+  ask(request: UserQuestionRequestLike): Promise<UserQuestionAnswer>
 }
 
 const HELP = [
@@ -58,6 +54,8 @@ const HELP = [
   '/help  显示本帮助',
 ].join('\n')
 
+const DELEGATE_INTERACTION = Symbol('delegate-interaction')
+
 export class ImEngine {
   private readonly channels = new Map<string, ChannelAdapter>()
   private readonly router: SessionRouter
@@ -66,11 +64,13 @@ export class ImEngine {
   private readonly merger: SessionMerger
   private readonly extraAllow = new Map<string, Set<string>>()
   private readonly sessionActors = new Map<string, string>()
+  private readonly questionActors = new Map<string, string>()
   private readonly queues = new Map<string, Promise<void>>()
+  private readonly interactionQueues = new Map<string, Promise<void>>()
   private readonly streams = new ReplyStreamHub()
   private readonly disposeEvents: Array<() => void> = []
-  private legacyProviderTimer?: NodeJS.Timeout
-  private legacyProviderInstalled = false
+  private readonly wrappedUserQuestionServices = new WeakSet<object>()
+  private legacyServiceTimer?: NodeJS.Timeout
   private disposed = false
 
   constructor(
@@ -107,6 +107,7 @@ export class ImEngine {
         this.broker.cancel(id)
         this.questions.cancel(id)
         this.sessionActors.delete(id)
+        this.questionActors.delete(id)
         void this.router.onHostDisposed(id)
       }, { global: true }))
       this.disposeEvents.push(on('approval/request', (...args: unknown[]) => {
@@ -119,8 +120,14 @@ export class ImEngine {
         const next = args[1] as () => Promise<UserQuestionAnswer>
         return this.onUserQuestions(req, next)
       }, { global: true, prepend: true }))
+      this.disposeEvents.push(on('internal/service', (...args: unknown[]) => {
+        if (args[0] === 'userQuestions' && this.installLegacyUserQuestionService(args[1])) {
+          if (this.legacyServiceTimer) clearTimeout(this.legacyServiceTimer)
+          this.legacyServiceTimer = undefined
+        }
+      }, { global: true }))
     }
-    this.scheduleLegacyUserQuestionProvider()
+    if (!this.installLegacyUserQuestionService()) this.scheduleLegacyUserQuestionService()
   }
 
   renameSession(sessionId: string, title: string): boolean {
@@ -182,7 +189,7 @@ export class ImEngine {
 
   dispose(): void {
     this.disposed = true
-    if (this.legacyProviderTimer) clearTimeout(this.legacyProviderTimer)
+    if (this.legacyServiceTimer) clearTimeout(this.legacyServiceTimer)
     for (const off of this.disposeEvents) off()
     this.broker.dispose()
     this.questions.dispose()
@@ -252,8 +259,8 @@ export class ImEngine {
         return
       }
       if (binding && this.questions.has(binding.sessionId)) {
-        const actor = this.sessionActors.get(binding.sessionId)
-        if (actor && msg.userId !== actor) {
+        const actor = this.questionActors.get(binding.sessionId)
+        if ((kind === 'group' && !actor) || (actor && msg.userId !== actor)) {
           await this.deliver(channel, msg.chatId, '只有发起当前任务的用户可以回答这个问题。')
           return
         }
@@ -374,30 +381,35 @@ export class ImEngine {
     const rawSessionId = req.agent?.session?.id ?? req.agent?.id ?? req.session?.id
     const sessionId = rawSessionId ? String(rawSessionId) : ''
     if (!sessionId || !isImSessionId(sessionId)) return next()
-    const binding = this.router.bindingForSession(sessionId)
-    const channel = binding ? this.channels.get(binding.channelId) : undefined
-    if (!binding || !channel) return next()
     if (req.signal?.aborted) return currentContract ? 'cancelled' : next()
-    if (binding.kind === 'group') {
-      await this.deliver(channel, binding.chatId, '当前工具审批不能在群聊中处理，请在网页端批准或拒绝。')
-      return next()
-    }
-    const prompt = this.approvalPrompt(req)
-    if (!prompt) {
-      await this.deliver(channel, binding.chatId, '该操作需要审批，但无法在 IM 中完整展示；请在网页端处理。')
-      return next()
-    }
-    const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
-    if (!await this.deliverInteraction(channel, binding.chatId, prompt)) {
-      this.broker.cancel(sessionId)
-      return next()
-    }
-    this.broker.activate(sessionId)
-    const verdict = await wait
-    if (req.signal?.aborted) return currentContract ? 'cancelled' : next()
-    if (verdict === 'allow') return currentContract ? 'allowed-once' : { behavior: 'allow' }
-    if (verdict === 'reject') return currentContract ? 'rejected' : { behavior: 'reject' }
-    return next()
+    const result = await this.runInteraction(sessionId, async () => {
+      if (this.disposed || req.signal?.aborted) return currentContract ? 'cancelled' : DELEGATE_INTERACTION
+      const binding = this.router.bindingForSession(sessionId)
+      const channel = binding ? this.channels.get(binding.channelId) : undefined
+      if (!binding || !channel) return DELEGATE_INTERACTION
+      if (binding.kind === 'group') {
+        await this.deliver(channel, binding.chatId, '当前工具审批不能在群聊中处理，请在网页端批准或拒绝。')
+        return DELEGATE_INTERACTION
+      }
+      const prompt = this.approvalPrompt(req)
+      if (!prompt) {
+        await this.deliver(channel, binding.chatId, '该操作需要审批，但无法在 IM 中完整展示；请在网页端处理。')
+        return DELEGATE_INTERACTION
+      }
+      const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
+      if (!wait) return DELEGATE_INTERACTION
+      if (!await this.deliverInteraction(channel, binding.chatId, prompt)) {
+        this.broker.cancel(sessionId)
+        return DELEGATE_INTERACTION
+      }
+      this.broker.activate(sessionId)
+      const verdict = await wait
+      if (req.signal?.aborted) return currentContract ? 'cancelled' : DELEGATE_INTERACTION
+      if (verdict === 'allow') return currentContract ? 'allowed-once' : { behavior: 'allow' }
+      if (verdict === 'reject') return currentContract ? 'rejected' : { behavior: 'reject' }
+      return DELEGATE_INTERACTION
+    }, req.signal, () => currentContract ? 'cancelled' : DELEGATE_INTERACTION)
+    return result === DELEGATE_INTERACTION ? next() : result
   }
 
   private async onUserQuestions(
@@ -411,85 +423,145 @@ export class ImEngine {
     if (!Array.isArray(questions)
       || questions.length === 0
       || questions.some((question) => !validUserQuestion(question))) return next()
-    const binding = this.router.bindingForSession(sessionId)
-    const channel = binding ? this.channels.get(binding.channelId) : undefined
-    if (!binding || !channel || this.questions.has(sessionId)) return next()
     if (req.signal?.aborted) {
       throw req.signal.reason ?? new DOMException('Aborted', 'AbortError')
     }
+    const initialBinding = this.router.bindingForSession(sessionId)
+    const actor = this.sessionActors.get(sessionId)
+    if (initialBinding?.kind === 'group' && !actor) return next()
     const typedQuestions = questions as UserQuestionItem[]
-    const wait = this.questions.begin(sessionId, typedQuestions, req.signal)
-    if (!wait) return next()
-    const delivered = await this.deliverInteraction(channel, binding.chatId, formatUserQuestion(
-      typedQuestions[0]!,
-      0,
-      typedQuestions.length,
-      { requiresMention: binding.kind === 'group' },
-    ))
-    if (!delivered) {
-      void wait.catch(() => undefined)
-      this.questions.cancel(sessionId)
-      return next()
-    }
-    this.questions.activate(sessionId)
-    return wait
+    const result = await this.runInteraction(sessionId, async () => {
+      if (this.disposed) return DELEGATE_INTERACTION
+      if (req.signal?.aborted) {
+        throw req.signal.reason ?? new DOMException('Aborted', 'AbortError')
+      }
+      const binding = this.router.bindingForSession(sessionId)
+      const channel = binding ? this.channels.get(binding.channelId) : undefined
+      if (!binding || !channel) return DELEGATE_INTERACTION
+      if (binding.kind === 'group' && !actor) return DELEGATE_INTERACTION
+      const wait = this.questions.begin(sessionId, typedQuestions, req.signal)
+      if (!wait) return DELEGATE_INTERACTION
+      if (actor) this.questionActors.set(sessionId, actor)
+      try {
+        const delivered = await this.deliverInteraction(channel, binding.chatId, formatUserQuestion(
+          typedQuestions[0]!,
+          0,
+          typedQuestions.length,
+          { requiresMention: binding.kind === 'group' },
+        ))
+        if (!delivered) {
+          void wait.catch(() => undefined)
+          this.questions.cancel(sessionId)
+          return DELEGATE_INTERACTION
+        }
+        this.questions.activate(sessionId)
+        return await wait
+      } finally {
+        this.questionActors.delete(sessionId)
+      }
+    }, req.signal, () => {
+      throw req.signal?.reason ?? new DOMException('Aborted', 'AbortError')
+    })
+    return result === DELEGATE_INTERACTION ? next() : result
   }
 
   /**
-   * DSH 0.1.1-rc.2 still exposes one mutable userQuestions provider instead of
-   * the agent-scoped waterfall. Decorate the web provider after it registers,
-   * claim only IM sessions, and leave every browser session on the original path.
+   * DSH 0.1.1-rc.2 exposes a mutable provider behind a stable service.ask.
+   * Decorate the service so later provider registrations remain visible through
+   * the original service implementation, while non-IM sessions keep its path.
    */
-  private scheduleLegacyUserQuestionProvider(): void {
-    if (this.installLegacyUserQuestionProvider()) return
-    const delays = [0, 25, 100, 250, 500, 1_000, 2_000]
-    const retry = (index: number) => {
+  private scheduleLegacyUserQuestionService(): void {
+    let attempt = 0
+    const retry = () => {
       if (this.disposed) return
-      this.legacyProviderTimer = setTimeout(() => {
-        this.legacyProviderTimer = undefined
-        if (this.installLegacyUserQuestionProvider()) return
-        if (index + 1 < delays.length) retry(index + 1)
-        else this.log('[interaction] 未发现旧版 userQuestions provider，保留 waterfall 路径')
-      }, delays[index])
-      this.legacyProviderTimer.unref?.()
+      const delay = Math.min(25 * 2 ** attempt, 2_000)
+      this.legacyServiceTimer = setTimeout(() => {
+        this.legacyServiceTimer = undefined
+        if (this.installLegacyUserQuestionService()) return
+        attempt += 1
+        if (attempt === 8) this.log('[interaction] 暂未发现 userQuestions service，保留 waterfall 并继续监听')
+        retry()
+      }, delay)
+      this.legacyServiceTimer.unref?.()
     }
-    retry(0)
+    retry()
   }
 
-  private installLegacyUserQuestionProvider(): boolean {
-    if (this.legacyProviderInstalled || this.disposed) return this.legacyProviderInstalled
-    const context = this.ctx as unknown as {
-      get?: (name: string) => unknown
-      userQuestions?: unknown
+  private installLegacyUserQuestionService(candidate?: unknown): boolean {
+    if (this.disposed) return false
+    if (candidate === undefined) {
+      try {
+        candidate = (this.ctx as unknown as { get?: (name: string, strict?: boolean) => unknown }).get?.('userQuestions', false)
+      } catch {
+        return false
+      }
     }
-    let service: LegacyUserQuestionService | undefined
-    try {
-      const candidate = context.get?.('userQuestions') ?? context.userQuestions
-      if (candidate && typeof candidate === 'object') service = candidate as LegacyUserQuestionService
-    } catch {
-      return false
-    }
-    const provider = service?.provider
-    if (!provider || typeof provider.ask !== 'function') return false
+    if (!candidate || typeof candidate !== 'object') return false
+    const service = candidate as LegacyUserQuestionService
+    if (this.wrappedUserQuestionServices.has(service)) return true
+    if (typeof service.ask !== 'function') return false
 
-    const originalAsk = provider.ask
-    const wrappedAsk: LegacyUserQuestionProvider['ask'] = (request) => this.onUserQuestions(
+    const originalAsk = service.ask
+    const wrappedAsk: LegacyUserQuestionService['ask'] = (request) => this.onUserQuestions(
       request,
-      () => originalAsk.call(provider, request),
+      () => originalAsk.call(service, request),
     )
     try {
-      provider.ask = wrappedAsk
+      service.ask = wrappedAsk
     } catch {
       return false
     }
-    if (provider.ask !== wrappedAsk) return false
-    this.legacyProviderInstalled = true
-    this.log('[interaction] 已接管旧版 userQuestions provider 的 IM 会话')
+    if (service.ask !== wrappedAsk) return false
+    this.wrappedUserQuestionServices.add(service)
+    this.log('[interaction] 已接管 userQuestions service 的 IM 会话')
     this.disposeEvents.push(() => {
-      if (provider.ask === wrappedAsk) provider.ask = originalAsk
-      this.legacyProviderInstalled = false
+      if (service.ask === wrappedAsk) service.ask = originalAsk
     })
     return true
+  }
+
+  private runInteraction<T>(
+    sessionId: string,
+    task: () => Promise<T>,
+    signal?: AbortSignal,
+    onAbort?: () => T | Promise<T>,
+  ): Promise<T> {
+    const previous = this.interactionQueues.get(sessionId) ?? Promise.resolve()
+    let abortedBeforeStart = false
+    let started = false
+    const scheduled = previous.catch(() => undefined).then(() => {
+      started = true
+      if (abortedBeforeStart) return undefined as T
+      return task()
+    })
+    const tail = scheduled.then(() => undefined, () => undefined)
+    this.interactionQueues.set(sessionId, tail)
+    void tail.then(() => {
+      if (this.interactionQueues.get(sessionId) === tail) this.interactionQueues.delete(sessionId)
+    })
+    if (!signal || !onAbort) return scheduled
+    return new Promise<T>((resolve, reject) => {
+      let settled = false
+      const finish = (callback: () => void) => {
+        if (settled) return
+        settled = true
+        signal.removeEventListener('abort', abort)
+        callback()
+      }
+      const abort = () => {
+        if (!started) abortedBeforeStart = true
+        Promise.resolve().then(onAbort).then(
+          (value) => finish(() => resolve(value)),
+          (error) => finish(() => reject(error)),
+        )
+      }
+      signal.addEventListener('abort', abort, { once: true })
+      scheduled.then(
+        (value) => finish(() => resolve(value)),
+        (error) => finish(() => reject(error)),
+      )
+      if (signal.aborted) abort()
+    })
   }
 
   private approvalPrompt(req: ApprovalRequestLike): string | undefined {

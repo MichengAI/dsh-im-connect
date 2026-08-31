@@ -54,6 +54,12 @@ export function validUserQuestion(question: unknown): question is UserQuestionIt
   if (item.header !== undefined && typeof item.header !== 'string') return false
   if (item.detail !== undefined && typeof item.detail !== 'string') return false
   if (item.multiSelect !== undefined && typeof item.multiSelect !== 'boolean') return false
+  if (item.intent !== undefined) {
+    if (!item.intent || typeof item.intent !== 'object') return false
+    const intent = item.intent as Record<string, unknown>
+    if (typeof intent.kind !== 'string') return false
+    if (intent.approve !== undefined && typeof intent.approve !== 'string') return false
+  }
   if (item.options !== undefined) {
     if (!Array.isArray(item.options)) return false
     for (const option of item.options) {

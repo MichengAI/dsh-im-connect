@@ -23,3 +23,14 @@ test('ApprovalBroker 响应 AbortSignal 并清理等待', async () => {
   assert.equal(await pending, undefined)
   assert.equal(broker.has('session'), false)
 })
+
+test('ApprovalBroker 不用第二个等待覆盖同会话中的第一个审批', async () => {
+  const broker = new ApprovalBroker()
+  const first = broker.wait('session')
+  const second = broker.wait('session')
+
+  assert.equal(second, undefined)
+  assert.equal(broker.activate('session'), true)
+  assert.equal(broker.answer('session', true), true)
+  assert.equal(await first, 'allow')
+})

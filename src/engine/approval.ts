@@ -15,8 +15,8 @@ export class ApprovalBroker {
     return this.pending.size
   }
 
-  wait(key: string, timeoutMs?: number, signal?: AbortSignal): Promise<ApprovalVerdict> {
-    if (this.pending.has(key)) return Promise.resolve(undefined)
+  wait(key: string, timeoutMs?: number, signal?: AbortSignal): Promise<ApprovalVerdict> | undefined {
+    if (this.pending.has(key)) return undefined
     if (signal?.aborted) return Promise.resolve(undefined)
     return new Promise((resolve) => {
       const settle = (value: ApprovalVerdict) => {

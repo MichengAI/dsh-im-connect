@@ -42,6 +42,7 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}) {
   const handlers = {}
   const ctx = {
     get: (name) => services[name],
+    agents: { get: () => ({ followup() {} }) },
     on: (name, fn) => {
       handlers[name] = fn
       return () => {}
@@ -233,21 +234,26 @@ test('结构化问题提示发送失败时交还下一个处理器', async (t) =
   }
 })
 
-test('旧版单 provider 将 IM 问题转到聊天，同时保留网页问题处理器', async (t) => {
+test('旧版 service 将 IM 问题转到聊天，且 provider 重注册后网页处理仍生效', async (t) => {
   const fallback = { answers: [{ id: 'web', selected: [], custom: 'browser' }] }
   const originalRequests = []
-  const provider = {
+  let provider = {
     async ask(request) {
       originalRequests.push(request)
       return fallback
     },
   }
+  const service = {
+    async ask(request) {
+      return provider.ask(request)
+    },
+  }
   const setup = makeEngine(t, undefined, undefined, {
-    userQuestions: { provider },
+    userQuestions: service,
   })
   setup.engine.addAllowed('telegram', 'user-1')
   try {
-    const pending = provider.ask({
+    const pending = service.ask({
       agent: { id: setup.dmSessionId, session: { id: setup.dmSessionId, events: [] } },
       questions: [{
         id: 'permission',
@@ -273,11 +279,28 @@ test('旧版单 provider 将 IM 问题转到聊天，同时保留网页问题处
       agent: { id: 'session-browser', session: { id: 'session-browser', events: [] } },
       questions: [{ id: 'web', question: '网页问题' }],
     }
-    assert.deepEqual(await provider.ask(browserRequest), fallback)
+    assert.deepEqual(await service.ask(browserRequest), fallback)
     assert.deepEqual(originalRequests, [browserRequest])
+
+    const replacement = { answers: [{ id: 'web', selected: [], custom: 'replacement' }] }
+    provider = { async ask() { return replacement } }
+    assert.deepEqual(await service.ask(browserRequest), replacement)
   } finally {
     setup.engine.dispose()
   }
+})
+
+test('userQuestions service 延迟注册时仍会被接管并在销毁时还原', (t) => {
+  const setup = makeEngine(t)
+  const service = { async ask() { return { answers: [] } } }
+  const originalAsk = service.ask
+  try {
+    setup.handlers['internal/service']('userQuestions', service)
+    assert.notEqual(service.ask, originalAsk)
+  } finally {
+    setup.engine.dispose()
+  }
+  assert.equal(service.ask, originalAsk)
 })
 
 test('结构化问题按顺序在 IM 中回答，且问题优先于审批关键词', async (t) => {
@@ -318,7 +341,8 @@ test('结构化问题按顺序在 IM 中回答，且问题优先于审批关键�
       callId: 'call-2',
     }, async () => 'browser-owned')
     approvalPending.then((value) => { approvalSettled = value })
-    await waitFor(() => sent.some((item) => item.text.includes('npm test')))
+    await sleep(30)
+    assert.equal(sent.some((item) => item.text.includes('npm test')), false)
 
     inbound({ chatId: 'user-1', userId: 'user-1', text: 'yes', kind: 'dm', messageId: 'question-1' })
     await waitFor(() => sent.some((item) => item.text.includes('选择交付物')))
@@ -332,8 +356,163 @@ test('结构化问题按顺序在 IM 中回答，且问题优先于审批关键�
       ],
     })
 
+    await waitFor(() => sent.some((item) => item.text.includes('npm test')))
     inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'approval-after-question' })
     assert.equal(await approvalPending, 'allowed-once')
+  } finally {
+    engine.dispose()
+  }
+})
+
+test('同会话并发审批按 FIFO 展示并分别解析决定', async (t) => {
+  const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t)
+  engine.addAllowed('telegram', 'user-1')
+  const request = (callId, command) => ({
+    agent: {
+      id: dmSessionId,
+      session: {
+        id: dmSessionId,
+        events: [{ type: 'tool/call', data: { callId, name: 'bash', arguments: JSON.stringify({ command }) } }],
+      },
+    },
+    toolName: 'bash',
+    callId,
+  })
+  try {
+    const first = handlers['approval/request'](request('call-first', 'first-command'), async () => 'first-browser')
+    await waitFor(() => sent.some((item) => item.text.includes('first-command')))
+    const second = handlers['approval/request'](request('call-second', 'second-command'), async () => 'second-browser')
+    await sleep(30)
+    assert.equal(sent.some((item) => item.text.includes('second-command')), false)
+
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'approve-first' })
+    assert.equal(await first, 'allowed-once')
+    await waitFor(() => sent.some((item) => item.text.includes('second-command')))
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '拒绝', kind: 'dm', messageId: 'reject-second' })
+    assert.equal(await second, 'rejected')
+  } finally {
+    engine.dispose()
+  }
+})
+
+test('并发第二个审批发送失败不会取消第一个审批', async (t) => {
+  const setup = makeEngine(t, undefined, async (chatId, text, sent) => {
+    sent.push({ chatId, text })
+    if (text.includes('second-command')) throw new Error('offline')
+  })
+  setup.engine.addAllowed('telegram', 'user-1')
+  const request = (callId, command) => ({
+    agent: {
+      id: setup.dmSessionId,
+      session: {
+        id: setup.dmSessionId,
+        events: [{ type: 'tool/call', data: { callId, name: 'bash', arguments: JSON.stringify({ command }) } }],
+      },
+    },
+    toolName: 'bash',
+    callId,
+  })
+  try {
+    const first = setup.handlers['approval/request'](request('call-first', 'first-command'), async () => 'first-browser')
+    await waitFor(() => setup.sent.some((item) => item.text.includes('first-command')))
+    const second = setup.handlers['approval/request'](request('call-second', 'second-command'), async () => 'second-browser')
+
+    setup.inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'approve-before-failure' })
+    assert.equal(await first, 'allowed-once')
+    assert.equal(await second, 'second-browser')
+  } finally {
+    setup.engine.dispose()
+  }
+})
+
+test('同会话并发问题按 FIFO 展示，不静默转交网页端', async (t) => {
+  const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t)
+  engine.addAllowed('telegram', 'user-1')
+  try {
+    let fallbackCalls = 0
+    const first = handlers['user-questions/request']({
+      agent: { id: dmSessionId, session: { id: dmSessionId, events: [] } },
+      questions: [{ id: 'first', question: '第一个问题' }],
+    }, async () => { fallbackCalls += 1; return { answers: [] } })
+    await waitFor(() => sent.some((item) => item.text.includes('第一个问题')))
+    const second = handlers['user-questions/request']({
+      agent: { id: dmSessionId, session: { id: dmSessionId, events: [] } },
+      questions: [{ id: 'second', question: '第二个问题' }],
+    }, async () => { fallbackCalls += 1; return { answers: [] } })
+    await sleep(30)
+    assert.equal(sent.some((item) => item.text.includes('第二个问题')), false)
+
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '答案一', kind: 'dm', messageId: 'answer-first' })
+    assert.deepEqual(await first, { answers: [{ id: 'first', selected: [], custom: '答案一' }] })
+    await waitFor(() => sent.some((item) => item.text.includes('第二个问题')))
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '答案二', kind: 'dm', messageId: 'answer-second' })
+    assert.deepEqual(await second, { answers: [{ id: 'second', selected: [], custom: '答案二' }] })
+    assert.equal(fallbackCalls, 0)
+  } finally {
+    engine.dispose()
+  }
+})
+
+test('排队中的问题收到取消信号会立即退出且不影响当前问题', async (t) => {
+  const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t)
+  const controller = new AbortController()
+  engine.addAllowed('telegram', 'user-1')
+  try {
+    const first = handlers['user-questions/request']({
+      agent: { id: dmSessionId, session: { id: dmSessionId, events: [] } },
+      questions: [{ id: 'first', question: '当前问题' }],
+    }, async () => assert.fail('当前问题不应转交网页端'))
+    await waitFor(() => sent.some((item) => item.text.includes('当前问题')))
+    const queued = handlers['user-questions/request']({
+      agent: { id: dmSessionId, session: { id: dmSessionId, events: [] } },
+      questions: [{ id: 'queued', question: '已取消问题' }],
+      signal: controller.signal,
+    }, async () => assert.fail('已取消问题不应转交网页端'))
+
+    controller.abort(new Error('queued stopped'))
+    await assert.rejects(Promise.race([
+      queued,
+      sleep(200).then(() => { throw new Error('queued abort timeout') }),
+    ]), /queued stopped/)
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '继续', kind: 'dm', messageId: 'answer-current' })
+    assert.deepEqual(await first, { answers: [{ id: 'first', selected: [], custom: '继续' }] })
+    await sleep(30)
+    assert.equal(sent.some((item) => item.text.includes('已取消问题')), false)
+  } finally {
+    engine.dispose()
+  }
+})
+
+test('群聊问题缺少发起者时保守交还网页端', async (t) => {
+  const { engine, sent, handlers, groupSessionId } = makeEngine(t)
+  try {
+    const fallback = { answers: [{ id: 'web', selected: [], custom: 'browser' }] }
+    const outcome = await handlers['user-questions/request']({
+      agent: { id: groupSessionId, session: { id: groupSessionId, events: [] } },
+      questions: [{ id: 'group', question: '群聊问题' }],
+    }, async () => fallback)
+    assert.deepEqual(outcome, fallback)
+    assert.equal(sent.some((item) => item.text.includes('群聊问题')), false)
+  } finally {
+    engine.dispose()
+  }
+})
+
+test('群聊问题只接受冻结的任务发起者回答', async (t) => {
+  const { engine, inbound, sent, handlers, groupSessionId } = makeEngine(t)
+  try {
+    inbound({ chatId: 'chat-9', userId: 'user-1', text: '启动任务!!', kind: 'group', addressed: true, messageId: 'group-start' })
+    await sleep(30)
+    const pending = handlers['user-questions/request']({
+      agent: { id: groupSessionId, session: { id: groupSessionId, events: [] } },
+      questions: [{ id: 'group', question: '谁来回答？' }],
+    }, async () => assert.fail('有发起者的群聊问题不应转交网页端'))
+    await waitFor(() => sent.some((item) => item.text.includes('谁来回答')))
+
+    inbound({ chatId: 'chat-9', userId: 'user-2', text: '冒名回答', kind: 'group', addressed: true, messageId: 'wrong-actor' })
+    await waitFor(() => sent.some((item) => item.text.includes('只有发起当前任务的用户')))
+    inbound({ chatId: 'chat-9', userId: 'user-1', text: '本人回答', kind: 'group', addressed: true, messageId: 'right-actor' })
+    assert.deepEqual(await pending, { answers: [{ id: 'group', selected: [], custom: '本人回答' }] })
   } finally {
     engine.dispose()
   }

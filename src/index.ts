@@ -19,7 +19,6 @@ export const inject = [
   'agentDefaultModel',
   'llm',
   'permissionPresets',
-  'userQuestions',
 ]
 
 export interface PluginConfig {

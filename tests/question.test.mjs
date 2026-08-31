@@ -41,6 +41,7 @@ test('问题校验拒绝错误字段', () => {
   assert.equal(validUserQuestion({ id: 'ok', question: '回答', options: [{ label: 'A' }] }), true)
   assert.equal(validUserQuestion({ id: 'bad', question: '回答', options: [{ label: 1 }] }), false)
   assert.equal(validUserQuestion({ id: 'bad', question: '回答', multiSelect: 'yes' }), false)
+  assert.equal(validUserQuestion({ id: 'bad', question: '回答', intent: { kind: 1 } }), false)
 })
 
 test('QuestionBroker 顺序收集并响应取消', async () => {
