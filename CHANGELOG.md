@@ -4,6 +4,14 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.28 — 2026-09-01
+
+- Added multiple isolated accounts for WeChat, WeCom, QQ, DingTalk, Feishu, Lark, and Telegram, with independent workspace, model, permission, private-access, credential, allowlist, and session state.
+- Redesigned IM Assistant settings around channel-local account creation, persistent account selection, account-specific configuration, clear empty states, on-demand QR pairing, and responsive desktop layouts.
+- Hardened public private chats so unapproved users cannot approve local tool calls, made legacy approval routes fail closed when an account is ambiguous, and explicitly cancelled pending approvals and questions when an account reloads.
+
+Published package: [`@michengai/dsh-im-connect@0.1.28`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.28).
+
 ## 0.1.27 — 2026-08-31
 
 - Routed DSH tool approvals and structured user questions through the originating IM conversation, with text replies for approvals, single-choice, multiple-choice, and custom answers.
