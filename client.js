@@ -14,14 +14,15 @@ window.__ModuleLoader__.load({
     const inject = ["slots", "sessions", "workspaces", "locale"];
     const API_BASE = "/dsh-im-connect/api";
     const TAB_KEY = "dsh-im-connect.sidebar-tab";
+    const ACCOUNT_SELECTION_KEY = "dsh-im-connect.settings.selected-account";
     const IM_LOCALE_NS = "im-connect";
     const IM_LOCALES = {
       zh: {
         "settings.label": "IM助理", "settings.title": "IM 频道", "settings.description": "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。频道配置仅保存在本机。",
-        "settings.aria": "IM助理", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
+        "settings.aria": "IM助理", "settings.selectAccountTitle": "选择一个账号", "settings.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。", "settings.noAccountsTitle": "还没有接入账号", "settings.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
         "channel.dingtalk": "钉钉", "channel.feishu": "飞书", "channel.lark": "Lark", "channel.weixin": "微信", "channel.wecom": "企业微信", "channel.qq": "QQ", "channel.telegram": "Telegram",
         "field.dingtalk.clientId": "Client ID（原 AppKey）", "field.dingtalk.clientSecret": "Client Secret（原 AppSecret）",
-        "bind.title": "配置 {channel}", "bind.close": "关闭", "bind.quick": "快捷绑定（推荐）", "bind.manual": "手动配置", "bind.success": "绑定成功，频道已连接", "bind.qrAlt": "{channel} 绑定二维码", "bind.generating": "正在生成…", "bind.waiting": "等待二维码", "bind.expire": "二维码 {time} 后过期", "bind.scanned": "已扫码，请在手机上确认", "bind.retry": "请重新生成二维码", "bind.refresh": "重新生成二维码", "action.saving": "保存中…", "action.confirm": "确认",
+        "bind.title": "配置 {channel}", "bind.close": "关闭", "bind.quick": "快捷绑定（推荐）", "bind.manual": "手动配置", "bind.success": "绑定成功，频道已连接", "bind.qrAlt": "{channel} 绑定二维码", "bind.generating": "正在生成…", "bind.expire": "二维码 {time} 后过期", "bind.scanned": "已扫码，请在手机上确认", "bind.retry": "请重新生成二维码", "bind.refresh": "重新生成二维码", "action.saving": "保存中…", "action.confirm": "确认",
         "qr.weixin": "请使用微信扫描二维码完成绑定", "qr.feishu": "请使用飞书扫描二维码，将自动创建机器人", "qr.lark": "请使用 Lark 扫描二维码完成配对", "qr.wecom": "请使用企业微信扫描二维码，快捷绑定机器人", "qr.dingtalk": "请使用钉钉扫描二维码，自动创建机器人", "qr.qq": "请使用手机 QQ 扫描二维码，创建开放平台机器人", "qr.default": "请使用对应 App 扫描二维码",
         "status.unconfigured": "未配置", "status.connected": "已连接", "status.connecting": "接入中…", "action.configure": "配置", "action.more": "{channel} 更多", "action.reconnect": "重新接入", "action.disconnect": "断开", "action.removeConfig": "删除配置", "action.receive": "接收消息",
         "error.loadAssistant": "无法加载全局配置", "error.noModels": "当前 Host 还没有可用模型，请先在网页里配置提供商", "error.save": "保存失败", "error.chooseWorkspace": "请选择工作区目录", "error.workspaceUnavailable": "当前 Host 无法新增工作区", "error.addWorkspace": "新增工作区失败", "error.load": "加载失败", "error.connection": "无法连接本机 IM 助理接口", "error.request": "请求失败", "error.action": "操作失败", "error.qr": "无法生成二维码", "error.detailsInLog": "操作失败，请查看服务器日志。",
@@ -34,10 +35,10 @@ window.__ModuleLoader__.load({
       },
       en: {
         "settings.label": "IM Assistant", "settings.title": "IM Channels", "settings.description": "Connect IM channels so your local assistant can receive messages from DingTalk, Feishu, and more. Channel settings are stored only on this machine.",
-        "settings.aria": "IM Assistant", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
+        "settings.aria": "IM Assistant", "settings.selectAccountTitle": "Select an account", "settings.selectAccountDescription": "Choose an account on the left to view and edit its workspace, model, and permissions.", "settings.noAccountsTitle": "No accounts connected", "settings.noAccountsDescription": "Choose a channel on the left, then select Add account.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
         "channel.dingtalk": "DingTalk", "channel.feishu": "Feishu", "channel.lark": "Lark", "channel.weixin": "WeChat", "channel.wecom": "WeCom", "channel.qq": "QQ", "channel.telegram": "Telegram",
         "field.dingtalk.clientId": "Client ID (formerly AppKey)", "field.dingtalk.clientSecret": "Client Secret (formerly AppSecret)",
-        "bind.title": "Set up {channel}", "bind.close": "Close", "bind.quick": "Quick setup (recommended)", "bind.manual": "Manual setup", "bind.success": "Connected successfully", "bind.qrAlt": "{channel} setup QR code", "bind.generating": "Generating…", "bind.waiting": "Waiting for QR code", "bind.expire": "QR code expires in {time}", "bind.scanned": "Scanned. Confirm on your phone.", "bind.retry": "Generate a new QR code", "bind.refresh": "Generate a new QR code", "action.saving": "Saving…", "action.confirm": "Confirm",
+        "bind.title": "Set up {channel}", "bind.close": "Close", "bind.quick": "Quick setup (recommended)", "bind.manual": "Manual setup", "bind.success": "Connected successfully", "bind.qrAlt": "{channel} setup QR code", "bind.generating": "Generating…", "bind.expire": "QR code expires in {time}", "bind.scanned": "Scanned. Confirm on your phone.", "bind.retry": "Generate a new QR code", "bind.refresh": "Generate a new QR code", "action.saving": "Saving…", "action.confirm": "Confirm",
         "qr.weixin": "Scan the QR code with WeChat to connect", "qr.feishu": "Scan with Feishu; a bot will be created automatically", "qr.lark": "Scan with Lark to pair", "qr.wecom": "Scan with WeCom to quickly connect a bot", "qr.dingtalk": "Scan with DingTalk; a bot will be created automatically", "qr.qq": "Scan with mobile QQ to create an Open Platform bot", "qr.default": "Scan the QR code with the corresponding app",
         "status.unconfigured": "Not configured", "status.connected": "Connected", "status.connecting": "Connecting…", "action.configure": "Configure", "action.more": "More options for {channel}", "action.reconnect": "Reconnect", "action.disconnect": "Disconnect", "action.removeConfig": "Remove configuration", "action.receive": "Receive messages",
         "error.loadAssistant": "Could not load global settings", "error.noModels": "No models are available in the Host. Configure a provider in the web app first.", "error.save": "Could not save", "error.chooseWorkspace": "Choose a workspace directory", "error.workspaceUnavailable": "This Host cannot create workspaces", "error.addWorkspace": "Could not add workspace", "error.load": "Could not load", "error.connection": "Could not connect to the local IM Assistant API", "error.request": "Request failed", "error.action": "Action failed", "error.qr": "Could not generate a QR code", "error.detailsInLog": "The operation failed. Check the server logs for details.",
@@ -53,7 +54,7 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
 
     const CSS = `
-.ima-page{--ima-text:var(--dsw-alias-label-primary,var(--dsh-text,#e6edf3));--ima-muted:var(--dsw-alias-label-tertiary,var(--dsh-text-muted,#8b949e));--ima-line:var(--dsw-alias-border-l2,var(--dsh-border,rgba(255,255,255,.1)));--ima-card:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));--ima-card-hover:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));--ima-ok:var(--dsw-alias-state-success-primary,#3fb950);--ima-danger:var(--dsw-alias-state-error-primary,#f85149);--ima-accent:var(--dsw-alias-brand-primary,#4b7cff);box-sizing:border-box;max-width:760px;width:100%;margin:0 auto;padding:0 0 32px;color:var(--ima-text)}
+.ima-page{--ima-text:var(--dsw-alias-label-primary,var(--dsh-text,#e6edf3));--ima-muted:var(--dsw-alias-label-tertiary,var(--dsh-text-muted,#8b949e));--ima-line:var(--dsw-alias-border-l2,var(--dsh-border,rgba(255,255,255,.1)));--ima-card:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));--ima-card-hover:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));--ima-ok:var(--dsw-alias-state-success-primary,#3fb950);--ima-warning:var(--dsw-alias-state-warning-primary,#d29922);--ima-danger:var(--dsw-alias-state-error-primary,#f85149);--ima-accent:var(--dsw-alias-brand-primary,#4b7cff);box-sizing:border-box;max-width:760px;width:100%;margin:0 auto;padding:0 0 32px;color:var(--ima-text)}
 .ima-deco{display:flex;justify-content:center;align-items:flex-end;gap:10px;min-height:56px;margin:8px 0 14px}
 .ima-bubble{font-size:12px;line-height:1.4;padding:6px 10px;border-radius:12px;max-width:220px;border:1px solid var(--ima-line)}
 .ima-bubble.left{background:rgba(46,160,67,.14);color:#7ee787}
@@ -164,8 +165,8 @@ window.__ModuleLoader__.load({
 .ima-seg button{flex:1;border:0;background:transparent;padding:10px 0;font-size:13px;color:var(--ima-muted);cursor:pointer}
 .ima-seg button.on{color:var(--ima-accent);box-shadow:inset 0 -2px 0 var(--ima-accent);font-weight:600}
 .ima-qrbox{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 4px}
-.ima-qrbox img,.ima-qrph{width:200px;height:200px;background:#fff;border:1px solid var(--ima-line);border-radius:12px;object-fit:contain}
-.ima-qrph{display:grid;place-items:center;color:var(--ima-muted);font-size:13px}
+.ima-qrbox img{width:200px;height:200px;background:#fff;border:1px solid var(--ima-line);border-radius:12px;object-fit:contain}
+.ima-bind-ready{display:flex;flex-direction:column;align-items:center;gap:14px;padding:12px 0 4px}.ima-bind-ready .ima-btn{min-width:136px}.ima-bind-status{min-height:40px;display:grid;place-items:center;color:var(--ima-muted);font-size:13px;text-align:center}
 .ima-hint{margin:0;color:var(--ima-muted);font-size:13px;text-align:center;line-height:1.6}
 .ima-link{border:0;background:transparent;color:var(--ima-accent);cursor:pointer;font-size:13px;min-height:32px}
 .ima-field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:13px}
@@ -175,6 +176,27 @@ window.__ModuleLoader__.load({
 .ima-radio small{display:block;color:var(--ima-muted);margin-top:2px}
 .ima-ok{color:var(--ima-ok);font-size:14px;text-align:center;padding:24px 0}
 .ima-modal .ima-error{color:var(--ima-danger)}
+.ima-page.ima-account-page{max-width:1120px;padding-bottom:40px}
+.ima-account-shell{display:grid;grid-template-columns:minmax(330px,390px) minmax(360px,1fr);min-height:650px;border:1px solid var(--ima-line);border-radius:16px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,rgba(255,255,255,.018))}
+.ima-platforms{padding:0;border-right:1px solid var(--ima-line);background:var(--dsw-alias-bg-base,transparent)}
+.ima-platform{border:0;border-bottom:1px solid var(--ima-line);border-radius:0;margin:0;overflow:visible;background:transparent}.ima-platform:last-child{border-bottom:0}.ima-platform.open{background:transparent}
+.ima-platform-head{display:flex;align-items:center;gap:10px;width:100%;min-height:64px;padding:10px 18px;border:0;border-radius:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.ima-platform:not(.open):not(.empty) .ima-platform-head:hover{background:var(--ima-card-hover)}.ima-platform.empty .ima-platform-head{cursor:default}.ima-platform-title{min-width:0;flex:1;font-size:14px;font-weight:650}.ima-platform-count{color:var(--ima-muted);font-size:12px;white-space:nowrap}.ima-platform-count.online{color:var(--ima-ok)}.ima-platform-count.offline,.ima-platform-count.partial{color:var(--ima-warning)}
+.ima-platform-add{min-height:34px;padding:0 10px;border:1px solid var(--ima-line);border-radius:8px;background:transparent;color:var(--ima-text);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}.ima-platform-add:hover{background:var(--ima-card-hover)}
+.ima-platform-caret{display:grid;width:18px;height:18px;margin:0 1px;place-items:center;color:var(--ima-muted);transition:transform .15s ease}.ima-platform-caret.empty{visibility:hidden}.ima-platform.open .ima-platform-caret{transform:rotate(90deg)}
+.ima-account-list{display:flex;flex-direction:column;gap:8px;padding:0 14px 14px}.ima-account-row{display:flex;align-items:center;gap:10px;width:100%;min-height:72px;padding:10px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.025));color:inherit;text-align:left;cursor:pointer}.ima-account-row:hover{background:var(--ima-card-hover);border-color:color-mix(in srgb,var(--ima-text) 22%,var(--ima-line))}.ima-account-row.on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));border-color:color-mix(in srgb,var(--ima-text) 18%,var(--ima-line))}
+.ima-platform-head:focus-visible,.ima-platform-add:focus-visible,.ima-account-row:focus-visible{outline:2px solid var(--ima-accent);outline-offset:2px}
+.ima-account-row .ima-logo,.ima-account-row .ima-logo svg{width:38px;height:38px}.ima-account-row .ima-logo{border-radius:9px}.ima-account-copy{min-width:0;flex:1}.ima-account-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600}.ima-account-id{display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ima-muted);font-size:11px}.ima-account-state{font-size:12px;white-space:nowrap;color:var(--ima-muted)}.ima-account-state.online{color:var(--ima-ok)}.ima-account-state.offline{color:var(--ima-warning)}.ima-account-next{display:grid;width:16px;height:16px;place-items:center;color:var(--ima-text);opacity:.8}.ima-dot{width:7px;height:7px;border-radius:50%;background:var(--ima-warning);flex:none}.ima-dot.on{background:var(--ima-ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ima-ok) 15%,transparent)}
+.ima-inspector{padding:22px 24px 26px;min-width:0}.ima-inspector-empty{display:grid;min-height:580px;padding:32px;place-items:center;text-align:center}.ima-inspector-empty-copy{max-width:300px}.ima-inspector-empty-title{margin:0;color:var(--ima-text);font-size:16px;font-weight:650;line-height:24px}.ima-inspector-empty-description{margin:8px 0 0;color:var(--ima-muted);font-size:13px;line-height:20px}.ima-inspector-head{display:flex;align-items:flex-start;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--ima-line)}.ima-inspector-head-copy{min-width:0;flex:1}.ima-inspector-title{margin:1px 0 3px;font-size:17px;line-height:24px}.ima-inspector-status{color:var(--ima-muted);font-size:12px}.ima-inspector-status.ok{color:var(--ima-ok)}
+.ima-form{display:flex;flex-direction:column;gap:16px;padding-top:20px}.ima-control{display:flex;flex-direction:column;gap:7px}.ima-control>span{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-control input,.ima-control select{box-sizing:border-box;width:100%;min-height:44px;padding:0 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font:13px inherit;outline:none}.ima-control input:focus,.ima-control select:focus{border-color:var(--ima-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-control option{background:#202124;color:#f2f3f5}
+.ima-switch-row{display:flex;align-items:center;justify-content:space-between;min-height:48px;padding:0 2px}.ima-switch-copy strong{display:block;font-size:13px}.ima-switch-copy small{display:block;margin-top:2px;color:var(--ima-muted);font-size:11px}
+.ima-inspector-actions{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:18px;border-top:1px solid var(--ima-line)}.ima-inspector-actions .ima-btn{min-height:36px}.ima-inspector-actions .danger{margin-left:auto;color:var(--ima-danger);border-color:color-mix(in srgb,var(--ima-danger) 35%,transparent)}
+.ima-save-note{min-height:18px;color:var(--ima-muted);font-size:11px}.ima-save-note.ok{color:var(--ima-ok)}
+.ima-modal.ima-account-modal{width:min(560px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto}.ima-setup-section{margin:4px 0 14px;padding-bottom:14px;border-bottom:1px solid var(--ima-line)}
+.ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:7px}.ima-picker-field.wide{grid-column:1/-1}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-account-picker{width:100%}.ima-account-picker .ima-chip-btn{width:100%;height:auto;min-height:44px;justify-content:flex-start;padding:8px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font-size:13px;text-align:left}.ima-account-picker .ima-chip-btn:hover,.ima-account-picker.is-open .ima-chip-btn{border-color:var(--ima-accent);background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-account-picker .ima-chip-label{flex:1}.ima-account-picker .ima-chip-btn em{margin-left:auto}.ima-account-picker .ima-chip-menu{width:100%;min-width:100%;max-height:min(320px,calc(100vh - 120px))}.ima-account-picker.ima-model-select .ima-chip-btn{border-radius:9px}.ima-account-picker.ima-model-select .ima-chip-menu{width:max(100%,320px);min-width:100%}.ima-account-settings .ima-chip-dialog{grid-column:1/-1;margin-top:0}.ima-picker-note{grid-column:1/-1;color:var(--ima-muted);font-size:11px;line-height:1.5}
+@media(max-width:1280px){[role="dialog"][aria-labelledby]:has(.ima-account-page){width:min(920px,calc(100vw - 48px));max-width:min(920px,calc(100vw - 48px))}.ima-account-shell{grid-template-columns:minmax(300px,340px) minmax(320px,1fr)}}
+@media(max-width:850px){[role="dialog"][aria-labelledby]:has(.ima-account-page){width:calc(100vw - 32px);max-width:calc(100vw - 32px)}.ima-account-shell{grid-template-columns:1fr}.ima-platforms{border-right:0;border-bottom:1px solid var(--ima-line)}.ima-inspector{padding:18px}}
+@media(max-width:620px){.ima-account-settings{grid-template-columns:1fr}.ima-picker-field.wide{grid-column:auto}.ima-account-picker.ima-model-select .ima-chip-menu{width:100%}}
 @media (prefers-reduced-motion:reduce){.ima-switch i{transition:none}}
 `;
 
@@ -190,12 +212,24 @@ window.__ModuleLoader__.load({
       const request = Object.assign({}, opts || {});
       const method = String(request.method || "GET").toUpperCase();
       if (method !== "GET" && method !== "HEAD") {
-        request.headers = Object.assign({}, request.headers || {}, { "x-dsh-im-connect-client": "1" });
+        request.headers = Object.assign({ "content-type": "application/json" }, request.headers || {}, { "x-dsh-im-connect-client": "1" });
+        if (request.body === undefined) request.body = "{}";
       }
       return fetch(API_BASE + path, request).then((r) => r.json());
     };
 
-    function BrandMark({ id }) {
+    const storedAccountSelection = () => {
+      try { return window.localStorage.getItem(ACCOUNT_SELECTION_KEY) || ""; }
+      catch { return ""; }
+    };
+    const rememberAccountSelection = (id) => {
+      try {
+        if (id) window.localStorage.setItem(ACCOUNT_SELECTION_KEY, id);
+        else window.localStorage.removeItem(ACCOUNT_SELECTION_KEY);
+      } catch { /* Local storage can be unavailable in restricted browser contexts. */ }
+    };
+
+    function BrandMark({ id, compact }) {
       const svg = (viewBox, children) => h("svg", {
         viewBox,
         xmlns: "http://www.w3.org/2000/svg",
@@ -226,8 +260,8 @@ window.__ModuleLoader__.load({
       }
 
       if (id === "wecom") {
-        return svg("0 0 46 46", [
-          h("path", { key: "bg", d: "M39.743 0H6.257A6.257 6.257 0 0 0 0 6.257v33.487A6.257 6.257 0 0 0 6.257 46h33.487A6.257 6.257 0 0 0 46 39.743V6.257A6.257 6.257 0 0 0 39.743 0", fill: "#fff" }),
+        return svg(compact ? "4 6 39 34" : "0 0 46 46", [
+          !compact && h("path", { key: "bg", d: "M39.743 0H6.257A6.257 6.257 0 0 0 0 6.257v33.487A6.257 6.257 0 0 0 6.257 46h33.487A6.257 6.257 0 0 0 46 39.743V6.257A6.257 6.257 0 0 0 39.743 0", fill: "#fff" }),
           h("path", { key: "orange", d: "M28.856 31.647a.483.483 0 0 0 .06.738 6.2 6.2 0 0 1 1.911 3.725 2.02 2.02 0 1 0 2.16-2.54 6.2 6.2 0 0 1-3.448-1.922.483.483 0 0 0-.683-.001", fill: "#fb6500" }),
           h("path", { key: "blueDot", d: "M37.057 28.448a2 2 0 0 0-.58 1.215 6.2 6.2 0 0 1-1.918 3.454.484.484 0 1 0 .738.616 6.2 6.2 0 0 1 3.725-1.91 2.02 2.02 0 1 0-1.96-3.376z", fill: "#0082ef" }),
           h("path", { key: "green", d: "M31.366 22.75a2.02 2.02 0 0 0 1.215 3.435 6.2 6.2 0 0 1 3.454 1.918.483.483 0 0 0 .829-.27.48.48 0 0 0-.212-.468 6.2 6.2 0 0 1-1.911-3.726 2.02 2.02 0 0 0-3.375-.889", fill: "#2dbc00" }),
@@ -254,7 +288,7 @@ window.__ModuleLoader__.load({
     }
 
     function Logo({ id, small }) {
-      return h("div", { className: small ? "ima-logo sm" : "ima-logo", "data-brand": id, "aria-hidden": "true" }, h(BrandMark, { id }));
+      return h("div", { className: small ? "ima-logo sm" : "ima-logo", "data-brand": id, "aria-hidden": "true" }, h(BrandMark, { id, compact: small }));
     }
 
     function isRasterQr(value) {
@@ -330,35 +364,44 @@ window.__ModuleLoader__.load({
     };
     let channelSkin = "native";
 
-    function BindModal({ ch, onClose, onConnected, t = fallbackT }) {
+    function BindModal({ ch, onClose, onConnected, catalog, permissions, workspaces, defaults, createWorkspace, pickDirectory, modelT, permissionT, t = fallbackT }) {
       const hasQr = ch.kind === "qr" || ch.kind === "qr-or-credentials";
       const hasManual = ch.kind === "credentials" || ch.kind === "qr-or-credentials";
       const [tab, setTab] = useState(hasQr ? "qr" : "manual");
       const [pairing, setPairing] = useState(null);
+      const [qrStarted, setQrStarted] = useState(false);
       const [draft, setDraft] = useState({});
       const [busy, setBusy] = useState(false);
       const [error, setError] = useState("");
+      const [settings, setSettings] = useState(() => ({
+        cwd: defaults && defaults.cwd || "",
+        provider: defaults && defaults.assistant && defaults.assistant.provider || "",
+        model: defaults && defaults.assistant && defaults.assistant.model || "",
+        reasoningEffort: defaults && defaults.assistant && defaults.assistant.reasoningEffort || "",
+        permission: defaults && defaults.permission || "",
+        privateAccess: "approved",
+      }));
       const alive = useRef(true);
 
       const startQr = useCallback((refresh) => {
         if (!hasQr) return;
+        setQrStarted(true);
         setBusy(true);
         setError("");
         api(`/channels/${ch.id}/qr/${refresh ? "refresh" : "start"}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ settings }),
         }).then((data) => {
           if (!alive.current) return;
           if (!data.ok && !data.pairing) setError(serverText(data.error, t) || t("error.qr"));
           setPairing(data.pairing || null);
         }).catch(() => { if (alive.current) setError(t("error.qr")); })
           .finally(() => { if (alive.current) setBusy(false); });
-      }, [ch.id, hasQr]);
+      }, [ch.id, hasQr, settings]);
 
       useEffect(() => {
         alive.current = true;
-        if (tab === "qr") startQr(false);
         return () => { alive.current = false; };
       }, []);
 
@@ -373,7 +416,7 @@ window.__ModuleLoader__.load({
       };
 
       useEffect(() => {
-        if (tab !== "qr") return undefined;
+        if (tab !== "qr" || !qrStarted) return undefined;
         const timer = setInterval(() => {
           api(`/channels/${ch.id}/qr/status`).then((data) => {
             if (finished.current || !alive.current || !data.ok) return;
@@ -382,7 +425,7 @@ window.__ModuleLoader__.load({
           }).catch(() => undefined);
         }, 2000);
         return () => clearInterval(timer);
-      }, [tab, ch.id]);
+      }, [tab, ch.id, qrStarted]);
 
       const close = () => {
         if (finished.current) return;
@@ -413,7 +456,7 @@ window.__ModuleLoader__.load({
         api(`/channels/${ch.id}/connect`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ config }),
+           body: JSON.stringify({ config, settings }),
         }).then((data) => {
           if (!data.ok) setError(serverText(data.error, t) || t("error.save"));
           else finish(400);
@@ -423,16 +466,19 @@ window.__ModuleLoader__.load({
       const switchTab = (next) => {
         setTab(next);
         setError("");
-        if (next === "qr") startQr(false);
-        else api(`/channels/${ch.id}/qr/cancel`, { method: "POST" }).catch(() => undefined);
+        if (next !== "qr") {
+          setQrStarted(false);
+          setPairing(null);
+          api(`/channels/${ch.id}/qr/cancel`, { method: "POST" }).catch(() => undefined);
+        }
       };
 
-      const status = pairing && pairing.status;
-      const src = qrSrc(pairing);
-      const remain = pairing && pairing.remainingSeconds;
+      const status = qrStarted && pairing && pairing.status;
+      const src = qrStarted ? qrSrc(pairing) : "";
+      const remain = qrStarted && pairing && pairing.remainingSeconds;
 
       return h("div", { className: "ima-mask", role: "presentation", onMouseDown: (event) => event.stopPropagation(), onClick: (event) => { event.stopPropagation(); close(); }, onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } } },
-        h("div", { className: "ima-modal", onClick: (e) => e.stopPropagation() },
+        h("div", { className: "ima-modal ima-account-modal", onClick: (e) => e.stopPropagation() },
           h("div", { className: "ima-modal-h" },
             h("h2", null, t("bind.title", { channel: channelLabel(ch, t) })),
             h("button", { className: "ima-x", onClick: close, "aria-label": t("bind.close") }, "×"),
@@ -442,19 +488,39 @@ window.__ModuleLoader__.load({
             h("button", { className: tab === "manual" ? "on" : "", onClick: () => switchTab("manual") }, t("bind.manual")),
           ),
           error && h("div", { className: "ima-error" }, error),
+          h("div", { className: "ima-setup-section" },
+            h(AccountSettingsPicker, {
+              value: settings,
+              onChange: (patch) => setSettings((current) => ({ ...current, ...patch })),
+              catalog,
+              permissions,
+              workspaces,
+              createWorkspace,
+              pickDirectory,
+              modelT,
+              permissionT,
+              showAutoNameNote: true,
+              t,
+            }),
+          ),
           tab === "qr" && hasQr && (
             status === "success"
               ? h("div", { className: "ima-ok" }, t("bind.success"))
-              : h("div", { className: "ima-qrbox" },
+              : src
+                ? h("div", { className: "ima-qrbox" },
                   h("p", { className: "ima-hint" }, hintOf(ch, t)),
-                  src
-                    ? h("img", { src, alt: t("bind.qrAlt", { channel: channelLabel(ch, t) }) })
-                    : h("div", { className: "ima-qrph" }, busy || status === "starting" ? t("bind.generating") : serverText(pairing && pairing.error, t) || t("bind.waiting")),
+                  h("img", { src, alt: t("bind.qrAlt", { channel: channelLabel(ch, t) }) }),
                   remain > 0 && h("p", { className: "ima-hint" }, t("bind.expire", { time: Math.floor(remain / 60) + ":" + String(remain % 60).padStart(2, "0") })),
                   status === "scanned" && h("p", { className: "ima-hint" }, t("bind.scanned")),
                   (status === "expired" || status === "failed") && h("p", { className: "ima-error" }, serverText(pairing && pairing.error, t) || t("bind.retry")),
-                  h("button", { className: "ima-link", disabled: busy, onClick: () => startQr(true) }, t("bind.refresh")),
+                  h("button", { className: "ima-btn", disabled: busy, onClick: () => startQr(true) }, t("bind.refresh")),
                 )
+                : h("div", { className: "ima-bind-ready" },
+                    h("p", { className: "ima-hint" }, hintOf(ch, t)),
+                    (busy || status === "starting") && h("div", { className: "ima-bind-status" }, t("bind.generating")),
+                    (status === "expired" || status === "failed") && h("div", { className: "ima-error" }, serverText(pairing && pairing.error, t) || t("bind.retry")),
+                    h("button", { className: "ima-btn primary", disabled: busy || !settings.cwd || !settings.provider || !settings.model || !settings.permission, onClick: () => startQr(qrStarted) }, busy ? t("bind.generating") : qrStarted ? t("bind.refresh") : "生成二维码"),
+                  )
           ),
           tab === "manual" && hasManual && h("div", null,
             ...ch.fields.map((f) => h("label", { key: f.key, className: "ima-field" },
@@ -575,6 +641,7 @@ window.__ModuleLoader__.load({
         h("button", {
           type: "button",
           className: "ima-chip-btn",
+          title: props.title || undefined,
           "aria-label": props.ariaLabel,
           "aria-expanded": Boolean(props.open),
           onMouseDown: (event) => event.stopPropagation(),
@@ -621,6 +688,220 @@ window.__ModuleLoader__.load({
           props.active && !props.chevron && h("i", { className: "ima-chip-tick" }),
           props.chevron && h("i", { className: "ima-chip-next" }),
         ),
+      );
+    }
+
+    function AccountSettingsPicker(props) {
+      const t = props.t || fallbackT;
+      const modelT = props.modelT || ((key) => key);
+      const permissionT = props.permissionT || ((key) => key);
+      const value = props.value || {};
+      const [open, setOpen] = useState("");
+      const [modelPane, setModelPane] = useState("root");
+      const [adding, setAdding] = useState(false);
+      const [addPath, setAddPath] = useState("");
+      const [addBusy, setAddBusy] = useState(false);
+      const [hint, setHint] = useState("");
+      const [confirmingFullAccess, setConfirmingFullAccess] = useState(false);
+      const [fullAccessAcknowledged, setFullAccessAcknowledged] = useState(false);
+      const items = props.workspaces || [];
+      const providers = props.catalog || [];
+      const permissions = props.permissions || [];
+      const provider = value.provider || (value.assistant && value.assistant.provider) || "";
+      const model = value.model || (value.assistant && value.assistant.model) || "";
+      const effort = value.reasoningEffort || (value.assistant && value.assistant.reasoningEffort) || "";
+      const cwd = value.cwd || "";
+      const permission = value.permission || "";
+      const privateAccess = value.privateAccess === "all" ? "all" : "approved";
+      const workspace = items.find((item) => item.path === cwd);
+      const modelGroups = providers.map((item) => ({
+        id: item.id,
+        name: item.name || item.id,
+        models: (item.models || []).map((entry) => ({
+          value: item.id + "::" + entry.id,
+          provider: item.id,
+          providerName: item.name || item.id,
+          model: entry.id,
+          label: entry.name || entry.id,
+          description: entry.description,
+          reasoning: entry.reasoning,
+        })),
+      })).filter((item) => item.models.length > 0);
+      const models = modelGroups.flatMap((item) => item.models);
+      const currentModel = models.find((item) => item.provider === provider && item.model === model);
+      const reasoning = currentModel && currentModel.reasoning;
+      const effectiveEffort = effort || (reasoning && reasoning.defaultEffort) || "";
+      const efforts = reasoning
+        ? [
+            ...(reasoning.defaultEffort ? [] : [{ id: "", name: modelT("effort.providerDefault") }]),
+            ...((reasoning.efforts || []).map((item) => ({ id: item.id, name: item.name || item.id, description: item.description }))),
+          ]
+        : [];
+      const effortLabel = reasoning
+        ? ((efforts.find((item) => item.id === effectiveEffort) || {}).name || effectiveEffort || modelT("effort.providerDefault"))
+        : "";
+      const permissionOptions = permissions.map((item) => ({ ...item, label: permissionLabel(item, t) }));
+      const currentPermission = permissionOptions.find((item) => item.value === permission);
+      const update = (patch) => {
+        setHint("");
+        if (typeof props.onChange === "function") props.onChange(patch);
+      };
+
+      const addWorkspace = (path) => {
+        const next = (path || "").trim();
+        if (!next) { setHint(t("error.chooseWorkspace")); return Promise.resolve(); }
+        if (typeof props.createWorkspace !== "function") { setHint(t("error.workspaceUnavailable")); return Promise.resolve(); }
+        setAddBusy(true);
+        return Promise.resolve(props.createWorkspace({ path: next })).then((created) => {
+          const cwdPath = (created && (created.path || created.cwd)) || next;
+          update({ cwd: cwdPath });
+          setAdding(false);
+          setAddPath("");
+          setOpen("");
+        }).catch((error) => setHint((error && error.message) || t("error.addWorkspace")))
+          .finally(() => setAddBusy(false));
+      };
+      const onAddWorkspace = () => {
+        setOpen("");
+        if (typeof props.pickDirectory === "function") {
+          Promise.resolve(props.pickDirectory()).then((picked) => picked && addWorkspace(picked)).catch(() => {
+            setAdding(true);
+            setAddPath("");
+          });
+          return;
+        }
+        setAdding(true);
+        setAddPath("");
+      };
+      const selectPermission = (next) => {
+        setOpen("");
+        if (next === permission) return;
+        if (next === "danger-full-access") {
+          setFullAccessAcknowledged(false);
+          setConfirmingFullAccess(true);
+          return;
+        }
+        update({ permission: next });
+      };
+      const field = (key, label, picker, wide) => h("div", { key, className: "ima-picker-field" + (wide ? " wide" : "") },
+        h("span", { className: "ima-picker-label" }, label),
+        picker,
+      );
+
+      return h("div", { className: "ima-account-settings" + (props.compact ? " compact" : "") },
+        field("workspace", props.workspaceLabel || "工作区", h(ChipMenu, {
+          open: open === "workspace",
+          onToggle: (next) => setOpen(next ? "workspace" : ""),
+          icon: h(FolderIcon),
+          label: (workspace && (workspace.title || workspace.path)) || cwd || "请选择工作区",
+          ariaLabel: props.workspaceLabel || "工作区",
+          className: "ima-account-picker",
+        },
+          items.length === 0 && h("div", { className: "ima-chip-empty" }, t("composer.noWorkspaces")),
+          ...items.map((item) => h(ChipRow, {
+            key: item.path,
+            icon: h(FolderIcon),
+            label: item.title || item.path,
+            hint: item.title ? item.path : "",
+            active: item.path === cwd,
+            onClick: () => { update({ cwd: item.path }); setOpen(""); },
+          })),
+          h("div", { className: "ima-chip-split" }),
+          h(ChipRow, { icon: h(PlusIcon), label: t("composer.addWorkspace"), onClick: onAddWorkspace }),
+        ), true),
+        field("model", "模型", h(ChipMenu, {
+          open: open === "model",
+          onToggle: (next) => { setOpen(next ? "model" : ""); if (next) setModelPane("root"); },
+          icon: null,
+          label: (currentModel && currentModel.label) || "请选择模型",
+          title: currentModel && currentModel.label,
+          suffix: effortLabel,
+          ariaLabel: modelT("trigger.selectAria"),
+          menuAria: modelT("menu.aria"),
+          className: "ima-account-picker ima-model-select",
+          menuClassName: "ima-model-menu",
+        },
+          modelPane === "root" && [
+            h(ChipRow, { key: "model", kv: true, label: modelT("menu.model"), hint: (currentModel && currentModel.label) || "请选择模型", chevron: true, onClick: () => setModelPane("model") }),
+            reasoning && h(ChipRow, { key: "effort", kv: true, label: modelT("menu.effort"), hint: effortLabel || modelT("effort.providerDefault"), chevron: true, onClick: () => setModelPane("effort") }),
+          ],
+          modelPane === "model" && (models.length === 0
+            ? h("div", { className: "ima-chip-empty" }, modelT("empty.models"))
+            : modelGroups.map((group) => h("section", { key: group.id, className: "ima-model-group", role: "group", "aria-label": group.name },
+                h("div", { className: "ima-model-group-title" }, group.name),
+                ...group.models.map((item) => h(ModelChoiceRow, {
+                  key: item.value,
+                  label: item.label,
+                  description: item.description,
+                  active: item.provider === provider && item.model === model,
+                  onClick: () => {
+                    const nextEffort = (item.reasoning && item.reasoning.defaultEffort) || "";
+                    update({ provider: item.provider, model: item.model, reasoningEffort: nextEffort });
+                    setOpen("");
+                  },
+                })),
+              ))),
+          modelPane === "effort" && efforts.map((item) => h(ModelChoiceRow, {
+            key: item.id,
+            label: item.name,
+            description: item.description,
+            active: item.id === effectiveEffort,
+            onClick: () => { update({ provider, model, reasoningEffort: item.id }); setOpen(""); },
+          })),
+        )),
+        field("permission", "权限", h(ChipMenu, {
+          open: open === "permission",
+          onToggle: (next) => setOpen(next ? "permission" : ""),
+          icon: h(ShieldIcon),
+          label: (currentPermission && currentPermission.label) || "请选择权限",
+          ariaLabel: t("composer.permission"),
+          className: "ima-account-picker",
+        },
+          ...permissionOptions.map((item) => h(ChipRow, {
+            key: item.value,
+            icon: h(ShieldIcon),
+            label: item.label,
+            active: item.value === permission,
+            onClick: () => selectPermission(item.value),
+          })),
+        )),
+        field("private", "私聊准入", h(ChipMenu, {
+          open: open === "private",
+          onToggle: (next) => setOpen(next ? "private" : ""),
+          icon: h(ShieldIcon),
+          label: privateAccess === "all" ? "允许所有私聊用户" : "仅已批准用户",
+          ariaLabel: "私聊准入",
+          className: "ima-account-picker",
+        },
+          h(ChipRow, { icon: h(ShieldIcon), label: "仅已批准用户", active: privateAccess === "approved", onClick: () => { update({ privateAccess: "approved" }); setOpen(""); } }),
+          h(ChipRow, { icon: h(ShieldIcon), label: "允许所有私聊用户", active: privateAccess === "all", onClick: () => { update({ privateAccess: "all" }); setOpen(""); } }),
+        ), true),
+        adding && h("div", { className: "ima-chip-dialog" },
+          h("strong", null, t("composer.addWorkspace")),
+          h("input", { value: addPath, placeholder: t("composer.workspacePath"), "aria-label": t("composer.workspacePath"), onChange: (event) => setAddPath(event.target.value) }),
+          h("div", { className: "ima-chip-dialog-actions" },
+            h("button", { className: "ima-btn", onClick: () => { setAdding(false); setAddPath(""); } }, t("action.cancel")),
+            h("button", { className: "ima-btn primary", disabled: addBusy || !addPath.trim(), onClick: () => addWorkspace(addPath) }, addBusy ? t("action.adding") : t("action.confirm")),
+          ),
+        ),
+        hint && h("div", { className: "ima-picker-note" }, hint),
+        props.showAutoNameNote && h("div", { className: "ima-picker-note" }, "绑定成功后会自动生成账号名，无需手动填写。"),
+        h(RiskConfirmation, {
+          open: confirmingFullAccess,
+          title: permissionT("confirm.title"),
+          description: permissionT("confirm.description"),
+          acknowledgeLabel: permissionT("confirm.acknowledge"),
+          cancelLabel: permissionT("confirm.cancel"),
+          confirmLabel: permissionT("confirm.enable"),
+          acknowledged: fullAccessAcknowledged,
+          onAcknowledgedChange: setFullAccessAcknowledged,
+          onCancel: () => { setFullAccessAcknowledged(false); setConfirmingFullAccess(false); },
+          onConfirm: () => {
+            update({ permission: "danger-full-access" });
+            setFullAccessAcknowledged(false);
+            setConfirmingFullAccess(false);
+          },
+        }),
       );
     }
 
@@ -902,6 +1183,73 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function AccountInspector({ account, catalog, permissions, workspaces, createWorkspace, pickDirectory, modelT, permissionT, t, onAction, onSave }) {
+      const [draft, setDraft] = useState(account);
+      const [note, setNote] = useState("");
+      useEffect(() => { setDraft(account); setNote(""); }, [account.id, account.cwd, account.permission, account.privateAccess, account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model]);
+      const save = (patch) => {
+        const next = { ...draft, ...patch };
+        setDraft(next);
+        setNote("保存中…");
+        return onSave(account.id, {
+          name: next.name,
+          cwd: next.cwd,
+          provider: next.assistant.provider,
+          model: next.assistant.model,
+          reasoningEffort: next.assistant.reasoningEffort || null,
+          permission: next.permission,
+          privateAccess: next.privateAccess,
+        }).then((ok) => setNote(ok ? "已保存" : "保存失败"));
+      };
+      const applySettings = (patch) => {
+        const hasAssistant = Object.prototype.hasOwnProperty.call(patch, "provider") || Object.prototype.hasOwnProperty.call(patch, "model") || Object.prototype.hasOwnProperty.call(patch, "reasoningEffort");
+        if (!hasAssistant) return save(patch);
+        const assistant = {
+          ...(draft.assistant || {}),
+          ...(Object.prototype.hasOwnProperty.call(patch, "provider") ? { provider: patch.provider } : {}),
+          ...(Object.prototype.hasOwnProperty.call(patch, "model") ? { model: patch.model } : {}),
+          ...(Object.prototype.hasOwnProperty.call(patch, "reasoningEffort") ? { reasoningEffort: patch.reasoningEffort || undefined } : {}),
+        };
+        return save({ assistant });
+      };
+      return h("div", { className: "ima-inspector" },
+        h("div", { className: "ima-inspector-head" },
+          h(Logo, { id: account.platform }),
+          h("div", { className: "ima-inspector-head-copy" },
+            h("h3", { className: "ima-inspector-title" }, account.name),
+            h("div", { className: account.connected ? "ima-inspector-status ok" : "ima-inspector-status" }, account.connected ? "● 运行正常" : "● " + (account.status || "未连接")),
+            h("div", { className: "ima-account-id" }, account.id),
+          ),
+        ),
+        h("div", { className: "ima-form" },
+          h(AccountSettingsPicker, {
+            value: draft,
+            onChange: applySettings,
+            catalog,
+            permissions,
+            workspaces,
+            createWorkspace,
+            pickDirectory,
+            modelT,
+            permissionT,
+            compact: true,
+            workspaceLabel: "当前工作区",
+            t,
+          }),
+          h("div", { className: "ima-switch-row" },
+            h("div", { className: "ima-switch-copy" }, h("strong", null, "接收消息"), h("small", null, "关闭后保留账号配置，但不接收新消息")),
+            h("button", { type: "button", className: draft.receiveEnabled ? "ima-switch" : "ima-switch off", role: "switch", "aria-checked": Boolean(draft.receiveEnabled), "aria-label": "接收消息", onClick: () => onAction(account.id, "receive", { receiveEnabled: !draft.receiveEnabled }) }, h("i")),
+          ),
+          h("div", { className: note === "已保存" ? "ima-save-note ok" : "ima-save-note" }, note),
+          h("div", { className: "ima-inspector-actions" },
+            h("button", { className: "ima-btn", onClick: () => onAction(account.id, "check") }, "检查连接"),
+            h("button", { className: "ima-btn", onClick: () => onAction(account.id, "reconnect") }, "重新连接"),
+            h("button", { className: "ima-btn danger", onClick: () => { if (window.confirm("确定移除这个账号？本机保存的配置和凭据将一并删除。")) onAction(account.id, "remove"); } }, "移除接入"),
+          ),
+        ),
+      );
+    }
+
     function SettingsPage(props) {
       const t = props.t || fallbackT;
       const [channels, setChannels] = useState(null);
@@ -909,77 +1257,160 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState("");
       const [busy, setBusy] = useState({});
       const [editing, setEditing] = useState(null);
-      // 请求序号守卫：快速连续操作时丢弃旧 GET 响应，避免旧状态覆盖新状态
+      const [selected, setSelected] = useState(storedAccountSelection);
+      const [expanded, setExpanded] = useState({ weixin: true });
+      const [catalog, setCatalog] = useState({ providers: [], permissions: [], assistant: null, cwd: "", permission: "" });
+      const workspaces = props.useWorkspaces ? (props.useWorkspaces((state) => state && state.items || []) || []) : [];
       const refreshSeq = useRef(0);
+      const selectAccount = useCallback((id) => {
+        const next = id || "";
+        setSelected(next);
+        rememberAccountSelection(next);
+      }, []);
 
       const refresh = useCallback(() => {
         const seq = ++refreshSeq.current;
         api("/channels").then((data) => {
           if (seq !== refreshSeq.current) return;
-          if (data.ok) { setChannels(data.channels); setPending(data.pending || []); setError(""); }
-          else setError(serverText(data.error, t) || t("error.load"));
+          if (data.ok) {
+            setChannels(data.channels);
+            setPending(data.pending || []);
+            setError("");
+            const all = (data.channels || []).flatMap((channel) => channel.accounts || []);
+            setSelected((current) => {
+              const next = all.some((item) => item.id === current) ? current : "";
+              if (next !== current) rememberAccountSelection(next);
+              return next;
+            });
+          } else setError(serverText(data.error, t) || t("error.load"));
         }).catch(() => { if (seq === refreshSeq.current) setError(t("error.connection")); });
       }, []);
 
-      useEffect(() => { ensureStyle(); refresh(); }, [refresh]);
       useEffect(() => {
-        const timer = setInterval(refresh, 4000);
-        return () => clearInterval(timer);
+        ensureStyle();
+        refresh();
+        api("/assistant").then((data) => {
+          if (data.ok) setCatalog({ providers: data.providers || [], permissions: data.permissions || [], assistant: data.assistant || null, cwd: data.cwd || "", permission: data.permission || "" });
+        }).catch(() => undefined);
       }, [refresh]);
+      useEffect(() => { const timer = setInterval(refresh, 4000); return () => clearInterval(timer); }, [refresh]);
 
       const onAction = (id, action, body) => {
+        const removalFallback = action === "remove"
+          ? (() => {
+              const owner = (channels || []).find((channel) => (channel.accounts || []).some((account) => account.id === id));
+              const ownerAccounts = owner && owner.accounts || [];
+              const removedIndex = ownerAccounts.findIndex((account) => account.id === id);
+              const adjacent = ownerAccounts[removedIndex + 1] || ownerAccounts[removedIndex - 1];
+              if (adjacent) return adjacent.id;
+              return (channels || []).flatMap((channel) => channel.accounts || []).find((account) => account.id !== id)?.id || "";
+            })()
+          : "";
         setBusy((prev) => ({ ...prev, [id]: true }));
-        api(`/channels/${id}/${action}`, {
+        return api("/accounts/" + id + "/" + action, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body || {}),
         }).then((data) => {
-          if (!data.ok) setError(serverText(data.error, t) || t("error.action"));
-          else setError("");
+          if (!data.ok) { setError(serverText(data.error, t) || t("error.action")); return false; }
+          setError("");
+          if (action === "remove" && selected === id) selectAccount(removalFallback);
           refresh();
-        }).catch(() => setError(t("error.request"))).finally(() => {
-          setBusy((prev) => ({ ...prev, [id]: false }));
-        });
+          return true;
+        }).catch(() => { setError(t("error.request")); return false; }).finally(() => setBusy((prev) => ({ ...prev, [id]: false })));
       };
+      const saveAccount = (id, body) => onAction(id, "settings", body);
+      const allAccounts = (channels || []).flatMap((channel) => channel.accounts || []);
+      const selectedAccount = allAccounts.find((item) => item.id === selected);
 
-      return h("section", { className: "ima-page", "aria-label": t("settings.aria") },
+      return h("section", { className: "ima-page ima-account-page", "aria-label": t("settings.aria") },
         h("header", { className: "ima-head" },
           h("div", null,
-            h("h2", { className: "ima-title" }, t("settings.title")),
-            h("p", { className: "ima-sub" }, t("settings.description")),
+            h("h2", { className: "ima-title" }, "IM机器人"),
+            h("p", { className: "ima-sub" }, "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。"),
           ),
         ),
-        h(ComposerBar, { useWorkspaces: props.useWorkspaces, createWorkspace: props.createWorkspace, pickDirectory: props.pickDirectory, permissionT: props.permissionT, modelT: props.modelT, t }),
         error && h("div", { className: "ima-error" }, error),
-        pending && pending.length > 0 && h("div", { className: "ima-pending" },
+        pending.length > 0 && h("div", { className: "ima-pending" },
           h("div", null, t("pending.notice")),
           ...pending.map((p) => h("div", { key: p.channelId + p.userId, className: "ima-pending-row" },
-            h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + channelLabel({ id: p.channelId, label: p.channelId }, t)),
+            h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + (allAccounts.find((item) => item.id === p.channelId)?.name || p.channelId)),
             h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "approve", { userId: p.userId }) }, t("action.approve")),
             h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "deny", { userId: p.userId }) }, t("action.deny")),
           )),
         ),
         channels == null
           ? h("div", { className: "ima-empty" }, t("loading"))
-          : h("div", { className: "ima-list" },
-              ...channels.map((ch) => h(ChannelCard, {
-                key: ch.id,
-                ch,
-                busy: busy[ch.id],
-                onAction,
-                onConfigure: () => setEditing(ch.id),
-                t,
-              })),
+          : h("div", { className: "ima-account-shell" },
+              h("div", { className: "ima-platforms" },
+                ...channels.map((ch) => {
+                  const canExpand = (ch.accounts || []).length > 0;
+                  const open = canExpand && Boolean(expanded[ch.id]);
+                  const toggleExpanded = canExpand ? () => setExpanded({ ...expanded, [ch.id]: !open }) : undefined;
+                  const channelStatus = ch.total === 0
+                    ? { label: "0 个账号", tone: "muted" }
+                    : ch.online === ch.total
+                      ? { label: ch.online + " / " + ch.total + " 在线", tone: "online" }
+                      : ch.online === 0
+                        ? { label: ch.total + " / " + ch.total + " 离线", tone: "offline" }
+                        : { label: ch.online + " / " + ch.total + " 在线", tone: "partial" };
+                  return h("div", { key: ch.id, className: "ima-platform" + (open ? " open" : "") + (canExpand ? "" : " empty") },
+                    h("div", { className: "ima-platform-head", role: canExpand ? "button" : undefined, tabIndex: canExpand ? 0 : undefined, "aria-expanded": canExpand ? open : undefined, onClick: toggleExpanded, onKeyDown: canExpand ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpanded(); } } : undefined },
+                      h(Logo, { id: ch.id }),
+                      h("span", { className: "ima-platform-title" }, channelLabel(ch, t)),
+                      h("span", { className: "ima-platform-count " + channelStatus.tone }, channelStatus.label),
+                      h("button", { className: "ima-platform-add", type: "button", onClick: (e) => { e.stopPropagation(); setEditing(ch.id); } }, "＋ 添加账号"),
+                      h("span", { className: canExpand ? "ima-platform-caret" : "ima-platform-caret empty", "aria-hidden": "true" }, canExpand && h(IconChevron)),
+                    ),
+                    open && h("div", { className: "ima-account-list" },
+                      ...(ch.accounts || []).map((account) => h("button", { key: account.id, type: "button", className: account.id === selected ? "ima-account-row on" : "ima-account-row", onClick: () => selectAccount(account.id) },
+                        h("span", { className: account.connected ? "ima-dot on" : "ima-dot" }),
+                        h(Logo, { id: ch.id }),
+                        h("span", { className: "ima-account-copy" }, h("span", { className: "ima-account-name" }, account.name), h("span", { className: "ima-account-id" }, account.id)),
+                        h("span", { className: busy[account.id] ? "ima-account-state" : account.connected ? "ima-account-state online" : "ima-account-state offline" }, busy[account.id] ? "处理中…" : account.connected ? "在线" : "离线"),
+                        h("span", { className: "ima-account-next", "aria-hidden": "true" }, h(IconChevron)),
+                      )),
+                    ),
+                  );
+                }),
+              ),
+              selectedAccount
+                ? h(AccountInspector, {
+                    account: selectedAccount,
+                    catalog: catalog.providers,
+                    permissions: catalog.permissions,
+                    workspaces,
+                    createWorkspace: props.createWorkspace,
+                    pickDirectory: props.pickDirectory,
+                    modelT: props.modelT,
+                    permissionT: props.permissionT,
+                    t,
+                    onAction,
+                    onSave: saveAccount,
+                  })
+                : h("div", { className: "ima-inspector-empty", role: "status" },
+                    h("div", { className: "ima-inspector-empty-copy" },
+                      h("h3", { className: "ima-inspector-empty-title" }, allAccounts.length ? t("settings.selectAccountTitle") : t("settings.noAccountsTitle")),
+                      h("p", { className: "ima-inspector-empty-description" }, allAccounts.length ? t("settings.selectAccountDescription") : t("settings.noAccountsDescription")),
+                    ),
+                  ),
             ),
         editing && h(BindModal, {
           ch: (channels || []).find((item) => item.id === editing) || { id: editing, label: editing, kind: "qr", fields: [] },
+          catalog: catalog.providers,
+          permissions: catalog.permissions,
+          workspaces,
+          createWorkspace: props.createWorkspace,
+          pickDirectory: props.pickDirectory,
+          modelT: props.modelT,
+          permissionT: props.permissionT,
+          defaults: catalog,
           onClose: () => setEditing(null),
-          onConnected: () => { setEditing(null); refresh(); },
+          onConnected: () => { setEditing(null); setExpanded((prev) => ({ ...prev, [editing]: true })); refresh(); },
           t,
         }),
       );
     }
-
     const WB_CSS = `.dcu-wb,.ima-native{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;padding-right:var(--dsh-sidebar-inline-padding,12px);box-sizing:border-box;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-toolbar{box-sizing:border-box;flex:none;height:36px;margin:2px -4px 4px 0;padding-left:4px;display:flex;justify-content:flex-end;align-items:center;gap:4px;overflow:visible;position:relative;z-index:2;color:var(--dsw-alias-label-tertiary,#81858C);border-radius:12px}.ima-n-head-label{white-space:nowrap;min-width:0;max-width:45%;flex:none;line-height:20px;font-size:14px;overflow:hidden;transition:max-width .18s var(--ds-ease-in-out,ease),margin-right .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear}.ima-n-toolbar.is-search .ima-n-head-label{opacity:0;visibility:hidden;max-width:0;margin-right:-4px;transform:translate(-4px);transition-delay:0s,0s,0s,0s,.18s}.ima-n-search-slot{box-sizing:border-box;min-width:28px;max-width:28px;transition:max-width .18s var(--ds-ease-in-out,ease);flex:none;align-items:center;margin-left:auto;display:flex;position:relative;z-index:2}.ima-n-toolbar.is-search .ima-n-search-slot{flex:1;min-width:0;max-width:100%}.ima-n-search{box-sizing:border-box;cursor:text;width:100%;height:28px;color:var(--dsw-alias-label-secondary);transition:width .18s var(--ds-ease-in-out,ease),padding .18s var(--ds-ease-in-out,ease),border-color .18s var(--ds-ease-in-out,ease);background:transparent;border:none;border-radius:50%;flex:none;align-items:center;margin:0;padding:0;display:flex;overflow:hidden}.ima-n-toolbar.is-search .ima-n-search{border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.10));width:calc(100% + 4px);height:30px;border-radius:10px;margin-inline:-2px;padding:0 4px 0 0}.ima-n-search-btn,.ima-n-head-btn{cursor:pointer;width:28px;height:28px;min-width:28px;min-height:28px;position:relative;z-index:1;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-toolbar.is-search .ima-n-search-btn{width:28px;height:30px}.ima-n-search-btn:hover,.ima-n-head-btn:hover,.ima-n-head-btn.on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,var(--ima-text))}.ima-n-toolbar.is-search .ima-n-search-btn:hover{background:transparent}.ima-n-head-acts{opacity:1;visibility:visible;max-width:32px;transition:max-width .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear;flex:none;align-items:center;gap:4px;display:flex;overflow:visible;position:relative}.ima-n-toolbar.is-search .ima-n-head-acts{opacity:0;visibility:hidden;pointer-events:none;max-width:0;transform:translate(4px);transition-delay:0s,0s,0s,.18s}.ima-n-head-filter{position:relative}.ima-n-search-input{display:none;opacity:0;pointer-events:none;width:0;min-width:0;flex:none;color:var(--dsw-alias-label-primary,var(--ima-text));transition:opacity .12s var(--ds-ease-in-out,ease);background:transparent;border:none;outline:none;flex:1;font-size:13px;line-height:18px}.ima-n-toolbar.is-search .ima-n-search-input{display:block;opacity:1;pointer-events:auto;margin-left:-2px;width:auto;flex:1;min-width:0}.ima-n-search-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-search-clear{cursor:pointer;width:24px;height:24px;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-search-clear:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}@media (prefers-reduced-motion:reduce){.ima-n-head-label,.ima-n-search-slot,.ima-n-search,.ima-n-head-acts,.ima-n-search-input{transition:none}}.ima-n-filter-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:196px;padding:8px 6px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2,#1c2128));box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.36))}.ima-n-filter-label{padding:6px 10px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-filter-split{height:1px;margin:6px 8px;background:var(--dsw-alias-border-l2,rgba(255,255,255,.1))}.ima-n-filter-menu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:36px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:inherit;font:14px/20px inherit;cursor:pointer;text-align:left}.ima-n-filter-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}.ima-n-filter-tick{width:16px;height:16px;flex:none}.ima-native-tree,.dcu-wb-tree{padding:0 0 16px;scrollbar-gutter:stable}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}
 .dcu-wb *,.ima-native *{box-sizing:border-box}
 .dcu-wb-tree,.ima-native-tree{flex:1;min-height:0;overflow-y:auto;padding-bottom:16px;user-select:none}

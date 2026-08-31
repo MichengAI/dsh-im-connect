@@ -13,11 +13,12 @@ function createHandle(sessionId) {
   }
 }
 
-function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds = new Set() } = {}) {
+function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds = new Set(), resolveConfig } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'im-connect-router-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const store = new SessionMapStore(join(dir, 'sessions.json'))
   const created = []
+  const createdOptions = []
   const permissionSelections = []
   const ctx = {
     permissionPresets: {
@@ -30,6 +31,7 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
           throw new Error(`session "${id}" already has a persisted log on disk that does not match this live session (id collision)`)
         }
         created.push(id)
+        createdOptions.push(opts)
         await opts.setup?.({ agent: { session: { id } } })
         return createHandle(id)
       },
@@ -56,9 +58,24 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
     agentPreset: 'standard',
     mergeTimeoutSecs: 5,
     permissionPreset: 'danger-full-access',
-  }, () => undefined)
-  return { router, store, created, archivedIds, permissionSelections }
+  }, () => undefined, resolveConfig)
+  return { router, store, created, createdOptions, archivedIds, permissionSelections }
 }
+
+test('不同账号实例使用各自的模型、工作区和权限', async (t) => {
+  const configs = {
+    wecom_alpha: { cwd: 'D:/workspace/alpha', provider: 'provider-a', model: 'model-a', agentPreset: 'standard', mergeTimeoutSecs: 5, permissionPreset: 'read-only' },
+    wecom_beta: { cwd: 'D:/workspace/beta', provider: 'provider-b', model: 'model-b', agentPreset: 'standard', mergeTimeoutSecs: 5, permissionPreset: 'danger-full-access' },
+  }
+  const { router, createdOptions, permissionSelections } = makeRouter(t, { resolveConfig: (id) => configs[id] })
+  await router.getOrCreate('wecom_alpha', 'dm', 'user-1', 'Alpha')
+  await router.getOrCreate('wecom_beta', 'dm', 'user-1', 'Beta')
+  assert.equal(createdOptions[0].meta.cwd, 'D:/workspace/alpha')
+  assert.deepEqual(createdOptions[0].agentOptions, { provider: 'provider-a', model: 'model-a' })
+  assert.equal(createdOptions[1].meta.cwd, 'D:/workspace/beta')
+  assert.deepEqual(createdOptions[1].agentOptions, { provider: 'provider-b', model: 'model-b' })
+  assert.deepEqual(permissionSelections.map((item) => item.permission), ['read-only', 'danger-full-access'])
+})
 
 test('新建 IM 会话通过 Host 官方权限服务应用所选预设', async (t) => {
   const { router, permissionSelections } = makeRouter(t)

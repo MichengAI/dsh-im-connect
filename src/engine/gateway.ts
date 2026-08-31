@@ -4,7 +4,7 @@ import { SessionMerger } from './merge.js'
 import { SessionRouter } from './router.js'
 import { SeenStore } from './seen-store.js'
 import { SessionMapStore } from './session-store.js'
-import { isImSessionId, type ChannelId, type ChatKind } from './session-id.js'
+import { isImSessionId, type ChatKind } from './session-id.js'
 import { canAnswerToolApproval, decideAccess } from './access.js'
 import { splitText } from './split.js'
 import { ReplyStreamHub, isAssistantTextDelta } from './reply-stream.js'
@@ -88,8 +88,10 @@ export class ImEngine {
     private readonly config: EngineConfig,
     private readonly log: (line: string) => void,
     private readonly onUnauthorized?: (channelId: string, msg: ImMessage) => string,
+    private readonly resolveConfig: (channelId: string) => EngineConfig = () => config,
+    private readonly resolvePrivateAccess: (channelId: string) => 'approved' | 'all' = () => 'approved',
   ) {
-    this.router = new SessionRouter(ctx, store, config, log)
+    this.router = new SessionRouter(ctx, store, config, log, resolveConfig)
     this.merger = new SessionMerger((config.mergeTimeoutSecs || 5) * 1000, (key, text) => {
       const sep = key.indexOf(':')
       const channelId = key.slice(0, sep)
@@ -191,6 +193,10 @@ export class ImEngine {
     set.add(id)
   }
 
+  reloadChannel(channelId: string): void {
+    void this.router.disposeChannel(channelId)
+  }
+
   clearAllowed(channelId: string): void {
     this.extraAllow.delete(channelId)
   }
@@ -217,10 +223,12 @@ export class ImEngine {
 
   private userAllowed(channelId: string, userId?: string): boolean {
     if (!userId) return false
+    if (this.resolvePrivateAccess(channelId) === 'all') return true
     return this.extraAllow.get(channelId)?.has(userId) === true
   }
 
   private isAuthorized(channelId: string, channel: ChannelAdapter, msg: ImMessage): boolean {
+    if (msg.userId && this.resolvePrivateAccess(channelId) === 'all') return true
     const local = channel.authorizes?.(msg.userId ?? '')
     if (local === false) return false
     if (local === true) return true
@@ -253,7 +261,7 @@ export class ImEngine {
       }
       const text = msg.text.trim()
       const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
-      const binding = this.router.lookup(channelId as ChannelId, kind, msg.chatId)
+      const binding = this.router.lookup(channelId, kind, msg.chatId)
       if (text.startsWith('/')) {
         const command = text.split(/\s+/, 1)[0]?.toLowerCase()
         if ((command === '/new' || command === '/clear')
@@ -339,7 +347,7 @@ export class ImEngine {
     const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
     if (cmd === '/help') return HELP
     if (cmd === '/status') {
-      const entry = this.router.get(channel.id as ChannelId, kind, msg.chatId)
+      const entry = this.router.get(channel.id, kind, msg.chatId)
       return [
         `渠道：${channel.label}（${channel.status()}）`,
         entry ? `频道会话：${entry.sessionId}` : '频道会话：（尚未创建）',
@@ -347,7 +355,7 @@ export class ImEngine {
       ].join('\n')
     }
     if (cmd === '/new' || cmd === '/clear') {
-      const entry = await this.router.rotate(channel.id as ChannelId, kind, msg.chatId, msg.username ?? msg.chatId)
+      const entry = await this.router.rotate(channel.id, kind, msg.chatId, msg.username ?? msg.chatId)
       return `已开启新的频道会话：${entry.sessionId}`
     }
     return `未知命令 ${cmd}。发送 /help 查看帮助。`
@@ -356,7 +364,7 @@ export class ImEngine {
   private async inject(channel: ChannelAdapter, msg: ImMessage): Promise<void> {
     const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
     const title = (msg.username || msg.text || msg.chatId).slice(0, 40)
-    const binding = await this.router.getOrCreate(channel.id as ChannelId, kind, msg.chatId, title)
+    const binding = await this.router.getOrCreate(channel.id, kind, msg.chatId, title)
     const content: Array<Record<string, unknown>> = []
     if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })
     for (const media of msg.media ?? []) {
@@ -377,7 +385,7 @@ export class ImEngine {
   }
 
   private async answerApproval(channelId: string, msg: ImMessage, allow: boolean): Promise<boolean> {
-    const binding = this.router.lookup(channelId as ChannelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
+    const binding = this.router.lookup(channelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
     if (!binding) return false
     if (!this.broker.has(binding.sessionId)) return false
     if (!this.broker.isReady(binding.sessionId)) {

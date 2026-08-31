@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createChannelAdapter } from './channels/factory.js'
@@ -112,10 +113,33 @@ export function backupCorruptConfig(file: string): string | undefined {
 }
 
 export interface ChannelState {
+  id?: string
+  platform?: ChannelId
+  name?: string
   enabled?: boolean
   receiveEnabled?: boolean
   lastError?: string
   config?: Record<string, string>
+  assistant?: AssistantModel
+  cwd?: string
+  permission?: PermissionPreset
+  privateAccess?: 'approved' | 'all'
+  lastCheckedAt?: string
+}
+
+export interface AccountView {
+  id: string
+  platform: ChannelId
+  name: string
+  connected: boolean
+  receiveEnabled: boolean
+  configuredKeys: string[]
+  status: string
+  assistant: AssistantModel
+  cwd: string
+  permission: PermissionPreset
+  privateAccess: 'approved' | 'all'
+  lastCheckedAt?: string
 }
 
 export interface ChannelView {
@@ -128,6 +152,9 @@ export interface ChannelView {
   receiveEnabled: boolean
   configuredKeys: string[]
   status: string
+  accounts: AccountView[]
+  online: number
+  total: number
 }
 
 interface PendingRequest {
@@ -138,6 +165,8 @@ interface PendingRequest {
 }
 
 interface Persisted {
+  version?: 2
+  /** v2 起按账号实例 ID 存储；旧版按渠道 ID 的记录会原位升级为首个账号。 */
   channels: Record<string, ChannelState>
   allowlist: Record<string, string[]>
   pending: Record<string, PendingRequest[]>
@@ -186,48 +215,79 @@ export class ChannelManager {
     this.applyAssistant(this.store.assistant)
     this.applyWorkspace(this.store.cwd)
     this.applyPermission(this.store.permission)
+    this.migrateAccountSettings()
     const seen = new SeenStore(join(options.stateDir, 'seen.json'))
     const credentials = (options.ctx as Context & { credentials?: CredentialService }).credentials
     this.vault = credentials
       ? createServiceVault(credentials)
       : createFileVault(join(options.stateDir, 'secrets.json'))
-    this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log, (channelId, msg) => {
-      this.requestAuthorization(channelId, msg)
+    this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log, (accountId, msg) => {
+      this.requestAuthorization(accountId, msg)
       return '未授权：请管理员在设置 → IM助理 中批准你的访问。'
-    })
+    }, (accountId) => this.accountEngineConfig(accountId), (accountId) => this.store.channels[accountId]?.privateAccess === 'all' ? 'all' : 'approved')
     for (const [channelId, users] of Object.entries(this.store.allowlist)) {
       for (const userId of users) this.engine.addAllowed(channelId, userId)
     }
     this.pairing = new PairingHub({
       log: options.log,
       onSuccess: async (id, creds) => {
-        const result = await this.connect(id, creds)
+        const settings: Record<string, string> = {}
+        for (const key of Object.keys(creds).filter((key) => key.startsWith('__setting_'))) {
+          settings[key.slice('__setting_'.length)] = creds[key]!
+          delete creds[key]
+        }
+        const result = await this.connect(id, creds, settings)
         if (!result.ok) throw new Error(result.error ?? '保存失败')
       },
     })
+    this.flush()
   }
 
   list(): ChannelView[] {
     return CHANNEL_ORDER.map((id) => {
       const meta = CHANNEL_META[id]
-      const state = this.store.channels[id] ?? {}
-      const config = state.config ?? {}
-      const configuredKeys = Object.keys(config).filter((key) => Boolean(config[key]) && !key.endsWith('Ref'))
-      const adapter = this.running.get(id)
-      const status = adapter?.status() ?? state.lastError ?? '未连接'
-      const connected = adapter !== undefined && !status.includes('失败') && status !== '未连接' && status !== '已停止'
+      const accounts = Object.entries(this.store.channels)
+        .filter(([accountId, state]) => this.platformOf(accountId, state) === id)
+        .map(([accountId, state]) => this.accountView(accountId, state))
+      const online = accounts.filter((item) => item.connected).length
+      const first = accounts[0]
       return {
         id,
         label: meta.label,
         description: meta.description,
         kind: meta.kind,
         fields: meta.fields,
-        connected,
-        receiveEnabled: connected && state.receiveEnabled !== false,
-        configuredKeys,
-        status,
+        connected: online > 0,
+        receiveEnabled: accounts.some((item) => item.receiveEnabled),
+        configuredKeys: first?.configuredKeys ?? [],
+        status: accounts.length === 0 ? '未配置' : `${online}/${accounts.length} 在线`,
+        accounts,
+        online,
+        total: accounts.length,
       }
     })
+  }
+
+  private accountView(accountId: string, state: ChannelState): AccountView {
+    const platform = this.platformOf(accountId, state)
+    const config = state.config ?? {}
+    const adapter = this.running.get(accountId)
+    const status = adapter?.status() ?? state.lastError ?? (state.enabled ? '未连接' : '已停止')
+    const connected = adapter !== undefined && !status.includes('失败') && status !== '未连接' && status !== '已停止'
+    return {
+      id: accountId,
+      platform,
+      name: state.name || `${CHANNEL_META[platform].label}账号`,
+      connected,
+      receiveEnabled: connected && state.receiveEnabled !== false,
+      configuredKeys: Object.keys(config).filter((key) => Boolean(config[key]) && !key.endsWith('Ref')),
+      status,
+      assistant: normalizeAssistantModel(state.assistant ?? {}) ?? this.currentAssistant()!,
+      cwd: normalizeWorkspacePath(state.cwd) ?? this.currentWorkspace(),
+      permission: normalizePermission(state.permission, this.permissionPresets().names) ?? this.currentPermission(),
+      privateAccess: state.privateAccess === 'all' ? 'all' : 'approved',
+      lastCheckedAt: state.lastCheckedAt,
+    }
   }
 
   channelSessions() {
@@ -235,7 +295,7 @@ export class ChannelManager {
     return CHANNEL_ORDER.map((id) => ({
       id,
       label: CHANNEL_META[id].label,
-      sessions: this.sessions.list().filter((item) => item.channel === id && !archived.has(item.sessionId)),
+      sessions: this.sessions.list().filter((item) => this.platformOf(item.channel, this.store.channels[item.channel]) === id && !archived.has(item.sessionId)),
     })).filter((group) => group.sessions.length > 0)
   }
 
@@ -250,42 +310,58 @@ export class ChannelManager {
     }
   }
 
-  async connect(id: ChannelId, config?: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
+  async connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{ ok: boolean; error?: string; accountId?: string }> {
     if (!CHANNEL_META[id]) return { ok: false, error: '未知渠道' }
-    return this.channelOperations.run(id, () => this.connectNow(id, config))
+    const accountId = this.accountIdFor(id, config ?? {})
+    return this.channelOperations.run(accountId, () => this.connectNow(id, accountId, config, settings ?? {}))
   }
 
-  private async connectNow(id: ChannelId, config?: Record<string, string>): Promise<{ ok: boolean; error?: string }> {
+  private async connectNow(id: ChannelId, accountId: string, config?: Record<string, string>, settings: Record<string, unknown> = {}): Promise<{ ok: boolean; error?: string; accountId?: string }> {
     const incoming = { ...(config ?? {}) }
+    const prev = this.store.channels[accountId] ?? {}
+    const normalized = this.normalizeAccountSettings(id, settings, prev)
+    if (!normalized.ok) return normalized
     if (id === 'weixin' && incoming.botToken) {
-      await this.vault.set(credentialRef('weixin', 'botToken'), incoming.botToken)
-      persistWeixinLogin(join(this.stateDir, 'weixin'), {
+      await this.vault.set(credentialRef(accountId, 'botToken'), incoming.botToken)
+      persistWeixinLogin(this.accountStateDir(accountId, id), {
         allowedUserId: incoming.allowedUserId,
         baseUrl: incoming.baseUrl,
       })
       delete incoming.botToken
       incoming.bound = '1'
     }
-    const prev = this.store.channels[id] ?? {}
-    const nextConfig = await this.persistSecrets(id, { ...(prev.config ?? {}), ...incoming })
-    this.store.channels[id] = { ...prev, enabled: true, receiveEnabled: true, config: nextConfig }
+    const nextConfig = await this.persistSecrets(id, accountId, { ...(prev.config ?? {}), ...incoming })
+    this.store.channels[accountId] = {
+      ...prev,
+      id: accountId,
+      platform: id,
+      name: normalized.settings.name,
+      assistant: normalized.settings.assistant,
+      cwd: normalized.settings.cwd,
+      permission: normalized.settings.permission,
+      privateAccess: normalized.settings.privateAccess,
+      enabled: true,
+      receiveEnabled: true,
+      config: nextConfig,
+    }
     this.flush()
-    this.seedAllowedUser(id, incoming.allowedUserId || incoming.ownerOpenId || nextConfig.allowedUserId || nextConfig.ownerOpenId)
+    this.seedAllowedUser(accountId, incoming.allowedUserId || incoming.ownerOpenId || nextConfig.allowedUserId || nextConfig.ownerOpenId)
     try {
-      await this.startOne(id)
-      return { ok: true }
+      await this.startOne(accountId)
+      return { ok: true, accountId }
     } catch (error) {
       this.log(`[manager] ${id} 连接失败: ${error instanceof Error ? error.message : String(error)}`)
-      return { ok: false, error: '渠道连接失败，请查看本机日志' }
+      return { ok: false, error: '账号连接失败，请查看本机日志', accountId }
     }
   }
 
-  async setReceive(id: ChannelId, receiveEnabled: boolean): Promise<{ ok: boolean; error?: string }> {
-    if (!CHANNEL_META[id]) return { ok: false, error: '未知渠道' }
-    return this.channelOperations.run(id, () => this.setReceiveNow(id, receiveEnabled))
+  async setReceive(id: string, receiveEnabled: boolean): Promise<{ ok: boolean; error?: string }> {
+    const accountId = this.resolveAccountId(id)
+    if (!accountId) return { ok: false, error: '账号不存在' }
+    return this.channelOperations.run(accountId, () => this.setReceiveNow(accountId, receiveEnabled))
   }
 
-  private async setReceiveNow(id: ChannelId, receiveEnabled: boolean): Promise<{ ok: boolean; error?: string }> {
+  private async setReceiveNow(id: string, receiveEnabled: boolean): Promise<{ ok: boolean; error?: string }> {
     const state = this.store.channels[id]
     if (!state?.enabled) return { ok: false, error: '渠道未配置' }
     state.receiveEnabled = receiveEnabled
@@ -295,36 +371,38 @@ export class ChannelManager {
     return { ok: true }
   }
 
-  async disconnect(id: ChannelId): Promise<void> {
-    if (!CHANNEL_META[id]) return
-    await this.channelOperations.run(id, () => this.disconnectNow(id))
+  async disconnect(id: string): Promise<void> {
+    const accountId = this.resolveAccountId(id)
+    if (!accountId) return
+    await this.channelOperations.run(accountId, () => this.disconnectNow(accountId))
   }
 
-  private async disconnectNow(id: ChannelId): Promise<void> {
+  private async disconnectNow(id: string): Promise<void> {
     const state = this.store.channels[id]
     if (state) {
       state.enabled = false
       state.receiveEnabled = false
       this.flush()
     }
-    this.pairing.cancel(id)
     await this.stopOne(id)
   }
 
-  async remove(id: ChannelId): Promise<void> {
-    if (!CHANNEL_META[id]) return
-    await this.channelOperations.run(id, () => this.removeNow(id))
+  async remove(id: string): Promise<void> {
+    const accountId = this.resolveAccountId(id)
+    if (!accountId) return
+    await this.channelOperations.run(accountId, () => this.removeNow(accountId))
   }
 
-  private async removeNow(id: ChannelId): Promise<void> {
+  private async removeNow(id: string): Promise<void> {
     await this.stopOne(id)
-    this.pairing.cancel(id)
     const state = this.store.channels[id]
-    if (id === 'weixin') {
-      clearWeixinLogin(join(this.stateDir, 'weixin'))
-      await this.vault.unset(credentialRef('weixin', 'botToken'))
+    if (!state) return
+    const platform = this.platformOf(id, state)
+    if (platform === 'weixin') {
+      clearWeixinLogin(this.accountStateDir(id, platform))
+      await this.vault.unset(credentialRef(id, 'botToken'))
     }
-    for (const field of CHANNEL_META[id].fields.filter((item) => item.secret)) {
+    for (const field of CHANNEL_META[platform].fields.filter((item) => item.secret)) {
       const ref = state?.config?.[`${field.key}Ref`] || credentialRef(id, field.key)
       await this.vault.unset(ref)
     }
@@ -344,9 +422,8 @@ export class ChannelManager {
     await this.migrateLegacyWeixinToken().catch((error) => {
       this.log(`[manager] 迁移旧版微信 token 失败，已保留原文件: ${error instanceof Error ? error.message : String(error)}`)
     })
-    for (const id of CHANNEL_ORDER) {
+    for (const [id, state] of Object.entries(this.store.channels)) {
       if (this.disposed) return
-      const state = this.store.channels[id]
       if (state?.enabled && state.receiveEnabled !== false) {
         const one = Date.now()
         await this.channelOperations.run(id, () => this.startOne(id)).catch((error) => {
@@ -455,9 +532,9 @@ export class ChannelManager {
             return
           }
           if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'method not allowed' }); return }
-          await readJson(req)
+          const body = await readJson(req)
           if (action === 'start') {
-            const pairing = await this.pairing.start(id)
+            const pairing = await this.pairing.start(id, pairingSettings(body.settings as Record<string, unknown> | undefined))
             send(res, pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
             return
           }
@@ -478,8 +555,8 @@ export class ChannelManager {
           const action = parts[4]
           const body = await readJson(req)
           if (action === 'connect') {
-            const result = await this.connect(id, body.config as Record<string, string> | undefined)
-            send(res, result.ok ? 200 : 400, result.ok ? { ok: true, channel: this.list().find((item) => item.id === id) } : result)
+            const result = await this.connect(id, body.config as Record<string, string> | undefined, body.settings as Record<string, unknown> | undefined)
+            send(res, result.ok ? 200 : 400, result.ok ? { ...result, channel: this.list().find((item) => item.id === id) } : result)
             return
           }
           if (action === 'receive') {
@@ -508,6 +585,48 @@ export class ChannelManager {
           send(res, 404, { ok: false, error: `未知操作 ${action}` })
           return
         }
+        if (parts[2] === 'accounts' && parts.length === 5 && req.method === 'POST') {
+          const accountId = parts[3]!
+          const action = parts[4]!
+          const body = await readJson(req)
+          if (!this.store.channels[accountId]) { send(res, 404, { ok: false, error: '账号不存在' }); return }
+          if (action === 'settings') {
+            const result = this.updateAccount(accountId, body)
+            send(res, result.ok ? 200 : 400, result)
+            return
+          }
+          if (action === 'receive') {
+            const result = await this.setReceive(accountId, body.receiveEnabled !== false)
+            send(res, result.ok ? 200 : 400, result)
+            return
+          }
+          if (action === 'reconnect') {
+            const result = await this.reconnect(accountId)
+            send(res, result.ok ? 200 : 400, result)
+            return
+          }
+          if (action === 'check') {
+            const state = this.store.channels[accountId]!
+            state.lastCheckedAt = new Date().toISOString()
+            this.flush()
+            send(res, 200, { ok: true, account: this.accountView(accountId, state) })
+            return
+          }
+          if (action === 'remove') {
+            await this.remove(accountId)
+            send(res, 200, { ok: true })
+            return
+          }
+          if (action === 'approve' || action === 'deny') {
+            const userId = String(body.userId ?? '')
+            if (!userId) { send(res, 400, { ok: false, error: '缺少 userId' }); return }
+            action === 'approve' ? this.approve(accountId, userId) : this.deny(accountId, userId)
+            send(res, 200, { ok: true, pending: this.pendingRequests() })
+            return
+          }
+          send(res, 404, { ok: false, error: `未知账号操作 ${action}` })
+          return
+        }
         send(res, 404, { ok: false, error: 'not found' })
         } catch (error) {
           // 单个路由异常不能让 HTTP 连接悬死，统一回 500 并落日志
@@ -531,13 +650,44 @@ export class ChannelManager {
     this.apiDisposers = []
     this.pairing.dispose()
     const activeIds = new Set([...this.running.keys(), ...this.channelOperations.keys()])
-    for (const id of activeIds) void this.channelOperations.run(id, () => this.stopOne(id as ChannelId))
+    for (const id of activeIds) void this.channelOperations.run(id, () => this.stopOne(id))
     this.engine.dispose()
   }
 
 
   currentAssistant(): AssistantModel | undefined {
     return normalizeAssistantModel(this.store.assistant ?? this.engineConfig)
+  }
+
+  updateAccount(accountId: string, input: Record<string, unknown>): { ok: boolean; error?: string; account?: AccountView } {
+    const state = this.store.channels[accountId]
+    if (!state) return { ok: false, error: '账号不存在' }
+    const platform = this.platformOf(accountId, state)
+    const normalized = this.normalizeAccountSettings(platform, input, state)
+    if (!normalized.ok) return normalized
+    state.name = normalized.settings.name
+    state.assistant = normalized.settings.assistant
+    state.cwd = normalized.settings.cwd
+    state.permission = normalized.settings.permission
+    state.privateAccess = normalized.settings.privateAccess
+    this.flush()
+    this.engine.reloadChannel(accountId)
+    return { ok: true, account: this.accountView(accountId, state) }
+  }
+
+  async reconnect(accountId: string): Promise<{ ok: boolean; error?: string }> {
+    if (!this.store.channels[accountId]) return { ok: false, error: '账号不存在' }
+    return this.channelOperations.run(accountId, async () => {
+      try {
+        const state = this.store.channels[accountId]!
+        state.enabled = true
+        state.receiveEnabled = true
+        await this.startOne(accountId)
+        return { ok: true }
+      } catch {
+        return { ok: false, error: '重新连接失败，请查看本机日志' }
+      }
+    })
   }
 
   setAssistant(input: { provider?: unknown; model?: unknown; cwd?: unknown; permission?: unknown }): { ok: boolean; error?: string; assistant?: AssistantModel; cwd?: string; permission?: PermissionPreset } {
@@ -677,23 +827,28 @@ export class ChannelManager {
     return out
   }
 
-  private async startOne(id: ChannelId): Promise<void> {
+  private async startOne(id: string): Promise<void> {
     await this.stopOne(id)
     if (this.disposed) return
     const state = this.store.channels[id]
+    if (!state) throw new Error('账号不存在')
+    const platform = this.platformOf(id, state)
     if (id === 'weixin') await this.migrateLegacyWeixinToken()
-    const resolved = await this.resolveSecrets(id, state?.config ?? {})
+    const resolved = await this.resolveSecrets(platform, id, state.config ?? {})
     if (this.disposed) return
-    const adapter = createChannelAdapter(id, resolved, this.log, join(this.stateDir, id), {
+    const accountDir = this.accountStateDir(id, platform)
+    const adapter = createChannelAdapter(platform, resolved, this.log, accountDir, {
+      accountId: id,
+      accountLabel: state.name || `${CHANNEL_META[platform].label}账号`,
       onWeixinBotToken: async (token) => {
-        const ref = credentialRef('weixin', 'botToken')
+        const ref = credentialRef(id, 'botToken')
         if (token) await this.vault.set(ref, token)
         else await this.vault.unset(ref)
       },
     })
     if (!adapter) throw new Error('凭据不足，无法启动渠道')
-    if (id === 'weixin') {
-      this.seedAllowedUser(id, readWeixinAllowedUserId(join(this.stateDir, 'weixin')) || resolved.allowedUserId)
+    if (platform === 'weixin') {
+      this.seedAllowedUser(id, readWeixinAllowedUserId(accountDir) || resolved.allowedUserId)
     }
     this.seedAllowedUser(id, resolved.ownerOpenId || resolved.allowedUserId)
     this.engine.register(adapter)
@@ -734,7 +889,7 @@ export class ChannelManager {
     this.log(`[manager] ${id} 已启动：${adapter.status()}`)
   }
 
-  private async stopOne(id: ChannelId): Promise<void> {
+  private async stopOne(id: string): Promise<void> {
     const adapter = this.running.get(id)
     if (!adapter) return
     this.engine.unregister(id)
@@ -742,8 +897,8 @@ export class ChannelManager {
     await Promise.resolve(adapter.stop()).catch(() => undefined)
   }
 
-  private async persistSecrets(id: ChannelId, config: Record<string, string>): Promise<Record<string, string>> {
-    const secrets = new Set((CHANNEL_META[id].fields.filter((field) => field.secret)).map((field) => field.key))
+  private async persistSecrets(platform: ChannelId, id: string, config: Record<string, string>): Promise<Record<string, string>> {
+    const secrets = new Set((CHANNEL_META[platform].fields.filter((field) => field.secret)).map((field) => field.key))
     const out = { ...config }
     for (const key of secrets) {
       const value = out[key]
@@ -756,16 +911,16 @@ export class ChannelManager {
     return out
   }
 
-  private async resolveSecrets(id: ChannelId, config: Record<string, string>): Promise<Record<string, string>> {
-    const secrets = new Set((CHANNEL_META[id].fields.filter((field) => field.secret)).map((field) => field.key))
+  private async resolveSecrets(platform: ChannelId, id: string, config: Record<string, string>): Promise<Record<string, string>> {
+    const secrets = new Set((CHANNEL_META[platform].fields.filter((field) => field.secret)).map((field) => field.key))
     const out = { ...config }
     for (const key of secrets) {
       const ref = out[`${key}Ref`] || credentialRef(id, key)
       const value = await this.vault.resolve(ref)
       if (value) out[key] = value
     }
-    if (id === 'weixin') {
-      const token = await this.vault.resolve(credentialRef('weixin', 'botToken'))
+    if (platform === 'weixin') {
+      const token = await this.vault.resolve(credentialRef(id, 'botToken'))
       if (token) out.botToken = token
     }
     return out
@@ -787,6 +942,7 @@ export class ChannelManager {
       if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('channels.json 顶层必须是对象')
       const parsed = value as Partial<Persisted>
       this.store = {
+        version: 2,
         channels: parsed.channels ?? {},
         allowlist: parsed.allowlist ?? {},
         pending: parsed.pending ?? {},
@@ -803,6 +959,87 @@ export class ChannelManager {
         throw backupError
       }
       this.store = { channels: {}, allowlist: {}, pending: {} }
+    }
+  }
+
+  private migrateAccountSettings(): void {
+    const assistant = this.currentAssistant() ?? { provider: this.engineConfig.provider, model: this.engineConfig.model }
+    const cwd = this.currentWorkspace()
+    const permission = this.currentPermission()
+    for (const [id, state] of Object.entries(this.store.channels)) {
+      const platform = this.platformOf(id, state)
+      state.id = id
+      state.platform = platform
+      state.name = String(state.name || `${CHANNEL_META[platform].label}账号`).trim()
+      state.assistant = normalizeAssistantModel(state.assistant ?? {}) ?? assistant
+      state.cwd = normalizeWorkspacePath(state.cwd) ?? cwd
+      state.permission = normalizePermission(state.permission, this.permissionPresets().names) ?? permission
+      state.privateAccess = state.privateAccess === 'all' ? 'all' : 'approved'
+    }
+    this.store.version = 2
+  }
+
+  private normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): { ok: true; settings: { name: string; assistant: AssistantModel; cwd: string; permission: PermissionPreset; privateAccess: 'approved' | 'all' } } | { ok: false; error: string } {
+    const fallback = this.currentAssistant()
+    const assistant = normalizeAssistantModel({
+      provider: input.provider ?? previous.assistant?.provider ?? fallback?.provider,
+      model: input.model ?? previous.assistant?.model ?? fallback?.model,
+      reasoningEffort: input.reasoningEffort ?? previous.assistant?.reasoningEffort,
+    })
+    if (!assistant) return { ok: false, error: '请选择提供商和模型' }
+    const cwd = normalizeWorkspacePath(input.cwd ?? previous.cwd ?? this.currentWorkspace())
+    if (!cwd) return { ok: false, error: '请选择工作区' }
+    const permission = normalizePermission(input.permission ?? previous.permission ?? this.currentPermission(), this.permissionPresets().names)
+    if (!permission) return { ok: false, error: '请选择权限' }
+    const privateAccess = input.privateAccess === 'all' || (input.privateAccess === undefined && previous.privateAccess === 'all') ? 'all' : 'approved'
+    const count = Object.entries(this.store.channels).filter(([id, state]) => this.platformOf(id, state) === platform).length
+    const name = String(input.name ?? previous.name ?? '').trim() || `${CHANNEL_META[platform].label}账号 ${count + 1}`
+    return { ok: true, settings: { name, assistant, cwd, permission, privateAccess } }
+  }
+
+  private accountIdFor(platform: ChannelId, config: Record<string, string>): string {
+    const identityKeys: Partial<Record<ChannelId, string>> = { weixin: 'allowedUserId', wecom: 'botId', qq: 'appId', dingtalk: 'clientId', feishu: 'appId', lark: 'appId' }
+    const identity = config[identityKeys[platform] ?? ''] || config.ownerOpenId || config.botToken || config.token
+    if (identity) {
+      for (const [accountId, state] of Object.entries(this.store.channels)) {
+        if (this.platformOf(accountId, state) !== platform) continue
+        const key = identityKeys[platform]
+        if (key && state.config?.[key] === identity) return accountId
+      }
+    }
+    const suffix = identity
+      ? createHash('sha256').update(`${platform}\0${identity}`).digest('hex').slice(0, 12)
+      : randomUUID().replaceAll('-', '').slice(0, 12)
+    return `${platform}_${suffix}`
+  }
+
+  private resolveAccountId(id: string): string | undefined {
+    if (this.store.channels[id]) return id
+    const matches = Object.entries(this.store.channels).filter(([accountId, state]) => this.platformOf(accountId, state) === id)
+    return matches.length === 1 ? matches[0]![0] : undefined
+  }
+
+  private platformOf(accountId: string, state?: ChannelState): ChannelId {
+    if (state?.platform && CHANNEL_META[state.platform]) return state.platform
+    const candidate = accountId.split('_', 1)[0] as ChannelId
+    return CHANNEL_META[candidate] ? candidate : accountId as ChannelId
+  }
+
+  private accountStateDir(accountId: string, platform: ChannelId): string {
+    return accountId === platform ? join(this.stateDir, platform) : join(this.stateDir, 'accounts', accountId)
+  }
+
+  private accountEngineConfig(accountId: string): EngineConfig {
+    const state = this.store.channels[accountId]
+    if (!state) return this.engineConfig
+    const assistant = normalizeAssistantModel(state.assistant ?? {})
+    return {
+      ...this.engineConfig,
+      cwd: normalizeWorkspacePath(state.cwd) ?? this.engineConfig.cwd,
+      provider: assistant?.provider ?? this.engineConfig.provider,
+      model: assistant?.model ?? this.engineConfig.model,
+      reasoningEffort: assistant?.reasoningEffort,
+      permissionPreset: normalizePermission(state.permission, this.permissionPresets().names) ?? this.engineConfig.permissionPreset,
     }
   }
 
@@ -850,5 +1087,15 @@ export class ChannelManager {
   private flush(): void {
     writeFileAtomicSync(this.file, `${JSON.stringify(this.store, null, 2)}\n`)
   }
+}
+
+function pairingSettings(input?: Record<string, unknown>): Record<string, string> {
+  if (!input) return {}
+  const out: Record<string, string> = {}
+  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess']) {
+    const value = input[key]
+    if (value !== undefined && value !== null) out[`__setting_${key}`] = String(value)
+  }
+  return out
 }
 

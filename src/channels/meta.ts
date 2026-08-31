@@ -18,12 +18,12 @@ export interface ChannelMeta {
 
 /** 设置页卡片顺序，对标视觉稿后再补 Telegram。 */
 export const CHANNEL_ORDER: ChannelId[] = [
-  'dingtalk',
-  'feishu',
-  'lark',
   'weixin',
   'wecom',
   'qq',
+  'feishu',
+  'lark',
+  'dingtalk',
   'telegram',
 ]
 

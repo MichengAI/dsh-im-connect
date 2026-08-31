@@ -3,25 +3,27 @@ export const IM_ORIGIN = 'im'
 export const IM_SESSION_PREFIX = 'im:'
 
 export type ChannelId = 'dingtalk' | 'feishu' | 'lark' | 'weixin' | 'wecom' | 'qq' | 'telegram'
+/** 运行实例 ID。旧版首个账号仍可直接使用渠道 ID，新账号使用 `<channel>_<stable>`。 */
+export type ChannelInstanceId = string
 export type ChatKind = 'dm' | 'group'
 
 export interface SessionRecord {
   sessionId: string
-  channel: ChannelId
+  channel: ChannelInstanceId
   kind: ChatKind
   chatId: string
   title: string
   updatedAt: string
 }
 
-export function sessionKeyOf(channel: ChannelId, kind: ChatKind, chatId: string): string {
+export function sessionKeyOf(channel: ChannelInstanceId, kind: ChatKind, chatId: string): string {
   return `${channel}:${kind}:${chatId}`
 }
 
 let lastStamp = 0
 
 /** 新建会话用带时间戳的唯一 id；同一毫秒连续创建会递增，避免撞上已归档记录。 */
-export function createImSessionId(channel: ChannelId, kind: ChatKind, chatId: string, now = Date.now()): string {
+export function createImSessionId(channel: ChannelInstanceId, kind: ChatKind, chatId: string, now = Date.now()): string {
   const stamp = now <= lastStamp ? lastStamp + 1 : now
   lastStamp = stamp
   return `${IM_SESSION_PREFIX}${channel}:${kind}:${stamp}:${chatId}`
@@ -34,7 +36,7 @@ export function isImSessionId(sessionId: string): boolean {
 const CHANNEL_IDS: readonly ChannelId[] = ['dingtalk', 'feishu', 'lark', 'weixin', 'wecom', 'qq', 'telegram']
 const STAMP_RE = /^\d{13,}$/
 
-export function parseImSessionId(sessionId: string): { channel: ChannelId; kind: ChatKind; chatId: string } | undefined {
+export function parseImSessionId(sessionId: string): { channel: ChannelInstanceId; kind: ChatKind; chatId: string } | undefined {
   if (!isImSessionId(sessionId)) return undefined
   const rest = sessionId.slice(IM_SESSION_PREFIX.length)
   const first = rest.indexOf(':')
@@ -47,8 +49,10 @@ export function parseImSessionId(sessionId: string): { channel: ChannelId; kind:
   if (third > 0 && STAMP_RE.test(chatId.slice(0, third))) {
     chatId = chatId.slice(third + 1)
   }
-  if (!CHANNEL_IDS.includes(channel as ChannelId) || (kind !== 'dm' && kind !== 'group') || chatId === '') return undefined
-  return { channel: channel as ChannelId, kind, chatId }
+  const platform = channel.split('_', 1)[0]
+  const validInstance = CHANNEL_IDS.includes(platform as ChannelId) && /^[a-z0-9_-]+$/.test(channel)
+  if (!validInstance || (kind !== 'dm' && kind !== 'group') || chatId === '') return undefined
+  return { channel, kind, chatId }
 }
 
 export function isImOrigin(origin: string | undefined): boolean {

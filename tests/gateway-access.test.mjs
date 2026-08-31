@@ -17,7 +17,7 @@ async function waitFor(check, timeoutMs = 2000) {
   }
 }
 
-function makeEngine(t, onUnauthorized, sendImpl, services = {}) {
+function makeEngine(t, onUnauthorized, sendImpl, services = {}, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'im-connect-access-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const store = new SessionMapStore(join(dir, 'sessions.json'))
@@ -55,7 +55,7 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}) {
     agentPreset: 'standard',
     mergeTimeoutSecs: 1,
     permissionPreset: 'danger-full-access',
-  }, () => undefined, onUnauthorized)
+  }, () => undefined, onUnauthorized, undefined, options.resolvePrivateAccess)
   const sent = []
   let inbound
   engine.register({
@@ -70,9 +70,23 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}) {
     },
     setMessageHandler(h) { inbound = h },
     status() { return '轮询中' },
+    ...(options.authorizes ? { authorizes: options.authorizes } : {}),
   })
   return { engine, inbound, sent, handlers, dmSessionId, groupSessionId }
 }
+
+test('账号显式允许所有私聊用户时覆盖渠道本地白名单', async (t) => {
+  const { engine, inbound, sent } = makeEngine(t, undefined, undefined, {}, {
+    resolvePrivateAccess: () => 'all',
+    authorizes: () => false,
+  })
+  try {
+    inbound({ chatId: 'user-1', userId: 'stranger', text: '/help', kind: 'dm', messageId: 'private-all' })
+    await waitFor(() => sent.some((item) => item.text.includes('IM 助理已连接')))
+  } finally {
+    engine.dispose()
+  }
+})
 
 test('未授权用户在命令和审批之前就被拒绝', async (t) => {
   const pending = []

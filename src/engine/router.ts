@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { ChannelId, ChatKind, SessionRecord } from './session-id.js'
+import type { ChannelInstanceId, ChatKind, SessionRecord } from './session-id.js'
 import { createImSessionId, sessionKeyOf } from './session-id.js'
 import { SessionMapStore } from './session-store.js'
 import { readHostDefaultModel, resolveImAgentOptions } from './agent-options.js'
@@ -7,7 +7,7 @@ import type { EngineConfig } from './types.js'
 
 export interface ChatBinding {
   key: string
-  channelId: ChannelId
+  channelId: ChannelInstanceId
   kind: ChatKind
   chatId: string
   sessionId: string
@@ -46,13 +46,14 @@ export class SessionRouter {
     private readonly store: SessionMapStore,
     private readonly config: EngineConfig,
     private readonly log: (line: string) => void,
+    private readonly resolveConfig: (channelId: string) => EngineConfig = () => config,
   ) {}
 
-  get(channelId: ChannelId, kind: ChatKind, chatId: string): ChatBinding | undefined {
+  get(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined {
     return this.live.get(sessionKeyOf(channelId, kind, chatId))
   }
 
-  lookup(channelId: ChannelId, kind: ChatKind, chatId: string): ChatBinding | undefined {
+  lookup(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined {
     const live = this.get(channelId, kind, chatId)
     if (live) return live
     const rec = this.store.get(sessionKeyOf(channelId, kind, chatId))
@@ -81,7 +82,7 @@ export class SessionRouter {
     }
   }
 
-  async getOrCreate(channelId: ChannelId, kind: ChatKind, chatId: string, title: string, options?: { rebuildMissing?: boolean }): Promise<ChatBinding> {
+  async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { rebuildMissing?: boolean }): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const live = this.live.get(key)
     if (live?.handle) {
@@ -116,7 +117,7 @@ export class SessionRouter {
     return this.create(channelId, kind, chatId, title)
   }
 
-  async rotate(channelId: ChannelId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
+  async rotate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const old = this.live.get(key)
     if (old?.handle) await old.handle.dispose().catch(() => undefined)
@@ -214,12 +215,21 @@ export class SessionRouter {
     agent.followup(message)
   }
 
-  private async create(channelId: ChannelId, kind: ChatKind, chatId: string, title: string, preferredSessionId?: string): Promise<ChatBinding> {
+  async disposeChannel(channelId: string): Promise<void> {
+    for (const [key, item] of [...this.live]) {
+      if (item.channelId !== channelId) continue
+      this.reloadDisposed.add(item.sessionId)
+      await item.handle?.dispose().catch(() => undefined)
+      this.live.delete(key)
+    }
+  }
+
+  private async create(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, preferredSessionId?: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const sessionId = preferredSessionId || createImSessionId(channelId, kind, chatId)
     let handle: Awaited<ReturnType<SessionRouter['createHandle']>>
     try {
-      handle = await this.createHandle(sessionId)
+      handle = await this.createHandle(sessionId, channelId)
     } catch (error) {
       if (!preferredSessionId || !isIdCollision(error)) throw error
       this.log(`[router] 创建冲突，改用新 id ${sessionId}`)
@@ -236,7 +246,7 @@ export class SessionRouter {
     this.store.upsert(key, record)
     const binding: ChatBinding = { key, channelId, kind, chatId, sessionId, handle }
     this.live.set(key, binding)
-    await this.attachWorkspace(sessionId)
+    await this.attachWorkspace(sessionId, channelId)
     this.log(`[router] 新建 IM 会话 ${sessionId}`)
     return binding
   }
@@ -251,17 +261,17 @@ export class SessionRouter {
         chatId: record.chatId,
         sessionId: record.sessionId,
       }
-      await this.attachWorkspace(record.sessionId)
+      await this.attachWorkspace(record.sessionId, record.channel)
       return binding
     }
     if (!this.ctx.agents?.resume) return undefined
     try {
       const handle = await this.ctx.agents.resume({
         resumeSessionId: record.sessionId,
-        agentOptions: this.resolveAgentOptions(),
-        setup: this.presetSetup(),
+        agentOptions: this.resolveAgentOptions(record.channel),
+        setup: this.presetSetup(record.channel),
       })
-      await this.attachWorkspace(record.sessionId)
+      await this.attachWorkspace(record.sessionId, record.channel)
       return {
         key: sessionKeyOf(record.channel, record.kind, record.chatId),
         channelId: record.channel,
@@ -276,24 +286,25 @@ export class SessionRouter {
     }
   }
 
-  private async createHandle(sessionId: string) {
+  private async createHandle(sessionId: string, channelId: string) {
     const agents = this.ctx.agents
     if (!agents?.create) throw new Error('当前 Host 没有 agents 服务，无法创建 IM 会话')
     // DSH 会话头的 origin 只能是 subagent；IM 与任务的区分靠 sessionId 的 im: 前缀。
     // 必须带上当前默认模型，否则 deployment:persona 的 {{model}} 组装会失败。
-    const agentOptions = this.resolveAgentOptions()
-    this.log(`[router] 使用模型 ${agentOptions.provider}/${agentOptions.model}${this.config.reasoningEffort ? ` ${this.config.reasoningEffort}` : ''}`)
+    const config = this.resolveConfig(channelId)
+    const agentOptions = this.resolveAgentOptions(channelId)
+    this.log(`[router] ${channelId} 使用模型 ${agentOptions.provider}/${agentOptions.model}${config.reasoningEffort ? ` ${config.reasoningEffort}` : ''}`)
     const create = () => agents.create({
       sessionId,
       meta: {
-        cwd: this.config.cwd || process.cwd(),
-        ...(this.config.agentPreset ? { agentPreset: this.config.agentPreset } : {}),
+        cwd: config.cwd || process.cwd(),
+        ...(config.agentPreset ? { agentPreset: config.agentPreset } : {}),
       },
       agentOptions: {
         ...agentOptions,
-        ...(this.config.reasoningEffort ? { reasoningEffort: this.config.reasoningEffort } : {}),
+        ...(config.reasoningEffort ? { reasoningEffort: config.reasoningEffort } : {}),
       },
-      setup: this.presetSetup(),
+      setup: this.presetSetup(channelId),
     })
     return agents.withoutInitiator ? agents.withoutInitiator(create) : create()
   }
@@ -302,7 +313,7 @@ export class SessionRouter {
     const started = Date.now()
     await this.pruneMissingSessions()
     for (const record of this.store.list()) {
-      await this.attachWorkspace(record.sessionId)
+      await this.attachWorkspace(record.sessionId, record.channel)
     }
     this.log(`[boot] attachMappedSessions ${Date.now() - started}ms`)
   }
@@ -322,7 +333,7 @@ export class SessionRouter {
     return norm(left) === norm(right)
   }
 
-  private async attachWorkspace(sessionId: string): Promise<void> {
+  private async attachWorkspace(sessionId: string, channelId: string): Promise<void> {
     let workspaces: Array<{ path: string; attachSession(sessionId: string): Promise<void> }> = []
     try {
       workspaces = this.ctx.get?.('workspaceRegistry')?.list?.() ?? []
@@ -333,7 +344,7 @@ export class SessionRouter {
       this.log(`[router] 当前没有工作区，网页点不开会话 ${sessionId}`)
       return
     }
-    const preferred = this.config.cwd || process.cwd()
+    const preferred = this.resolveConfig(channelId).cwd || process.cwd()
     const ordered = [...workspaces].sort((left, right) => {
       const leftHit = this.samePath(left.path, preferred) ? 0 : 1
       const rightHit = this.samePath(right.path, preferred) ? 0 : 1
@@ -352,28 +363,30 @@ export class SessionRouter {
     this.log(`[router] 挂载会话失败 ${sessionId}: ${lastError}`)
   }
 
-  private resolveAgentOptions(): { provider: string; model: string } {
+  private resolveAgentOptions(channelId: string): { provider: string; model: string } {
+    const config = this.resolveConfig(channelId)
     return resolveImAgentOptions({
-      provider: this.config.provider,
-      model: this.config.model,
+      provider: config.provider,
+      model: config.model,
       fallback: readHostDefaultModel(this.ctx),
     })
   }
 
-  private presetSetup() {
+  private presetSetup(channelId: string) {
     const ctx = this.ctx
-    const preset = this.config.agentPreset || 'standard'
-    const permission = this.config.permissionPreset
+    const config = this.resolveConfig(channelId)
+    const preset = config.agentPreset || 'standard'
+    const permission = config.permissionPreset
     return async (agentCtx: unknown) => {
       if (ctx.agentPresets?.mount) await ctx.agentPresets.mount(agentCtx, preset)
-      if (this.config.provider && this.config.model) {
+      if (config.provider && config.model) {
         try {
           const { installModelSelection } = await import('@deepseek-ai/dsh-agent')
           installModelSelection(agentCtx, {
             current: {
-              provider: this.config.provider,
-              model: this.config.model,
-              ...(this.config.reasoningEffort ? { reasoningEffort: this.config.reasoningEffort } : {}),
+              provider: config.provider,
+              model: config.model,
+              ...(config.reasoningEffort ? { reasoningEffort: config.reasoningEffort } : {}),
             },
             assembled: undefined,
           })

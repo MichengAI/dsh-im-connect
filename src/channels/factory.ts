@@ -12,26 +12,32 @@ export function createChannelAdapter(
   config: Record<string, string>,
   log: (line: string) => void,
   stateDir: string,
-  options?: { onWeixinBotToken?: (token: string | undefined) => void | Promise<void> },
+  options?: { accountId?: string; accountLabel?: string; onWeixinBotToken?: (token: string | undefined) => void | Promise<void> },
 ): ChannelAdapter | undefined {
+  let adapter: ChannelAdapter | undefined
   switch (id) {
     case 'telegram':
-      return createTelegramChannel({ token: config.token, stateDir }, log)
+      adapter = createTelegramChannel({ token: config.token, stateDir }, log); break
     case 'feishu':
-      return createFeishuChannel('feishu', { appId: config.appId, appSecret: config.appSecret }, log)
+      adapter = createFeishuChannel('feishu', { appId: config.appId, appSecret: config.appSecret }, log); break
     case 'lark':
-      return createFeishuChannel('lark', { appId: config.appId, appSecret: config.appSecret, domain: 'lark' }, log)
+      adapter = createFeishuChannel('lark', { appId: config.appId, appSecret: config.appSecret, domain: 'lark' }, log); break
     case 'weixin':
-      return createWeixinChannel({ enabled: true, stateDir, botToken: config.botToken, onBotToken: options?.onWeixinBotToken }, log, stateDir)
+      adapter = createWeixinChannel({ enabled: true, stateDir, botToken: config.botToken, onBotToken: options?.onWeixinBotToken }, log, stateDir); break
     case 'wecom':
-      return createWecomChannel({ botId: config.botId, secret: config.secret }, log)
+      adapter = createWecomChannel({ botId: config.botId, secret: config.secret }, log); break
     case 'dingtalk':
-      return createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret }, log)
+      adapter = createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret }, log); break
     case 'qq':
-      return createQqChannel({ appId: config.appId, appSecret: config.appSecret }, log)
+      adapter = createQqChannel({ appId: config.appId, appSecret: config.appSecret }, log); break
     default:
       return undefined
   }
+  if (!adapter) return undefined
+  return {
+    ...adapter,
+    id: options?.accountId ?? adapter.id,
+    label: options?.accountLabel ?? adapter.label,
+  }
 }
-
 
