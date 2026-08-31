@@ -11,7 +11,16 @@ import type { EngineConfig } from './engine/types.js'
 import { createRotatingFileAppender } from './engine/file-log.js'
 
 export const name = 'dsh-im-connect'
-export const inject = ['webServer', 'credentials', 'agents', 'agentPresets', 'agentDefaultModel', 'llm', 'permissionPresets']
+export const inject = [
+  'webServer',
+  'credentials',
+  'agents',
+  'agentPresets',
+  'agentDefaultModel',
+  'llm',
+  'permissionPresets',
+  'userQuestions',
+]
 
 export interface PluginConfig {
   stateDir: string
@@ -76,4 +85,3 @@ export {
   sessionKeyOf,
 } from './engine/session-id.js'
 export { splitText } from './engine/split.js'
-

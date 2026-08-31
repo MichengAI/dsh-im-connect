@@ -8,7 +8,45 @@ import { isImSessionId, type ChannelId, type ChatKind } from './session-id.js'
 import { canAnswerToolApproval, decideAccess } from './access.js'
 import { splitText } from './split.js'
 import { ReplyStreamHub, isAssistantTextDelta } from './reply-stream.js'
+import {
+  QuestionBroker,
+  formatUserQuestion,
+  validUserQuestion,
+  type UserQuestionAnswer,
+  type UserQuestionItem,
+} from './question.js'
 import type { ChannelAdapter, EngineConfig, ImMessage } from './types.js'
+
+interface AgentLike {
+  id?: string
+  session?: {
+    id?: string
+    events?: Array<{ type?: string; data?: Record<string, unknown> }>
+  }
+}
+
+interface ApprovalRequestLike {
+  agent?: AgentLike
+  session?: { id?: string }
+  toolName?: string
+  callId?: string
+  reason?: string
+  signal?: AbortSignal
+}
+
+interface UserQuestionRequestLike {
+  agent?: AgentLike
+  questions?: unknown[]
+  signal?: AbortSignal
+}
+
+interface LegacyUserQuestionProvider {
+  ask(request: UserQuestionRequestLike): Promise<UserQuestionAnswer>
+}
+
+interface LegacyUserQuestionService {
+  provider?: LegacyUserQuestionProvider
+}
 
 const HELP = [
   'IM 助理已连接本机 DeepSeek Harness。',
@@ -24,11 +62,16 @@ export class ImEngine {
   private readonly channels = new Map<string, ChannelAdapter>()
   private readonly router: SessionRouter
   private readonly broker = new ApprovalBroker()
+  private readonly questions = new QuestionBroker()
   private readonly merger: SessionMerger
   private readonly extraAllow = new Map<string, Set<string>>()
+  private readonly sessionActors = new Map<string, string>()
   private readonly queues = new Map<string, Promise<void>>()
   private readonly streams = new ReplyStreamHub()
   private readonly disposeEvents: Array<() => void> = []
+  private legacyProviderTimer?: NodeJS.Timeout
+  private legacyProviderInstalled = false
+  private disposed = false
 
   constructor(
     private readonly ctx: Context,
@@ -61,14 +104,23 @@ export class ImEngine {
       this.disposeEvents.push(on('session/disposed', (...args: unknown[]) => {
         const id = String((args[0] as { id?: string } | undefined)?.id ?? '')
         if (id === '') return
+        this.broker.cancel(id)
+        this.questions.cancel(id)
+        this.sessionActors.delete(id)
         void this.router.onHostDisposed(id)
       }, { global: true }))
       this.disposeEvents.push(on('approval/request', (...args: unknown[]) => {
-        const req = args[0] as { session?: { id?: string } }
+        const req = args[0] as ApprovalRequestLike
         const next = args[1] as () => Promise<unknown>
         return this.onApproval(req, next)
-      }, { global: true }))
+      }, { global: true, prepend: true }))
+      this.disposeEvents.push(on('user-questions/request', (...args: unknown[]) => {
+        const req = args[0] as UserQuestionRequestLike
+        const next = args[1] as () => Promise<UserQuestionAnswer>
+        return this.onUserQuestions(req, next)
+      }, { global: true, prepend: true }))
     }
+    this.scheduleLegacyUserQuestionProvider()
   }
 
   renameSession(sessionId: string, title: string): boolean {
@@ -129,8 +181,11 @@ export class ImEngine {
   }
 
   dispose(): void {
+    this.disposed = true
+    if (this.legacyProviderTimer) clearTimeout(this.legacyProviderTimer)
     for (const off of this.disposeEvents) off()
     this.broker.dispose()
+    this.questions.dispose()
     this.merger.dispose()
     void this.router.disposeAll()
   }
@@ -182,17 +237,54 @@ export class ImEngine {
         return
       }
       const text = msg.text.trim()
+      const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
+      const binding = this.router.lookup(channelId as ChannelId, kind, msg.chatId)
       if (text.startsWith('/')) {
+        const command = text.split(/\s+/, 1)[0]?.toLowerCase()
+        if ((command === '/new' || command === '/clear')
+          && binding
+          && (this.questions.has(binding.sessionId) || this.broker.has(binding.sessionId))) {
+          await this.deliver(channel, msg.chatId, '请先完成当前问题或审批，再开启新的频道会话。')
+          return
+        }
         const reply = await this.handleCommand(channel, msg)
         if (reply) await this.deliver(channel, msg.chatId, reply)
         return
       }
+      if (binding && this.questions.has(binding.sessionId)) {
+        const actor = this.sessionActors.get(binding.sessionId)
+        if (actor && msg.userId !== actor) {
+          await this.deliver(channel, msg.chatId, '只有发起当前任务的用户可以回答这个问题。')
+          return
+        }
+        if (!text || (msg.media?.length ?? 0) > 0) {
+          await this.deliver(channel, msg.chatId, '请用文字回答当前问题。')
+          return
+        }
+        const result = this.questions.answer(binding.sessionId, text)
+        if (result.handled) {
+          if (result.waitingPresentation) {
+            await this.deliver(channel, msg.chatId, '问题详情仍在发送，请稍后再回答。')
+            return
+          }
+          if (result.next) {
+            const delivered = await this.deliverInteraction(channel, msg.chatId, formatUserQuestion(
+              result.next.question,
+              result.next.index,
+              result.next.total,
+              { requiresMention: kind === 'group' },
+            ))
+            if (!delivered) this.questions.cancel(binding.sessionId, new Error('下一个交互问题发送失败'))
+            else this.questions.activate(binding.sessionId)
+          }
+          return
+        }
+      }
       const allowWords = ['批准', '同意', 'yes', 'y', 'allow']
-      const denyWords = ['拒绝', 'no', 'n', 'reject', 'deny']
+      const denyWords = ['拒绝', '不同意', 'no', 'n', 'reject', 'deny']
       const verdict = allowWords.includes(text.toLowerCase()) ? true : denyWords.includes(text.toLowerCase()) ? false : undefined
       if (verdict !== undefined) {
         if (!canAnswerToolApproval({ userAllowed: true, kind: msg.kind === 'group' ? 'group' : 'dm' })) {
-          const binding = this.router.lookup(channelId as ChannelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
           if (binding && this.broker.has(binding.sessionId)) {
             await channel.send(msg.chatId, '请在私聊中批准或拒绝工具调用。').catch(() => undefined)
             return
@@ -252,6 +344,7 @@ export class ImEngine {
       else if (media.path) content.push({ type: 'text', text: `[附件 ${media.name ?? media.kind}] ${media.path}` })
     }
     if (content.length === 0) return
+    if (msg.userId) this.sessionActors.set(binding.sessionId, msg.userId)
     this.streams.reset(`${channel.id}:${msg.chatId}`)
     await channel.sendAction?.(msg.chatId, 'typing').catch(() => undefined)
     this.router.followup(binding, {
@@ -266,22 +359,172 @@ export class ImEngine {
   private async answerApproval(channelId: string, msg: ImMessage, allow: boolean): Promise<boolean> {
     const binding = this.router.lookup(channelId as ChannelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
     if (!binding) return false
+    if (!this.broker.has(binding.sessionId)) return false
+    if (!this.broker.isReady(binding.sessionId)) {
+      await this.channels.get(channelId)?.send(msg.chatId, '审批详情仍在发送，请稍后再回复。').catch(() => undefined)
+      return true
+    }
     const ok = this.broker.answer(binding.sessionId, allow)
     if (ok) await this.channels.get(channelId)?.send(msg.chatId, allow ? '已批准。' : '已拒绝。')
     return ok
   }
 
-  private async onApproval(req: { session?: { id?: string } }, next: () => Promise<unknown>): Promise<unknown> {
-    const sessionId = req.session?.id ? String(req.session.id) : ''
+  private async onApproval(req: ApprovalRequestLike, next: () => Promise<unknown>): Promise<unknown> {
+    const currentContract = req.agent !== undefined
+    const rawSessionId = req.agent?.session?.id ?? req.agent?.id ?? req.session?.id
+    const sessionId = rawSessionId ? String(rawSessionId) : ''
     if (!sessionId || !isImSessionId(sessionId)) return next()
     const binding = this.router.bindingForSession(sessionId)
     const channel = binding ? this.channels.get(binding.channelId) : undefined
     if (!binding || !channel) return next()
-    await channel.send(binding.chatId, '需要批准才能继续。回复「批准」或「拒绝」。').catch(() => undefined)
-    const verdict = await this.broker.wait(sessionId, 120_000)
-    if (verdict === 'allow') return { behavior: 'allow' }
-    if (verdict === 'reject') return { behavior: 'reject' }
+    if (req.signal?.aborted) return currentContract ? 'cancelled' : next()
+    if (binding.kind === 'group') {
+      await this.deliver(channel, binding.chatId, '当前工具审批不能在群聊中处理，请在网页端批准或拒绝。')
+      return next()
+    }
+    const prompt = this.approvalPrompt(req)
+    if (!prompt) {
+      await this.deliver(channel, binding.chatId, '该操作需要审批，但无法在 IM 中完整展示；请在网页端处理。')
+      return next()
+    }
+    const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
+    if (!await this.deliverInteraction(channel, binding.chatId, prompt)) {
+      this.broker.cancel(sessionId)
+      return next()
+    }
+    this.broker.activate(sessionId)
+    const verdict = await wait
+    if (req.signal?.aborted) return currentContract ? 'cancelled' : next()
+    if (verdict === 'allow') return currentContract ? 'allowed-once' : { behavior: 'allow' }
+    if (verdict === 'reject') return currentContract ? 'rejected' : { behavior: 'reject' }
     return next()
+  }
+
+  private async onUserQuestions(
+    req: UserQuestionRequestLike,
+    next: () => Promise<UserQuestionAnswer>,
+  ): Promise<UserQuestionAnswer> {
+    const rawSessionId = req.agent?.session?.id ?? req.agent?.id
+    const sessionId = rawSessionId ? String(rawSessionId) : ''
+    if (!sessionId || !isImSessionId(sessionId)) return next()
+    const questions = req.questions
+    if (!Array.isArray(questions)
+      || questions.length === 0
+      || questions.some((question) => !validUserQuestion(question))) return next()
+    const binding = this.router.bindingForSession(sessionId)
+    const channel = binding ? this.channels.get(binding.channelId) : undefined
+    if (!binding || !channel || this.questions.has(sessionId)) return next()
+    if (req.signal?.aborted) {
+      throw req.signal.reason ?? new DOMException('Aborted', 'AbortError')
+    }
+    const typedQuestions = questions as UserQuestionItem[]
+    const wait = this.questions.begin(sessionId, typedQuestions, req.signal)
+    if (!wait) return next()
+    const delivered = await this.deliverInteraction(channel, binding.chatId, formatUserQuestion(
+      typedQuestions[0]!,
+      0,
+      typedQuestions.length,
+      { requiresMention: binding.kind === 'group' },
+    ))
+    if (!delivered) {
+      void wait.catch(() => undefined)
+      this.questions.cancel(sessionId)
+      return next()
+    }
+    this.questions.activate(sessionId)
+    return wait
+  }
+
+  /**
+   * DSH 0.1.1-rc.2 still exposes one mutable userQuestions provider instead of
+   * the agent-scoped waterfall. Decorate the web provider after it registers,
+   * claim only IM sessions, and leave every browser session on the original path.
+   */
+  private scheduleLegacyUserQuestionProvider(): void {
+    if (this.installLegacyUserQuestionProvider()) return
+    const delays = [0, 25, 100, 250, 500, 1_000, 2_000]
+    const retry = (index: number) => {
+      if (this.disposed) return
+      this.legacyProviderTimer = setTimeout(() => {
+        this.legacyProviderTimer = undefined
+        if (this.installLegacyUserQuestionProvider()) return
+        if (index + 1 < delays.length) retry(index + 1)
+        else this.log('[interaction] 未发现旧版 userQuestions provider，保留 waterfall 路径')
+      }, delays[index])
+      this.legacyProviderTimer.unref?.()
+    }
+    retry(0)
+  }
+
+  private installLegacyUserQuestionProvider(): boolean {
+    if (this.legacyProviderInstalled || this.disposed) return this.legacyProviderInstalled
+    const context = this.ctx as unknown as {
+      get?: (name: string) => unknown
+      userQuestions?: unknown
+    }
+    let service: LegacyUserQuestionService | undefined
+    try {
+      const candidate = context.get?.('userQuestions') ?? context.userQuestions
+      if (candidate && typeof candidate === 'object') service = candidate as LegacyUserQuestionService
+    } catch {
+      return false
+    }
+    const provider = service?.provider
+    if (!provider || typeof provider.ask !== 'function') return false
+
+    const originalAsk = provider.ask
+    const wrappedAsk: LegacyUserQuestionProvider['ask'] = (request) => this.onUserQuestions(
+      request,
+      () => originalAsk.call(provider, request),
+    )
+    try {
+      provider.ask = wrappedAsk
+    } catch {
+      return false
+    }
+    if (provider.ask !== wrappedAsk) return false
+    this.legacyProviderInstalled = true
+    this.log('[interaction] 已接管旧版 userQuestions provider 的 IM 会话')
+    this.disposeEvents.push(() => {
+      if (provider.ask === wrappedAsk) provider.ask = originalAsk
+      this.legacyProviderInstalled = false
+    })
+    return true
+  }
+
+  private approvalPrompt(req: ApprovalRequestLike): string | undefined {
+    const toolName = req.toolName?.trim() || (req.session ? '工具操作' : '')
+    if (!toolName) return undefined
+    const lines = [
+      'DeepSeek Harness 需要你的审批：',
+      '',
+      `工具：${toolName}`,
+    ]
+    const callId = req.callId?.trim()
+    if (req.agent && !callId) return undefined
+    if (callId) {
+      const event = [...(req.agent?.session?.events ?? [])].reverse().find((item) => {
+        if (item.type === 'tool/call') return item.data?.callId === callId
+        if (item.type === 'tool/code-dispatch-start') return item.data?.subCallId === callId
+        return false
+      })
+      if (!event) return undefined
+      const name = typeof event.data?.name === 'string' ? event.data.name : toolName
+      if (name !== toolName) return undefined
+      const args = event.data?.arguments
+      let rendered: string
+      try {
+        rendered = typeof args === 'string' ? args : JSON.stringify(args ?? {}, null, 2)
+      } catch {
+        return undefined
+      }
+      if (!rendered.trim() || rendered.length > 6_000) return undefined
+      lines.push('操作参数：', rendered)
+    }
+    const reason = req.reason?.trim()
+    if (reason) lines.push(`原因：${reason}`)
+    lines.push('', '请精准回复「批准」或「拒绝」（也支持：同意 / 不同意 / yes / allow / no / reject）。')
+    return lines.join('\n')
   }
 
   private async onSessionEvent(
@@ -370,6 +613,20 @@ export class ImEngine {
       }
     }
     return deliveredAny
+  }
+
+  /** 交互提示必须完整送达；任一分片失败就不能继续在 IM 中收集决定。 */
+  private async deliverInteraction(channel: ChannelAdapter, chatId: string, text: string): Promise<boolean> {
+    for (const chunk of splitText(text, channel.maxMessageLength)) {
+      try {
+        await channel.send(chatId, chunk)
+        this.log(`[${channel.id}] 已投递交互 ${chatId}，长度 ${chunk.length}`)
+      } catch (error) {
+        this.log(`[${channel.id}] 交互提示发送失败: ${error instanceof Error ? error.message : String(error)}`)
+        return false
+      }
+    }
+    return true
   }
 }
 
