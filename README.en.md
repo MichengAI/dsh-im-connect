@@ -6,7 +6,7 @@
 
   # DSH IM Connect
 
-  **Connect Feishu, DingTalk, WeCom, WeChat, QQ, and Telegram to local DeepSeek Harness**
+  **Connect Feishu, Lark, DingTalk, WeCom, WeChat, QQ, and Telegram to local DeepSeek Harness**
 
   [简体中文](README.md) · [Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE)
 
@@ -23,8 +23,9 @@
 ## Features
 
 - Connect DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram from **Settings → IM Assistant**.
+- Add multiple accounts under the same channel. Each account has its own workspace, model, reasoning effort, permission, private-access mode, credentials, allowlist, and session state.
 - Each IM chat maps to an independent DSH session under the workspace **Channels** tab, never mixed into web **Tasks**.
-- Send work, read replies, and approve tools from the phone; model and permission follow the local DSH profile.
+- Send work and read replies from the phone. When DSH needs input, handle tool approval or denial, single choice, multiple choice, and custom answers in the originating IM conversation.
 - Bind by QR code or credentials. Secrets go into DSH `ctx.credentials`, not `channels.json`.
 - Paste one sentence into DSH, Codex, or WorkBuddy and let that agent install the plugin locally.
 - Groups need no binding, only a mention. In DMs, QR scanners are auto-allowed only when the platform returns their identity; everyone else must be approved on the settings page.
@@ -44,6 +45,7 @@ Inbound messages are identified before commands, tool approvals, or injection.
 | DM after manual credentials | Telegram, and DingTalk / WeCom / QQ bound manually, require approval for every DM |
 | DM without a userId | Denied |
 | Tool approval | Only an allowlisted user in a DM can reply `Approve` / `Deny` (or `批准` / `拒绝`); group replies do not grant |
+| Interactive choice | Reply with an option number or text in the originating IM conversation; separate multiple choices with commas or add a custom answer; only the initiating user can answer in a group |
 
 WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk immediately. A different WeChat account DMing the bot waits for settings approval.
 
@@ -73,7 +75,7 @@ WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk 
 
 ## Screenshots
 
-Connect channels in **Settings → IM Assistant**. Unconnected cards show **Configure**; connected cards show a toggle and status:
+Add accounts under each channel in **Settings → IM Assistant**. Expand a channel, select an account, and configure its workspace, model, permission, private access, and receive state independently on the right:
 
 ![IM Assistant settings](assets/screenshots/settings-channels.png)
 
@@ -162,7 +164,7 @@ dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https:/
 dsh --profile web --dump-config
 ```
 
-To pin a release, replace `@latest` with a version such as `@0.1.1`.
+To pin a release, replace `@latest` with a version such as `@0.1.28`.
 
 The configuration output should contain `im-connect`. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: `dsh plugin add` also applies `cordis.patch.yml`.
 
@@ -186,17 +188,19 @@ Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the p
 
 ## Usage
 
-Open **Settings → IM Assistant**, choose the workspace, permission, and model, then connect a channel. The full guide is [Usage guide](docs/02-产品与业务/04-使用说明.md).
+Open **Settings → IM Assistant**, select **Add account** under the target channel, then choose that account's workspace, model, permission, and private-access mode. The full guide is [Usage guide](docs/02-产品与业务/04-使用说明.md).
 
 | Goal | Action | Notes |
 | --- | --- | --- |
-| Connect a channel | Select **Configure** on an unconnected card, then scan or enter credentials | Feishu / Lark / WeChat are QR-only; Telegram needs a Bot Token; the dialog closes after success |
-| Pause receiving | Turn off the connected-card toggle | Credentials stay; inbound messages pause |
+| Add an account | Select **Add account** under a channel, choose the account settings, then scan or enter credentials | The same channel can contain multiple accounts; Feishu / Lark / WeChat are QR-only, while Telegram needs a Bot Token |
+| Change account settings | Expand the channel, select an account, then edit its workspace, model, reasoning effort, permission, or private-access mode on the right | Changes affect only that account and apply to its subsequent sessions immediately |
+| Pause receiving | Select the account and turn off **Receive messages** on the right | Credentials and settings stay; only new inbound messages for that account pause |
 | Send work from IM | WeChat / Feishu / Lark / QQ QR scanners can DM immediately; DingTalk / WeCom scanners and other users need approval. Groups only need a mention | Each chat has its own channel session |
 | Split input | End with `..` to continue, `!!` to flush now | Default merge window is about 5 seconds |
 | Start a new session | Send `/new` or `/clear` | Affects only the current IM chat |
 | Status / help | Send `/status` or `/help` | Scoped to the current channel session |
 | Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
+| Answer an interactive question | Reply with an option number or text; separate multiple choices with commas, or enter a custom answer | Multiple questions arrive in order; only the initiating user can answer in a group |
 | Approve a tool | Reply `Approve` / `Deny` or `批准` / `拒绝` in a DM | Also accepts `yes` / `no` / `allow` / `reject`; group replies cannot grant |
 | Review on the web | Open the workspace **Channels** tab | IM sessions never appear under **Tasks** |
 
@@ -206,13 +210,14 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 
 | Item | Current behavior |
 | --- | --- |
-| Access | Groups need no binding, only a mention. DMs fail closed: WeChat / Feishu / Lark / QQ QR scanners are auto-allowlisted; DingTalk / WeCom QR APIs do not return user identity, so their scanners still need settings approval |
+| Access | Groups need no binding, only a mention. Each account can allow only approved users or all DM users; approved-only is the default, and WeChat / Feishu / Lark / QQ QR scanners are added to that account's allowlist automatically |
 | Management API | Enforces both a loopback peer and loopback host (`localhost`, `127.0.0.1`, `[::1]`); mutations require JSON and the plugin client header |
 | Secrets | WeChat tokens and other secrets prefer DSH `ctx.credentials`; otherwise they use plaintext `%DSH_HOME%\dsh-im-connect\secrets.json`, restricted to the current user and never safe to sync or share |
-| Channel state | `channels.json` stores enablement and credential refs, not raw secrets |
+| Account state | `channels.json` stores per-account workspace, model, permission, private access, enablement, and credential refs, not raw secrets |
 | Browser payloads | Never include tokens, secrets, App Secrets, or internal error details |
 | WeChat protocol | Official iLink only; no reverse-engineered personal WeChat protocol |
-| Tool approval | Only an allowlisted user in a DM can grant or deny; group chats cannot approve |
+| Tool approval | Only a user on the current account's allowlist can grant or deny in a DM. Even when all DM users may chat, unapproved users cannot approve tools; approvals cannot cross conversations or come from groups |
+| Interactive questions | Single-choice, multiple-choice, and custom questions return to the originating IM conversation; one conversation handles them in order, and only the initiating user can answer in a group |
 
 Do not expose DSH Web beyond this machine. Permission presets use the same host sandbox-policy values as Chat; `danger-full-access` does not wrap a sandbox.
 
