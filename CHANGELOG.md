@@ -4,6 +4,14 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.27 — 2026-08-31
+
+- Routed DSH tool approvals and structured user questions through the originating IM conversation, with text replies for approvals, single-choice, multiple-choice, and custom answers.
+- Kept current and legacy DSH interaction contracts compatible while serializing same-session prompts and restricting group replies to the initiating user.
+- Hardened prompt delivery and cancellation so partial sends, failed deliveries, aborts, session resets, and plugin disposal cannot leave an active stale interaction.
+
+Published package: [`@michengai/dsh-im-connect@0.1.27`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.27).
+
 ## 0.1.26 — 2026-08-28
 
 - Enabled npm Trusted Publishing through the repository's GitHub Actions release workflow.
