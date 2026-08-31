@@ -18,35 +18,41 @@ window.__ModuleLoader__.load({
     const IM_LOCALE_NS = "im-connect";
     const IM_LOCALES = {
       zh: {
-        "settings.label": "IM助理", "settings.title": "IM 频道", "settings.description": "配置 IM 频道，让本机助手接收来自钉钉、飞书等平台的消息。频道配置仅保存在本机。",
+        "settings.label": "IM助理", "settings.title": "IM机器人", "settings.description": "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。",
         "settings.aria": "IM助理", "settings.selectAccountTitle": "选择一个账号", "settings.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。", "settings.noAccountsTitle": "还没有接入账号", "settings.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。", "settings.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
+        "account.workspace": "工作区", "account.currentWorkspace": "当前工作区", "account.selectWorkspace": "请选择工作区", "account.selectModel": "请选择模型", "account.selectPermission": "请选择权限", "account.privateAccess": "私聊准入", "account.privateApproved": "仅已批准用户", "account.privateAll": "允许所有私聊用户", "account.autoNameNote": "绑定成功后会自动生成账号名，无需手动填写。", "account.defaultName": "{channel}账号 {count}",
+        "account.countZero": "0 个账号", "account.countOnline": "{online} / {total} 在线", "account.countOffline": "{total} / {total} 离线", "account.statusProcessing": "处理中…", "account.statusOnline": "在线", "account.statusOffline": "离线", "account.statusRunning": "运行正常", "account.statusNotConnected": "未连接", "account.receive": "接收消息", "account.receiveDescription": "关闭后保留账号配置，但不接收新消息", "account.removeConfirm": "确定移除这个账号？本机保存的配置和凭据将一并删除。",
+        "action.addAccount": "添加账号", "action.generateQr": "生成二维码", "action.checkConnection": "检查连接", "action.reconnectAccount": "重新连接", "action.removeAccount": "移除接入", "status.saving": "保存中…", "status.saved": "已保存",
         "channel.dingtalk": "钉钉", "channel.feishu": "飞书", "channel.lark": "Lark", "channel.weixin": "微信", "channel.wecom": "企业微信", "channel.qq": "QQ", "channel.telegram": "Telegram",
         "field.dingtalk.clientId": "Client ID（原 AppKey）", "field.dingtalk.clientSecret": "Client Secret（原 AppSecret）",
         "bind.title": "配置 {channel}", "bind.close": "关闭", "bind.quick": "快捷绑定（推荐）", "bind.manual": "手动配置", "bind.success": "绑定成功，频道已连接", "bind.newIdentity": "检测到新的账号身份，已创建新账号", "bind.qrAlt": "{channel} 绑定二维码", "bind.generating": "正在生成…", "bind.expire": "二维码 {time} 后过期", "bind.scanned": "已扫码，请在手机上确认", "bind.retry": "请重新生成二维码", "bind.refresh": "重新生成二维码", "action.saving": "保存中…", "action.confirm": "确认",
         "qr.weixin": "请使用微信扫描二维码完成绑定", "qr.feishu": "请使用飞书扫描二维码，将自动创建机器人", "qr.lark": "请使用 Lark 扫描二维码完成配对", "qr.wecom": "请使用企业微信扫描二维码，快捷绑定机器人", "qr.dingtalk": "请使用钉钉扫描二维码，自动创建机器人", "qr.qq": "请使用手机 QQ 扫描二维码，创建开放平台机器人", "qr.default": "请使用对应 App 扫描二维码",
         "status.unconfigured": "未配置", "status.connected": "已连接", "status.connecting": "接入中…", "action.configure": "配置", "action.more": "{channel} 更多", "action.reconnect": "重新接入", "action.disconnect": "断开", "action.removeConfig": "删除配置", "action.receive": "接收消息",
-        "error.loadAssistant": "无法加载全局配置", "error.noModels": "当前 Host 还没有可用模型，请先在网页里配置提供商", "error.save": "保存失败", "error.chooseWorkspace": "请选择工作区目录", "error.workspaceUnavailable": "当前 Host 无法新增工作区", "error.addWorkspace": "新增工作区失败", "error.load": "加载失败", "error.connection": "无法连接本机 IM 助理接口", "error.request": "请求失败", "error.action": "操作失败", "error.qr": "无法生成二维码", "error.detailsInLog": "操作失败，请查看服务器日志。",
+        "error.loadAssistant": "无法加载账号配置", "error.noModels": "当前 Host 还没有可用模型，请先在网页里配置提供商", "error.save": "保存失败", "error.chooseWorkspace": "请选择工作区目录", "error.workspaceUnavailable": "当前 Host 无法新增工作区", "error.addWorkspace": "新增工作区失败", "error.load": "加载失败", "error.connection": "无法连接本机 IM 助理接口", "error.request": "请求失败", "error.action": "操作失败", "error.qr": "无法生成二维码", "error.detailsInLog": "操作失败，请查看服务器日志。",
         "composer.aria": "全局会话配置", "composer.project": "选择项目", "composer.projectAria": "项目", "composer.noWorkspaces": "暂无工作区", "composer.addWorkspace": "添加工作区…", "composer.permission": "权限", "composer.noModels": "暂无模型", "composer.workspacePath": "工作区路径", "action.cancel": "取消", "action.adding": "添加中…",
         "permission.readOnly": "只读", "permission.workspaceWrite": "工作区写入", "permission.fullAccess": "完全访问",
         "rail.workspace": "工作区", "rail.search": "搜索", "rail.searchPlaceholder": "搜索会话...", "rail.clearSearch": "清除搜索", "rail.filter": "筛选", "rail.group": "分组方式", "rail.byWorkspace": "按工作区", "rail.list": "单列表", "rail.sort": "排序方式", "rail.manual": "手动排序", "rail.recent": "最近更新", "rail.running": "运行中", "rail.idle": "空闲", "rail.renameAria": "重命名会话", "rail.rename": "重命名", "rail.fork": "分叉会话", "rail.archive": "归档会话", "rail.empty": "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。", "rail.noTasks": "暂无网页任务", "rail.ungrouped": "未分组", "rail.tabsAria": "工作区分类", "rail.tasks": "任务", "rail.channels": "频道",
         "time.now": "刚刚", "time.minutes": "{count}分钟前", "time.hours": "{count}小时前", "time.days": "{count}天前",
-        "server.unknownChannel": "未知渠道", "server.channelUnconfigured": "渠道未配置", "server.sessionMissing": "会话不存在", "server.qrUnsupported": "该渠道不支持扫码绑定", "server.qrExpired": "二维码已过期", "server.qrIncomplete": "扫码未完成", "server.accessDenied": "未授权：请管理员在设置 → IM助理 中批准你的访问。",
+        "server.unknownChannel": "未知渠道", "server.channelUnconfigured": "渠道未配置", "server.sessionMissing": "会话不存在", "server.accountMissing": "账号不存在", "server.accountConnectFailed": "账号连接失败，请查看本机日志", "server.accountReconnectFailed": "重新连接失败，请查看本机日志", "server.selectAccountSettings": "请选择提供商、模型、工作区或权限", "server.selectModel": "请选择提供商和模型", "server.selectWorkspace": "请选择工作区", "server.selectPermission": "请选择权限", "server.missingCredentials": "凭据不足，无法启动渠道", "server.qrUnsupported": "该渠道不支持扫码绑定", "server.qrExpired": "二维码已过期", "server.qrIncomplete": "扫码未完成", "server.accessDenied": "未授权：请管理员在设置 → IM助理 中批准你的访问。",
         "status.disconnected": "已断开", "status.reconnectFailed": "重连失败", "status.connectingSocket": "连接中", "status.waitHandshake": "等待网关握手", "status.authenticating": "鉴权中", "status.reconnecting": "重连中", "status.connectionError": "连接错误", "status.connectionFailed": "连接失败", "status.streamConnected": "Stream 已连接", "status.stopped": "已停止", "status.longConnection": "长连接已建立", "status.polling": "轮询中", "status.notLoggedIn": "未登录", "status.waitQr": "等待扫码", "status.loggedIn": "已登录", "status.loggedInRecovered": "已登录（自动恢复）", "status.loggingIn": "登录中",
       },
       en: {
-        "settings.label": "IM Assistant", "settings.title": "IM Channels", "settings.description": "Connect IM channels so your local assistant can receive messages from DingTalk, Feishu, and more. Channel settings are stored only on this machine.",
+        "settings.label": "IM Assistant", "settings.title": "IM Bots", "settings.description": "Manage accounts across channels. Each account has its own workspace, model, and permission settings, stored only on this machine.",
         "settings.aria": "IM Assistant", "settings.selectAccountTitle": "Select an account", "settings.selectAccountDescription": "Choose an account on the left to view and edit its workspace, model, and permissions.", "settings.noAccountsTitle": "No accounts connected", "settings.noAccountsDescription": "Choose a channel on the left, then select Add account.", "settings.publicChatNotice": "Unapproved users can start chats, but they cannot approve tool calls.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
+        "account.workspace": "Workspace", "account.currentWorkspace": "Current workspace", "account.selectWorkspace": "Select a workspace", "account.selectModel": "Select a model", "account.selectPermission": "Select a permission", "account.privateAccess": "Private chat access", "account.privateApproved": "Approved users only", "account.privateAll": "Allow all DM users", "account.autoNameNote": "The account name is generated automatically after setup.", "account.defaultName": "{channel} account {count}",
+        "account.countZero": "0 accounts", "account.countOnline": "{online} / {total} online", "account.countOffline": "{total} / {total} offline", "account.statusProcessing": "Processing…", "account.statusOnline": "Online", "account.statusOffline": "Offline", "account.statusRunning": "Running normally", "account.statusNotConnected": "Not connected", "account.receive": "Receive messages", "account.receiveDescription": "Turn this off to keep the account settings without receiving new messages", "account.removeConfirm": "Remove this account? Its saved settings and credentials will also be deleted.",
+        "action.addAccount": "Add account", "action.generateQr": "Generate QR code", "action.checkConnection": "Check", "action.reconnectAccount": "Reconnect", "action.removeAccount": "Remove", "status.saving": "Saving…", "status.saved": "Saved",
         "channel.dingtalk": "DingTalk", "channel.feishu": "Feishu", "channel.lark": "Lark", "channel.weixin": "WeChat", "channel.wecom": "WeCom", "channel.qq": "QQ", "channel.telegram": "Telegram",
         "field.dingtalk.clientId": "Client ID (formerly AppKey)", "field.dingtalk.clientSecret": "Client Secret (formerly AppSecret)",
         "bind.title": "Set up {channel}", "bind.close": "Close", "bind.quick": "Quick setup (recommended)", "bind.manual": "Manual setup", "bind.success": "Connected successfully", "bind.newIdentity": "A new account identity was detected and a new account was created", "bind.qrAlt": "{channel} setup QR code", "bind.generating": "Generating…", "bind.expire": "QR code expires in {time}", "bind.scanned": "Scanned. Confirm on your phone.", "bind.retry": "Generate a new QR code", "bind.refresh": "Generate a new QR code", "action.saving": "Saving…", "action.confirm": "Confirm",
         "qr.weixin": "Scan the QR code with WeChat to connect", "qr.feishu": "Scan with Feishu; a bot will be created automatically", "qr.lark": "Scan with Lark to pair", "qr.wecom": "Scan with WeCom to quickly connect a bot", "qr.dingtalk": "Scan with DingTalk; a bot will be created automatically", "qr.qq": "Scan with mobile QQ to create an Open Platform bot", "qr.default": "Scan the QR code with the corresponding app",
         "status.unconfigured": "Not configured", "status.connected": "Connected", "status.connecting": "Connecting…", "action.configure": "Configure", "action.more": "More options for {channel}", "action.reconnect": "Reconnect", "action.disconnect": "Disconnect", "action.removeConfig": "Remove configuration", "action.receive": "Receive messages",
-        "error.loadAssistant": "Could not load global settings", "error.noModels": "No models are available in the Host. Configure a provider in the web app first.", "error.save": "Could not save", "error.chooseWorkspace": "Choose a workspace directory", "error.workspaceUnavailable": "This Host cannot create workspaces", "error.addWorkspace": "Could not add workspace", "error.load": "Could not load", "error.connection": "Could not connect to the local IM Assistant API", "error.request": "Request failed", "error.action": "Action failed", "error.qr": "Could not generate a QR code", "error.detailsInLog": "The operation failed. Check the server logs for details.",
+        "error.loadAssistant": "Could not load account settings", "error.noModels": "No models are available in the Host. Configure a provider in the web app first.", "error.save": "Could not save", "error.chooseWorkspace": "Choose a workspace directory", "error.workspaceUnavailable": "This Host cannot create workspaces", "error.addWorkspace": "Could not add workspace", "error.load": "Could not load", "error.connection": "Could not connect to the local IM Assistant API", "error.request": "Request failed", "error.action": "Action failed", "error.qr": "Could not generate a QR code", "error.detailsInLog": "The operation failed. Check the server logs for details.",
         "composer.aria": "Global session settings", "composer.project": "Select project", "composer.projectAria": "Project", "composer.noWorkspaces": "No workspaces", "composer.addWorkspace": "Add workspace…", "composer.permission": "Permission", "composer.noModels": "No models", "composer.workspacePath": "Workspace path", "action.cancel": "Cancel", "action.adding": "Adding…",
         "permission.readOnly": "Read Only", "permission.workspaceWrite": "Workspace Write", "permission.fullAccess": "Full access",
         "rail.workspace": "Workspaces", "rail.search": "Search", "rail.searchPlaceholder": "Search sessions...", "rail.clearSearch": "Clear search", "rail.filter": "Filter", "rail.group": "Group by", "rail.byWorkspace": "By workspace", "rail.list": "Single list", "rail.sort": "Sort by", "rail.manual": "Manual", "rail.recent": "Recently updated", "rail.running": "Running", "rail.idle": "Idle", "rail.renameAria": "Rename session", "rail.rename": "Rename", "rail.fork": "Fork session", "rail.archive": "Archive session", "rail.empty": "No channel sessions yet. Connect a channel in Settings → IM Assistant, then send the bot a message.", "rail.noTasks": "No web tasks", "rail.ungrouped": "Ungrouped", "rail.tabsAria": "Workspace categories", "rail.tasks": "Tasks", "rail.channels": "Channels",
         "time.now": "Just now", "time.minutes": "{count} min ago", "time.hours": "{count} hr ago", "time.days": "{count} days ago",
-        "server.unknownChannel": "Unknown channel", "server.channelUnconfigured": "Channel is not configured", "server.sessionMissing": "Session does not exist", "server.qrUnsupported": "This channel does not support QR setup", "server.qrExpired": "QR code has expired", "server.qrIncomplete": "QR setup was not completed", "server.accessDenied": "Access denied: ask an administrator to approve you in Settings → IM Assistant.",
+        "server.unknownChannel": "Unknown channel", "server.channelUnconfigured": "Channel is not configured", "server.sessionMissing": "Session does not exist", "server.accountMissing": "Account does not exist", "server.accountConnectFailed": "Could not connect the account. Check the local logs.", "server.accountReconnectFailed": "Could not reconnect the account. Check the local logs.", "server.selectAccountSettings": "Select a provider, model, workspace, or permission setting", "server.selectModel": "Select a provider and model", "server.selectWorkspace": "Select a workspace", "server.selectPermission": "Select a permission", "server.missingCredentials": "The channel cannot start because credentials are missing", "server.qrUnsupported": "This channel does not support QR setup", "server.qrExpired": "QR code has expired", "server.qrIncomplete": "QR setup was not completed", "server.accessDenied": "Access denied: ask an administrator to approve you in Settings → IM Assistant.",
         "status.disconnected": "Disconnected", "status.reconnectFailed": "Reconnect failed", "status.connectingSocket": "Connecting", "status.waitHandshake": "Waiting for gateway handshake", "status.authenticating": "Authenticating", "status.reconnecting": "Reconnecting", "status.connectionError": "Connection error", "status.connectionFailed": "Connection failed", "status.streamConnected": "Stream connected", "status.stopped": "Stopped", "status.longConnection": "Long connection established", "status.polling": "Polling", "status.notLoggedIn": "Not signed in", "status.waitQr": "Waiting for scan", "status.loggedIn": "Signed in", "status.loggedInRecovered": "Signed in (restored)", "status.loggingIn": "Signing in",
       },
     };
@@ -190,7 +196,7 @@ window.__ModuleLoader__.load({
 .ima-inspector{padding:22px 24px 26px;min-width:0}.ima-inspector-empty{display:grid;min-height:580px;padding:32px;place-items:center;text-align:center}.ima-inspector-empty-copy{max-width:300px}.ima-inspector-empty-title{margin:0;color:var(--ima-text);font-size:16px;font-weight:650;line-height:24px}.ima-inspector-empty-description{margin:8px 0 0;color:var(--ima-muted);font-size:13px;line-height:20px}.ima-inspector-head{display:flex;align-items:flex-start;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--ima-line)}.ima-inspector-head-copy{min-width:0;flex:1}.ima-inspector-title{margin:1px 0 3px;font-size:17px;line-height:24px}.ima-inspector-status{color:var(--ima-muted);font-size:12px}.ima-inspector-status.ok{color:var(--ima-ok)}
 .ima-form{display:flex;flex-direction:column;gap:16px;padding-top:20px}.ima-control{display:flex;flex-direction:column;gap:7px}.ima-control>span{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-control input,.ima-control select{box-sizing:border-box;width:100%;min-height:44px;padding:0 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font:13px inherit;outline:none}.ima-control input:focus,.ima-control select:focus{border-color:var(--ima-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-control option{background:#202124;color:#f2f3f5}
 .ima-switch-row{display:flex;align-items:center;justify-content:space-between;min-height:48px;padding:0 2px}.ima-switch-copy strong{display:block;font-size:13px}.ima-switch-copy small{display:block;margin-top:2px;color:var(--ima-muted);font-size:11px}
-.ima-inspector-actions{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:18px;border-top:1px solid var(--ima-line)}.ima-inspector-actions .ima-btn{min-height:36px}.ima-inspector-actions .danger{margin-left:auto;color:var(--ima-danger);border-color:color-mix(in srgb,var(--ima-danger) 35%,transparent)}
+.ima-inspector-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;padding-top:18px;border-top:1px solid var(--ima-line)}.ima-inspector-actions .ima-btn{flex:none;min-width:0;min-height:36px;padding:0 8px;font-size:12px;white-space:nowrap}.ima-inspector-actions .danger{margin-left:auto;color:var(--ima-danger);border-color:color-mix(in srgb,var(--ima-danger) 35%,transparent)}
 .ima-save-note{min-height:18px;color:var(--ima-muted);font-size:11px}.ima-save-note.ok{color:var(--ima-ok)}
 .ima-modal.ima-account-modal{width:min(560px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto}.ima-setup-section{margin:4px 0 14px;padding-bottom:14px;border-bottom:1px solid var(--ima-line)}
 .ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:7px}.ima-picker-field.wide{grid-column:1/-1}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-account-picker{width:100%}.ima-account-picker .ima-chip-btn{width:100%;height:auto;min-height:44px;justify-content:flex-start;padding:8px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font-size:13px;text-align:left}.ima-account-picker .ima-chip-btn:hover,.ima-account-picker.is-open .ima-chip-btn{border-color:var(--ima-accent);background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-account-picker .ima-chip-label{flex:1}.ima-account-picker .ima-chip-btn em{margin-left:auto}.ima-account-picker .ima-chip-menu{width:100%;min-width:100%;max-height:min(320px,calc(100vh - 120px))}.ima-account-picker.ima-model-select .ima-chip-btn{border-radius:9px}.ima-account-picker.ima-model-select .ima-chip-menu{width:max(100%,320px);min-width:100%}.ima-account-settings .ima-chip-dialog{grid-column:1/-1;margin-top:0}.ima-picker-note{grid-column:1/-1;color:var(--ima-muted);font-size:11px;line-height:1.5}.ima-picker-note.warning{color:var(--ima-warning)}
@@ -303,9 +309,11 @@ window.__ModuleLoader__.load({
 
     const SERVER_TEXT_KEYS = new Map([
       ["未知渠道", "server.unknownChannel"], ["渠道未配置", "server.channelUnconfigured"], ["会话不存在", "server.sessionMissing"],
+      ["账号不存在", "server.accountMissing"], ["账号连接失败，请查看本机日志", "server.accountConnectFailed"], ["重新连接失败，请查看本机日志", "server.accountReconnectFailed"],
+      ["请选择提供商、模型、工作区或权限", "server.selectAccountSettings"], ["请选择提供商和模型", "server.selectModel"], ["请选择工作区", "server.selectWorkspace"], ["请选择权限", "server.selectPermission"], ["凭据不足，无法启动渠道", "server.missingCredentials"],
       ["该渠道不支持扫码绑定", "server.qrUnsupported"], ["二维码已过期", "server.qrExpired"], ["扫码未完成", "server.qrIncomplete"],
       ["未授权：请管理员在设置 → IM助理 中批准你的访问。", "server.accessDenied"],
-      ["已断开", "status.disconnected"], ["重连失败", "status.reconnectFailed"], ["连接中", "status.connectingSocket"], ["等待网关握手", "status.waitHandshake"],
+      ["未连接", "account.statusNotConnected"], ["已断开", "status.disconnected"], ["重连失败", "status.reconnectFailed"], ["连接中", "status.connectingSocket"], ["等待网关握手", "status.waitHandshake"],
       ["鉴权中", "status.authenticating"], ["已连接", "status.connected"], ["重连中", "status.reconnecting"], ["连接错误", "status.connectionError"], ["连接失败", "status.connectionFailed"],
       ["Stream 已连接", "status.streamConnected"], ["已停止", "status.stopped"], ["长连接已建立", "status.longConnection"], ["轮询中", "status.polling"],
       ["未登录", "status.notLoggedIn"], ["等待扫码", "status.waitQr"], ["已登录", "status.loggedIn"], ["已登录（自动恢复）", "status.loggedInRecovered"], ["登录中", "status.loggingIn"],
@@ -324,6 +332,13 @@ window.__ModuleLoader__.load({
       const key = "channel." + ch.id;
       const translated = t(key);
       return translated === key ? (ch.label || ch.id) : translated;
+    }
+    function accountLabel(account, t) {
+      if (!account || !account.autoName) return account && (account.name || account.id) || "";
+      return t("account.defaultName", {
+        channel: channelLabel({ id: account.platform, label: account.platform }, t),
+        count: account.nameOrdinal || 1,
+      });
     }
     function fieldLabel(ch, field, t) {
       const key = "field." + ch.id + "." + field.key;
@@ -527,7 +542,7 @@ window.__ModuleLoader__.load({
                     h("p", { className: "ima-hint" }, hintOf(ch, t)),
                     (busy || status === "starting") && h("div", { className: "ima-bind-status" }, t("bind.generating")),
                     (status === "expired" || status === "failed") && h("div", { className: "ima-error" }, serverText(pairing && pairing.error, t) || t("bind.retry")),
-                    h("button", { className: "ima-btn primary", disabled: busy || !settings.cwd || !settings.provider || !settings.model || !settings.permission, onClick: () => startQr(qrStarted) }, busy ? t("bind.generating") : qrStarted ? t("bind.refresh") : "生成二维码"),
+                    h("button", { className: "ima-btn primary", disabled: busy || !settings.cwd || !settings.provider || !settings.model || !settings.permission, onClick: () => startQr(qrStarted) }, busy ? t("bind.generating") : qrStarted ? t("bind.refresh") : t("action.generateQr")),
                   )
           ),
           tab === "manual" && hasManual && h("div", null,
@@ -797,12 +812,12 @@ window.__ModuleLoader__.load({
       );
 
       return h("div", { className: "ima-account-settings" + (props.compact ? " compact" : "") },
-        field("workspace", props.workspaceLabel || "工作区", h(ChipMenu, {
+        field("workspace", props.workspaceLabel || t("account.workspace"), h(ChipMenu, {
           open: open === "workspace",
           onToggle: (next) => setOpen(next ? "workspace" : ""),
           icon: h(FolderIcon),
-          label: (workspace && (workspace.title || workspace.path)) || cwd || "请选择工作区",
-          ariaLabel: props.workspaceLabel || "工作区",
+          label: (workspace && (workspace.title || workspace.path)) || cwd || t("account.selectWorkspace"),
+          ariaLabel: props.workspaceLabel || t("account.workspace"),
           className: "ima-account-picker",
         },
           items.length === 0 && h("div", { className: "ima-chip-empty" }, t("composer.noWorkspaces")),
@@ -817,11 +832,11 @@ window.__ModuleLoader__.load({
           h("div", { className: "ima-chip-split" }),
           h(ChipRow, { icon: h(PlusIcon), label: t("composer.addWorkspace"), onClick: onAddWorkspace }),
         ), true),
-        field("model", "模型", h(ChipMenu, {
+        field("model", modelT("menu.model"), h(ChipMenu, {
           open: open === "model",
           onToggle: (next) => { setOpen(next ? "model" : ""); if (next) setModelPane("root"); },
           icon: null,
-          label: (currentModel && currentModel.label) || "请选择模型",
+          label: (currentModel && currentModel.label) || t("account.selectModel"),
           title: currentModel && currentModel.label,
           suffix: effortLabel,
           ariaLabel: modelT("trigger.selectAria"),
@@ -830,7 +845,7 @@ window.__ModuleLoader__.load({
           menuClassName: "ima-model-menu",
         },
           modelPane === "root" && [
-            h(ChipRow, { key: "model", kv: true, label: modelT("menu.model"), hint: (currentModel && currentModel.label) || "请选择模型", chevron: true, onClick: () => setModelPane("model") }),
+            h(ChipRow, { key: "model", kv: true, label: modelT("menu.model"), hint: (currentModel && currentModel.label) || t("account.selectModel"), chevron: true, onClick: () => setModelPane("model") }),
             reasoning && h(ChipRow, { key: "effort", kv: true, label: modelT("menu.effort"), hint: effortLabel || modelT("effort.providerDefault"), chevron: true, onClick: () => setModelPane("effort") }),
           ],
           modelPane === "model" && (models.length === 0
@@ -857,11 +872,11 @@ window.__ModuleLoader__.load({
             onClick: () => { update({ provider, model, reasoningEffort: item.id }); setOpen(""); },
           })),
         )),
-        field("permission", "权限", h(ChipMenu, {
+        field("permission", t("composer.permission"), h(ChipMenu, {
           open: open === "permission",
           onToggle: (next) => setOpen(next ? "permission" : ""),
           icon: h(ShieldIcon),
-          label: (currentPermission && currentPermission.label) || "请选择权限",
+          label: (currentPermission && currentPermission.label) || t("account.selectPermission"),
           ariaLabel: t("composer.permission"),
           className: "ima-account-picker",
         },
@@ -873,16 +888,16 @@ window.__ModuleLoader__.load({
             onClick: () => selectPermission(item.value),
           })),
         )),
-        field("private", "私聊准入", h(ChipMenu, {
+        field("private", t("account.privateAccess"), h(ChipMenu, {
           open: open === "private",
           onToggle: (next) => setOpen(next ? "private" : ""),
           icon: h(ShieldIcon),
-          label: privateAccess === "all" ? "允许所有私聊用户" : "仅已批准用户",
-          ariaLabel: "私聊准入",
+          label: privateAccess === "all" ? t("account.privateAll") : t("account.privateApproved"),
+          ariaLabel: t("account.privateAccess"),
           className: "ima-account-picker",
         },
-          h(ChipRow, { icon: h(ShieldIcon), label: "仅已批准用户", active: privateAccess === "approved", onClick: () => { update({ privateAccess: "approved" }); setOpen(""); } }),
-          h(ChipRow, { icon: h(ShieldIcon), label: "允许所有私聊用户", active: privateAccess === "all", onClick: () => { update({ privateAccess: "all" }); setOpen(""); } }),
+          h(ChipRow, { icon: h(ShieldIcon), label: t("account.privateApproved"), active: privateAccess === "approved", onClick: () => { update({ privateAccess: "approved" }); setOpen(""); } }),
+          h(ChipRow, { icon: h(ShieldIcon), label: t("account.privateAll"), active: privateAccess === "all", onClick: () => { update({ privateAccess: "all" }); setOpen(""); } }),
         ), true),
         privateAccess === "all" && h("div", { className: "ima-picker-note warning" }, t("settings.publicChatNotice")),
         adding && h("div", { className: "ima-chip-dialog" },
@@ -894,7 +909,7 @@ window.__ModuleLoader__.load({
           ),
         ),
         hint && h("div", { className: "ima-picker-note" }, hint),
-        props.showAutoNameNote && h("div", { className: "ima-picker-note" }, "绑定成功后会自动生成账号名，无需手动填写。"),
+        props.showAutoNameNote && h("div", { className: "ima-picker-note" }, t("account.autoNameNote")),
         h(RiskConfirmation, {
           open: confirmingFullAccess,
           title: permissionT("confirm.title"),
@@ -1205,7 +1220,7 @@ window.__ModuleLoader__.load({
         const seq = ++saveSeq.current;
         const next = { ...draft, ...patch };
         setDraft(next);
-        setNote("保存中…");
+        setNote("status.saving");
         return onSave(account.id, {
           name: next.name,
           cwd: next.cwd,
@@ -1215,7 +1230,7 @@ window.__ModuleLoader__.load({
           permission: next.permission,
           privateAccess: next.privateAccess,
         }).then((ok) => {
-          if (seq === saveSeq.current) setNote(ok ? "已保存" : "保存失败");
+          if (seq === saveSeq.current) setNote(ok ? "status.saved" : "error.save");
           return ok;
         });
       };
@@ -1234,8 +1249,8 @@ window.__ModuleLoader__.load({
         h("div", { className: "ima-inspector-head" },
           h(Logo, { id: account.platform }),
           h("div", { className: "ima-inspector-head-copy" },
-            h("h3", { className: "ima-inspector-title" }, account.name),
-            h("div", { className: account.connected ? "ima-inspector-status ok" : "ima-inspector-status" }, account.connected ? "● 运行正常" : "● " + (account.status || "未连接")),
+            h("h3", { className: "ima-inspector-title" }, accountLabel(account, t)),
+            h("div", { className: account.connected ? "ima-inspector-status ok" : "ima-inspector-status" }, "● " + (account.connected ? t("account.statusRunning") : (serverText(account.status, t) || t("account.statusNotConnected")))),
             h("div", { className: "ima-account-id" }, account.id),
           ),
         ),
@@ -1251,18 +1266,18 @@ window.__ModuleLoader__.load({
             modelT,
             permissionT,
             compact: true,
-            workspaceLabel: "当前工作区",
+            workspaceLabel: t("account.currentWorkspace"),
             t,
           }),
           h("div", { className: "ima-switch-row" },
-            h("div", { className: "ima-switch-copy" }, h("strong", null, "接收消息"), h("small", null, "关闭后保留账号配置，但不接收新消息")),
-            h("button", { type: "button", className: draft.receiveEnabled ? "ima-switch" : "ima-switch off", role: "switch", "aria-checked": Boolean(draft.receiveEnabled), "aria-label": "接收消息", onClick: () => onAction(account.id, "receive", { receiveEnabled: !draft.receiveEnabled }) }, h("i")),
+            h("div", { className: "ima-switch-copy" }, h("strong", null, t("account.receive")), h("small", null, t("account.receiveDescription"))),
+            h("button", { type: "button", className: draft.receiveEnabled ? "ima-switch" : "ima-switch off", role: "switch", "aria-checked": Boolean(draft.receiveEnabled), "aria-label": t("account.receive"), onClick: () => onAction(account.id, "receive", { receiveEnabled: !draft.receiveEnabled }) }, h("i")),
           ),
-          h("div", { className: note === "已保存" ? "ima-save-note ok" : "ima-save-note" }, note),
+          h("div", { className: note === "status.saved" ? "ima-save-note ok" : "ima-save-note" }, note && t(note)),
           h("div", { className: "ima-inspector-actions" },
-            h("button", { className: "ima-btn", onClick: () => onAction(account.id, "check") }, "检查连接"),
-            h("button", { className: "ima-btn", onClick: () => onAction(account.id, "reconnect") }, "重新连接"),
-            h("button", { className: "ima-btn danger", onClick: () => { if (window.confirm("确定移除这个账号？本机保存的配置和凭据将一并删除。")) onAction(account.id, "remove"); } }, "移除接入"),
+            h("button", { className: "ima-btn", onClick: () => onAction(account.id, "check") }, t("action.checkConnection")),
+            h("button", { className: "ima-btn", onClick: () => onAction(account.id, "reconnect") }, t("action.reconnectAccount")),
+            h("button", { className: "ima-btn danger", onClick: () => { if (window.confirm(t("account.removeConfirm"))) onAction(account.id, "remove"); } }, t("action.removeAccount")),
           ),
         ),
       );
@@ -1344,15 +1359,15 @@ window.__ModuleLoader__.load({
       return h("section", { className: "ima-page ima-account-page", "aria-label": t("settings.aria") },
         h("header", { className: "ima-head" },
           h("div", null,
-            h("h2", { className: "ima-title" }, "IM机器人"),
-            h("p", { className: "ima-sub" }, "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。"),
+            h("h2", { className: "ima-title" }, t("settings.title")),
+            h("p", { className: "ima-sub" }, t("settings.description")),
           ),
         ),
         error && h("div", { className: "ima-error" }, error),
         pending.length > 0 && h("div", { className: "ima-pending" },
           h("div", null, t("pending.notice")),
           ...pending.map((p) => h("div", { key: p.channelId + p.userId, className: "ima-pending-row" },
-            h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + (allAccounts.find((item) => item.id === p.channelId)?.name || p.channelId)),
+            h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + (accountLabel(allAccounts.find((item) => item.id === p.channelId), t) || p.channelId)),
             h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "approve", { userId: p.userId }) }, t("action.approve")),
             h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "deny", { userId: p.userId }) }, t("action.deny")),
           )),
@@ -1366,26 +1381,26 @@ window.__ModuleLoader__.load({
                   const open = canExpand && Boolean(expanded[ch.id]);
                   const toggleExpanded = canExpand ? () => setExpanded({ ...expanded, [ch.id]: !open }) : undefined;
                   const channelStatus = ch.total === 0
-                    ? { label: "0 个账号", tone: "muted" }
+                    ? { label: t("account.countZero"), tone: "muted" }
                     : ch.online === ch.total
-                      ? { label: ch.online + " / " + ch.total + " 在线", tone: "online" }
+                      ? { label: t("account.countOnline", { online: ch.online, total: ch.total }), tone: "online" }
                       : ch.online === 0
-                        ? { label: ch.total + " / " + ch.total + " 离线", tone: "offline" }
-                        : { label: ch.online + " / " + ch.total + " 在线", tone: "partial" };
+                        ? { label: t("account.countOffline", { total: ch.total }), tone: "offline" }
+                        : { label: t("account.countOnline", { online: ch.online, total: ch.total }), tone: "partial" };
                   return h("div", { key: ch.id, className: "ima-platform" + (open ? " open" : "") + (canExpand ? "" : " empty") },
                     h("div", { className: "ima-platform-head", role: canExpand ? "button" : undefined, tabIndex: canExpand ? 0 : undefined, "aria-expanded": canExpand ? open : undefined, onClick: toggleExpanded, onKeyDown: canExpand ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpanded(); } } : undefined },
                       h(Logo, { id: ch.id }),
                       h("span", { className: "ima-platform-title" }, channelLabel(ch, t)),
                       h("span", { className: "ima-platform-count " + channelStatus.tone }, channelStatus.label),
-                      h("button", { className: "ima-platform-add", type: "button", onClick: (e) => { e.stopPropagation(); setEditing(ch.id); } }, "＋ 添加账号"),
+                      h("button", { className: "ima-platform-add", type: "button", onClick: (e) => { e.stopPropagation(); setEditing(ch.id); } }, "＋ " + t("action.addAccount")),
                       h("span", { className: canExpand ? "ima-platform-caret" : "ima-platform-caret empty", "aria-hidden": "true" }, canExpand && h(IconChevron)),
                     ),
                     open && h("div", { className: "ima-account-list" },
                       ...(ch.accounts || []).map((account) => h("button", { key: account.id, type: "button", className: account.id === selected ? "ima-account-row on" : "ima-account-row", onClick: () => selectAccount(account.id) },
                         h("span", { className: account.connected ? "ima-dot on" : "ima-dot" }),
                         h(Logo, { id: ch.id }),
-                        h("span", { className: "ima-account-copy" }, h("span", { className: "ima-account-name" }, account.name), h("span", { className: "ima-account-id" }, account.id)),
-                        h("span", { className: busy[account.id] ? "ima-account-state" : account.connected ? "ima-account-state online" : "ima-account-state offline" }, busy[account.id] ? "处理中…" : account.connected ? "在线" : "离线"),
+                        h("span", { className: "ima-account-copy" }, h("span", { className: "ima-account-name" }, accountLabel(account, t)), h("span", { className: "ima-account-id" }, account.id)),
+                        h("span", { className: busy[account.id] ? "ima-account-state" : account.connected ? "ima-account-state online" : "ima-account-state offline" }, busy[account.id] ? t("account.statusProcessing") : account.connected ? t("account.statusOnline") : t("account.statusOffline")),
                         h("span", { className: "ima-account-next", "aria-hidden": "true" }, h(IconChevron)),
                       )),
                     ),

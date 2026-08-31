@@ -4,6 +4,14 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.29 — 2026-09-01
+
+- Completed Host-language localization across the multi-account settings flow, including account setup, selectors, status, actions, empty states, confirmations, and actionable server errors.
+- Localized automatically generated account names without migrating stored account data, while preserving custom account names unchanged.
+- Fixed narrow account inspectors so concise English connection actions remain aligned on one row, with whole-button wrapping as a safe fallback.
+
+Published package: [`@michengai/dsh-im-connect@0.1.29`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.29).
+
 ## 0.1.28 — 2026-09-01
 
 - Added multiple isolated accounts for WeChat, WeCom, QQ, DingTalk, Feishu, Lark, and Telegram, with independent workspace, model, permission, private-access, credential, allowlist, and session state.

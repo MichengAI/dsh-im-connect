@@ -131,6 +131,8 @@ export interface AccountView {
   id: string
   platform: ChannelId
   name: string
+  autoName: boolean
+  nameOrdinal?: number
   connected: boolean
   receiveEnabled: boolean
   configuredKeys: string[]
@@ -274,10 +276,16 @@ export class ChannelManager {
     const adapter = this.running.get(accountId)
     const status = adapter?.status() ?? state.lastError ?? (state.enabled ? '未连接' : '已停止')
     const connected = adapter !== undefined && !status.includes('失败') && status !== '未连接' && status !== '已停止'
+    const defaultNamePrefix = `${CHANNEL_META[platform].label}账号`
+    const name = String(state.name || defaultNamePrefix).trim()
+    const defaultNameSuffix = name.startsWith(`${defaultNamePrefix} `) ? name.slice(defaultNamePrefix.length + 1) : ''
+    const autoName = name === defaultNamePrefix || /^\d+$/.test(defaultNameSuffix)
     return {
       id: accountId,
       platform,
-      name: state.name || `${CHANNEL_META[platform].label}账号`,
+      name,
+      autoName,
+      ...(autoName ? { nameOrdinal: Number(defaultNameSuffix || 1) } : {}),
       connected,
       receiveEnabled: connected && state.receiveEnabled !== false,
       configuredKeys: Object.keys(config).filter((key) => Boolean(config[key]) && !key.endsWith('Ref')),

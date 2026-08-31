@@ -106,7 +106,7 @@ test('添加账号使用 Host 风格选择器且二维码按需生成', () => {
   assert.doesNotMatch(client, /h\("input", \{[^\n]*settings\.name/)
   assert.doesNotMatch(client, /ima-qrph|等待二维码/)
   assert.match(client, /src\s*\? h\("div", \{ className: "ima-qrbox" \}/)
-  assert.match(client, /qrStarted \? t\("bind\.refresh"\) : "生成二维码"/)
+  assert.match(client, /qrStarted \? t\("bind\.refresh"\) : t\("action\.generateQr"\)/)
   assert.match(client, /if \(tab !== "qr" \|\| !qrStarted\) return undefined/)
 })
 
@@ -145,6 +145,8 @@ test('紧凑桌面窗口收窄设置弹窗和账号双栏，避免卡片横向�
   assert.match(client, /@media\(max-width:1280px\)\{\[role="dialog"\]\[aria-labelledby\]:has\(\.ima-account-page\)\{width:min\(920px,calc\(100vw - 48px\)\)/)
   assert.match(client, /grid-template-columns:minmax\(300px,340px\) minmax\(320px,1fr\)/)
   assert.match(client, /@media\(max-width:850px\)\{\[role="dialog"\]\[aria-labelledby\]:has\(\.ima-account-page\)\{width:calc\(100vw - 32px\)/)
+  assert.match(client, /\.ima-inspector-actions\{[^}]*flex-wrap:wrap/)
+  assert.match(client, /\.ima-inspector-actions \.ima-btn\{[^}]*flex:none[^}]*padding:0 8px[^}]*font-size:12px[^}]*white-space:nowrap/)
 })
 
 test('企业微信侧边栏小图标移除白色应用底板并放大有效标记', () => {
@@ -193,8 +195,31 @@ test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
   assert.match(client, /}, LocalizedSettingsPage\)\)/, '设置页本身必须订阅语言变化，模型词条才能立即刷新')
   assert.match(client, /"settings\.label": "IM Assistant"/)
   assert.match(client, /"settings\.label": "IM助理"/, '中文设置区标题是 Codex UI 的跨插件导航兼容标识')
+  assert.match(client, /"settings\.title": "IM Bots"/)
+  assert.match(client, /"action\.addAccount": "Add account"/)
+  assert.match(client, /"action\.checkConnection": "Check"/)
+  assert.match(client, /"action\.removeAccount": "Remove"/)
+  assert.match(client, /"account\.privateAll": "Allow all DM users"/)
+  assert.match(client, /"account\.removeConfirm": "Remove this account\? Its saved settings and credentials will also be deleted\."/)
+  assert.match(client, /"server\.accountMissing": "Account does not exist"/)
+  assert.match(client, /\["账号不存在", "server\.accountMissing"\]/)
+  assert.match(client, /\["请选择提供商和模型", "server\.selectModel"\]/)
   assert.match(client, /"rail\.channels": "Channels"/)
+  assert.match(client, /t\("settings\.title"\)/)
+  assert.match(client, /t\("action\.addAccount"\)/)
+  assert.match(client, /t\("account\.privateAccess"\)/)
+  assert.match(client, /t\("account\.receive"\)/)
+  assert.match(client, /window\.confirm\(t\("account\.removeConfirm"\)\)/)
+  assert.match(client, /function accountLabel\(account, t\)/)
   assert.match(client, /t\("error\.detailsInLog"\)/)
+
+  const bindAndPicker = client.slice(client.indexOf('function BindModal'), client.indexOf('function ComposerBar'))
+  const accountPage = client.slice(client.indexOf('function AccountInspector'), client.indexOf('const CHANNEL_RAIL_CSS'))
+  assert.doesNotMatch(
+    bindAndPicker + accountPage,
+    /生成二维码|请选择工作区|请选择模型|请选择权限|私聊准入|绑定成功后会自动生成账号名|保存中|已保存|运行正常|当前工作区|接收消息|检查连接|重新连接|移除接入|IM机器人|添加账号|处理中|在线|离线/,
+    '多账号设置页的用户可见文案必须通过 Host i18n 解析',
+  )
 })
 
 test('IM 模型菜单只使用适配器声明的模型与推理等级', () => {
@@ -274,6 +299,16 @@ test('重复凭据复用账号，Telegram 更换 token 会明确标记新身份'
   assert.equal(rotated.created, true)
   assert.equal(rotated.newIdentity, true)
   assert.notEqual(rotated.accountId, first.accountId)
+  const custom = await manager.connect('telegram', { token: 'token-c' }, { ...settings, name: 'Ops bot' })
+  const accounts = manager.list().find((item) => item.id === 'telegram').accounts
+  assert.equal(accounts.length, 3)
+  assert.equal(accounts[0].autoName, true)
+  assert.equal(accounts[0].nameOrdinal, 1)
+  assert.equal(accounts[1].autoName, true)
+  assert.equal(accounts[1].nameOrdinal, 2)
+  assert.equal(accounts.find((account) => account.id === custom.accountId).name, 'Ops bot')
+  assert.equal(accounts.find((account) => account.id === custom.accountId).autoName, false)
+  assert.equal(accounts.find((account) => account.id === custom.accountId).nameOrdinal, undefined)
   assert.equal(manager.approve('telegram', 'ambiguous-user'), false)
   assert.equal(manager.approve(first.accountId, 'approved-user'), true)
 })
