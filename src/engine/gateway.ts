@@ -190,11 +190,12 @@ export class ImEngine {
     set.add(id)
   }
 
-  reloadChannel(channelId: string): void {
+  async reloadChannel(channelId: string, options: { resetSessions?: boolean } = {}): Promise<void> {
     for (const sessionId of this.router.sessionIdsForChannel(channelId)) {
       this.cancelSessionInteractions(sessionId, new Error('账号配置已更新'))
     }
-    void this.router.disposeChannel(channelId)
+    if (options.resetSessions) await this.router.resetChannelSessions(channelId)
+    else await this.router.disposeChannel(channelId)
   }
 
   clearAllowed(channelId: string): void {

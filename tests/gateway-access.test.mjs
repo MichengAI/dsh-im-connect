@@ -242,7 +242,7 @@ test('账号配置重载会显式取消该账号等待中的工具审批', async
     }, async () => 'browser-owned')
     await waitFor(() => sent.some((item) => item.text.includes('操作参数')))
 
-    engine.reloadChannel('telegram')
+    await engine.reloadChannel('telegram')
     assert.equal(await pending, 'browser-owned')
   } finally {
     engine.dispose()
@@ -258,7 +258,7 @@ test('账号配置重载会显式取消该账号等待中的结构化问题', as
     }, async () => assert.fail('账号配置更新不应把旧问题转交网页端'))
     await waitFor(() => sent.some((item) => item.text.includes('配置更新前的问题')))
 
-    engine.reloadChannel('telegram')
+    await engine.reloadChannel('telegram')
     await assert.rejects(pending, /账号配置已更新/)
   } finally {
     engine.dispose()

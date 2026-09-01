@@ -69,6 +69,7 @@ export class PairingHub {
 
   async start(id: ChannelId, extra: Record<string, string> = {}): Promise<PairingView> {
     if (!this.supports(id)) throw new Error(`${id} 不支持扫码绑定`)
+    if (this.sessions.get(id)?.status === 'saving') return this.view(id)
     this.cancel(id)
     const session: Session = {
       channelId: id,
@@ -125,6 +126,8 @@ export class PairingHub {
   cancel(id: ChannelId): PairingView {
     const session = this.sessions.get(id)
     if (!session) return this.view(id)
+    // 外部平台已经返回凭据后必须完成本地保存，避免关闭弹窗留下“机器人已创建但账号未落盘”。
+    if (session.status === 'saving') return this.view(id)
     session.begin?.dispose?.()
     session.controller.abort()
     if (session.status !== 'success') {
@@ -195,14 +198,18 @@ export class PairingHub {
         if (this.sessions.get(session.channelId) !== session) return
         if (polled.pollIntervalMs) session.pollIntervalMs = polled.pollIntervalMs
         if (polled.status === 'success' && polled.credentials) {
-          session.status = 'success'
+          session.status = 'saving'
           session.qrUrl = undefined
           session.qrImage = undefined
-          session.hint = '绑定成功'
+          session.hint = '正在保存账号'
           const credentials = { ...session.extra, ...polled.credentials }
           try {
             await this.onSuccess?.(session.channelId, credentials)
+            if (this.sessions.get(session.channelId) !== session) return
+            session.status = 'success'
+            session.hint = '绑定成功'
           } catch (error) {
+            if (this.sessions.get(session.channelId) !== session) return
             session.status = 'failed'
             const detail = error instanceof Error ? error.message : String(error)
             session.error = '保存凭据失败，请查看本机日志'

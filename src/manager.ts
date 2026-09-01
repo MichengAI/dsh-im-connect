@@ -605,7 +605,7 @@ export class ChannelManager {
           const body = await readJson(req)
           if (!this.store.channels[accountId]) { send(res, 404, { ok: false, error: '账号不存在' }); return }
           if (action === 'settings') {
-            const result = this.updateAccount(accountId, body)
+            const result = await this.updateAccount(accountId, body)
             send(res, result.ok ? 200 : 400, result)
             return
           }
@@ -673,20 +673,25 @@ export class ChannelManager {
     return normalizeAssistantModel(this.store.assistant ?? this.engineConfig)
   }
 
-  updateAccount(accountId: string, input: Record<string, unknown>): { ok: boolean; error?: string; account?: AccountView } {
-    const state = this.store.channels[accountId]
-    if (!state) return { ok: false, error: '账号不存在' }
-    const platform = this.platformOf(accountId, state)
-    const normalized = this.normalizeAccountSettings(platform, input, state)
-    if (!normalized.ok) return normalized
-    state.name = normalized.settings.name
-    state.assistant = normalized.settings.assistant
-    state.cwd = normalized.settings.cwd
-    state.permission = normalized.settings.permission
-    state.privateAccess = normalized.settings.privateAccess
-    this.flush()
-    this.engine.reloadChannel(accountId)
-    return { ok: true, account: this.accountView(accountId, state) }
+  async updateAccount(accountId: string, input: Record<string, unknown>): Promise<{ ok: boolean; error?: string; account?: AccountView }> {
+    if (!this.store.channels[accountId]) return { ok: false, error: '账号不存在' }
+    return this.channelOperations.run(accountId, async () => {
+      const state = this.store.channels[accountId]
+      if (!state) return { ok: false, error: '账号不存在' }
+      const platform = this.platformOf(accountId, state)
+      const normalized = this.normalizeAccountSettings(platform, input, state)
+      if (!normalized.ok) return normalized
+      const previousCwd = normalizeWorkspacePath(state.cwd) ?? this.currentWorkspace()
+      const resetSessions = !sameWorkspacePath(previousCwd, normalized.settings.cwd)
+      state.name = normalized.settings.name
+      state.assistant = normalized.settings.assistant
+      state.cwd = normalized.settings.cwd
+      state.permission = normalized.settings.permission
+      state.privateAccess = normalized.settings.privateAccess
+      this.flush()
+      await this.engine.reloadChannel(accountId, { resetSessions })
+      return { ok: true, account: this.accountView(accountId, state) }
+    })
   }
 
   async reconnect(accountId: string): Promise<{ ok: boolean; error?: string }> {
@@ -1137,5 +1142,10 @@ function pairingSettings(input?: Record<string, unknown>): Record<string, string
     if (value !== undefined && value !== null) out[`__setting_${key}`] = String(value)
   }
   return out
+}
+
+function sameWorkspacePath(left: string, right: string): boolean {
+  const normalize = (value: string): string => value.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase()
+  return normalize(left) === normalize(right)
 }
 

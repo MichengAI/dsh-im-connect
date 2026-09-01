@@ -40,7 +40,7 @@ export function remainingSeconds(expiresAt?: number, now = Date.now()): number |
   return Math.max(0, Math.ceil((expiresAt - now) / 1000))
 }
 
-export type PairingPhase = 'idle' | 'starting' | 'waiting' | 'scanned' | 'success' | 'expired' | 'failed' | 'cancelled'
+export type PairingPhase = 'idle' | 'starting' | 'waiting' | 'scanned' | 'saving' | 'success' | 'expired' | 'failed' | 'cancelled'
 
 export interface PairingView {
   channelId: string

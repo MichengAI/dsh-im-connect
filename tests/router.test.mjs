@@ -92,6 +92,29 @@ test('同一聊天未归档时复用当前会话', async (t) => {
   assert.match(first.sessionId, /^im:wecom:dm:\d+:user-1$/)
 })
 
+test('账号修改工作区后丢弃旧映射，后续消息在新目录创建会话', async (t) => {
+  let cwd = 'D:/workspace/old'
+  const { router, store, createdOptions } = makeRouter(t, {
+    resolveConfig: () => ({
+      cwd,
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      agentPreset: 'standard',
+      mergeTimeoutSecs: 5,
+      permissionPreset: 'workspace-write',
+    }),
+  })
+  const first = await router.getOrCreate('wecom', 'dm', 'user-workspace', '旧目录会话')
+
+  cwd = 'D:/workspace/new'
+  await router.resetChannelSessions('wecom')
+
+  assert.equal(store.get('wecom:dm:user-workspace'), undefined)
+  const next = await router.getOrCreate('wecom', 'dm', 'user-workspace', '新目录会话')
+  assert.notEqual(next.sessionId, first.sessionId)
+  assert.equal(createdOptions[1].meta.cwd, 'D:/workspace/new')
+})
+
 test('归档后再发消息必须新建会话', async (t) => {
   const archivedIds = []
   const { router, store, created } = makeRouter(t, { archivedIds })

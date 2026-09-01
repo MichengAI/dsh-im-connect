@@ -231,6 +231,15 @@ export class SessionRouter {
     }
   }
 
+  async resetChannelSessions(channelId: string): Promise<void> {
+    await this.disposeChannel(channelId)
+    // 工作区属于会话创建参数，不能拿旧 sessionId 在新目录恢复；仅解除映射，保留 Host 中的历史日志。
+    for (const record of this.store.list()) {
+      if (record.channel !== channelId) continue
+      this.store.remove(sessionKeyOf(record.channel, record.kind, record.chatId))
+    }
+  }
+
   private async create(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, preferredSessionId?: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const sessionId = preferredSessionId || createImSessionId(channelId, kind, chatId)

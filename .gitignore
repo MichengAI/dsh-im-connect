@@ -6,5 +6,3 @@ dist/
 .env
 .env.*
 secrets.json
-
-/docs/

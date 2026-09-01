@@ -17,3 +17,10 @@ test('绑定成功后自动关闭配置弹窗，不连带关设置页', () => {
   assert.match(client, /finished\.current/)
   assert.match(client, /onMouseDown: \(event\) => event\.stopPropagation\(\)/)
 })
+
+test('账号保存完成前显示保存中，不提前进入绑定成功分支', () => {
+  assert.match(client, /status === "saving"/)
+  assert.match(client, /t\("bind\.saving"\)/)
+  assert.match(client, /"bind\.saving": "正在保存账号…"/)
+  assert.match(client, /"bind\.saving": "Saving account…"/)
+})

@@ -66,6 +66,57 @@ test('PairingHub 刷新二维码本地生成失败时停止旧连接', async () 
   hub.dispose()
 })
 
+test('PairingHub 等账号保存完成后才报告绑定成功', async () => {
+  let releaseSave
+  let markSaving
+  const saveGate = new Promise((resolve) => { releaseSave = resolve })
+  const saving = new Promise((resolve) => { markSaving = resolve })
+  const hub = new PairingHub({
+    onSuccess: async () => {
+      markSaving()
+      await saveGate
+    },
+    beginFn: async () => ({
+      qrImage: 'data:image/png;base64,stub',
+      expiresAt: Date.now() + 60_000,
+      pollIntervalMs: 1,
+      poll: async () => ({ status: 'success', credentials: { botId: 'bot-1', secret: 'secret-1' } }),
+    }),
+  })
+
+  await hub.start('wecom')
+  await saving
+  assert.equal(hub.view('wecom').status, 'saving')
+
+  releaseSave()
+  for (let i = 0; i < 50 && hub.view('wecom').status !== 'success'; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2))
+  }
+  assert.equal(hub.view('wecom').status, 'success')
+  hub.dispose()
+})
+
+test('PairingHub 保存账号失败时不留下成功状态', async () => {
+  const hub = new PairingHub({
+    onSuccess: async () => { throw new Error('persist failed') },
+    beginFn: async () => ({
+      qrImage: 'data:image/png;base64,stub',
+      expiresAt: Date.now() + 60_000,
+      pollIntervalMs: 1,
+      poll: async () => ({ status: 'success', credentials: { botId: 'bot-2', secret: 'secret-2' } }),
+    }),
+  })
+
+  await hub.start('wecom')
+  for (let i = 0; i < 50 && hub.view('wecom').status !== 'failed'; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2))
+  }
+  const view = hub.view('wecom')
+  assert.equal(view.status, 'failed')
+  assert.equal(view.error, '保存凭据失败，请查看本机日志')
+  hub.dispose()
+})
+
 test('QQ 首张二维码超时会释放连接器，不在后台继续轮询', async () => {
   let disposed = false
   await assert.rejects(

@@ -287,13 +287,13 @@ test('账号推理等级省略时保留，显式传 null 时清空', async (t) =
     privateAccess: 'approved',
   })
 
-  const preserved = manager.updateAccount(created.accountId, {
+  const preserved = await manager.updateAccount(created.accountId, {
     provider: 'next-provider',
     model: 'next-reasoning-model',
   })
   assert.equal(preserved.account.assistant.reasoningEffort, 'high')
 
-  const cleared = manager.updateAccount(created.accountId, {
+  const cleared = await manager.updateAccount(created.accountId, {
     provider: 'local-provider',
     model: 'local-model',
     reasoningEffort: null,
@@ -302,6 +302,47 @@ test('账号推理等级省略时保留，显式传 null 时清空', async (t) =
     provider: 'local-provider',
     model: 'local-model',
   })
+})
+
+test('账号修改工作区时等待旧会话重置完成再返回保存成功', async (t) => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'workspace-token' }, {
+    provider: 'workspace-provider',
+    model: 'workspace-model',
+    cwd: 'D:\\repo\\old',
+    permission: 'review',
+    privateAccess: 'approved',
+  })
+  let releaseReset
+  const resetGate = new Promise((resolve) => { releaseReset = resolve })
+  const reloads = []
+  manager.engine.reloadChannel = async (accountId, options) => {
+    reloads.push({ accountId, options })
+    await resetGate
+  }
+
+  let settled = false
+  const updating = manager.updateAccount(created.accountId, { cwd: 'D:\\repo\\new' })
+    .then((result) => {
+      settled = true
+      return result
+    })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(settled, false)
+  assert.deepEqual(reloads, [{ accountId: created.accountId, options: { resetSessions: true } }])
+  releaseReset()
+  const result = await updating
+  assert.equal(result.ok, true)
+  assert.equal(result.account.cwd, 'D:\\repo\\new')
+  const persisted = JSON.parse(readFileSync(manager.file, 'utf8'))
+  assert.equal(persisted.channels[created.accountId].cwd, 'D:\\repo\\new')
+
+  reloads.length = 0
+  manager.engine.reloadChannel = async (accountId, options) => { reloads.push({ accountId, options }) }
+  await manager.updateAccount(created.accountId, { cwd: 'd:/repo/new/' })
+  assert.deepEqual(reloads, [{ accountId: created.accountId, options: { resetSessions: false } }])
 })
 
 test('启动时清理旧版本为无推理模型残留的推理等级', async (t) => {
