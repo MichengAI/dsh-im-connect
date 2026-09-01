@@ -4,6 +4,12 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.30 — 2026-09-01
+
+- Fixed account model switches so models without reasoning-effort support no longer inherit a stale Low, Medium, or High value, and automatically clean invalid values persisted by earlier versions.
+
+Published package: [`@michengai/dsh-im-connect@0.1.30`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.30).
+
 ## 0.1.29 — 2026-09-01
 
 - Completed Host-language localization across the multi-account settings flow, including account setup, selectors, status, actions, empty states, confirmations, and actionable server errors.

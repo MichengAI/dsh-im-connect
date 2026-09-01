@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel } from '../lib/engine/assistant-settings.js'
 import { ChannelManager } from '../lib/manager.js'
 
-function makeManager(t) {
+function makeManager(t, ctx = {}) {
   const stateDir = mkdtempSync(join(tmpdir(), 'im-connect-assistant-'))
   const permissionPresets = {
     names: ['review', 'workspace-write', 'danger-full-access'],
@@ -21,7 +21,7 @@ function makeManager(t) {
     mergeTimeoutSecs: 5,
     permissionPreset: 'review',
   }
-  const manager = new ChannelManager({ ctx: { permissionPresets }, stateDir, log: () => undefined, engineConfig })
+  const manager = new ChannelManager({ ctx: { ...ctx, permissionPresets }, stateDir, log: () => undefined, engineConfig })
   t.after(() => {
     manager.disposeApi()
     rmSync(stateDir, { recursive: true, force: true })
@@ -234,7 +234,6 @@ test('IM 模型菜单只使用适配器声明的模型与推理等级', () => {
   assert.match(manager, /resolved\.reasoning\.efforts\.map/)
 })
 
-
 test('思考强度空值和 none 视为未设置', () => {
   assert.equal(normalizeEffort('high'), 'high')
   assert.equal(normalizeEffort(' none '), undefined)
@@ -274,6 +273,62 @@ test('助手多字段配置全部合法时一次保存完整结果', (t) => {
   assert.deepEqual(result.assistant, { provider: 'next-provider', model: 'next-model' })
   assert.equal(result.cwd, 'D:\\repo\\next')
   assert.equal(result.permission, 'workspace-write')
+})
+
+test('账号推理等级省略时保留，显式传 null 时清空', async (t) => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'reasoning-token' }, {
+    provider: 'reasoning-provider',
+    model: 'reasoning-model',
+    reasoningEffort: 'high',
+    cwd: 'D:\\repo\\reasoning',
+    permission: 'review',
+    privateAccess: 'approved',
+  })
+
+  const preserved = manager.updateAccount(created.accountId, {
+    provider: 'next-provider',
+    model: 'next-reasoning-model',
+  })
+  assert.equal(preserved.account.assistant.reasoningEffort, 'high')
+
+  const cleared = manager.updateAccount(created.accountId, {
+    provider: 'local-provider',
+    model: 'local-model',
+    reasoningEffort: null,
+  })
+  assert.deepEqual(cleared.account.assistant, {
+    provider: 'local-provider',
+    model: 'local-model',
+  })
+})
+
+test('启动时清理旧版本为无推理模型残留的推理等级', async (t) => {
+  const manager = makeManager(t, {
+    get: (name) => name === 'llm'
+      ? { resolveModelInfo: async () => ({ description: 'local model' }) }
+      : undefined,
+  })
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'legacy-reasoning-token' }, {
+    provider: 'local-provider',
+    model: 'local-model',
+    reasoningEffort: 'high',
+    cwd: 'D:\\repo\\local',
+    permission: 'review',
+    privateAccess: 'approved',
+  })
+
+  await manager.initEnabled()
+
+  const account = manager.list()
+    .flatMap((channel) => channel.accounts)
+    .find((item) => item.id === created.accountId)
+  assert.deepEqual(account.assistant, {
+    provider: 'local-provider',
+    model: 'local-model',
+  })
 })
 
 test('重复凭据复用账号，Telegram 更换 token 会明确标记新身份', async (t) => {

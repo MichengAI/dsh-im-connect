@@ -433,6 +433,7 @@ export class ChannelManager {
     await this.migrateLegacyWeixinToken().catch((error) => {
       this.log(`[manager] 迁移旧版微信 token 失败，已保留原文件: ${error instanceof Error ? error.message : String(error)}`)
     })
+    await this.clearUnsupportedReasoningEfforts()
     for (const [id, state] of Object.entries(this.store.channels)) {
       if (this.disposed) return
       if (state?.enabled && state.receiveEnabled !== false) {
@@ -992,12 +993,33 @@ export class ChannelManager {
     this.store.version = 2
   }
 
+  private async clearUnsupportedReasoningEfforts(): Promise<void> {
+    const llm = (this.ctx as Context & {
+      get?(name: string): {
+        resolveModelInfo?: (provider: string, model: string) => Promise<{ reasoning?: unknown }>
+      } | undefined
+    }).get?.('llm')
+    if (!llm?.resolveModelInfo) return
+
+    let changed = false
+    await Promise.all(Object.entries(this.store.channels).map(async ([id, state]) => {
+      const assistant = normalizeAssistantModel(state.assistant ?? {})
+      if (!assistant?.reasoningEffort) return
+      const resolved = await llm.resolveModelInfo!(assistant.provider, assistant.model).catch(() => undefined)
+      if (resolved === undefined || resolved.reasoning !== undefined) return
+      state.assistant = { provider: assistant.provider, model: assistant.model }
+      changed = true
+      this.log(`[manager] 已清理 ${id} 的无效推理等级 ${assistant.reasoningEffort}`)
+    }))
+    if (changed) this.flush()
+  }
+
   private normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): { ok: true; settings: { name: string; assistant: AssistantModel; cwd: string; permission: PermissionPreset; privateAccess: 'approved' | 'all' } } | { ok: false; error: string } {
     const fallback = this.currentAssistant()
     const assistant = normalizeAssistantModel({
       provider: input.provider ?? previous.assistant?.provider ?? fallback?.provider,
       model: input.model ?? previous.assistant?.model ?? fallback?.model,
-      reasoningEffort: input.reasoningEffort ?? previous.assistant?.reasoningEffort,
+      reasoningEffort: input.reasoningEffort !== undefined ? input.reasoningEffort : previous.assistant?.reasoningEffort,
     })
     if (!assistant) return { ok: false, error: '请选择提供商和模型' }
     const cwd = normalizeWorkspacePath(input.cwd ?? previous.cwd ?? this.currentWorkspace())
