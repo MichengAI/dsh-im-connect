@@ -9,7 +9,7 @@ window.__ModuleLoader__.load({
     const React = require("react");
     const { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } = React;
     const ReactDOM = require("react-dom");
-    const { RiskConfirmation } = require("@deepseek-ai/dsh-client-ui-primitives");
+    const { RiskConfirmation, IconListPenOutline16 } = require("@deepseek-ai/dsh-client-ui-primitives");
     const EMPTY_EXTRA_TABS = [];
     const inject = ["slots", "sessions", "workspaces", "locale"];
     const API_BASE = "/dsh-im-connect/api";
@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
     const IM_LOCALE_NS = "im-connect";
     const IM_LOCALES = {
       zh: {
-        "settings.label": "IM助理", "settings.title": "IM机器人", "settings.description": "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。",
+        "settings.label": "IM助理", "settings.title": "IM机器人", "settings.description": "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。", "settings.viewProject": "GitHub", "settings.feedback": "问题反馈",
         "settings.aria": "IM助理", "settings.selectAccountTitle": "选择一个账号", "settings.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。", "settings.noAccountsTitle": "还没有接入账号", "settings.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。", "settings.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
         "account.workspace": "工作区", "account.currentWorkspace": "当前工作区", "account.selectWorkspace": "请选择工作区", "account.selectModel": "请选择模型", "account.selectPermission": "请选择权限", "account.privateAccess": "私聊准入", "account.privateApproved": "仅已批准用户", "account.privateAll": "允许所有私聊用户", "account.autoNameNote": "绑定成功后会自动生成账号名，无需手动填写。", "account.defaultName": "{channel}账号 {count}",
         "account.countZero": "0 个账号", "account.countOnline": "{online} / {total} 在线", "account.countOffline": "{total} / {total} 离线", "account.statusProcessing": "处理中…", "account.statusOnline": "在线", "account.statusOffline": "离线", "account.statusRunning": "运行正常", "account.statusNotConnected": "未连接", "account.receive": "接收消息", "account.receiveDescription": "关闭后保留账号配置，但不接收新消息", "account.removeConfirm": "确定移除这个账号？本机保存的配置和凭据将一并删除。",
@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
         "status.disconnected": "已断开", "status.reconnectFailed": "重连失败", "status.connectingSocket": "连接中", "status.waitHandshake": "等待网关握手", "status.authenticating": "鉴权中", "status.reconnecting": "重连中", "status.connectionError": "连接错误", "status.connectionFailed": "连接失败", "status.streamConnected": "Stream 已连接", "status.stopped": "已停止", "status.longConnection": "长连接已建立", "status.polling": "轮询中", "status.notLoggedIn": "未登录", "status.waitQr": "等待扫码", "status.loggedIn": "已登录", "status.loggedInRecovered": "已登录（自动恢复）", "status.loggingIn": "登录中",
       },
       en: {
-        "settings.label": "IM Assistant", "settings.title": "IM Bots", "settings.description": "Manage accounts across channels. Each account has its own workspace, model, and permission settings, stored only on this machine.",
+        "settings.label": "IM Assistant", "settings.title": "IM Bots", "settings.description": "Manage accounts across channels. Each account has its own workspace, model, and permission settings, stored only on this machine.", "settings.viewProject": "GitHub", "settings.feedback": "Issues",
         "settings.aria": "IM Assistant", "settings.selectAccountTitle": "Select an account", "settings.selectAccountDescription": "Choose an account on the left to view and edit its workspace, model, and permissions.", "settings.noAccountsTitle": "No accounts connected", "settings.noAccountsDescription": "Choose a channel on the left, then select Add account.", "settings.publicChatNotice": "Unapproved users can start chats, but they cannot approve tool calls.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
         "account.workspace": "Workspace", "account.currentWorkspace": "Current workspace", "account.selectWorkspace": "Select a workspace", "account.selectModel": "Select a model", "account.selectPermission": "Select a permission", "account.privateAccess": "Private chat access", "account.privateApproved": "Approved users only", "account.privateAll": "Allow all DM users", "account.autoNameNote": "The account name is generated automatically after setup.", "account.defaultName": "{channel} account {count}",
         "account.countZero": "0 accounts", "account.countOnline": "{online} / {total} online", "account.countOffline": "{total} / {total} offline", "account.statusProcessing": "Processing…", "account.statusOnline": "Online", "account.statusOffline": "Offline", "account.statusRunning": "Running normally", "account.statusNotConnected": "Not connected", "account.receive": "Receive messages", "account.receiveDescription": "Turn this off to keep the account settings without receiving new messages", "account.removeConfirm": "Remove this account? Its saved settings and credentials will also be deleted.",
@@ -206,11 +206,13 @@ window.__ModuleLoader__.load({
 @media (prefers-reduced-motion:reduce){.ima-switch i{transition:none}}
 `;
 
+    const TITLE_LINK_CSS = ".ima-title-row{display:flex;align-items:center;gap:8px;min-width:0}.ima-title-links{display:flex;align-items:center;gap:4px}.ima-title-link{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap}.ima-title-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.ima-title-link:focus-visible{outline:2px solid var(--dsw-alias-state-success-primary);outline-offset:2px}.ima-title-link svg{flex:none}@media(max-width:720px){.ima-title-row{flex-wrap:wrap}}";
+
     let styleEl = null;
     const ensureStyle = () => {
       if (styleEl && styleEl.isConnected) return;
       styleEl = document.createElement("style");
-      styleEl.textContent = CSS;
+      styleEl.textContent = CSS + TITLE_LINK_CSS;
       document.head.appendChild(styleEl);
     };
 
@@ -1288,6 +1290,13 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** GitHub 品牌图标未由宿主图标库提供，内联后可保持主题适配。 */
+    function GithubMark16() {
+      return h("svg", { viewBox: "0 0 16 16", width: 16, height: 16, "aria-hidden": true, focusable: "false" },
+        h("path", { fill: "currentColor", d: "M8 0a8 8 0 0 0-2.53 15.59c.4.074.547-.173.547-.385 0-.19-.007-.693-.01-1.36-2.226.484-2.695-1.073-2.695-1.073-.364-.924-.89-1.17-.89-1.17-.726-.496.055-.486.055-.486.803.056 1.225.824 1.225.824.714 1.223 1.872.87 2.328.665.072-.517.28-.87.508-1.07-1.777-.202-3.645-.888-3.645-3.956 0-.874.31-1.588.823-2.148-.083-.202-.357-1.017.078-2.12 0 0 .672-.215 2.2.82A7.65 7.65 0 0 1 8 4.8c.68.003 1.365.092 2.004.27 1.527-1.035 2.197-.82 2.197-.82.437 1.103.162 1.918.08 2.12.513.56.822 1.274.822 2.148 0 3.076-1.872 3.752-3.654 3.95.288.248.544.735.544 1.482 0 1.07-.01 1.932-.01 2.195 0 .214.144.463.55.384A8.001 8.001 0 0 0 8 0Z" }),
+      );
+    }
+
     function SettingsPage(props) {
       const t = props.t || fallbackT;
       const [channels, setChannels] = useState(null);
@@ -1364,7 +1373,13 @@ window.__ModuleLoader__.load({
       return h("section", { className: "ima-page ima-account-page", "aria-label": t("settings.aria") },
         h("header", { className: "ima-head" },
           h("div", null,
-            h("h2", { className: "ima-title" }, t("settings.title")),
+            h("div", { className: "ima-title-row" },
+              h("h2", { className: "ima-title" }, t("settings.title")),
+              h("div", { className: "ima-title-links" },
+                h("a", { className: "ima-title-link", href: "https://github.com/MichengAI/dsh-im-connect", target: "_blank", rel: "noreferrer", "aria-label": t("settings.viewProject") }, h(GithubMark16), t("settings.viewProject")),
+                h("a", { className: "ima-title-link", href: "https://github.com/MichengAI/dsh-im-connect/issues", target: "_blank", rel: "noreferrer", "aria-label": t("settings.feedback") }, h(IconListPenOutline16), t("settings.feedback")),
+              ),
+            ),
             h("p", { className: "ima-sub" }, t("settings.description")),
           ),
         ),

@@ -91,7 +91,8 @@ export class ImEngine {
     private readonly resolveConfig: (channelId: string) => EngineConfig = () => config,
     private readonly resolvePrivateAccess: (channelId: string) => 'approved' | 'all' = () => 'approved',
   ) {
-    this.router = new SessionRouter(ctx, store, config, log, resolveConfig)
+    // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
+    this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig)
     this.merger = new SessionMerger((config.mergeTimeoutSecs || 5) * 1000, (key, text) => {
       const sep = key.indexOf(':')
       const channelId = key.slice(0, sep)

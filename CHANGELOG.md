@@ -4,6 +4,11 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.33 — 2026-09-03
+
+- Added GitHub and Issues links beside the IM Assistant settings title, matching the Archive Manager's icon size, button sizing, interaction states, and responsive layout.
+- Declared the DSH client and Agent modules used by the plugin as peer dependencies for `>=0.1.0-rc.5 <0.2.0`, and added the published DSH development modules at `0.1.2-alpha.5` alongside the Cordis and Schemastery baseline update.
+
 ## 0.1.32 — 2026-09-02
 
 - Rebuilt an account's IM session mapping after a real workspace change, preserving Host history while ensuring the next inbound message creates a session in the new workspace. Equivalent Windows paths do not reset sessions, while Linux path case changes do.

@@ -6,6 +6,26 @@ import { join } from 'node:path'
 import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel } from '../lib/engine/assistant-settings.js'
 import { ChannelManager } from '../lib/manager.js'
 
+test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  const dshPackages = [
+    '@deepseek-ai/dsh-agent',
+    '@deepseek-ai/dsh-client-locale',
+    '@deepseek-ai/dsh-client-runtime',
+    '@deepseek-ai/dsh-client-ui-primitives',
+    '@deepseek-ai/dsh-client-ui-settings',
+    '@deepseek-ai/dsh-client-ui-slots',
+  ]
+  const developmentPackages = dshPackages.filter((packageName) => packageName !== '@deepseek-ai/dsh-client-runtime')
+  for (const packageName of dshPackages) {
+    assert.equal(manifest.peerDependencies[packageName], '>=0.1.0-rc.5 <0.2.0')
+  }
+  for (const packageName of developmentPackages) {
+    assert.equal(manifest.devDependencies[packageName], '0.1.2-alpha.5')
+  }
+  assert.equal(manifest.peerDependenciesMeta['@deepseek-ai/dsh-client-runtime'].optional, true)
+})
+
 function makeManager(t, ctx = {}) {
   const stateDir = mkdtempSync(join(tmpdir(), 'im-connect-assistant-'))
   const permissionPresets = {
@@ -220,6 +240,23 @@ test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
     /生成二维码|请选择工作区|请选择模型|请选择权限|私聊准入|绑定成功后会自动生成账号名|保存中|已保存|运行正常|当前工作区|接收消息|检查连接|重新连接|移除接入|IM机器人|添加账号|处理中|在线|离线/,
     '多账号设置页的用户可见文案必须通过 Host i18n 解析',
   )
+})
+
+test('设置标题旁提供项目主页与问题反馈入口', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /className: "ima-title-row"/)
+  assert.match(client, /href: "https:\/\/github\.com\/MichengAI\/dsh-im-connect"/)
+  assert.match(client, /href: "https:\/\/github\.com\/MichengAI\/dsh-im-connect\/issues"/)
+  assert.match(client, /function GithubMark16\(\)/)
+  assert.match(client, /target: "_blank", rel: "noreferrer"/)
+  assert.match(client, /"settings\.viewProject": "GitHub"/)
+  assert.match(client, /"settings\.feedback": "问题反馈"/)
+  assert.match(client, /"settings\.feedback": "Issues"/)
+  assert.match(client, /className: "ima-title-links"/)
+  assert.match(client, /className: "ima-title-link"/)
+  assert.match(client, /\.ima-title-link\{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var\(--dsw-alias-label-secondary\);background:transparent;border:1px solid var\(--dsw-alias-border-l2\);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap\}/)
+  assert.match(client, /\.ima-title-link:focus-visible\{outline:2px solid var\(--dsw-alias-state-success-primary\);outline-offset:2px\}/)
+  assert.match(client, /@media\(max-width:720px\)\{\.ima-title-row\{flex-wrap:wrap\}\}/)
 })
 
 test('IM 模型菜单只使用适配器声明的模型与推理等级', () => {
