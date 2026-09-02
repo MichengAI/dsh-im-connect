@@ -444,8 +444,10 @@ window.__ModuleLoader__.load({
         return () => clearInterval(timer);
       }, [tab, ch.id, qrStarted]);
 
+      const status = qrStarted && pairing && pairing.status;
+      const saving = status === "saving";
       const close = () => {
-        if (finished.current) return;
+        if (finished.current || saving) return;
         alive.current = false;
         if (hasQr) api("/channels/" + ch.id + "/qr/cancel", { method: "POST" }).catch(() => undefined);
         onClose();
@@ -455,6 +457,7 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         const onKeyDown = (event) => {
           if (event.key !== "Escape") return;
+          if (saving) return;
           event.preventDefault();
           event.stopPropagation();
           if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
@@ -464,7 +467,7 @@ window.__ModuleLoader__.load({
         };
         window.addEventListener("keydown", onKeyDown, true);
         return () => window.removeEventListener("keydown", onKeyDown, true);
-      }, [hasQr, ch.id]);
+      }, [hasQr, ch.id, saving]);
 
       const saveManual = () => {
         const config = { ...draft };
@@ -485,6 +488,7 @@ window.__ModuleLoader__.load({
       };
 
       const switchTab = (next) => {
+        if (saving) return;
         setTab(next);
         setError("");
         setSuccess("");
@@ -495,7 +499,6 @@ window.__ModuleLoader__.load({
         }
       };
 
-      const status = qrStarted && pairing && pairing.status;
       const src = qrStarted ? qrSrc(pairing) : "";
       const remain = qrStarted && pairing && pairing.remainingSeconds;
 
@@ -503,11 +506,11 @@ window.__ModuleLoader__.load({
         h("div", { className: "ima-modal ima-account-modal", onClick: (e) => e.stopPropagation() },
           h("div", { className: "ima-modal-h" },
             h("h2", null, t("bind.title", { channel: channelLabel(ch, t) })),
-            h("button", { className: "ima-x", onClick: close, "aria-label": t("bind.close") }, "×"),
+            h("button", { className: "ima-x", disabled: saving, onClick: close, "aria-label": t("bind.close") }, "×"),
           ),
           hasQr && hasManual && h("div", { className: "ima-seg" },
-            h("button", { className: tab === "qr" ? "on" : "", onClick: () => switchTab("qr") }, t("bind.quick")),
-            h("button", { className: tab === "manual" ? "on" : "", onClick: () => switchTab("manual") }, t("bind.manual")),
+            h("button", { className: tab === "qr" ? "on" : "", disabled: saving, onClick: () => switchTab("qr") }, t("bind.quick")),
+            h("button", { className: tab === "manual" ? "on" : "", disabled: saving, onClick: () => switchTab("manual") }, t("bind.manual")),
           ),
           error && h("div", { className: "ima-error" }, error),
           success && h("div", { className: "ima-ok" }, success),

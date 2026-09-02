@@ -13,7 +13,7 @@ function createHandle(sessionId) {
   }
 }
 
-function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds = new Set(), resolveConfig } = {}) {
+function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds = new Set(), resolveConfig, disposeTimeoutMs } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'im-connect-router-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
   const store = new SessionMapStore(join(dir, 'sessions.json'))
@@ -58,7 +58,7 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
     agentPreset: 'standard',
     mergeTimeoutSecs: 5,
     permissionPreset: 'danger-full-access',
-  }, () => undefined, resolveConfig)
+  }, () => undefined, resolveConfig, { disposeTimeoutMs })
   return { router, store, created, createdOptions, archivedIds, permissionSelections }
 }
 
@@ -113,6 +113,61 @@ test('账号修改工作区后丢弃旧映射，后续消息在新目录创建�
   const next = await router.getOrCreate('wecom', 'dm', 'user-workspace', '新目录会话')
   assert.notEqual(next.sessionId, first.sessionId)
   assert.equal(createdOptions[1].meta.cwd, 'D:/workspace/new')
+})
+
+test('会话重置期间到达的新消息等待映射清理后再创建会话', async (t) => {
+  let cwd = 'D:/workspace/old'
+  const { router, createdOptions } = makeRouter(t, {
+    resolveConfig: () => ({
+      cwd,
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      agentPreset: 'standard',
+      mergeTimeoutSecs: 5,
+      permissionPreset: 'workspace-write',
+    }),
+  })
+  const first = await router.getOrCreate('wecom', 'dm', 'user-race', '旧目录会话')
+  let releaseDispose
+  let markDisposeStarted
+  const disposeGate = new Promise((resolve) => { releaseDispose = resolve })
+  const disposeStarted = new Promise((resolve) => { markDisposeStarted = resolve })
+  first.handle.dispose = async () => {
+    markDisposeStarted()
+    await disposeGate
+  }
+
+  cwd = 'D:/workspace/new'
+  const resetting = router.resetChannelSessions('wecom')
+  await disposeStarted
+  let incomingSettled = false
+  const incoming = router.getOrCreate('wecom', 'dm', 'user-race', '新目录消息').then((binding) => {
+    incomingSettled = true
+    return binding
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  const settledBeforeRelease = incomingSettled
+  releaseDispose()
+  await resetting
+  const next = await incoming
+
+  assert.equal(settledBeforeRelease, false)
+  assert.notEqual(next.sessionId, first.sessionId)
+  assert.equal(createdOptions[1].meta.cwd, 'D:/workspace/new')
+})
+
+test('会话句柄卸载超时后仍完成本地映射清理', async (t) => {
+  const { router, store } = makeRouter(t, { disposeTimeoutMs: 10 })
+  const first = await router.getOrCreate('wecom', 'dm', 'user-timeout', '超时会话')
+  first.handle.dispose = async () => new Promise(() => undefined)
+
+  await Promise.race([
+    router.resetChannelSessions('wecom'),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('会话卸载未在限定时间内结束')), 100)),
+  ])
+
+  assert.equal(store.get('wecom:dm:user-timeout'), undefined)
+  assert.equal(router.get('wecom', 'dm', 'user-timeout'), undefined)
 })
 
 test('归档后再发消息必须新建会话', async (t) => {

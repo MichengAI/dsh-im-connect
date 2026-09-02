@@ -4,6 +4,10 @@ import { createImSessionId, sessionKeyOf } from './session-id.js'
 import { SessionMapStore } from './session-store.js'
 import { readHostDefaultModel, resolveImAgentOptions } from './agent-options.js'
 import type { EngineConfig } from './types.js'
+import { KeyedSerialQueue } from './keyed-queue.js'
+import { sameWorkspacePath } from './workspace-path.js'
+
+const DEFAULT_DISPOSE_TIMEOUT_MS = 10_000
 
 export interface ChatBinding {
   key: string
@@ -40,6 +44,8 @@ type AgentHost = Context & {
 export class SessionRouter {
   private readonly live = new Map<string, ChatBinding>()
   private readonly reloadDisposed = new Set<string>()
+  private readonly channelOperations = new KeyedSerialQueue()
+  private readonly disposeTimeoutMs: number
 
   constructor(
     private readonly ctx: AgentHost,
@@ -47,7 +53,10 @@ export class SessionRouter {
     private readonly config: EngineConfig,
     private readonly log: (line: string) => void,
     private readonly resolveConfig: (channelId: string) => EngineConfig = () => config,
-  ) {}
+    options: { disposeTimeoutMs?: number } = {},
+  ) {
+    this.disposeTimeoutMs = Math.max(1, options.disposeTimeoutMs ?? DEFAULT_DISPOSE_TIMEOUT_MS)
+  }
 
   get(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined {
     return this.live.get(sessionKeyOf(channelId, kind, chatId))
@@ -90,12 +99,16 @@ export class SessionRouter {
   }
 
   async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { rebuildMissing?: boolean }): Promise<ChatBinding> {
+    return this.channelOperations.run(channelId, () => this.getOrCreateNow(channelId, kind, chatId, title, options))
+  }
+
+  private async getOrCreateNow(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { rebuildMissing?: boolean }): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const live = this.live.get(key)
     if (live?.handle) {
       if (this.isArchived(live.sessionId)) {
         this.log(`[router] 当前会话已归档，轮换 ${live.sessionId}`)
-        return this.rotate(channelId, kind, chatId, title)
+        return this.rotateNow(channelId, kind, chatId, title)
       }
       return live
     }
@@ -103,7 +116,7 @@ export class SessionRouter {
     if (saved) {
       if (this.isArchived(saved.sessionId)) {
         this.log(`[router] 映射会话已归档，轮换 ${saved.sessionId}`)
-        return this.rotate(channelId, kind, chatId, title)
+        return this.rotateNow(channelId, kind, chatId, title)
       }
       const resumed = await this.resume(saved)
       if (resumed) {
@@ -119,15 +132,19 @@ export class SessionRouter {
         }
       }
       this.log(`[router] 无法恢复会话，轮换 ${saved.sessionId}`)
-      return this.rotate(channelId, kind, chatId, title)
+      return this.rotateNow(channelId, kind, chatId, title)
     }
     return this.create(channelId, kind, chatId, title)
   }
 
   async rotate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
+    return this.channelOperations.run(channelId, () => this.rotateNow(channelId, kind, chatId, title))
+  }
+
+  private async rotateNow(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const old = this.live.get(key)
-    if (old?.handle) await old.handle.dispose().catch(() => undefined)
+    if (old?.handle) await this.disposeHandle(old)
     this.live.delete(key)
     this.store.remove(key)
     return this.create(channelId, kind, chatId, title)
@@ -178,17 +195,6 @@ export class SessionRouter {
     }
   }
 
-  async remove(sessionId: string): Promise<boolean> {
-    const rec = this.store.list().find((item) => item.sessionId === sessionId)
-    if (!rec) return false
-    const key = sessionKeyOf(rec.channel, rec.kind, rec.chatId)
-    const live = this.live.get(key)
-    if (live?.handle) await live.handle.dispose().catch(() => undefined)
-    this.live.delete(key)
-    this.store.remove(key)
-    return true
-  }
-
   async ensure(sessionId: string): Promise<boolean> {
     const rec = this.store.list().find((item) => item.sessionId === sessionId)
     if (!rec) return false
@@ -197,10 +203,8 @@ export class SessionRouter {
   }
 
   async disposeAll(): Promise<void> {
-    for (const item of this.live.values()) {
-      this.reloadDisposed.add(item.sessionId)
-      await item.handle?.dispose().catch(() => undefined)
-    }
+    const channels = [...new Set([...this.live.values()].map((item) => item.channelId))]
+    await Promise.all(channels.map((channelId) => this.disposeChannel(channelId)))
     this.live.clear()
   }
 
@@ -223,21 +227,67 @@ export class SessionRouter {
   }
 
   async disposeChannel(channelId: string): Promise<void> {
-    for (const [key, item] of [...this.live]) {
-      if (item.channelId !== channelId) continue
-      this.reloadDisposed.add(item.sessionId)
-      await item.handle?.dispose().catch(() => undefined)
-      this.live.delete(key)
-    }
+    await this.channelOperations.run(channelId, () => this.disposeChannelNow(channelId))
   }
 
   async resetChannelSessions(channelId: string): Promise<void> {
-    await this.disposeChannel(channelId)
-    // 工作区属于会话创建参数，不能拿旧 sessionId 在新目录恢复；仅解除映射，保留 Host 中的历史日志。
-    for (const record of this.store.list()) {
-      if (record.channel !== channelId) continue
-      this.store.remove(sessionKeyOf(record.channel, record.kind, record.chatId))
-    }
+    await this.channelOperations.run(channelId, async () => {
+      await this.disposeChannelNow(channelId)
+      // 工作区属于会话创建参数，不能拿旧 sessionId 在新目录恢复；仅解除映射，保留 Host 中的历史日志。
+      for (const record of this.store.list()) {
+        if (record.channel !== channelId) continue
+        this.store.remove(sessionKeyOf(record.channel, record.kind, record.chatId))
+      }
+    })
+  }
+
+  private async disposeChannelNow(channelId: string): Promise<void> {
+    const entries = [...this.live].filter(([, item]) => item.channelId === channelId)
+    for (const [, item] of entries) this.reloadDisposed.add(item.sessionId)
+    await Promise.all(entries.map(async ([key, item]) => {
+      await this.disposeHandle(item)
+      this.live.delete(key)
+    }))
+  }
+
+  private async disposeHandle(item: ChatBinding): Promise<void> {
+    if (!item.handle) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const result = await Promise.race([
+      Promise.resolve().then(() => item.handle!.dispose()).then(
+        () => 'disposed' as const,
+        (error) => {
+          this.log(`[router] 卸载会话失败 ${item.sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+          return 'failed' as const
+        },
+      ),
+      new Promise<'timed-out'>((resolve) => {
+        timer = setTimeout(() => resolve('timed-out'), this.disposeTimeoutMs)
+      }),
+    ])
+    if (timer) clearTimeout(timer)
+    if (result === 'timed-out') this.log(`[router] 卸载会话超时 ${item.sessionId}，已解除本地引用`)
+  }
+
+  private async removeFromChannel(sessionId: string): Promise<boolean> {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (!rec) return false
+    const key = sessionKeyOf(rec.channel, rec.kind, rec.chatId)
+    const live = this.live.get(key)
+    if (live?.handle) await this.disposeHandle(live)
+    this.live.delete(key)
+    this.store.remove(key)
+    return true
+  }
+
+  async remove(sessionId: string): Promise<boolean> {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (!rec) return false
+    return this.channelOperations.run(rec.channel, () => this.removeFromChannel(sessionId))
+  }
+
+  private samePath(left: string, right: string): boolean {
+    return sameWorkspacePath(left, right)
   }
 
   private async create(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, preferredSessionId?: string): Promise<ChatBinding> {
@@ -342,11 +392,6 @@ export class SessionRouter {
     } catch {
       return false
     }
-  }
-
-  private samePath(left: string, right: string): boolean {
-    const norm = (value: string) => value.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase()
-    return norm(left) === norm(right)
   }
 
   private async attachWorkspace(sessionId: string, channelId: string): Promise<void> {

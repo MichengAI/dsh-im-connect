@@ -23,4 +23,8 @@ test('账号保存完成前显示保存中，不提前进入绑定成功分支',
   assert.match(client, /t\("bind\.saving"\)/)
   assert.match(client, /"bind\.saving": "正在保存账号…"/)
   assert.match(client, /"bind\.saving": "Saving account…"/)
+  assert.match(client, /if \(finished\.current \|\| saving\) return/)
+  assert.match(client, /if \(saving\) return;\s*event\.preventDefault\(\)/)
+  assert.match(client, /disabled: saving, onClick: close/)
+  assert.match(client, /disabled: saving, onClick: \(\) => switchTab\("manual"\)/)
 })

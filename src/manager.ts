@@ -15,6 +15,7 @@ import { normalizeAssistantModel, normalizePermission, normalizeWorkspacePath, t
 import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
 import { KeyedSerialQueue } from './engine/keyed-queue.js'
 import { backupCorruptFileSync, writeFileAtomicSync } from './engine/atomic-file.js'
+import { sameWorkspacePath } from './engine/workspace-path.js'
 
 export const API_CLIENT_HEADER = 'x-dsh-im-connect-client'
 const MAX_API_BODY_BYTES = 1024 * 1024
@@ -683,13 +684,16 @@ export class ChannelManager {
       if (!normalized.ok) return normalized
       const previousCwd = normalizeWorkspacePath(state.cwd) ?? this.currentWorkspace()
       const resetSessions = !sameWorkspacePath(previousCwd, normalized.settings.cwd)
+      const reloadSessions = resetSessions
+        || !sameAssistantModel(state.assistant, normalized.settings.assistant)
+        || state.permission !== normalized.settings.permission
       state.name = normalized.settings.name
       state.assistant = normalized.settings.assistant
       state.cwd = normalized.settings.cwd
       state.permission = normalized.settings.permission
       state.privateAccess = normalized.settings.privateAccess
       this.flush()
-      await this.engine.reloadChannel(accountId, { resetSessions })
+      if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
       return { ok: true, account: this.accountView(accountId, state) }
     })
   }
@@ -1144,8 +1148,9 @@ function pairingSettings(input?: Record<string, unknown>): Record<string, string
   return out
 }
 
-function sameWorkspacePath(left: string, right: string): boolean {
-  const normalize = (value: string): string => value.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase()
-  return normalize(left) === normalize(right)
+function sameAssistantModel(left: AssistantModel | undefined, right: AssistantModel): boolean {
+  return left?.provider === right.provider
+    && left.model === right.model
+    && left.reasoningEffort === right.reasoningEffort
 }
 

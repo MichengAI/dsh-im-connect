@@ -342,7 +342,53 @@ test('账号修改工作区时等待旧会话重置完成再返回保存成功',
   reloads.length = 0
   manager.engine.reloadChannel = async (accountId, options) => { reloads.push({ accountId, options }) }
   await manager.updateAccount(created.accountId, { cwd: 'd:/repo/new/' })
-  assert.deepEqual(reloads, [{ accountId: created.accountId, options: { resetSessions: false } }])
+  assert.deepEqual(reloads, [])
+})
+
+test('Linux 工作区路径大小写变化必须重置旧会话', async (t) => {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { ...descriptor, value: 'linux' })
+  t.after(() => Object.defineProperty(process, 'platform', descriptor))
+
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'linux-workspace-token' }, {
+    provider: 'workspace-provider',
+    model: 'workspace-model',
+    cwd: '/srv/Repo',
+    permission: 'review',
+    privateAccess: 'approved',
+  })
+  const reloads = []
+  manager.engine.reloadChannel = async (accountId, options) => { reloads.push({ accountId, options }) }
+
+  await manager.updateAccount(created.accountId, { cwd: '/srv/repo' })
+
+  assert.deepEqual(reloads, [{ accountId: created.accountId, options: { resetSessions: true } }])
+})
+
+test('只修改账号名称或私聊策略不重载会话', async (t) => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'metadata-only-token' }, {
+    provider: 'workspace-provider',
+    model: 'workspace-model',
+    cwd: 'D:\\repo\\metadata',
+    permission: 'review',
+    privateAccess: 'approved',
+  })
+  const reloads = []
+  manager.engine.reloadChannel = async (accountId, options) => { reloads.push({ accountId, options }) }
+
+  const result = await manager.updateAccount(created.accountId, {
+    name: '新名称',
+    privateAccess: 'all',
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.account.name, '新名称')
+  assert.equal(result.account.privateAccess, 'all')
+  assert.deepEqual(reloads, [])
 })
 
 test('启动时清理旧版本为无推理模型残留的推理等级', async (t) => {
