@@ -4,12 +4,12 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
-## 0.1.31 — 2026-09-02
+## 0.1.32 — 2026-09-02
 
 - Rebuilt an account's IM session mapping after a real workspace change, preserving Host history while ensuring the next inbound message creates a session in the new workspace. Equivalent Windows paths do not reset sessions, while Linux path case changes do.
 - Made account updates and QR pairing wait for persistence and channel reload to finish, so a reported successful bind is fully saved. Saving now resists cancellation controls and captures Escape before the Host settings page can close.
 
-Published package: [`@michengai/dsh-im-connect@0.1.31`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.31).
+Published package: [`@michengai/dsh-im-connect@0.1.32`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.32).
 
 ## 0.1.30 — 2026-09-01
 

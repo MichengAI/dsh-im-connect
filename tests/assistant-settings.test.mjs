@@ -305,6 +305,10 @@ test('账号推理等级省略时保留，显式传 null 时清空', async (t) =
 })
 
 test('账号修改工作区时等待旧会话重置完成再返回保存成功', async (t) => {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { ...descriptor, value: 'win32' })
+  t.after(() => Object.defineProperty(process, 'platform', descriptor))
+
   const manager = makeManager(t)
   manager.startOne = async () => undefined
   const created = await manager.connect('telegram', { token: 'workspace-token' }, {

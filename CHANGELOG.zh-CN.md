@@ -4,12 +4,12 @@
 
 以下记录最近发布的五个版本。Git 标签与 GitHub Release 现已和这些条目同步；历史条目继续保留原始发布提交链接。
 
-## 0.1.31 — 2026-09-02
+## 0.1.32 — 2026-09-02
 
 - 账号工作区确实变化时重建其 IM 会话映射，保留宿主历史记录，并保证下一条入站消息在新工作区创建会话。Windows 等价路径不重置会话；Linux 下仅大小写不同的路径会正确触发重置。
 - 账号更新与扫码绑定现在会等待配置落盘和渠道重载完成才报告成功。保存期间的取消控件保持锁定，并在宿主设置页之前拦截 Escape。
 
-发布包：[`@michengai/dsh-im-connect@0.1.31`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.31)。
+发布包：[`@michengai/dsh-im-connect@0.1.32`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.32)。
 
 ## 0.1.30 — 2026-09-01
 
