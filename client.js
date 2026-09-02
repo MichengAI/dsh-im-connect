@@ -457,10 +457,10 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         const onKeyDown = (event) => {
           if (event.key !== "Escape") return;
-          if (saving) return;
           event.preventDefault();
           event.stopPropagation();
           if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+          if (saving) return;
           alive.current = false;
           if (hasQr) api("/channels/" + ch.id + "/qr/cancel", { method: "POST" }).catch(() => undefined);
           onCloseRef.current();

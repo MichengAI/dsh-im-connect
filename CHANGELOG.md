@@ -4,6 +4,13 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.31 — 2026-09-02
+
+- Rebuilt an account's IM session mapping after a real workspace change, preserving Host history while ensuring the next inbound message creates a session in the new workspace. Equivalent Windows paths do not reset sessions, while Linux path case changes do.
+- Made account updates and QR pairing wait for persistence and channel reload to finish, so a reported successful bind is fully saved. Saving now resists cancellation controls and captures Escape before the Host settings page can close.
+
+Published package: [`@michengai/dsh-im-connect@0.1.31`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.31).
+
 ## 0.1.30 — 2026-09-01
 
 - Fixed account model switches so models without reasoning-effort support no longer inherit a stale Low, Medium, or High value, and automatically clean invalid values persisted by earlier versions.
@@ -33,12 +40,6 @@ Published package: [`@michengai/dsh-im-connect@0.1.28`](https://www.npmjs.com/pa
 - Hardened prompt delivery and cancellation so partial sends, failed deliveries, aborts, session resets, and plugin disposal cannot leave an active stale interaction.
 
 Published package: [`@michengai/dsh-im-connect@0.1.27`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.27).
-
-## 0.1.26 — 2026-08-28
-
-- Enabled npm Trusted Publishing through the repository's GitHub Actions release workflow.
-
-Published package: [`@michengai/dsh-im-connect@0.1.26`](https://www.npmjs.com/package/@michengai/dsh-im-connect/v/0.1.26).
 
 ## 0.1.25 — 2026-08-27
 
