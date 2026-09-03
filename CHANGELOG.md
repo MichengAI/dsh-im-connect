@@ -4,6 +4,10 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.34 — 2026-09-03
+
+- Upgraded the DSH Agent, client locale, UI primitives, settings, and slots development dependencies from `0.1.2-alpha.5` to `0.1.2-rc.1`, with complete regression and package validation.
+
 ## 0.1.33 — 2026-09-03
 
 - Added GitHub and Issues links beside the IM Assistant settings title, matching the Archive Manager's icon size, button sizing, interaction states, and responsive layout.
