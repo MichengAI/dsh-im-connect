@@ -1,0 +1,1 @@
+{"version":3,"file":"json-state.d.ts","sourceRoot":"","sources":["../../src/engine/json-state.ts"],"names":[],"mappings":"AAGA,qBAAa,aAAa,CAAC,CAAC,SAAS,MAAM;IAC7B,OAAO,CAAC,QAAQ,CAAC,IAAI;IAAU,OAAO,CAAC,QAAQ,CAAC,QAAQ;gBAAvC,IAAI,EAAE,MAAM,EAAmB,QAAQ,EAAE,CAAC;IAEvE,IAAI,IAAI,CAAC;IAWT,KAAK,CAAC,KAAK,EAAE,CAAC,GAAG,IAAI;CAGtB"}

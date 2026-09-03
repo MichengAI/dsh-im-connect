@@ -1,0 +1,1 @@
+{"version":3,"file":"keyed-queue.d.ts","sourceRoot":"","sources":["../../src/engine/keyed-queue.ts"],"names":[],"mappings":"AAAA,qCAAqC;AACrC,qBAAa,gBAAgB;IAC3B,OAAO,CAAC,QAAQ,CAAC,UAAU,CAAmC;IAE9D,IAAI,IAAI,MAAM,EAAE;IAIV,GAAG,CAAC,CAAC,EAAE,GAAG,EAAE,MAAM,EAAE,SAAS,EAAE,MAAM,OAAO,CAAC,CAAC,CAAC,GAAG,OAAO,CAAC,CAAC,CAAC;CAWnE"}
