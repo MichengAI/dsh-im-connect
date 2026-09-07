@@ -4,6 +4,11 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## Unreleased
+
+- Added independent in-product update checks with automatic updates when a verified DSH update service is available and a profile-specific manual fallback otherwise.
+- Removed the update-button dependency on `react-dom/client` so the client can load on Hosts that do not register that module id.
+
 ## 0.1.34 — 2026-09-03
 
 - Added compatibility with DeepSeek Harness `0.1.2-rc.1`.

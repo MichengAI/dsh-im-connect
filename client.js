@@ -9,7 +9,6 @@ window.__ModuleLoader__.load({
     const React = require("react");
     const { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } = React;
     const ReactDOM = require("react-dom");
-    const { createRoot } = require("react-dom/client");
     const { RiskConfirmation, IconListPenOutline16, IconPlusOutline16, IconRefreshOutline16, IconDownloadOutline16, IconCopyOutline16, IconCloseOutline16, IconTrashOutline16, IconSendOutline16 } = require("@deepseek-ai/dsh-client-ui-primitives");
     const EMPTY_EXTRA_TABS = [];
     const inject = ["slots", "sessions", "workspaces", "locale"];
@@ -17,15 +16,30 @@ window.__ModuleLoader__.load({
     const TAB_KEY = "dsh-im-connect.sidebar-tab";
     const ACCOUNT_SELECTION_KEY = "dsh-im-connect.settings.selected-account";
     const IM_LOCALE_NS = "im-connect";
-    const UPDATE_ICON_COMPONENTS = {
-      refresh: IconRefreshOutline16,
-      download: IconDownloadOutline16,
-      copy: IconCopyOutline16,
-      close: IconCloseOutline16,
+    const UPDATE_ICON_PATHS = {
+      refresh: ["M13.5 5.5V2.5m0 0h-3m3 0-2.1 2.1A5.5 5.5 0 1 0 13.2 12"],
+      download: ["M8 2v8m0 0 3-3m-3 3-3-3M3 13v2h10v-2"],
+      copy: ["M5 5h8v8H5z", "M3 3h8"],
+      close: ["m4 4 8 8M12 4 4 12"],
     };
     function createPluginUpdateIcon(name) {
       const element = document.createElement("span");
-      createRoot(element).render(React.createElement(UPDATE_ICON_COMPONENTS[name], { size: 16 }));
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 16 16");
+      svg.setAttribute("width", "16");
+      svg.setAttribute("height", "16");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-width", "1.5");
+      svg.setAttribute("stroke-linecap", "round");
+      svg.setAttribute("stroke-linejoin", "round");
+      svg.setAttribute("aria-hidden", "true");
+      UPDATE_ICON_PATHS[name].forEach((d) => {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", d);
+        svg.append(path);
+      });
+      element.append(svg);
       return element;
     }
     const IM_LOCALES = {

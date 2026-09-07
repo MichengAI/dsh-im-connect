@@ -188,6 +188,10 @@ dsh --profile web --dump-config
 
 Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
 
+## Updates
+
+The settings title shows the installed version and a **Check for updates** button. When a newer release is available, **Update automatically** runs only when the DSH CLI or Desktop update service is available; otherwise, the dialog provides a profile-specific manual command to copy and run.
+
 ## Usage
 
 Open **Settings → IM Assistant**, select **Add account** under the target channel, then choose that account's workspace, model, permission, and private-access mode. The full guide is [Usage guide](docs/02-产品与业务/04-使用说明.md).
