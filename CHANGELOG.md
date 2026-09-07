@@ -6,6 +6,8 @@ The five most recent published versions are listed below. Git tags and GitHub Re
 
 ## Unreleased
 
+## 0.1.38 - 2026-09-08
+
 - Fix #11: move the settings API to `/api/dsh-im-connect`, following the REST prefix used by other DSH plugins. The route uses DSH’s public `connection.requestRejection`, preserving trusted-host, Origin, and authority-bound browser-cookie checks behind reverse proxies. Local requests also require login; unavailable authentication fails closed with retry/upgrade guidance.
 - Keep account, model, pairing, and session routes unchanged; send same-origin credentials explicitly, disable management caching, and cover real Host authentication plus frontend transport regressions.
 
