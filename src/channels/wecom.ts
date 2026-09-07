@@ -1,18 +1,20 @@
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
 import { requestChannelBytes, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
+import { validateAdditionalImageHosts } from './image-host-policy.js'
 
-async function downloadWecomImage(image: { url?: string; aeskey?: string }): Promise<ImMedia> {
+async function downloadWecomImage(image: { url?: string; aeskey?: string }, additionalImageHosts: readonly string[]): Promise<ImMedia> {
   if (!image.url || !image.aeskey) throw new Error('图片缺少下载地址或解密密钥')
   // SDK downloadFile has no response-size or redirect/SSRF controls. Reuse its
   // public decryptFile primitive after our bounded, DNS-pinned HTTPS transfer.
   const { decryptFile } = await import('@wecom/aibot-node-sdk')
-  return imageMedia(decryptFile(await requestChannelBytes(image.url), image.aeskey))
+  return imageMedia(decryptFile(await requestChannelBytes(image.url, { additionalTrustedHosts: additionalImageHosts }), image.aeskey))
 }
 
 export interface WecomConfig {
   botId?: string
   secret?: string
+  additionalImageHosts?: readonly string[]
 }
 
 export interface WecomSdkClient {
@@ -154,6 +156,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
   const botId = config.botId?.trim()
   const secret = config.secret?.trim()
   if (!botId || !secret) return undefined
+  const additionalImageHosts = validateAdditionalImageHosts(config.additionalImageHosts)
 
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let client: WecomSdkClient | undefined
@@ -208,7 +211,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
             if (images.length > MAX_CHANNEL_IMAGES) throw new Error('图片数量超过限制')
             for (const image of images) {
               if (generation !== startedGeneration) return
-              media.push(await (dependencies.downloadImage ?? downloadWecomImage)(image))
+              media.push(await (dependencies.downloadImage ? dependencies.downloadImage(image) : downloadWecomImage(image, additionalImageHosts)))
             }
           } catch (error) {
             if (generation !== startedGeneration) return

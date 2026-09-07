@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createWeixinChannel, persistWeixinLogin, encryptAesEcb } from '../lib/channels/weixin.js'
 
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
+
 for (const mode of ['abort-download', 'late-download', 'late-poll']) test(`Weixin stop discards old batch and never sends failure feedback: ${mode}`, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'weixin-stop-'))
   persistWeixinLogin(dir, { allowedUserId: 'user' })
@@ -62,7 +64,7 @@ for (const fail of [false, true]) for (const text of ['', 'compare']) {
       if (url.includes('/download')) {
         downloads.push(init)
         if (fail) throw new Error('SENSITIVE_DOWNLOAD_URL')
-        return new Response(encryptAesEcb(Buffer.from('png'), key), { headers: { 'content-type': 'image/png' } })
+        return new Response(encryptAesEcb(png, key), { headers: { 'content-type': 'image/png' } })
       }
       if (url.includes('/sendmessage')) { replies.push(JSON.parse(init.body)); return Response.json({ ret: 0 }) }
       throw new Error('Unexpected request')
@@ -81,7 +83,7 @@ for (const fail of [false, true]) for (const text of ['', 'compare']) {
         assert.equal(received.length, 1)
         assert.equal(received[0].text, text)
         assert.equal(received[0].media.length, 2)
-        assert.deepEqual(received[0].media.map(m => readFileSync(m.path, 'utf8')), ['png', 'png'])
+        assert.deepEqual(received[0].media.map(m => readFileSync(m.path)), [png, png])
         assert.notEqual(received[0].media[0].path, received[0].media[1].path)
         assert.ok(downloads.every(init => !init.headers && init.signal))
       }

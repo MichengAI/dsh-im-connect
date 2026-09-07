@@ -14,6 +14,7 @@ import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, basename } from 'node:path'
+import { isIP } from 'node:net'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { writePrivateFileSync } from '../engine/secure-file.js'
 import { isAbortError, sleepWithSignal, timeoutSignal } from '../engine/abort.js'
@@ -93,6 +94,32 @@ export function parseAesKey(aesKeyBase64: string, label = 'aes'): Buffer {
 /** 构建 CDN 下载 URL。 */
 export function buildCdnDownloadUrl(encryptedQueryParam: string, cdnBaseUrl = CDN_BASE_URL): string {
   return `${cdnBaseUrl}/download?encrypted_query_param=${encodeURIComponent(encryptedQueryParam)}`
+}
+
+type WeixinImageFailureKind = 'network' | 'server' | 'http' | 'timeout' | 'size' | 'format' | 'decrypt' | 'metadata' | 'unsafe' | 'storage'
+
+/** 只保留固定分类，不记录底层异常消息、签名 URL 或密钥。 */
+class WeixinImageError extends Error {
+  constructor(readonly kind: WeixinImageFailureKind, readonly status?: number) {
+    const reasons: Record<WeixinImageFailureKind, string> = {
+      network: '网络连接失败', server: `下载服务器暂时不可用（HTTP ${status}）`,
+      http: `下载服务器返回 HTTP ${status}`, timeout: '下载超时', size: '图片超过 50 MiB 接收限制',
+      format: '图片格式无效或不支持，请发送 PNG、JPEG、GIF 或 WebP', decrypt: '图片解密失败或解密信息无效',
+      metadata: '图片缺少下载地址或解密信息', unsafe: '图片下载安全校验失败', storage: '图片保存失败',
+    }
+    super(reasons[kind])
+    this.name = 'WeixinImageError'
+  }
+}
+
+function imageTransportError(error: unknown): WeixinImageError {
+  if (error instanceof WeixinImageError) return error
+  const e = error as { name?: string; message?: string; code?: string; cause?: { code?: string } }
+  const code = e?.code ?? e?.cause?.code ?? ''
+  if (e?.name === 'TimeoutError' || e?.name === 'AbortError' || ['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'].includes(code)) return new WeixinImageError('timeout')
+  if (/^媒体超过 \d+ 字节上限$/.test(e?.message ?? '')) return new WeixinImageError('size')
+  if (/^(ERR_TLS_|ERR_SSL_|CERT_|DEPTH_ZERO_|UNABLE_TO_VERIFY_|SELF_SIGNED_)/.test(code)) return new WeixinImageError('unsafe')
+  return new WeixinImageError('network')
 }
 
 // ── 工具函数 ────────────────────────────────────────────────────
@@ -354,6 +381,56 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     }
   }
 
+  /** 仅重试图片下载，共享截止时间，不重试 POST 或解密操作。 */
+  async function downloadImageCdn(mediaRef: Json | undefined, aesKey: Buffer | undefined): Promise<{ buf: Buffer; contentType?: string }> {
+    const url = cdnUrlOf(mediaRef)
+    if (!url) throw new WeixinImageError('metadata')
+    try {
+      const target = new URL(url)
+      const hostname = target.hostname.replace(/\.$/, '')
+      // 保留协议中的 full_url，不因增加重试而引入单 CDN 限制；
+      // 拒绝明文、IP 直连、localhost 和 URL 凭据，下载时另行禁止重定向。
+      if (target.protocol !== 'https:' || target.username || target.password
+        || isIP(hostname) || hostname.includes(':')
+        || hostname === 'localhost' || hostname.endsWith('.localhost')) throw new Error()
+    } catch { throw new WeixinImageError('unsafe') }
+    const parent = lifecycle?.signal
+    const signal = timeoutSignal(60_000, parent)
+    for (let attempt = 0; ; attempt++) {
+      if (parent?.aborted) throw parent.reason
+      if (signal.aborted) throw new WeixinImageError('timeout')
+      let res: Response
+      let buf: Buffer
+      try {
+        res = await fetch(url, { signal, redirect: 'manual' })
+        if (!res.ok) {
+          await res.body?.cancel().catch(() => undefined)
+          throw new WeixinImageError(res.status >= 500 ? 'server' : 'http', res.status)
+        }
+        try { buf = await readResponseBufferLimited(res, MAX_WEIXIN_MEDIA_BYTES) } catch (error) {
+          await res.body?.cancel().catch(() => undefined)
+          throw error
+        }
+        signal.throwIfAborted()
+      } catch (error) {
+        if (parent?.aborted) throw parent.reason
+        if (signal.aborted) throw new WeixinImageError('timeout')
+        const e = error as { status?: number; cause?: { code?: string }; code?: string }
+        const retryable = (e.status !== undefined && e.status >= 500 && e.status <= 599)
+          || ['ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ETIMEDOUT', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'].includes(e.code ?? e.cause?.code ?? '')
+        if (attempt >= 1 || !retryable) throw imageTransportError(error)
+        try { await sleepWithSignal(150, signal) } catch {
+          if (parent?.aborted) throw parent.reason
+          throw new WeixinImageError('timeout')
+        }
+        continue
+      }
+      try {
+        return { buf: aesKey ? decryptAesEcb(buf, aesKey) : buf, contentType: res.headers.get('content-type') ?? undefined }
+      } catch { throw new WeixinImageError('decrypt') }
+    }
+  }
+
   /** 保存媒体字节到媒体目录。 */
   function saveMediaBuf(buf: Buffer, ext: string, prefix: string, name?: string): string {
     mkdirSync(mediaDir, { recursive: true })
@@ -377,14 +454,24 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   async function downloadImageItem(item: Json): Promise<ImMedia> {
     const img = item.image_item as Json | undefined
     const mediaRef = img?.media as Json | undefined
-    const aesKey = aesKeyOf(mediaRef, img ? pickStr(img, 'aeskey') : undefined, 'wechat-image')
-    const dl = await downloadCdn(mediaRef, aesKey)
-    if (!dl) return { kind: 'image', name: 'image' }
-    // 从 CDN Content-Type 推断真实图片类型（避免 saveImage 校验失败）
-    const ct = dl.contentType?.split(';')[0]?.trim().toLowerCase() ?? ''
-    const ext = ct === 'image/png' ? '.png' : ct === 'image/gif' ? '.gif' : ct === 'image/webp' ? '.webp' : '.jpg'
-    const mediaType = ct.startsWith('image/') ? ct : 'image/jpeg'
-    const saved = saveMediaBuf(dl.buf, ext, 'image', `image${ext}`)
+    let aesKey: Buffer | undefined
+    try {
+      const hex = img ? pickStr(img, 'aeskey') : undefined
+      if (hex && !/^[a-fA-F0-9]{32}$/.test(hex)) throw new Error()
+      aesKey = aesKeyOf(mediaRef, hex, 'wechat-image')
+      if (!aesKey && Number(mediaRef?.encrypt_type) === 1) throw new Error()
+    } catch { throw new WeixinImageError('decrypt') }
+    const dl = await downloadImageCdn(mediaRef, aesKey)
+    // 根据明文字节判断格式，避免加密 CDN 的 octet-stream 响应头误导类型。
+    const buf = dl.buf
+    const ext = buf.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) ? '.png'
+      : buf.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex')) ? '.jpg'
+      : /^GIF8[79]a$/.test(buf.subarray(0, 6).toString('ascii')) ? '.gif'
+      : buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP' ? '.webp' : undefined
+    if (!ext) throw new WeixinImageError('format')
+    const mediaType = mimeFromExt(ext)
+    let saved: string
+    try { saved = saveMediaBuf(buf, ext, 'image', `image${ext}`) } catch { throw new WeixinImageError('storage') }
     return { kind: 'image', path: saved, mediaType, name: basename(saved) }
   }
 
@@ -540,14 +627,23 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
             if (!current()) return
             const media = []
             let mediaFailed = false
+            let imageFailure: WeixinImageError | undefined
             for (const item of settled) {
               if (item.status === 'fulfilled') {
                 if (item.value.kind === 'image' && !item.value.path && !item.value.data) mediaFailed = true
                 else media.push(item.value)
-              } else { mediaFailed = true; log('[weixin] 媒体下载失败') }
+              } else {
+                mediaFailed = true
+                if (item.reason instanceof WeixinImageError) {
+                  imageFailure ??= item.reason
+                  log(`[weixin] 图片下载失败 category=${item.reason.kind}: ${item.reason.message}`)
+                } else log('[weixin] 媒体下载失败')
+              }
             }
             if (mediaFailed) {
-              await sendText(parsed.fromUserId, '图片或媒体下载失败，请重新发送。').catch(() => log('[weixin] 媒体提示发送失败'))
+              if (!current()) return
+              const feedback = imageFailure ? `图片下载失败：${imageFailure.message}。整条消息未提交，请重新发送。` : '图片或媒体下载失败，请重新发送。'
+              await sendText(parsed.fromUserId, feedback).catch(() => log('[weixin] 媒体提示发送失败'))
               // Never turn an image caption (e.g. /new) into a text-only command.
               continue
             }

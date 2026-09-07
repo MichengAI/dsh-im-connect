@@ -1,0 +1,39 @@
+type TokenResponse = { accessToken?: unknown; expireIn?: unknown }
+
+/** 缓存归固定凭据的单个适配器所有，不按 clientId 跨实例共享。 */
+export class DingtalkTokenCache {
+  private cached?: { token: string; expiresAt: number }
+
+  private pending?: Promise<string>
+  private generation = 0
+
+  clear(): void {
+    this.generation++
+    this.cached = undefined
+    this.pending = undefined
+  }
+
+  constructor(private readonly load: (signal: AbortSignal) => Promise<TokenResponse>, private readonly now = Date.now) {}
+
+  async get(signal: AbortSignal): Promise<string> {
+    signal.throwIfAborted()
+    if (this.cached && this.now() < this.cached.expiresAt) return this.cached.token
+    if (this.pending) return this.pending
+    const pending = this.fetch(signal)
+    this.pending = pending
+    try { return await pending } finally { if (this.pending === pending) this.pending = undefined }
+  }
+
+  private async fetch(signal: AbortSignal): Promise<string> {
+    const startedAt = this.now()
+    const generation = this.generation
+    const auth = await this.load(signal)
+    signal.throwIfAborted()
+    if (generation !== this.generation) throw new Error('钉钉图片鉴权已取消')
+    if (typeof auth.accessToken !== 'string' || !auth.accessToken.trim()) throw new Error('钉钉图片鉴权失败')
+    const ttl = typeof auth.expireIn === 'number' && Number.isFinite(auth.expireIn) ? auth.expireIn * 1000 : 0
+    const expiresAt = startedAt + ttl - Math.min(60_000, Math.max(5_000, ttl * 0.1))
+    this.cached = Number.isFinite(expiresAt) && expiresAt > this.now() ? { token: auth.accessToken, expiresAt } : undefined
+    return auth.accessToken
+  }
+}

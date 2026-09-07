@@ -1,13 +1,15 @@
 /** QQ 开放平台机器人：官方 WebSocket 网关，不是个人 QQ 号。 */
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { timeoutSignal } from '../engine/abort.js'
-import { readResponseBufferLimited } from './weixin.js'
+
+import { validateAdditionalImageHosts } from './image-host-policy.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
-import { MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
+import { MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost, requestChannelBytes, imageMedia } from './channel-image-download.js'
 
 export interface QqChannelConfig {
   appId?: string
   appSecret?: string
+  additionalImageHosts?: readonly string[]
 }
 
 interface GatewayPayload {
@@ -47,6 +49,8 @@ export function cleanQqText(text: string): string {
 }
 
 export function createQqChannel(config: QqChannelConfig, log: (line: string) => void): ChannelAdapter | undefined {
+  const additionalImageHosts = validateAdditionalImageHosts(config.additionalImageHosts)
+  const trustedMediaHosts = new Set(['multimedia.nt.qq.com', 'multimedia.nt.qq.com.cn', 'gchat.qpic.cn', ...additionalImageHosts])
   const appId = config.appId?.trim()
   const appSecret = config.appSecret?.trim()
   if (!appId || !appSecret) return undefined
@@ -158,6 +162,8 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
       if (ws === socket) statusText = '等待网关握手'
     }
     const generation = lifecycle
+    const socketLifetime = new AbortController()
+    const mediaSignal = generation ? AbortSignal.any([generation.signal, socketLifetime.signal]) : socketLifetime.signal
     const current = () => !stopped && lifecycle === generation && ws === socket
     const incoming = new KeyedSerialQueue()
     socket.onmessage = (ev) => {
@@ -223,7 +229,7 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
               const declaredBytes = images.reduce((sum, image) => sum + (typeof image.size === 'number' && image.size > 0 ? image.size : 0), 0)
               if (declaredBytes > MAX_MESSAGE_IMAGE_BYTES) throw new Error('图片累计大小超过上限')
               let remainingBytes = MAX_MESSAGE_IMAGE_BYTES
-              const downloadSignal = timeoutSignal(30_000, generation?.signal)
+              const downloadSignal = timeoutSignal(30_000, mediaSignal)
               for (const image of images) {
                 if (!current()) return
                 downloadSignal.throwIfAborted()
@@ -233,19 +239,16 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
                   : /^[a-z][a-z0-9+.-]*:/i.test(rawUrl) ? rawUrl : `https://${rawUrl}`)
                 // Official QQ CDN only; never forward API credentials or follow redirects.
                 if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port
-                  || !(url.hostname === 'multimedia.nt.qq.com.cn'
-                    || ['qq.com', 'qpic.cn'].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)))) throw new Error('不安全的图片地址')
+                  || !trustedMediaHosts.has(url.hostname)) throw new Error('不安全的图片地址')
                 // QQ also supplies scheme-less/HTTP CDN links. Upgrade known hosts;
                 // never send signed media URLs over plaintext HTTP.
                 url.protocol = 'https:'
                 if ((image.size ?? 0) > 20 * 1024 * 1024) throw new Error('图片过大')
-                const response = await fetch(url.href, { signal: downloadSignal, redirect: 'error' })
-                if (!response.ok) throw new Error(`图片下载 HTTP ${response.status}`)
-                const data = await readResponseBufferLimited(response, remainingBytes)
+                const data = await requestChannelBytes(url.href, { signal: downloadSignal, maxBytes: remainingBytes, additionalTrustedHosts: additionalImageHosts })
                 downloadSignal.throwIfAborted()
                 remainingBytes -= data.length
                 if (!data.length) throw new Error('图片为空')
-                media.push({ kind: 'image', data, mediaType: image.content_type, name: image.filename })
+                media.push({ ...imageMedia(data, MAX_MESSAGE_IMAGE_BYTES), name: image.filename })
               }
             } catch (error) {
               if (!current()) return
@@ -282,6 +285,7 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
       }
     }
     socket.onclose = (ev) => {
+      socketLifetime.abort()
       if (ws !== socket) return
       clearInterval(heartbeat)
       heartbeat = undefined

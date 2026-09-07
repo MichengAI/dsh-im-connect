@@ -6,7 +6,7 @@ export declare function channelImageFailureReason(error: unknown): string;
 /** Diagnostic host only: never emit a signed path/query, userinfo, or AES key. */
 export declare function channelImageDownloadHost(raw?: string): string;
 /** Infer MIME from bytes, not an attacker-controlled filename or Content-Type. */
-export declare function imageMedia(data: Buffer): ImMedia;
+export declare function imageMedia(data: Buffer, maxBytes?: number): ImMedia;
 /** HTTPS only; resolve inside the connection lookup, so DNS cannot rebind after validation.
  * No redirects or ambient proxy/credentials. IPv4-only intentionally fails closed on IPv6-only hosts.
  */
@@ -16,5 +16,7 @@ export declare function requestChannelBytes(rawUrl: string, options?: {
     body?: string;
     maxBytes?: number;
     timeoutMs?: number;
+    signal?: AbortSignal;
+    additionalTrustedHosts?: readonly string[];
 }): Promise<Buffer>;
 //# sourceMappingURL=channel-image-download.d.ts.map

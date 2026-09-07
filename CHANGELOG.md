@@ -6,6 +6,12 @@ The five most recent published versions are listed below. Git tags and GitHub Re
 
 ## Unreleased
 
+- Add native inbound images for WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram through DSH Chat's current-session model checks and durable attachment admission; prevent account defaults from overriding Chat's selected model.
+- Route QQ image downloads through the DNS-validated downloader while preserving whole-message budgets, cancellation, and deadlines. Allow administrators to configure additional exact image hosts per account instead of patching region-specific COS/OSS origins.
+- Reuse DingTalk access tokens per account, coalesce concurrent token requests, and invalidate the cache on expiry, stop, or restart.
+- Classify WeChat image failures and retry transient network/server failures within a bounded budget. Never downgrade failed image captions to text commands or retry/deliver stale input after stop.
+- Extend image security, ordering, lifecycle, real host-admission, and durable-storage regression tests. Track live channel and vision-model verification separately from transport fixtures.
+
 ## 0.1.37 - 2026-09-07
 
 - Withdraw the unfinished proactive delivery feature, including account delivery settings, `im-send`, Agent tools, and delivery HTTP endpoints. Existing IM replies and plugin update controls are retained.

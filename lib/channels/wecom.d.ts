@@ -2,6 +2,7 @@ import type { ChannelAdapter, ImMedia, ReplyStream } from '../engine/types.js';
 export interface WecomConfig {
     botId?: string;
     secret?: string;
+    additionalImageHosts?: readonly string[];
 }
 export interface WecomSdkClient {
     replyStream(frame: unknown, streamId: string, content: string, finish?: boolean): Promise<unknown>;

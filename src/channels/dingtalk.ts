@@ -1,21 +1,23 @@
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { DingtalkCardClient, openDingtalkCardStream, type CardTarget } from './dingtalk-card.js'
+import { validateAdditionalImageHosts } from './image-host-policy.js'
+import { DingtalkTokenCache } from './dingtalk-token-cache.js'
 import { timeoutSignal } from '../engine/abort.js'
 import { requestChannelBytes, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
 
-async function downloadDingtalkImage(clientId: string, clientSecret: string, downloadCode: string, log: (line: string) => void): Promise<ImMedia> {
+async function postDingtalk(path: string, body: unknown, signal: AbortSignal, headers: Record<string, string> = {}) {
+  const bytes = await requestChannelBytes(`https://api.dingtalk.com/v1.0/${path}`, {
+    method: 'POST', headers: { 'content-type': 'application/json', ...headers },
+    body: JSON.stringify(body), maxBytes: 64 * 1024, signal,
+  })
+  return JSON.parse(bytes.toString()) as Record<string, unknown>
+}
+
+async function downloadDingtalkImage(clientId: string, tokens: DingtalkTokenCache, downloadCode: string, signal: AbortSignal, additionalImageHosts: readonly string[], log: (line: string) => void): Promise<ImMedia> {
   if (typeof downloadCode !== 'string' || !downloadCode.trim()) throw new Error('图片缺少 downloadCode')
-  const post = async (path: string, body: unknown, headers: Record<string, string> = {}) => {
-    const bytes = await requestChannelBytes(`https://api.dingtalk.com/v1.0/${path}`, {
-      method: 'POST', headers: { 'content-type': 'application/json', ...headers },
-      body: JSON.stringify(body), maxBytes: 64 * 1024,
-    })
-    return JSON.parse(bytes.toString()) as Record<string, unknown>
-  }
-  const auth = await post('oauth2/accessToken', { appKey: clientId, appSecret: clientSecret })
-  if (typeof auth.accessToken !== 'string' || !auth.accessToken) throw new Error('钉钉图片鉴权失败')
-  const file = await post('robot/messageFiles/download', { robotCode: clientId, downloadCode }, {
-    'x-acs-dingtalk-access-token': auth.accessToken,
+  const token = await tokens.get(signal)
+  const file = await postDingtalk('robot/messageFiles/download', { robotCode: clientId, downloadCode }, signal, {
+    'x-acs-dingtalk-access-token': token,
   })
   if (typeof file.downloadUrl !== 'string' || !file.downloadUrl) throw new Error('钉钉没有返回图片下载地址')
   const mediaUrl = new URL(file.downloadUrl)
@@ -23,16 +25,17 @@ async function downloadDingtalkImage(clientId: string, clientSecret: string, dow
   // DingTalk can return an HTTP-signed OSS URL. Upgrade this exact platform
   // origin without altering its opaque path/query; never allow plaintext media.
   if (mediaUrl.protocol === 'http:'
-    && mediaUrl.hostname === 'wukong-file-im-zjk.oss-cn-zhangjiakou.aliyuncs.com'
+    && (mediaUrl.hostname === 'wukong-file-im-zjk.oss-cn-zhangjiakou.aliyuncs.com' || additionalImageHosts.includes(mediaUrl.hostname))
     && !mediaUrl.username && !mediaUrl.password && !mediaUrl.port) mediaUrl.protocol = 'https:'
   log(`[dingtalk] 图片下载 host=${channelImageDownloadHost(mediaUrl.href)} sourceProtocol=${sourceProtocol} protocol=${mediaUrl.protocol} port=${mediaUrl.port || 'default'} userinfo=${Boolean(mediaUrl.username || mediaUrl.password)}`)
   // The temporary media URL must never receive the app secret or access token.
-  return imageMedia(await requestChannelBytes(mediaUrl.href))
+  return imageMedia(await requestChannelBytes(mediaUrl.href, { signal, additionalTrustedHosts: additionalImageHosts }))
 }
 
 export interface DingtalkConfig {
   clientId?: string
   clientSecret?: string
+  additionalImageHosts?: readonly string[]
 }
 
 export interface DingtalkRobotPayload {
@@ -72,11 +75,14 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
   const clientId = config.clientId?.trim()
   const clientSecret = config.clientSecret?.trim()
   if (!clientId || !clientSecret) return undefined
+  const additionalImageHosts = validateAdditionalImageHosts(config.additionalImageHosts)
 
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let client: { connect(): Promise<void>; disconnect(): void; registerCallbackListener(topic: string, cb: (res: { data: string }) => unknown): void } | undefined
   let statusText = '未连接'
   let generation = 0
+  let lifecycle = new AbortController()
+  const tokens = new DingtalkTokenCache(signal => postDingtalk('oauth2/accessToken', { appKey: clientId, appSecret: clientSecret }, signal))
   const receiving = new Map<string, Promise<void>>()
   const webhooks = new Map<string, string>()
   const targets = new Map<string, CardTarget>()
@@ -96,12 +102,23 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
     maxMessageLength: 4000,
     async start() {
       const startedGeneration = ++generation
+      lifecycle.abort()
+      lifecycle = new AbortController()
+      const signal = lifecycle.signal
+      tokens.clear()
+      receiving.clear()
+      webhooks.clear()
+      targets.clear()
+      client?.disconnect()
+      client = undefined
       try {
         const sdk = await import('dingtalk-stream') as {
           DWClient: new (opts: Record<string, unknown>) => NonNullable<typeof client>
           TOPIC_ROBOT: string
         }
-        client = new sdk.DWClient({ clientId, clientSecret, autoReconnect: true })
+        if (generation !== startedGeneration) return
+        const startedClient = new sdk.DWClient({ clientId, clientSecret, autoReconnect: true })
+        client = startedClient
         client.registerCallbackListener(sdk.TOPIC_ROBOT, (res) => {
           let payload: DingtalkRobotPayload
           try { payload = JSON.parse(res.data) as typeof payload } catch { return }
@@ -123,7 +140,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
               for (const code of images) {
                 if (generation !== startedGeneration) return
                 media.push(await (dependencies.downloadImage
-                  ? dependencies.downloadImage(code) : downloadDingtalkImage(clientId, clientSecret, code, log)))
+                  ? dependencies.downloadImage(code) : downloadDingtalkImage(clientId, tokens, code, signal, additionalImageHosts, log)))
               }
             } catch (error) {
               if (generation !== startedGeneration) return
@@ -131,7 +148,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
               log(`[dingtalk] 图片读取失败: ${reason}`)
               if (!payload.sessionWebhook) throw new Error('没有可回复的图片回调 webhook')
               await requestChannelBytes(payload.sessionWebhook, {
-                method: 'POST', headers: { 'content-type': 'application/json' }, maxBytes: 64 * 1024,
+                method: 'POST', headers: { 'content-type': 'application/json' }, maxBytes: 64 * 1024, signal,
                 body: JSON.stringify({ msgtype: 'text', text: { content: `图片读取失败：${reason}。请重试；若仍失败请管理员检查网络和机器人文件下载权限。` } }),
               })
               return
@@ -143,10 +160,16 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
           void work.finally(() => { if (receiving.get(parsed.chatId) === work) receiving.delete(parsed.chatId) })
           return { status: 'SUCCESS' }
         })
-        await client.connect()
+        await startedClient.connect()
+        if (generation !== startedGeneration) { startedClient.disconnect(); return }
         statusText = 'Stream 已连接'
         log('[dingtalk] Stream 已连接')
       } catch (error) {
+        if (generation !== startedGeneration) return
+        lifecycle.abort()
+        tokens.clear()
+        client?.disconnect()
+        client = undefined
         const message = error instanceof Error ? error.message : String(error)
         const missing = /Cannot find package ['"]dingtalk-stream['"]/i.test(message)
         throw new Error(missing ? '缺少依赖 dingtalk-stream' : `钉钉连接失败: ${message}`)
@@ -154,6 +177,8 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
     },
     async stop() {
       generation++
+      lifecycle.abort()
+      tokens.clear()
       receiving.clear()
       client?.disconnect()
       client = undefined

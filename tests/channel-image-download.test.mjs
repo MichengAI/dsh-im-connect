@@ -2,6 +2,82 @@ import test, { mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { network } from './channel-image-fixture.mjs'
 
+test('caller cancellation rejects before I/O and during pending download without leaked listeners', async () => {
+  const { requestChannelBytes } = await import('../lib/channels/channel-image-download.js')
+  const { getEventListeners } = await import('node:events')
+  try {
+    let calls = network(Buffer.from('x'))
+    const before = new AbortController(); before.abort()
+    await assert.rejects(requestChannelBytes('https://example.com/a', { signal: before.signal }), { name: 'AbortError' })
+    assert.equal(calls.length, 0)
+    network(Buffer.from('x'), { stall: true })
+    const during = new AbortController()
+    const pending = requestChannelBytes('https://example.com/a', { signal: during.signal, timeoutMs: 100 })
+    during.abort()
+    await assert.rejects(pending, { name: 'AbortError' })
+    assert.equal(getEventListeners(during.signal, 'abort').length, 0)
+  } finally { mock.restoreAll() }
+})
+
+test('administrator exact hosts only extend Fake-IP and reject malformed additions', async () => {
+  const { requestChannelBytes } = await import('../lib/channels/channel-image-download.js')
+  try {
+    network(Buffer.from('ok'), { address: '198.19.255.254' })
+    assert.equal((await requestChannelBytes('https://cdn.example.com/a', { additionalTrustedHosts: ['CDN.example.com'] })).toString(), 'ok')
+    for (const address of ['10.0.0.1', '127.0.0.1', '169.254.169.254', '192.168.1.1', '100.64.1.1']) {
+      network(Buffer.from('no'), { address })
+      await assert.rejects(requestChannelBytes('https://cdn.example.com/a', { additionalTrustedHosts: ['cdn.example.com'] }), /安全/)
+    }
+    network(Buffer.from('no'), { address: '198.18.1.1' })
+    await assert.rejects(requestChannelBytes('https://cdn.example.com.evil.example/a', { additionalTrustedHosts: ['cdn.example.com'] }), /安全/)
+    for (const hosts of [['*.example.com'], ['example.com/path'], ['127.0.0.1'], ['example.com,other.com'], 'example.com']) {
+      const calls = network(Buffer.from('no'))
+      await assert.rejects(requestChannelBytes('https://example.com/a', { additionalTrustedHosts: hosts }), /主机/)
+      assert.equal(calls.length, 0)
+    }
+  } finally { mock.restoreAll() }
+})
+
+test('DNS remains connection-pinned and mixed private answers are rejected', async () => {
+  const { requestChannelBytes } = await import('../lib/channels/channel-image-download.js')
+  const { default: dns } = await import('node:dns')
+  try {
+    const calls = network(Buffer.from('ok'))
+    let lookups = 0
+    mock.method(dns, 'lookup', (host, options, cb) => { lookups++; cb(null, [{ address: lookups === 1 ? '8.8.8.8' : '127.0.0.1', family: 4 }]) })
+    assert.equal((await requestChannelBytes('https://multimedia.nt.qq.com/a')).toString(), 'ok')
+    assert.equal(lookups, 1)
+    assert.equal(calls[0].options.agent, false)
+    mock.method(dns, 'lookup', (host, options, cb) => cb(null, [{ address: '8.8.8.8', family: 4 }, { address: '10.0.0.1', family: 4 }]))
+    await assert.rejects(requestChannelBytes('https://multimedia.nt.qq.com/a'), /安全/)
+  } finally { mock.restoreAll() }
+})
+
+for (const phase of ['dns', 'body', 'success', 'http-error']) test(`signal cleanup and prompt settlement during ${phase}`, async () => {
+  const { requestChannelBytes } = await import('../lib/channels/channel-image-download.js')
+  const { default: dns } = await import('node:dns')
+  const { getEventListeners } = await import('node:events')
+  const controller = new AbortController()
+  let release, begun
+  const started = new Promise(resolve => { begun = resolve })
+  try {
+    network(() => { begun(); return new Promise(resolve => { release = resolve }) }, { status: phase === 'http-error' ? 403 : 200 })
+    if (phase === 'dns') mock.method(dns, 'lookup', (host, opts, cb) => { release = () => cb(null, [{ address: '8.8.8.8', family: 4 }]); begun() })
+    if (phase === 'success') network(Buffer.from('ok'))
+    if (phase === 'http-error') network(Buffer.from('no'), { status: 403 })
+    const pending = requestChannelBytes('https://example.com/a', { signal: controller.signal, timeoutMs: 200 })
+    if (phase === 'success') await pending
+    else if (phase === 'http-error') await assert.rejects(pending, /HTTP 403/)
+    else {
+      await started
+      controller.abort()
+      await assert.rejects(pending, { name: 'AbortError' })
+      release?.(Buffer.from('late'))
+    }
+    assert.equal(getEventListeners(controller.signal, 'abort').length, 0)
+  } finally { release?.(Buffer.from('late')); mock.restoreAll() }
+})
+
 test('image byte validation accepts raster signatures, rejects disguised files and oversize', async () => {
   const h = await import('../lib/channels/channel-image-download.js')
   assert.equal(typeof h.imageMedia, 'function')

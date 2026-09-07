@@ -1,5 +1,6 @@
 import type { ImMedia } from '../engine/types.js'
 import https from 'node:https'
+import { validateAdditionalImageHosts } from './image-host-policy.js'
 import dns from 'node:dns'
 import { BlockList, isIP } from 'node:net'
 
@@ -36,8 +37,8 @@ export function channelImageDownloadHost(raw?: string): string {
 }
 
 /** Infer MIME from bytes, not an attacker-controlled filename or Content-Type. */
-export function imageMedia(data: Buffer): ImMedia {
-  if (!data.length || data.length > MAX_CHANNEL_IMAGE_BYTES) throw new Error('图片超过大小限制或为空')
+export function imageMedia(data: Buffer, maxBytes = MAX_CHANNEL_IMAGE_BYTES): ImMedia {
+  if (!data.length || data.length > maxBytes) throw new Error('图片超过大小限制或为空')
   let mediaType: string | undefined
   if (data.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) mediaType = 'image/png'
   else if (data.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex'))) mediaType = 'image/jpeg'
@@ -62,6 +63,8 @@ const proxyFakeIps = new BlockList()
 proxyFakeIps.addSubnet('198.18.0.0', 15)
 const proxyCompatibleHosts = new Set([
   'wework.qpic.cn', 'multimedia.nt.qq.com.cn', 'multimedia.nt.qq.com',
+  // QQ 聊天图片域名来源：https://github.com/takayama-lily/oicq/discussions/244
+  'gchat.qpic.cn',
   // Exact WeCom AI-bot COS origin observed in authenticated image callbacks.
   // Do not trust arbitrary tenant buckets under myqcloud.com.
   'ww-aibot-img-1258476243.cos.ap-guangzhou.myqcloud.com',
@@ -75,21 +78,42 @@ const proxyCompatibleHosts = new Set([
  */
 export async function requestChannelBytes(rawUrl: string, options: {
   method?: 'GET' | 'POST'; headers?: Record<string, string>; body?: string
-  maxBytes?: number; timeoutMs?: number
+  maxBytes?: number; timeoutMs?: number; signal?: AbortSignal
+  additionalTrustedHosts?: readonly string[]
 } = {}): Promise<Buffer> {
+  const additionalHosts = new Set(validateAdditionalImageHosts(options.additionalTrustedHosts))
+  options.signal?.throwIfAborted()
   const url = new URL(rawUrl)
   if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')
     || isIP(url.hostname) || url.hostname.includes(':') || url.hostname.endsWith('.')) {
     throw new Error('图片地址不符合安全要求')
   }
   return new Promise((resolve, reject) => {
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let responseStream: import('node:http').IncomingMessage | undefined
+    const finish = (error?: unknown, data?: Buffer) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      options.signal?.removeEventListener('abort', abort)
+      if (error) reject(error)
+      else resolve(data!)
+    }
+    const abort = () => {
+      const error = new DOMException('图片下载已取消', 'AbortError')
+      finish(error)
+      responseStream?.destroy(error)
+      req.destroy(error)
+    }
     const req = https.request(url, {
       method: options.method ?? 'GET', headers: options.headers, agent: false,
       lookup: (hostname, _options, callback) => {
         dns.lookup(hostname, { all: true, family: 4 }, (error, addresses) => {
+          if (settled) return
           if (error) return callback(error, '', 4)
           if (!addresses.length || addresses.some(item => item.family !== 4
-            || (blocked.check(item.address) && !(proxyCompatibleHosts.has(hostname) && proxyFakeIps.check(item.address))))) {
+            || (blocked.check(item.address) && !((proxyCompatibleHosts.has(hostname) || additionalHosts.has(hostname)) && proxyFakeIps.check(item.address))))) {
             return callback(new Error('图片地址不符合安全要求'), '', 4)
           }
           if (_options.all) callback(null, addresses)
@@ -97,6 +121,8 @@ export async function requestChannelBytes(rawUrl: string, options: {
         })
       },
     }, async response => {
+      if (settled) { response.destroy(); return }
+      responseStream = response
       const chunks: Buffer[] = []
       const maxBytes = options.maxBytes ?? MAX_CHANNEL_IMAGE_BYTES + 32
       let size = 0
@@ -108,18 +134,21 @@ export async function requestChannelBytes(rawUrl: string, options: {
           if (size > maxBytes) throw new Error('图片超过大小限制')
           chunks.push(Buffer.from(chunk))
         }
-        resolve(Buffer.concat(chunks))
+        finish(undefined, Buffer.concat(chunks))
       } catch (error) {
         response.destroy()
-        reject(error)
-      } finally { clearTimeout(timer) }
+        finish(error)
+      }
     })
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       const error = new Error('图片下载超时')
+      finish(error)
+      responseStream?.destroy(error)
       req.destroy(error)
-      reject(error)
     }, options.timeoutMs ?? 30_000)
-    req.on('error', error => { clearTimeout(timer); reject(error) })
-    req.end(options.body)
+    req.on('error', error => finish(error))
+    options.signal?.addEventListener('abort', abort, { once: true })
+    if (options.signal?.aborted) abort()
+    else req.end(options.body)
   })
 }

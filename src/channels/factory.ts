@@ -6,6 +6,7 @@ import { createTelegramChannel } from './telegram.js'
 import { createWecomChannel } from './wecom.js'
 import { createWeixinChannel } from './weixin.js'
 import { createQqChannel } from './qq.js'
+import { parseAdditionalImageHosts } from './image-host-policy.js'
 
 export function createChannelAdapter(
   id: ChannelId,
@@ -15,6 +16,8 @@ export function createChannelAdapter(
   options?: { accountId?: string; accountLabel?: string; onWeixinBotToken?: (token: string | undefined) => void | Promise<void> },
 ): ChannelAdapter | undefined {
   let adapter: ChannelAdapter | undefined
+  const imageOptions = ['qq', 'wecom', 'dingtalk'].includes(id)
+    ? { additionalImageHosts: parseAdditionalImageHosts(config.additionalImageHosts) } : {}
   switch (id) {
     case 'telegram':
       adapter = createTelegramChannel({ token: config.token, stateDir }, log); break
@@ -25,11 +28,11 @@ export function createChannelAdapter(
     case 'weixin':
       adapter = createWeixinChannel({ enabled: true, stateDir, botToken: config.botToken, onBotToken: options?.onWeixinBotToken }, log, stateDir); break
     case 'wecom':
-      adapter = createWecomChannel({ botId: config.botId, secret: config.secret }, log); break
+      adapter = createWecomChannel({ botId: config.botId, secret: config.secret, ...imageOptions }, log); break
     case 'dingtalk':
-      adapter = createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret }, log); break
+      adapter = createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret, ...imageOptions }, log); break
     case 'qq':
-      adapter = createQqChannel({ appId: config.appId, appSecret: config.appSecret }, log); break
+      adapter = createQqChannel({ appId: config.appId, appSecret: config.appSecret, ...imageOptions }, log); break
     default:
       return undefined
   }

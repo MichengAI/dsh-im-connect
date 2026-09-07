@@ -2,6 +2,7 @@ import type { ChannelAdapter, ImMedia } from '../engine/types.js';
 export interface DingtalkConfig {
     clientId?: string;
     clientSecret?: string;
+    additionalImageHosts?: readonly string[];
 }
 export interface DingtalkRobotPayload {
     msgtype?: string;

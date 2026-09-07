@@ -3,6 +3,7 @@ import type { ChannelAdapter } from '../engine/types.js';
 export interface QqChannelConfig {
     appId?: string;
     appSecret?: string;
+    additionalImageHosts?: readonly string[];
 }
 export declare function cleanQqText(text: string): string;
 export declare function createQqChannel(config: QqChannelConfig, log: (line: string) => void): ChannelAdapter | undefined;

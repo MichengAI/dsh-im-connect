@@ -1,4 +1,6 @@
-import test from 'node:test'
+import test, { mock } from 'node:test'
+import { network } from './channel-image-fixture.mjs'
+const png = Buffer.from('89504e470d0a1a0a0000000049454e44', 'hex')
 import assert from 'node:assert/strict'
 import { createQqChannel } from '../lib/channels/qq.js'
 
@@ -11,10 +13,10 @@ for (const mode of ['count', 'declared-total', 'stream-total']) test(`QQ rejects
     if (url.endsWith('/getAppAccessToken')) return Response.json({ access_token: 'secret' })
     if (url.endsWith('/gateway')) return Response.json({ url: 'wss://qq.test' })
     if (url.includes('/messages')) { replies.push(JSON.parse(init.body)); return Response.json({}) }
-    downloads++
-    return new Response(mode === 'stream-total' ? Buffer.alloc(11 * 1024 * 1024) : 'png')
+    throw new Error('unexpected media fetch')
   }
   const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
+  network(() => { downloads++; const data = mode === 'stream-total' ? Buffer.alloc(11 * 1024 * 1024) : Buffer.from(png); png.copy(data); return data })
   channel.setMessageHandler(m => received.push(m))
   try {
     await channel.start()
@@ -25,7 +27,7 @@ for (const mode of ['count', 'declared-total', 'stream-total']) test(`QQ rejects
     assert.equal(replies.length, 1)
     assert.equal(replies[0].msg_id, 'm')
     assert.match(replies[0].content, /失败/)
-  } finally { await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
+  } finally { mock.restoreAll(); await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
 })
 
 test('QQ uses one whole-message deadline and never downloads the next image after expiry', async () => {
@@ -37,21 +39,20 @@ test('QQ uses one whole-message deadline and never downloads the next image afte
     if (url.endsWith('/getAppAccessToken')) return Response.json({ access_token: 'secret' })
     if (url.endsWith('/gateway')) return Response.json({ url: 'wss://qq.test' })
     if (url.includes('/messages')) { replies.push(JSON.parse(init.body)); return Response.json({}) }
-    downloads++
-    if (downloads === 1) deadline.abort(new Error('deadline expired'))
-    return new Response('png')
+    throw new Error('unexpected media fetch')
   }
   const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
   channel.setMessageHandler(m => received.push(m))
   try {
     await channel.start()
+    network(() => { downloads++; deadline.abort(); return png })
     AbortSignal.timeout = ms => { assert.equal(ms, 30000); deadline = new AbortController(); return deadline.signal }
     socket.onmessage({ data: JSON.stringify({ op: 0, t: 'C2C_MESSAGE_CREATE', d: { id: 'm', content: '/new', author: { user_openid: 'u' }, attachments: [1, 2].map(() => ({ content_type: 'image/png', url: 'https://multimedia.nt.qq.com/image' })) } }) })
     await new Promise(resolve => setImmediate(resolve))
     assert.equal(downloads, 1)
     assert.equal(received.length, 0)
     assert.equal(replies.length, 1)
-  } finally { await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs; AbortSignal.timeout = previousTimeout }
+  } finally { mock.restoreAll(); await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs; AbortSignal.timeout = previousTimeout }
 })
 
 for (const prefix of ['https://multimedia.nt.qq.com/', 'https://multimedia.nt.qq.com.cn/', '//multimedia.nt.qq.com.cn/', 'multimedia.nt.qq.com.cn/', 'http://multimedia.nt.qq.com.cn/']) for (const group of [false, true]) for (const text of ['', 'compare']) {
@@ -63,15 +64,13 @@ for (const prefix of ['https://multimedia.nt.qq.com/', 'https://multimedia.nt.qq
     globalThis.fetch = async (url, init) => {
       if (url.endsWith('/getAppAccessToken')) return Response.json({ access_token: 'secret-token' })
       if (url.endsWith('/gateway')) return Response.json({ url: 'wss://qq.test' })
-      if (url.startsWith(prefix.includes('qq.com.cn') ? 'https://multimedia.nt.qq.com.cn/' : 'https://multimedia.nt.qq.com/')) {
-        downloads.push(init)
-        return new Response('png', { headers: { 'content-type': 'image/png' } })
-      }
+      if (!url.includes('/messages')) throw new Error('unexpected media fetch')
       return Response.json({})
     }
     const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
     channel.setMessageHandler(m => received.push(m))
     try {
+      const calls = network(png)
       await channel.start()
       socket.onmessage({ data: JSON.stringify({ op: 0, t: group ? 'GROUP_AT_MESSAGE_CREATE' : 'C2C_MESSAGE_CREATE', d: {
         id: 'message', content: text, group_openid: 'g', author: { user_openid: 'u', member_openid: 'u' },
@@ -81,12 +80,12 @@ for (const prefix of ['https://multimedia.nt.qq.com/', 'https://multimedia.nt.qq
       assert.equal(received.length, 1)
       assert.equal(received[0].text, text)
       assert.equal(received[0].media?.length, 2)
-      assert.equal(received[0].media[0].data.toString(), 'png')
+      assert.deepEqual(received[0].media[0].data, png)
       assert.equal(received[0].messageId, 'message')
       assert.equal(received[0].addressed, true)
-      assert.equal(downloads.length, 2)
-      assert.ok(downloads.every(init => !init.headers && init.signal && init.redirect === 'error'))
-    } finally { await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
+      assert.equal(calls.length, 2)
+      assert.ok(calls.every(call => !call.options.headers && call.options.agent === false && call.url.startsWith('https:')))
+    } finally { mock.restoreAll(); await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
   })
 }
 
@@ -100,14 +99,9 @@ for (const mode of ['private-url', 'redirect', 'declared', 'stream', 'empty', 'h
       if (url.endsWith('/getAppAccessToken')) return Response.json({ access_token: 'secret-token' })
       if (url.endsWith('/gateway')) return Response.json({ url: 'wss://qq.test' })
       if (url.includes('/messages')) { replies.push(JSON.parse(init.body)); return Response.json({}) }
-      assert.notEqual(mode, 'private-url', 'must not fetch unsafe URL')
-      if (mode === 'network') throw new Error('SECRET_URL')
-      if (mode === 'redirect') return new Response('', { status: 302, headers: { location: 'http://127.0.0.1/' } })
-      if (mode === 'http') return new Response('', { status: 403 })
-      if (mode === 'declared') return new Response('x', { headers: { 'content-length': '99999999' } })
-      if (mode === 'stream') return new Response(Buffer.alloc(20 * 1024 * 1024 + 1))
-      return new Response('')
+      throw new Error('unexpected media fetch')
     }
+    network(() => { if (mode === 'network') throw new Error('SECRET_URL'); return mode === 'stream' ? Buffer.alloc(20 * 1024 * 1024 + 1) : Buffer.alloc(0) }, { status: mode === 'redirect' ? 302 : mode === 'http' ? 403 : 200, headers: mode === 'declared' ? { 'content-length': '99999999' } : { location: 'http://127.0.0.1/' } })
     const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, s => logs.push(s))
     channel.setMessageHandler(m => received.push(m))
     try {
@@ -121,12 +115,12 @@ for (const mode of ['private-url', 'redirect', 'declared', 'stream', 'empty', 'h
       assert.ok(logs.every(s => !s.includes('SECRET_URL')))
       if (mode === 'http') assert.match(replies[0].content, /HTTP 403/)
       if (mode === 'private-url') assert.match(replies[0].content, /安全校验拦截/)
-    } finally { await channel.stop(); globalThis.fetch = prevFetch; globalThis.WebSocket = prevWs }
+    } finally { mock.restoreAll(); await channel.stop(); globalThis.fetch = prevFetch; globalThis.WebSocket = prevWs }
   })
 }
 
-for (const stop of [false, true]) {
-  test(`QQ serializes per chat without blocking Hello; late downloads ${stop ? 'discard after stop' : 'keep arrival order'}`, async () => {
+for (const stop of [false, true, 'disconnect']) {
+  test(`QQ serializes per chat without blocking Hello; late downloads ${stop === 'disconnect' ? 'discard after disconnect' : stop ? 'discard after stop' : 'keep arrival order'}`, async () => {
     const previousFetch = globalThis.fetch, previousWs = globalThis.WebSocket
     let socket, release, started
     const begun = new Promise(resolve => { started = resolve })
@@ -137,10 +131,15 @@ for (const stop of [false, true]) {
       if (url.endsWith('/getAppAccessToken')) return Response.json({ access_token: 'secret' })
       if (url.endsWith('/gateway')) return Response.json({ url: 'wss://qq.test' })
       if (url.includes('/messages')) { posts.push(url); return Response.json({}) }
-      started(); return pending
+      throw new Error('unexpected media fetch')
     }
     const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
     channel.setMessageHandler(m => received.push(m))
+    network(() => { started(); return pending })
+    const { default: https } = await import('node:https')
+    const request = https.request
+    let destroyed = false
+    mock.method(https, 'request', (...args) => { const req = request(...args); const destroy = req.destroy; req.destroy = error => { destroyed = true; return destroy(error) }; return req })
     const emit = d => socket.onmessage({ data: JSON.stringify({ op: 0, t: 'C2C_MESSAGE_CREATE', d: { author: { user_openid: 'u' }, ...d } }) })
     try {
       await channel.start()
@@ -151,11 +150,13 @@ for (const stop of [false, true]) {
       assert.equal(sent[0].op, 2, 'Hello must not wait for media')
       await new Promise(resolve => setImmediate(resolve))
       assert.equal(received.length, 0)
-      if (stop) await channel.stop()
-      release(new Response('png', { status: stop ? 403 : 200 }))
+      if (stop === 'disconnect') socket.onclose({ code: 4000 })
+      else if (stop) await channel.stop()
+      if (stop) assert.equal(destroyed, true, 'obsolete generation must abort active request immediately')
+      release(png)
       await new Promise(resolve => setImmediate(resolve))
       assert.deepEqual(received.map(m => m.messageId), stop ? [] : ['image', 'text'])
       assert.equal(posts.length, 0)
-    } finally { release?.(new Response('png')); await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
+    } finally { mock.restoreAll(); release?.(png); await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
   })
 }
