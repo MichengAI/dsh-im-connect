@@ -6,6 +6,9 @@ The five most recent published versions are listed below. Git tags and GitHub Re
 
 ## Unreleased
 
+- Fix #11: move the settings API to `/api/dsh-im-connect`, following the REST prefix used by other DSH plugins. The route uses DSH’s public `connection.requestRejection`, preserving trusted-host, Origin, and authority-bound browser-cookie checks behind reverse proxies. Local requests also require login; unavailable authentication fails closed with retry/upgrade guidance.
+- Keep account, model, pairing, and session routes unchanged; send same-origin credentials explicitly, disable management caching, and cover real Host authentication plus frontend transport regressions.
+
 - Add native inbound images for WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram through DSH Chat's current-session model checks and durable attachment admission; prevent account defaults from overriding Chat's selected model.
 - Route QQ image downloads through the DNS-validated downloader while preserving whole-message budgets, cancellation, and deadlines. Allow administrators to configure additional exact image hosts per account instead of patching region-specific COS/OSS origins.
 - Reuse DingTalk access tokens per account, coalesce concurrent token requests, and invalidate the cache on expiry, stop, or restart.

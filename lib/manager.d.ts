@@ -8,16 +8,6 @@ interface ApiBodyReadResult {
     oversized: boolean;
     invalidJson: boolean;
 }
-interface ApiRequestErrorShape {
-    status: number;
-    error: string;
-}
-/** 管理面只接受回环 Host；写请求再用自定义头 + JSON 阻断简单跨站请求。 */
-export declare function validateApiRequest(request: {
-    method?: string;
-    headers: Record<string, string | string[] | undefined>;
-    remoteAddress?: string;
-}): ApiRequestErrorShape | undefined;
 /** 累计原始字节后一次性解码，避免 UTF-8 多字节字符跨 data chunk 时被替换字符破坏。 */
 export declare function readApiJsonBody(req: import('node:stream').Readable, maxBodyBytes?: number): Promise<ApiBodyReadResult>;
 /** 把不可解析的配置移走后再回到空配置，避免下一次 flush 覆盖唯一副本。 */

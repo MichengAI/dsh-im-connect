@@ -26,16 +26,18 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
-      - name: 安装图片契约测试宿主（隔离插件依赖）
+      - name: 安装图片与管理认证契约测试宿主（隔离插件依赖）
         run: >-
           npm install --prefix "$RUNNER_TEMP/dsh-image-contract" --no-audit --no-fund
           @deepseek-ai/dsh-api-session-controller@0.1.2-rc.1
           @deepseek-ai/dsh-attachment-local@0.1.2-rc.1
+          @deepseek-ai/dsh-client-connection@0.1.2-rc.1
 
       - name: 编译并测试
         env:
           DSH_CHAT_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-api-session-controller
           DSH_ATTACHMENT_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-attachment-local
+          DSH_CONNECTION_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-client-connection
         run: npm test
 
       - name: 校验发布包

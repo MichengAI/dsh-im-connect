@@ -38,21 +38,11 @@ class ApiRequestError extends Error {
   }
 }
 
-/** 管理面只接受回环 Host；写请求再用自定义头 + JSON 阻断简单跨站请求。 */
-export function validateApiRequest(request: {
+/** 宿主负责身份认证；插件仍限制写请求格式，避免简单跨站表单与错误载荷。 */
+function validateApiMutation(request: {
   method?: string
   headers: Record<string, string | string[] | undefined>
-  remoteAddress?: string
 }): ApiRequestErrorShape | undefined {
-  const remote = request.remoteAddress ?? ''
-  if (!(remote === '::1' || /^127\./.test(remote) || /^::ffff:127\./i.test(remote))) {
-    return { status: 403, error: 'forbidden client address' }
-  }
-  const hostValue = request.headers.host
-  const host = String(Array.isArray(hostValue) ? hostValue[0] ?? '' : hostValue ?? '').toLowerCase()
-  if (!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) {
-    return { status: 403, error: 'forbidden host' }
-  }
   const method = (request.method ?? 'GET').toUpperCase()
   if (method === 'GET' || method === 'HEAD') return undefined
   const markerValue = request.headers[API_CLIENT_HEADER]
@@ -469,7 +459,7 @@ export class ChannelManager {
     }).webServer
     if (!webServer) return
     const send = (res: import('node:http').ServerResponse, status: number, body: unknown) => {
-      res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+      res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
       res.end(JSON.stringify(body))
     }
     const readJson = async (req: import('node:http').IncomingMessage): Promise<Record<string, unknown>> => {
@@ -478,25 +468,25 @@ export class ChannelManager {
       if (invalidJson) throw new ApiRequestError(400, '请求体不是合法 JSON')
       return body
     }
-    const payload = () => ({
-      ok: true,
-      channels: this.list(),
-      groups: this.channelSessions(),
-      pending: this.pendingRequests(),
-      assistant: this.currentAssistant(),
-    })
-    const dispose = webServer.register({
-      kind: 'prefix',
-      path: '/dsh-im-connect/api',
-      handler: async (req, res) => {
-        try {
-          const requestError = validateApiRequest({ method: req.method, headers: req.headers, remoteAddress: req.socket.remoteAddress })
-          if (requestError) { send(res, requestError.status, { ok: false, error: requestError.error }); return }
-          const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
-        const parts = url.pathname.split('/').filter(Boolean)
+    const dispatch = async (
+      method: string,
+      path: string,
+      readBody: () => Promise<Record<string, unknown>>,
+      send: (status: number, body: unknown) => void,
+    ): Promise<void> => {
+      const payload = () => ({
+        ok: true,
+        channels: this.list(),
+        groups: this.channelSessions(),
+        pending: this.pendingRequests(),
+        assistant: this.currentAssistant(),
+      })
+      try {
+        // 路由段统一从插件前缀之后开始，身份认证只由下方入口负责。
+        const parts = ('/dsh-im-connect/api' + path).split('/').filter(Boolean)
         if (parts[2] === 'assistant' && parts.length === 3) {
-          if (req.method === 'GET') {
-            send(res, 200, {
+          if (method === 'GET') {
+            send(200, {
               ok: true,
               assistant: this.currentAssistant(),
               cwd: this.currentWorkspace(),
@@ -506,166 +496,199 @@ export class ChannelManager {
             })
             return
           }
-          if (req.method === 'POST') {
-            const body = await readJson(req)
+          if (method === 'POST') {
+            const body = await readBody()
             const result = this.setAssistant(body)
-            send(res, result.ok ? 200 : 400, result)
+            send(result.ok ? 200 : 400, result)
             return
           }
-          send(res, 405, { ok: false, error: 'method not allowed' })
+          send(405, { ok: false, error: 'method not allowed' })
           return
         }
-        if (parts[2] === 'sessions' && parts.length === 4 && req.method === 'POST') {
+        if (parts[2] === 'sessions' && parts.length === 4 && method === 'POST') {
           const action = parts[3]
-          const body = await readJson(req)
+          const body = await readBody()
           const sessionId = String(body.sessionId ?? '')
-          if (!sessionId) { send(res, 400, { ok: false, error: '缺少 sessionId' }); return }
+          if (!sessionId) { send(400, { ok: false, error: '缺少 sessionId' }); return }
           if (action === 'rename') {
             const title = String(body.title ?? '').trim()
-            if (!title) { send(res, 400, { ok: false, error: '缺少标题' }); return }
+            if (!title) { send(400, { ok: false, error: '缺少标题' }); return }
             const ok = this.engine.renameSession(sessionId, title)
-            send(res, ok ? 200 : 404, ok ? { ok: true, groups: this.channelSessions() } : { ok: false, error: '会话不存在' })
+            send(ok ? 200 : 404, ok ? { ok: true, groups: this.channelSessions() } : { ok: false, error: '会话不存在' })
             return
           }
           if (action === 'remove') {
             const ok = await this.engine.removeSession(sessionId)
-            send(res, ok ? 200 : 404, ok ? { ok: true, groups: this.channelSessions() } : { ok: false, error: '会话不存在' })
+            send(ok ? 200 : 404, ok ? { ok: true, groups: this.channelSessions() } : { ok: false, error: '会话不存在' })
             return
           }
           if (action === 'ensure') {
             const ok = await this.engine.ensureSession(sessionId)
-            send(res, ok ? 200 : 404, ok ? { ok: true, sessionId } : { ok: false, error: '会话不存在' })
+            send(ok ? 200 : 404, ok ? { ok: true, sessionId } : { ok: false, error: '会话不存在' })
             return
           }
-          send(res, 404, { ok: false, error: `未知会话操作 ${action}` })
+          send(404, { ok: false, error: `未知会话操作 ${action}` })
           return
         }
-        if (parts[2] === 'channels' && parts.length === 3 && req.method === 'GET') {
-          send(res, 200, payload())
+        if (parts[2] === 'channels' && parts.length === 3 && method === 'GET') {
+          send(200, payload())
           return
         }
         if (parts[2] === 'channels' && parts.length === 6 && parts[4] === 'qr') {
           const id = parts[3] as ChannelId
           const action = parts[5]
-          if (!CHANNEL_META[id]) { send(res, 404, { ok: false, error: '未知渠道' }); return }
-          if (!supportsQr(id)) { send(res, 400, { ok: false, error: '该渠道不支持扫码绑定' }); return }
-          if (action === 'status' && req.method === 'GET') {
-            send(res, 200, { ok: true, pairing: this.pairing.view(id), channel: this.list().find((item) => item.id === id) })
+          if (!CHANNEL_META[id]) { send(404, { ok: false, error: '未知渠道' }); return }
+          if (!supportsQr(id)) { send(400, { ok: false, error: '该渠道不支持扫码绑定' }); return }
+          if (action === 'status' && method === 'GET') {
+            send(200, { ok: true, pairing: this.pairing.view(id), channel: this.list().find((item) => item.id === id) })
             return
           }
-          if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'method not allowed' }); return }
-          const body = await readJson(req)
+          if (method !== 'POST') { send(405, { ok: false, error: 'method not allowed' }); return }
+          const body = await readBody()
           if (action === 'start') {
             const pairing = await this.pairing.start(id, pairingSettings(body.settings as Record<string, unknown> | undefined))
-            send(res, pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
+            send(pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
             return
           }
           if (action === 'refresh') {
             const pairing = await this.pairing.refresh(id)
-            send(res, pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
+            send(pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
             return
           }
           if (action === 'cancel') {
-            send(res, 200, { ok: true, pairing: this.pairing.cancel(id) })
+            send(200, { ok: true, pairing: this.pairing.cancel(id) })
             return
           }
-          send(res, 404, { ok: false, error: `未知扫码操作 ${action}` })
+          send(404, { ok: false, error: `未知扫码操作 ${action}` })
           return
         }
-        if (parts[2] === 'channels' && parts.length === 5 && req.method === 'POST') {
+        if (parts[2] === 'channels' && parts.length === 5 && method === 'POST') {
           const id = parts[3] as ChannelId
           const action = parts[4]
-          const body = await readJson(req)
+          const body = await readBody()
           if (action === 'connect') {
             const result = await this.connect(id, body.config as Record<string, string> | undefined, body.settings as Record<string, unknown> | undefined)
-            send(res, result.ok ? 200 : 400, result.ok ? { ...result, channel: this.list().find((item) => item.id === id) } : result)
+            send(result.ok ? 200 : 400, result.ok ? { ...result, channel: this.list().find((item) => item.id === id) } : result)
             return
           }
           if (action === 'receive') {
             const result = await this.setReceive(id, body.receiveEnabled !== false)
-            send(res, result.ok ? 200 : 400, result.ok ? { ok: true, channel: this.list().find((item) => item.id === id) } : result)
+            send(result.ok ? 200 : 400, result.ok ? { ok: true, channel: this.list().find((item) => item.id === id) } : result)
             return
           }
           if (action === 'disconnect') {
             await this.disconnect(id)
-            send(res, 200, { ok: true, channel: this.list().find((item) => item.id === id) })
+            send(200, { ok: true, channel: this.list().find((item) => item.id === id) })
             return
           }
           if (action === 'remove') {
             await this.remove(id)
-            send(res, 200, { ok: true, channel: this.list().find((item) => item.id === id) })
+            send(200, { ok: true, channel: this.list().find((item) => item.id === id) })
             return
           }
           if (action === 'approve' || action === 'deny') {
             const userId = String(body.userId ?? '')
-            if (!userId) { send(res, 400, { ok: false, error: '缺少 userId' }); return }
+            if (!userId) { send(400, { ok: false, error: '缺少 userId' }); return }
             const accountId = this.resolveAccountId(id)
-            if (!accountId) { send(res, 404, { ok: false, error: '账号不存在或该渠道包含多个账号' }); return }
+            if (!accountId) { send(404, { ok: false, error: '账号不存在或该渠道包含多个账号' }); return }
             if (action === 'approve') this.approve(accountId, userId)
             else this.deny(accountId, userId)
-            send(res, 200, { ok: true, pending: this.pendingRequests() })
+            send(200, { ok: true, pending: this.pendingRequests() })
             return
           }
-          send(res, 404, { ok: false, error: `未知操作 ${action}` })
+          send(404, { ok: false, error: `未知操作 ${action}` })
           return
         }
-        if (parts[2] === 'accounts' && parts.length === 5 && req.method === 'POST') {
+        if (parts[2] === 'accounts' && parts.length === 5 && method === 'POST') {
           const accountId = parts[3]!
           const action = parts[4]!
-          const body = await readJson(req)
-          if (!this.store.channels[accountId]) { send(res, 404, { ok: false, error: '账号不存在' }); return }
+          const body = await readBody()
+          if (!this.store.channels[accountId]) { send(404, { ok: false, error: '账号不存在' }); return }
           if (action === 'settings') {
             const result = await this.updateAccount(accountId, body)
-            send(res, result.ok ? 200 : 400, result)
+            send(result.ok ? 200 : 400, result)
             return
           }
           if (action === 'receive') {
             const result = await this.setReceive(accountId, body.receiveEnabled !== false)
-            send(res, result.ok ? 200 : 400, result)
+            send(result.ok ? 200 : 400, result)
             return
           }
           if (action === 'reconnect') {
             const result = await this.reconnect(accountId)
-            send(res, result.ok ? 200 : 400, result)
+            send(result.ok ? 200 : 400, result)
             return
           }
           if (action === 'check') {
             const state = this.store.channels[accountId]!
             state.lastCheckedAt = new Date().toISOString()
             this.flush()
-            send(res, 200, { ok: true, account: this.accountView(accountId, state) })
+            send(200, { ok: true, account: this.accountView(accountId, state) })
             return
           }
           if (action === 'remove') {
             await this.remove(accountId)
-            send(res, 200, { ok: true })
+            send(200, { ok: true })
             return
           }
           if (action === 'approve' || action === 'deny') {
             const userId = String(body.userId ?? '')
-            if (!userId) { send(res, 400, { ok: false, error: '缺少 userId' }); return }
+            if (!userId) { send(400, { ok: false, error: '缺少 userId' }); return }
             action === 'approve' ? this.approve(accountId, userId) : this.deny(accountId, userId)
-            send(res, 200, { ok: true, pending: this.pendingRequests() })
+            send(200, { ok: true, pending: this.pendingRequests() })
             return
           }
-          send(res, 404, { ok: false, error: `未知账号操作 ${action}` })
+          send(404, { ok: false, error: `未知账号操作 ${action}` })
           return
         }
-        send(res, 404, { ok: false, error: 'not found' })
-        } catch (error) {
-          // 单个路由异常不能让 HTTP 连接悬死，统一回 500 并落日志
-          if (error instanceof ApiRequestError) {
-            send(res, error.status, { ok: false, error: error.message })
+        send(404, { ok: false, error: 'not found' })
+      } catch (error) {
+        // 单个路由异常不能让 HTTP 连接悬死，统一回 500 并落日志。
+        if (error instanceof ApiRequestError) {
+          send(error.status, { ok: false, error: error.message })
+          return
+        }
+        const detail = error instanceof Error ? error.message : String(error)
+        this.log(`[manager] API 处理失败: ${detail}`)
+        send(500, { ok: false, error: '操作失败，请查看本机日志' })
+      }
+    }
+
+    const basePath = '/api/dsh-im-connect'
+    const dispose = webServer.register({
+      kind: 'prefix',
+      path: basePath,
+      handler: async (req, res) => {
+        try {
+          // 动态读取活动服务，并保留 requestRejection 的 this 绑定。
+          const connection = (typeof ctx.get === 'function' ? ctx.get('connection') : undefined) as {
+            requestRejection?: (request: { headers: typeof req.headers }) => 401 | 403 | undefined
+          } | undefined
+          if (typeof connection?.requestRejection !== 'function') {
+            send(res, 503, { ok: false, error: '宿主认证服务尚未就绪或版本不支持；请稍后重试或升级宿主。 / Retry or upgrade DSH to enable authenticated management.' })
             return
           }
-          const detail = error instanceof Error ? error.message : String(error)
-          this.log(`[manager] API 处理失败: ${detail}`)
+          const rejection = connection.requestRejection(req)
+          if (rejection !== undefined) {
+            send(res, rejection, { ok: false, error: rejection === 401 ? '请先登录 DSH / Sign in to DSH first' : '宿主拒绝此 Host 或跨站请求 / Host or cross-site request forbidden' })
+            return
+          }
+          const requestError = validateApiMutation(req)
+          if (requestError) { send(res, requestError.status, { ok: false, error: requestError.error }); return }
+          const url = new URL(req.url ?? '/', 'http://localhost')
+          if (url.pathname !== basePath && !url.pathname.startsWith(basePath + '/')) {
+            send(res, 404, { ok: false, error: 'not found' })
+            return
+          }
+          await dispatch(req.method ?? 'GET', url.pathname.slice(basePath.length), () => readJson(req), (status, body) => send(res, status, body))
+        } catch (error) {
+          this.log(`[manager] API 认证失败: ${error instanceof Error ? error.message : String(error)}`)
           send(res, 500, { ok: false, error: '操作失败，请查看本机日志' })
         }
       },
     })
     if (typeof dispose === 'function') this.apiDisposers.push(dispose)
-    this.log('[manager] API 已注册 /dsh-im-connect/api')
+    this.log('[manager] API 已注册 /api/dsh-im-connect')
   }
 
   disposeApi(): void {

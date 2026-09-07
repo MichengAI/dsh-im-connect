@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { clearWeixinLogin, createWeixinChannel, isStaleWeixinTokenError, uniqueMediaFileName, persistWeixinLogin, readLegacyWeixinBotToken, readResponseBufferLimited } from '../lib/channels/weixin.js'
-import { API_CLIENT_HEADER, backupCorruptConfig, readApiJsonBody, validateApiRequest } from '../lib/manager.js'
+import { backupCorruptConfig, readApiJsonBody } from '../lib/manager.js'
 import { createFileVault } from '../lib/engine/credentials.js'
 import { createRotatingFileAppender } from '../lib/engine/file-log.js'
 import { KeyedSerialQueue } from '../lib/engine/keyed-queue.js'
@@ -105,15 +105,6 @@ test('原子写替换完整文件且不残留临时文件', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
-})
-
-test('管理 API 强制回环 Host，并用自定义头和 JSON 保护写请求', () => {
-  assert.deepEqual(validateApiRequest({ method: 'GET', headers: { host: 'localhost' }, remoteAddress: '192.168.1.5' }), { status: 403, error: 'forbidden client address' })
-  assert.deepEqual(validateApiRequest({ method: 'GET', headers: { host: 'evil.example' }, remoteAddress: '127.0.0.1' }), { status: 403, error: 'forbidden host' })
-  assert.equal(validateApiRequest({ method: 'GET', headers: { host: '127.0.0.1:10406' }, remoteAddress: '::ffff:127.0.0.1' }), undefined)
-  assert.deepEqual(validateApiRequest({ method: 'POST', headers: { host: 'localhost:10406', 'content-type': 'application/json' }, remoteAddress: '::1' }), { status: 403, error: 'forbidden mutation request' })
-  assert.deepEqual(validateApiRequest({ method: 'POST', headers: { host: '[::1]:10406', [API_CLIENT_HEADER]: '1', 'content-type': 'text/plain' }, remoteAddress: '::1' }), { status: 415, error: 'content-type must be application/json' })
-  assert.equal(validateApiRequest({ method: 'POST', headers: { host: 'localhost:10406', [API_CLIENT_HEADER]: '1', 'content-type': 'application/json; charset=utf-8' }, remoteAddress: '127.0.0.1' }), undefined)
 })
 
 test('管理 API 请求体在 UTF-8 多字节字符跨 chunk 时仍能正确解析', async () => {

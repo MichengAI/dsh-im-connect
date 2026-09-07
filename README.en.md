@@ -227,7 +227,7 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 | Item | Current behavior |
 | --- | --- |
 | Access | Groups need no binding, only a mention. Each account can allow only approved users or all DM users; approved-only is the default, and WeChat / Feishu / Lark / QQ QR scanners are added to that account's allowlist automatically |
-| Management API | Enforces both a loopback peer and loopback host (`localhost`, `127.0.0.1`, `[::1]`); mutations require JSON and the plugin client header |
+| Management API | Uses `/api/dsh-im-connect`, following the REST prefix used by other DSH plugins. It delegates Host, Origin, and Cookie checks to Host `connection.requestRejection`, including local requests. Unavailable authentication returns 503; mutations retain JSON, client-header, and 1 MiB limits |
 | Secrets | WeChat tokens and other secrets prefer DSH `ctx.credentials`; otherwise they use plaintext `%DSH_HOME%\dsh-im-connect\secrets.json`, restricted to the current user and never safe to sync or share |
 | Account state | `channels.json` stores per-account workspace, model, permission, private access, enablement, and credential refs, not raw secrets |
 | Browser payloads | Never include tokens, secrets, App Secrets, or internal error details |
@@ -235,14 +235,14 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 | Tool approval | Only a user on the current account's allowlist can grant or deny in a DM. Even when all DM users may chat, unapproved users cannot approve tools; approvals cannot cross conversations or come from groups |
 | Interactive questions | Single-choice, multiple-choice, and custom questions return to the originating IM conversation; one conversation handles them in order, and only the initiating user can answer in a group |
 
-Do not expose DSH Web beyond this machine. Permission presets use the same host sandbox-policy values as Chat; `danger-full-access` does not wrap a sandbox.
+Keep the DSH backend listening on loopback. Remote access should use a controlled HTTPS reverse proxy, the actual authority in the Host's `trustedHosts`, and a login through that authority. Do not spoof localhost or remove authentication to bypass 403. Image-download `additionalImageHosts` does not configure management access; see [management authentication](SECURITY.md#管理面). Permission presets use the same host sandbox-policy values as Chat; `danger-full-access` does not wrap a sandbox.
 
 ## Secondary development
 
 This repository develops in `src` and builds to `lib`:
 
 - [src\index.ts](src/index.ts): host entry, config, and lifecycle.
-- [src\manager.ts](src/manager.ts): channel start/stop, loopback API, and credential persistence.
+- [src\manager.ts](src/manager.ts): channel start/stop, authenticated management API, and credential persistence.
 - [src\engine](src/engine): session routing, slash commands, approval, splitting, and outbound push.
 - [src\channels](src/channels): DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram adapters.
 - `client.js`: settings page and workspace channel sidebar.
@@ -260,6 +260,8 @@ dsh plugin --profile web add .
 When changing channel or session logic, keep the engine platform-agnostic, keep adapters from creating agents, and keep web tasks separate from IM channels.
 
 ## Validation
+
+For real management-authentication tests, set `DSH_CONNECTION_CONTRACT_ROOT` to the isolated `@deepseek-ai/dsh-client-connection` package root. The Gateway-coexistence case also uses `DSH_CHAT_CONTRACT_ROOT` from the image contracts. Local runs skip these contracts when unconfigured; CI supplies both. Tests use temporary HTTP servers and credentials, not a live Cloudflare deployment.
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8

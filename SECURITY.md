@@ -20,8 +20,13 @@
 
 ## 管理面
 
-- 设置页与 `/dsh-im-connect/api` 同时校验回环来源地址与回环 Host；即使 Host webServer 误绑到局域网地址，远程请求也会被拒绝。
-- 所有写接口必须使用 `application/json`，并携带插件客户端专用请求头；普通跨站表单不能触发连接、批准、删除或权限修改。
+- 设置页使用 `/api/dsh-im-connect`。每个请求都先通过宿主公开的 `connection.requestRejection` 认证，再进入插件业务分发。该接口同时执行 Host/trustedHosts、Origin、跨站标记与绑定访问地址的浏览器 Cookie 校验；本机请求同样需要登录。路径前缀、自定义请求头及回环代理来源都不是身份凭据。
+- 该 REST 前缀遵循其他 DSH 插件的 `/api/<插件名>` 约定，并通过具名路径与宿主 Gateway 共存；不注册第二个 `/api` RPC interceptor，也不改变宿主 Gateway。接口仍为 REST JSON，不是 Remote RPC envelope；既有业务路径、GET/POST 方法、参数和成功返回结构不变。
+- 每次请求通过 `ctx.get('connection')` 读取当前活动服务，不缓存认证实例、不暴露 inactive 服务。宿主缺少公开认证接口或服务暂不可用时返回 503，提示稍后重试或升级；认证异常不会降级为匿名本地访问。
+- 反代应保留外部 Host、Cookie 和 Origin，在宿主 `client-connection.trustedHosts` 配置实际访问地址，并通过该地址的 DSH 登录入口取得 Cookie。不要将 Host 改成 localhost 来绕过校验，不接受插件专用 token 或转发头作为认证。公网入口应使用 HTTPS。
+- 管理回包统一 `Cache-Control: no-store`，前端使用同源 Cookie 且禁用缓存。
+- 所有写接口必须使用 `Content-Type: application/json`，并携带 `x-dsh-im-connect-client: 1`；读取和写入均需宿主登录 Cookie。请求体仍按实际接收字节限制为 1 MiB，普通跨站表单不能触发连接、批准、删除或权限修改。
+- 失败返回 JSON `{ "ok": false, "error": "说明" }`：未登录/无效 Cookie 为 401；不可信 Host、跨站请求或写请求缺客户端标记为 403；认证服务不可用为 503。非法 JSON 为 400，超限为 413，非 JSON 写请求为 415；业务路由其余错误码保持原行为。认证失败不会进入业务读写。
 - 待批准列表保存在 `channels.json` 的 `pending`，白名单保存在 `allowlist`。
 - 浏览器回包不返回 token、secret、原始凭据或内部异常详情。
 

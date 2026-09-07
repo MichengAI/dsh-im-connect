@@ -227,7 +227,7 @@ dsh --profile web --dump-config
 | 项 | 当前行为 |
 | --- | --- |
 | 用户准入 | 群聊不用绑定，只需 @。每个账号可选择「仅已批准用户」或「允许所有私聊用户」；默认仅批准用户可用，微信 / 飞书 / Lark / QQ 扫码者会自动加入该账号白名单 |
-| 管理接口 | 强制校验本机回环来源及 Host（`localhost` / `127.0.0.1` / `[::1]`）；写接口要求 JSON 和插件客户端请求头 |
+| 管理接口 | `/api/dsh-im-connect`；通过宿主 `connection.requestRejection` 验证 Host、Origin 和 Cookie，本机也须登录；认证不可用返回 503，写接口保留 JSON、客户端请求头和 1 MiB 限制 |
 | 敏感字段 | 包括微信 token 在内均优先写入 DSH `ctx.credentials`；没有该服务时落到 `%DSH_HOME%\dsh-im-connect\secrets.json`（明文，仅限当前用户，禁止同步或分享） |
 | 账号状态 | `channels.json` 按账号保存工作区、模型、权限、私聊准入、启用状态和凭据引用，不保存明文 Secret |
 | 浏览器回包 | 不返回 token、secret、App Secret 或内部异常详情 |
@@ -235,14 +235,14 @@ dsh --profile web --dump-config
 | 工具批准 | 仅私聊且发送者已在当前账号白名单时生效；即使账号允许所有私聊用户，未批准用户也不能审批工具，且不能跨会话或在群里批准 |
 | 交互问题 | 单选、多选和自定义问题回到发起任务的 IM 会话；同一会话按顺序处理，群聊只接受任务发起者回答 |
 
-不要把 DSH Web 暴露到非本机地址。权限预设与 Chat 使用相同的 Host sandbox-policy；`danger-full-access` 不套沙箱。
+DSH 后端保持本机监听；远程访问使用受控 HTTPS 反向代理，并在宿主配置实际访问地址的 `trustedHosts`、通过该地址登录。不要伪装 localhost 或删除认证检查来绕过 403；图片下载的 `additionalImageHosts` 不用于管理接口。详见 [管理面认证](SECURITY.md#管理面)。权限预设与 Chat 使用相同的 Host sandbox-policy；`danger-full-access` 不套沙箱。
 
 ## 二次开发
 
 本仓库用 `src` 开发，构建到 `lib`：
 
 - [src\index.ts](src/index.ts)：Host 入口、配置和生命周期。
-- [src\manager.ts](src/manager.ts)：渠道启停、本机 API、凭据落盘。
+- [src\manager.ts](src/manager.ts)：渠道启停、已认证管理 API、凭据落盘。
 - [src\engine](src/engine)：会话路由、斜杠命令、审批、分片和回推。
 - [src\channels](src/channels)：钉钉、飞书、Lark、微信、企业微信、QQ、Telegram 适配器。
 - `client.js`：设置页和工作区频道侧栏。
@@ -260,6 +260,8 @@ dsh plugin --profile web add .
 修改渠道或会话逻辑时，必须保持：引擎不写死平台名、渠道不创建 agent、网页任务与 IM 频道分列。
 
 ## 验证
+
+真实管理认证测试需要把 `DSH_CONNECTION_CONTRACT_ROOT` 指向隔离安装的 `@deepseek-ai/dsh-client-connection` 包根目录；与 Gateway 共存的用例同时使用图片契约的 `DSH_CHAT_CONTRACT_ROOT`。未配置时本地会跳过对应契约测试，CI 已配置执行。测试使用临时 HTTP 服务和临时凭据，不代表真实 Cloudflare 部署联调。
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
