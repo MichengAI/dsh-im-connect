@@ -1,5 +1,14 @@
-import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
+import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
+import { requestChannelBytes, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
+
+async function downloadWecomImage(image: { url?: string; aeskey?: string }): Promise<ImMedia> {
+  if (!image.url || !image.aeskey) throw new Error('图片缺少下载地址或解密密钥')
+  // SDK downloadFile has no response-size or redirect/SSRF controls. Reuse its
+  // public decryptFile primitive after our bounded, DNS-pinned HTTPS transfer.
+  const { decryptFile } = await import('@wecom/aibot-node-sdk')
+  return imageMedia(decryptFile(await requestChannelBytes(image.url), image.aeskey))
+}
 
 export interface WecomConfig {
   botId?: string
@@ -139,7 +148,9 @@ export class WecomReplyBroker {
   }
 }
 
-export function createWecomChannel(config: WecomConfig, log: (line: string) => void): ChannelAdapter | undefined {
+export function createWecomChannel(config: WecomConfig, log: (line: string) => void, dependencies: {
+  downloadImage?: (image: { url?: string; aeskey?: string }) => Promise<ImMedia>
+} = {}): ChannelAdapter | undefined {
   const botId = config.botId?.trim()
   const secret = config.secret?.trim()
   if (!botId || !secret) return undefined
@@ -148,6 +159,8 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
   let client: WecomSdkClient | undefined
   let broker: WecomReplyBroker | undefined
   let statusText = '未连接'
+  let generation = 0
+  const receiving = new Map<string, Promise<void>>()
 
   return {
     id: 'wecom',
@@ -155,6 +168,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     maxMessageLength: 4000,
     skipMerge: true,
     async start() {
+      const startedGeneration = ++generation
       let sdk: {
         WSClient: new (opts: { botId: string; secret: string; maxAuthFailureAttempts?: number; logger?: { debug: Function; info: Function; warn: Function; error: Function } }) => WecomSdkClient
         generateReqId?: (prefix: string) => string
@@ -176,22 +190,48 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
         const senderId = from?.userid ?? ''
         const chatId = chattype === 'group' ? String(body.chatid ?? '') : senderId
         const text = messageText(body)
-        if (!chatId || !text || !['single', 'group'].includes(chattype)) {
+        const mixed = body.mixed as { msg_item?: Array<{ msgtype?: string; image?: { url?: string; aeskey?: string } }> } | undefined
+        const images = body.msgtype === 'image' ? [(body.image as { url?: string; aeskey?: string }) ?? {}]
+          : body.msgtype === 'mixed' && Array.isArray(mixed?.msg_item)
+            ? mixed.msg_item.filter(item => item?.msgtype === 'image').map(item => item.image ?? {}) : []
+        if (!chatId || (!text && !images.length) || !['single', 'group'].includes(chattype)) {
           log(`[wecom] 忽略一帧 chattype=${chattype || '-'} msgtype=${String(body.msgtype ?? '-')}`)
           return
         }
         // 企微长连接模式只会在群聊中 @ 当前机器人时推送回调，这里无需也无法校验 mention；
         // 不做 text.includes('@') 兜底，避免正文不含 ASCII @ 时误丢合法消息。
         log(`[wecom] 收到 ${chattype} ${senderId}: ${text.slice(0, 80)}`)
-        broker?.remember(chatId, frame)
-        void handler?.({
-          chatId,
-          userId: senderId,
-          text,
-          kind: chattype === 'group' ? 'group' : 'dm',
-          addressed: true,
-          messageId: typeof body.msgid === 'string' ? body.msgid : undefined,
-        })
+        const work = (receiving.get(chatId) ?? Promise.resolve()).then(async () => {
+          if (generation !== startedGeneration) return
+          const media: ImMedia[] = []
+          try {
+            if (images.length > MAX_CHANNEL_IMAGES) throw new Error('图片数量超过限制')
+            for (const image of images) {
+              if (generation !== startedGeneration) return
+              media.push(await (dependencies.downloadImage ?? downloadWecomImage)(image))
+            }
+          } catch (error) {
+            if (generation !== startedGeneration) return
+            const reason = channelImageFailureReason(error)
+            log(`[wecom] 图片读取失败: ${reason} host=${images.slice(0, MAX_CHANNEL_IMAGES).map(image => channelImageDownloadHost(image.url)).join(',')}`)
+            // Reply directly: consuming the broker FIFO here could steal an earlier frame.
+            await client?.replyStream(frame, newStreamId(), `图片读取失败：${reason}。请重新发送；若仍失败请管理员检查网络和机器人配置。`, true)
+            return
+          }
+          if (generation !== startedGeneration) return
+          broker?.remember(chatId, frame)
+          await handler?.({
+            chatId,
+            media,
+            userId: senderId,
+            text,
+            kind: chattype === 'group' ? 'group' : 'dm',
+            addressed: true,
+            messageId: typeof body.msgid === 'string' ? body.msgid : undefined,
+          })
+        }).catch(() => { log('[wecom] 消息处理或回调回复失败') })
+        receiving.set(chatId, work)
+        void work.finally(() => { if (receiving.get(chatId) === work) receiving.delete(chatId) })
       })
       const ready = new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('企业微信连接超时')), 20_000)
@@ -214,6 +254,8 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       statusText = '长连接已建立'
     },
     async stop() {
+      generation++
+      receiving.clear()
       client?.disconnect()
       client = undefined
       broker?.dispose()

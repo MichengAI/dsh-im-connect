@@ -1,4 +1,4 @@
-import type { ChannelAdapter, ReplyStream } from '../engine/types.js';
+import type { ChannelAdapter, ImMedia, ReplyStream } from '../engine/types.js';
 export interface WecomConfig {
     botId?: string;
     secret?: string;
@@ -31,5 +31,10 @@ export declare class WecomReplyBroker {
     send(chatId: string, text: string): Promise<void>;
     beginReply(chatId: string): Promise<ReplyStream>;
 }
-export declare function createWecomChannel(config: WecomConfig, log: (line: string) => void): ChannelAdapter | undefined;
+export declare function createWecomChannel(config: WecomConfig, log: (line: string) => void, dependencies?: {
+    downloadImage?: (image: {
+        url?: string;
+        aeskey?: string;
+    }) => Promise<ImMedia>;
+}): ChannelAdapter | undefined;
 //# sourceMappingURL=wecom.d.ts.map

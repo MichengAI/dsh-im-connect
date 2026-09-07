@@ -6,9 +6,71 @@ import { join } from 'node:path'
 import { SessionRouter } from '../lib/engine/router.js'
 import { SessionMapStore } from '../lib/engine/session-store.js'
 
+test('real Chat selection owns assembly and request after account initialization', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT }, async t => {
+  const { Context } = await import('@deepseek-ai/cordis')
+  const { pathToFileURL } = await import('node:url')
+  const { ApiSessionAgentController } = await import(pathToFileURL(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/agent.js')).href)
+  const { SessionCommandController } = await import(pathToFileURL(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/commands.js')).href)
+  const { SessionController } = await import(pathToFileURL(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/index.js')).href)
+  const { router } = makeRouter(t, { resolveConfig: () => ({ provider: 'account', model: 'text-only', reasoningEffort: 'high', agentPreset: 'standard', mergeTimeoutSecs: 1 }) })
+  const agentCtx = new Context()
+  const received = [], resolved = []
+  let options
+  router.ctx.agents.create = async opts => {
+    options = opts.agentOptions
+    const handle = createHandle(opts.sessionId)
+    handle.agent.id = opts.sessionId
+    handle.agent.ctx = agentCtx
+    handle.agent.session.header = {}
+    handle.agent.session.requestHeader = () => undefined
+    handle.agent.followup = message => received.push(message)
+    agentCtx.provide('agent', handle.agent)
+    await opts.setup(agentCtx)
+    return handle
+  }
+  const binding = await router.getOrCreate('wecom', 'dm', 'selection-contract', 'image')
+  const agent = binding.handle.agent
+  const assemble = () => agentCtx.waterfall('system-prompt/assemble', {}, {}, async () => ({ variables: { provider: options.provider, model: options.model } }))
+  const request = () => agentCtx.waterfall('agent/request', {}, async () => ({ ...options }))
+  // Older text-only hosts still use the account's initial options and effort.
+  assert.deepEqual((await assemble()).variables, { provider: 'account', model: 'text-only' })
+  assert.deepEqual(await request(), { provider: 'account', model: 'text-only', reasoningEffort: 'high' })
+  const host = {
+    agents: { get: () => agent },
+    typert: { lookups: { configure() {} }, contexts: { configureHost() {} } },
+    sessionProjections: { stateOf: () => ({ pending: agent.session.events.at(-1).data }) },
+    agentDefaultModel: { currentSelection: () => ({ provider: 'global', model: 'default' }) },
+    llm: { listProviders: () => [{ id: 'chat' }], async resolveModelInfo(provider, model) { resolved.push([provider, model]); return { inputModalities: ['text', 'image'] } } },
+    attachments: { async saveImages(images) { return images.map(() => ({ attachmentId: 'image', mediaType: 'image/png', bytes: 1, width: 1, height: 1 })) } },
+  }
+  const owner = new ApiSessionAgentController(host)
+  const selection = owner.selectionFor(agent)
+  assert.deepEqual(selection.current, { provider: 'account', model: 'text-only', reasoningEffort: 'high' })
+  const controller = Object.create(SessionController.prototype)
+  controller.commands = new SessionCommandController(host, owner, process.cwd())
+  for (const current of [{ provider: 'chat', model: 'vision', reasoningEffort: 'low' }, { provider: 'chat', model: 'vision' }]) {
+    selection.current = current
+    await controller.prompt({ requestId: crypto.randomUUID(), sessionId: agent.id, mode: 'queue', content: [{ type: 'image', data: 'AA==', mediaType: 'image/png' }] }, new AbortController().signal)
+    assert.deepEqual(resolved.at(-1), ['chat', 'vision'])
+    assert.equal(received.at(-1).content[0].type, 'image')
+    assert.deepEqual((await assemble()).variables, { provider: current.provider, model: current.model })
+    assert.deepEqual(await request(), current)
+  }
+})
+
+test('legacy resumed sessions retain account reasoning effort in agentOptions', async t => {
+  const { router } = makeRouter(t, { resolveConfig: () => ({ provider: 'account', model: 'text-only', reasoningEffort: 'high', agentPreset: 'standard', mergeTimeoutSecs: 1 }) })
+  await router.getOrCreate('wecom', 'dm', 'reasoning', 'text')
+  await router.disposeChannel('wecom')
+  let options
+  router.ctx.agents.resume = async opts => { options = opts.agentOptions; return createHandle(opts.resumeSessionId) }
+  await router.getOrCreate('wecom', 'dm', 'reasoning', 'text')
+  assert.deepEqual(options, { provider: 'account', model: 'text-only', reasoningEffort: 'high' })
+})
+
 function createHandle(sessionId) {
   return {
-    agent: { followup() {}, session: { id: sessionId } },
+    agent: { followup() {}, session: { id: sessionId, events: [], append(type, data) { this.events.push({ type, data }) } } },
     async dispose() {},
   }
 }
@@ -61,6 +123,15 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
   }, () => undefined, resolveConfig, { disposeTimeoutMs })
   return { router, store, created, createdOptions, archivedIds, permissionSelections }
 }
+
+test('新会话把账号模型写为会话选择，首次图片不能退回宿主默认模型；恢复不覆盖选择', async t => {
+  const { router } = makeRouter(t)
+  const binding = await router.getOrCreate('wecom', 'dm', 'image-first', 'photo')
+  assert.deepEqual(binding.handle.agent.session.events, [{ type: 'model/selection', data: { provider: 'deepseek', model: 'deepseek-chat' } }])
+  await router.disposeChannel('wecom')
+  const resumed = await router.getOrCreate('wecom', 'dm', 'image-first', 'photo')
+  assert.deepEqual(resumed.handle.agent.session.events, [])
+})
 
 test('不同账号实例使用各自的模型、工作区和权限', async (t) => {
   const configs = {

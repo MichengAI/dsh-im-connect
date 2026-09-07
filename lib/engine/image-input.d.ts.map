@@ -1,0 +1,1 @@
+{"version":3,"file":"image-input.d.ts","sourceRoot":"","sources":["../../src/engine/image-input.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,YAAY,CAAA;AAEzC,qBAAa,eAAgB,SAAQ,KAAK;CAAG;AAE7C,oFAAoF;AACpF,wBAAgB,iBAAiB,CAAC,KAAK,EAAE,OAAO,GAAG,MAAM,CAKxD;AAED,oFAAoF;AACpF,wBAAsB,eAAe,CAAC,KAAK,EAAE,OAAO,GAAG,OAAO,CAAC,MAAM,CAAC,MAAM,EAAE,OAAO,CAAC,CAAC,CAWtF"}

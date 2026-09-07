@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { ImageInputError, imageInputFailure, imagePromptPart } from './image-input.js'
 import { ApprovalBroker } from './approval.js'
 import { SessionMerger } from './merge.js'
 import { SessionRouter } from './router.js'
@@ -80,6 +81,7 @@ export class ImEngine {
   private readonly wrappedUserQuestionServices = new WeakSet<object>()
   private legacyServiceTimer?: NodeJS.Timeout
   private disposed = false
+  private readonly inputScopes = new Map<string, AbortController>()
 
   constructor(
     private readonly ctx: Context,
@@ -154,16 +156,19 @@ export class ImEngine {
     this.config.provider = provider
     this.config.model = model
     this.config.reasoningEffort = reasoningEffort
+    for (const channelId of this.inputScopes.keys()) this.cancelInputs(channelId)
     void this.router.disposeAll()
   }
 
   setCwd(cwd: string): void {
     this.config.cwd = cwd
+    for (const channelId of this.inputScopes.keys()) this.cancelInputs(channelId)
     void this.router.disposeAll()
   }
 
   setPermission(permission: string): void {
     this.config.permissionPreset = permission
+    for (const channelId of this.inputScopes.keys()) this.cancelInputs(channelId)
     void this.router.disposeAll()
   }
 
@@ -177,6 +182,7 @@ export class ImEngine {
   }
 
   unregister(channelId: string): void {
+    this.cancelInputs(channelId)
     this.channels.delete(channelId)
   }
 
@@ -192,6 +198,7 @@ export class ImEngine {
   }
 
   async reloadChannel(channelId: string, options: { resetSessions?: boolean } = {}): Promise<void> {
+    this.cancelInputs(channelId)
     for (const sessionId of this.router.sessionIdsForChannel(channelId)) {
       this.cancelSessionInteractions(sessionId, new Error('账号配置已更新'))
     }
@@ -205,6 +212,7 @@ export class ImEngine {
 
   dispose(): void {
     this.disposed = true
+    for (const channelId of this.inputScopes.keys()) this.cancelInputs(channelId)
     if (this.legacyServiceTimer) clearTimeout(this.legacyServiceTimer)
     for (const off of this.disposeEvents) off()
     this.broker.dispose()
@@ -272,7 +280,7 @@ export class ImEngine {
       const text = msg.text.trim()
       const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
       const binding = this.router.lookup(channelId, kind, msg.chatId)
-      if (text.startsWith('/')) {
+      if (text.startsWith('/') && !msg.media?.length) {
         const command = text.split(/\s+/, 1)[0]?.toLowerCase()
         if ((command === '/new' || command === '/clear')
           && binding
@@ -321,7 +329,7 @@ export class ImEngine {
       const allowWords = ['批准', '同意', 'yes', 'y', 'allow']
       const denyWords = ['拒绝', '不同意', 'no', 'n', 'reject', 'deny']
       const verdict = allowWords.includes(text.toLowerCase()) ? true : denyWords.includes(text.toLowerCase()) ? false : undefined
-      if (verdict !== undefined) {
+      if (verdict !== undefined && !msg.media?.length) {
         if (!canAnswerToolApproval({ userAllowed: this.userAllowed(channelId, msg.userId), kind: msg.kind === 'group' ? 'group' : 'dm' })) {
           if (binding && this.broker.has(binding.sessionId)) {
             const hint = msg.kind === 'group'
@@ -350,7 +358,7 @@ export class ImEngine {
       }
     } catch (error) {
       this.log(`[${channelId}] 处理失败: ${error instanceof Error ? error.message : String(error)}`)
-      await channel.send(msg.chatId, '消息处理失败，请查看本机日志。').catch(() => undefined)
+      await channel.send(msg.chatId, msg.media?.some(media => media.kind === 'image') ? imageInputFailure(error) : '消息处理失败，请查看本机日志。').catch(() => undefined)
     }
   }
 
@@ -375,26 +383,47 @@ export class ImEngine {
   }
 
   private async inject(channel: ChannelAdapter, msg: ImMessage): Promise<void> {
+    if (this.disposed || this.channels.get(channel.id) !== channel) return
+    let scope = this.inputScopes.get(channel.id)
+    if (!scope) this.inputScopes.set(channel.id, scope = new AbortController())
+    const { signal } = scope
     const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
     const title = (msg.username || msg.text || msg.chatId).slice(0, 40)
     const binding = await this.router.getOrCreate(channel.id, kind, msg.chatId, title)
     const content: Array<Record<string, unknown>> = []
     if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })
     for (const media of msg.media ?? []) {
-      if (media.kind === 'voice-text' && media.text) content.push({ type: 'text', text: `[语音] ${media.text}` })
+      if (media.kind === 'image') content.push(await imagePromptPart(media))
+      else if (media.kind === 'voice-text' && media.text) content.push({ type: 'text', text: `[语音] ${media.text}` })
       else if (media.path) content.push({ type: 'text', text: `[附件 ${media.name ?? media.kind}] ${media.path}` })
     }
-    if (content.length === 0) return
+    if (signal.aborted || content.length === 0) return
     if (msg.userId) this.sessionActors.set(binding.sessionId, msg.userId)
     this.streams.reset(`${channel.id}:${msg.chatId}`)
     await channel.sendAction?.(msg.chatId, 'typing').catch(() => undefined)
-    this.router.followup(binding, {
+    if (signal.aborted) return
+    if (content.some(part => part.type === 'image')) {
+      // Use Chat's public admission entry: session-local model selection, shared
+      // model-switch serialization, and durable attachment validation/storage.
+      // Optional lookup preserves text-only operation on older Hosts. Keep
+      // strict lookup so a pending or unloading provider is never invoked.
+      const controller = (this.ctx as unknown as { get(name: string): unknown }).get('sessionController') as {
+        prompt(request: { requestId: string; sessionId: string; mode: 'queue'; content: Array<Record<string, unknown>> }, signal: AbortSignal): Promise<unknown>
+      } | undefined
+      if (!controller?.prompt) throw new ImageInputError('当前 Host 不支持 Chat 图片输入，请升级 DeepSeek Harness。')
+      await controller.prompt({ requestId: crypto.randomUUID(), sessionId: binding.sessionId, mode: 'queue', content }, signal)
+    } else this.router.followup(binding, {
       id: crypto.randomUUID(),
       role: 'user',
       content,
       source: { kind: 'user' },
     })
     this.log(`[${channel.id}] 已注入 ${binding.sessionId}`)
+  }
+
+  private cancelInputs(channelId: string): void {
+    this.inputScopes.get(channelId)?.abort()
+    this.inputScopes.delete(channelId)
   }
 
   private async answerApproval(channelId: string, msg: ImMessage, allow: boolean): Promise<boolean> {

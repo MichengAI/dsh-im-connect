@@ -334,7 +334,10 @@ export class SessionRouter {
     try {
       const handle = await this.ctx.agents.resume({
         resumeSessionId: record.sessionId,
-        agentOptions: this.resolveAgentOptions(record.channel),
+        agentOptions: {
+          ...this.resolveAgentOptions(record.channel),
+          ...(this.resolveConfig(record.channel).reasoningEffort ? { reasoningEffort: this.resolveConfig(record.channel).reasoningEffort } : {}),
+        },
         setup: this.presetSetup(record.channel),
       })
       await this.attachWorkspace(record.sessionId, record.channel)
@@ -355,7 +358,8 @@ export class SessionRouter {
   private async createHandle(sessionId: string, channelId: string) {
     const agents = this.ctx.agents
     if (!agents?.create) throw new Error('当前 Host 没有 agents 服务，无法创建 IM 会话')
-    // DSH 会话头的 origin 只能是 subagent；IM 与任务的区分靠 sessionId 的 im: 前缀。
+    // IM 保持普通会话（不设置 subagent origin）；Chat prompt 会拒绝子代理所有权。
+    // IM 与任务的区分靠 sessionId 的 im: 前缀。
     // 必须带上当前默认模型，否则 deployment:persona 的 {{model}} 组装会失败。
     const config = this.resolveConfig(channelId)
     const agentOptions = this.resolveAgentOptions(channelId)
@@ -372,7 +376,24 @@ export class SessionRouter {
       },
       setup: this.presetSetup(channelId),
     })
-    return agents.withoutInitiator ? agents.withoutInitiator(create) : create()
+    const handle = await (agents.withoutInitiator ? agents.withoutInitiator(create) : create())
+    // Chat's selectionFor() restores the durable pending selection, not this
+    // router's assembly hook. Seed NEW sessions so an image-first message uses
+    // the account model. Never rewrite a resumed session's current selection.
+    const session = handle.agent?.session as { append?: (type: string, data: unknown) => void } | undefined
+    if (config.provider && config.model && session?.append) {
+      try {
+        session.append('model/selection', {
+          provider: config.provider,
+          model: config.model,
+          ...(config.reasoningEffort ? { reasoningEffort: config.reasoningEffort } : {}),
+        })
+      } catch (error) {
+        // Older Hosts may not register this event; preserve legacy text input.
+        this.log(`[router] 无法记录初始模型选择: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    return handle
   }
 
   async attachMappedSessions(): Promise<void> {
@@ -440,21 +461,10 @@ export class SessionRouter {
     const permission = config.permissionPreset
     return async (agentCtx: unknown) => {
       if (ctx.agentPresets?.mount) await ctx.agentPresets.mount(agentCtx, preset)
-      if (config.provider && config.model) {
-        try {
-          const { installModelSelection } = await import('@deepseek-ai/dsh-agent')
-          installModelSelection(agentCtx, {
-            current: {
-              provider: config.provider,
-              model: config.model,
-              ...(config.reasoningEffort ? { reasoningEffort: config.reasoningEffort } : {}),
-            },
-            assembled: undefined,
-          })
-        } catch {
-          // Host 未暴露该接口时，仍把 reasoningEffort 放在 agentOptions 里。
-        }
-      }
+      // Account defaults belong in agentOptions (including on legacy Hosts),
+      // not a second installModelSelection middleware. Its outer after-next
+      // override would defeat Chat's session selection and image admission.
+      // New sessions also persist their initial selection in createHandle().
       if (permission) {
         try {
           const agent = (agentCtx as { agent?: { session?: unknown } }).agent

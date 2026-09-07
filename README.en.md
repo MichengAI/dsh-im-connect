@@ -73,6 +73,18 @@ WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk 
 
 ✅ Ready = text in and out works ｜ *WeChat = official iLink only, no reverse-engineered personal protocol ｜ Groups still require an @ mention
 
+## Image input
+
+Image input follows DSH Chat's model-capability and attachment rules rather than guessing vision support from model names:
+
+The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram. See the [image-input verification guide](docs/image-input.md) for protocol forms and live checks.
+
+- Use the model currently selected for the IM session, not just the global default.
+- When the model declares `image` support, store images as standard DSH attachments and submit image content to the model. Session history keeps image references rather than only local-path text.
+- When the model explicitly excludes image input, tell the sender to switch models instead of silently dropping the image. Missing capability metadata follows Chat's compatibility behavior and is not, by itself, a reason to reject an image.
+- Channel download limits, host attachment size and format limits, DM access rules, and group mention requirements still apply.
+- This is inbound image analysis, not a promise that every channel supports sending images from the bot or generating images.
+
 ## Screenshots
 
 Add accounts under each channel in **Settings → IM Assistant**. Expand a channel, select an account, and configure its workspace, model, permission, private access, and receive state independently on the right:

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 docs/*
+!docs/image-input.md
 !docs/02-产品与业务/
 docs/02-产品与业务/*
 !docs/02-产品与业务/05-主动投递.md

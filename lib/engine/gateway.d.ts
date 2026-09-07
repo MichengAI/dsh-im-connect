@@ -28,6 +28,7 @@ export declare class ImEngine {
     private readonly wrappedUserQuestionServices;
     private legacyServiceTimer?;
     private disposed;
+    private readonly inputScopes;
     constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all');
     renameSession(sessionId: string, title: string): boolean;
     removeSession(sessionId: string): Promise<boolean>;
@@ -52,6 +53,7 @@ export declare class ImEngine {
     private handleInbound;
     private handleCommand;
     private inject;
+    private cancelInputs;
     private answerApproval;
     private onApproval;
     private onUserQuestions;

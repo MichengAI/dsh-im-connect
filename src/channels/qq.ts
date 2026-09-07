@@ -1,6 +1,9 @@
 /** QQ 开放平台机器人：官方 WebSocket 网关，不是个人 QQ 号。 */
-import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
+import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { timeoutSignal } from '../engine/abort.js'
+import { readResponseBufferLimited } from './weixin.js'
+import { KeyedSerialQueue } from '../engine/keyed-queue.js'
+import { MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
 
 export interface QqChannelConfig {
   appId?: string
@@ -17,7 +20,7 @@ interface GatewayPayload {
 interface QQMessage {
   id: string
   content?: string
-  attachments?: unknown[]
+  attachments?: Array<{ content_type?: string; url?: string; filename?: string; size?: number }>
   author?: {
     id?: string
     user_openid?: string
@@ -37,6 +40,7 @@ const TOKEN_URL = 'https://bots.qq.com/app/getAppAccessToken'
 const API = 'https://api.sgroup.qq.com'
 const GATEWAY_PATH = '/gateway'
 const GROUP_AND_C2C_INTENT = 1 << 25
+const MAX_MESSAGE_IMAGE_BYTES = 20 * 1024 * 1024
 
 export function cleanQqText(text: string): string {
   return text.replace(/<@!?\w+>/g, '').replace(/^\s*@\S+\s+/, '').trim()
@@ -101,15 +105,19 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
   }
 
   async function qqFetch<T>(path: string, init?: RequestInit): Promise<T> {
-    const request = () => fetch(`${API}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `QQBot ${accessToken}`,
-        'content-type': 'application/json',
-        ...(init?.headers ?? {}),
-      },
-      signal: timeoutSignal(30_000, lifecycle?.signal),
-    })
+    const requestLifecycle = lifecycle
+    const request = () => {
+      requestLifecycle?.signal.throwIfAborted()
+      return fetch(`${API}${path}`, {
+        ...init,
+        headers: {
+          Authorization: `QQBot ${accessToken}`,
+          'content-type': 'application/json',
+          ...(init?.headers ?? {}),
+        },
+        signal: timeoutSignal(30_000, requestLifecycle?.signal),
+      })
+    }
     await ensureToken()
     let res = await request()
     if (res.status === 401) {
@@ -149,15 +157,23 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
     socket.onopen = () => {
       if (ws === socket) statusText = '等待网关握手'
     }
+    const generation = lifecycle
+    const current = () => !stopped && lifecycle === generation && ws === socket
+    const incoming = new KeyedSerialQueue()
     socket.onmessage = (ev) => {
+      if (!current()) return
       let payload: GatewayPayload
-      try {
-        payload = JSON.parse(String(ev.data)) as GatewayPayload
-      } catch {
-        log('[qq] 收到无法解析的网关消息')
-        return
-      }
+      try { payload = JSON.parse(String(ev.data)) as GatewayPayload } catch { log('[qq] 收到无法解析的网关消息'); return }
+      // Sequence/handshake/heartbeat handling must never wait behind media I/O.
       if (payload.s !== undefined) seq = payload.s
+      const isMessage = payload.op === 0 && ['C2C_MESSAGE_CREATE', 'GROUP_AT_MESSAGE_CREATE'].includes(payload.t ?? '')
+      const msg = payload.d as QQMessage | undefined
+      const key = payload.t === 'GROUP_AT_MESSAGE_CREATE' ? `g:${msg?.group_openid ?? ''}` : msg?.author?.user_openid ?? msg?.author?.id ?? ''
+      const work = isMessage ? incoming.run(key, () => receive(payload)) : receive(payload)
+      void work.catch(() => { if (current()) log('[qq] 消息处理失败') })
+    }
+    const receive = async (payload: GatewayPayload) => {
+      if (!current()) return
       switch (payload.op) {
         case 10: {
           const hello = payload.d as { heartbeat_interval: number }
@@ -199,22 +215,56 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
               ? `g:${msg.group_openid ?? ''}`
               : (msg.author.user_openid ?? msg.author.id ?? '')
             if (!chatId || !userId) return
-            if (!text) {
-              // 纯图片/文件消息静默丢弃会让用户以为机器人没收到，回一条文字提示
-              if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
-                remember(chatId, isGroup ? 'group' : 'dm', msg.id)
-                void sendText(chatId, '暂不支持图片/文件，请发送文字。').catch((error) => {
-                  log(`[qq] 媒体提示发送失败: ${error instanceof Error ? error.message : String(error)}`)
-                })
+            remember(chatId, isGroup ? 'group' : 'dm', msg.id)
+            const images = (msg.attachments ?? []).filter(a => typeof a.content_type === 'string' && a.content_type.startsWith('image/'))
+            const media: ImMedia[] = []
+            try {
+              if (images.length > MAX_CHANNEL_IMAGES) throw new Error('图片数量超过上限')
+              const declaredBytes = images.reduce((sum, image) => sum + (typeof image.size === 'number' && image.size > 0 ? image.size : 0), 0)
+              if (declaredBytes > MAX_MESSAGE_IMAGE_BYTES) throw new Error('图片累计大小超过上限')
+              let remainingBytes = MAX_MESSAGE_IMAGE_BYTES
+              const downloadSignal = timeoutSignal(30_000, generation?.signal)
+              for (const image of images) {
+                if (!current()) return
+                downloadSignal.throwIfAborted()
+                if (remainingBytes <= 0) throw new Error('图片累计大小超过上限')
+                const rawUrl = image.url ?? ''
+                const url = new URL(rawUrl.startsWith('//') ? `https:${rawUrl}`
+                  : /^[a-z][a-z0-9+.-]*:/i.test(rawUrl) ? rawUrl : `https://${rawUrl}`)
+                // Official QQ CDN only; never forward API credentials or follow redirects.
+                if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.port
+                  || !(url.hostname === 'multimedia.nt.qq.com.cn'
+                    || ['qq.com', 'qpic.cn'].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`)))) throw new Error('不安全的图片地址')
+                // QQ also supplies scheme-less/HTTP CDN links. Upgrade known hosts;
+                // never send signed media URLs over plaintext HTTP.
+                url.protocol = 'https:'
+                if ((image.size ?? 0) > 20 * 1024 * 1024) throw new Error('图片过大')
+                const response = await fetch(url.href, { signal: downloadSignal, redirect: 'error' })
+                if (!response.ok) throw new Error(`图片下载 HTTP ${response.status}`)
+                const data = await readResponseBufferLimited(response, remainingBytes)
+                downloadSignal.throwIfAborted()
+                remainingBytes -= data.length
+                if (!data.length) throw new Error('图片为空')
+                media.push({ kind: 'image', data, mediaType: image.content_type, name: image.filename })
               }
+            } catch (error) {
+              if (!current()) return
+              const reason = channelImageFailureReason(error)
+              log(`[qq] 图片下载失败: ${reason} host=${images.slice(0, MAX_CHANNEL_IMAGES).map(image => channelImageDownloadHost(image.url)).join(',')}`)
+              await sendText(chatId, `图片下载失败：${reason}。请重新发送。`).catch(() => log('[qq] 图片提示发送失败'))
               return
             }
-            remember(chatId, isGroup ? 'group' : 'dm', msg.id)
-            void handler?.({
+            if (!current()) return
+            if (!text && !media.length) {
+              if (msg.attachments?.length) await sendText(chatId, '暂不支持该文件类型，请发送文字或图片。')
+              return
+            }
+            await handler?.({
               chatId,
               userId,
               username: msg.author.username,
               text,
+              ...(media.length ? { media } : {}),
               kind: isGroup ? 'group' : 'dm',
               addressed: true,
               messageId: msg.id,

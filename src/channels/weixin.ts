@@ -349,7 +349,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       const plain = aesKey ? decryptAesEcb(buf, aesKey) : buf
       return { buf: plain, contentType: res.headers.get('content-type') ?? undefined }
     } catch (err) {
-      log(`[weixin] 媒体下载失败: ${err instanceof Error ? err.message : String(err)}`)
+      log('[weixin] 媒体下载失败')
       return undefined
     }
   }
@@ -471,6 +471,8 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   }
 
   async function pollLoop(): Promise<void> {
+    const generation = lifecycle
+    const current = () => !stopped && lifecycle === generation && !generation?.signal.aborted
     // 已有保存的登录态 → 跳过扫码直接轮询（重启免扫码）
     if (botToken) {
       statusText = '已登录（自动恢复）'
@@ -480,7 +482,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     }
     let cursor = state.syncBuf ?? ''
     let staleCount = 0
-    while (!stopped) {
+    while (current()) {
       let data: Json
       try {
         data = await request(
@@ -489,7 +491,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
           (config.pollTimeoutSecs ?? 70) * 1000 + 5000,
         )
       } catch (err) {
-        if (stopped) return
+        if (!current()) return
         const msg = err instanceof Error ? err.message : String(err)
         // token 失效（服务端 errcode -14，与官方插件 STALE_TOKEN_ERRCODE 一致）
         if (isStaleWeixinTokenError(err)) {
@@ -517,6 +519,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         await sleepWithSignal(5000, lifecycle?.signal)
         continue
       }
+      if (!current()) return
       staleCount = 0
       const nextCursor = pickStr(data, 'get_updates_buf', 'cursor', 'sync_buf') ?? cursor
       if (nextCursor !== cursor) {
@@ -526,19 +529,30 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       const rawList = data.msgs ?? data.messages ?? data.updates
       if (Array.isArray(rawList)) {
         for (const raw of rawList) {
+          if (!current()) return
           try {
             const parsed = parseInbound(raw)
             if (!parsed) continue
             if (parsed.contextToken) state.contextTokens[parsed.fromUserId] = parsed.contextToken
             if (state.allowedUserId && parsed.fromUserId !== state.allowedUserId) continue
-            // 单个媒体失败只降级丢媒体，不再连累文本整条丢弃
+            // 下载完整后再分发；图片失败不能将图文静默降级成文字。
             const settled = await Promise.allSettled(parsed.media)
+            if (!current()) return
             const media = []
+            let mediaFailed = false
             for (const item of settled) {
-              if (item.status === 'fulfilled') media.push(item.value)
-              else log(`[weixin] 媒体下载失败，降级为纯文本: ${item.reason instanceof Error ? item.reason.message : String(item.reason)}`)
+              if (item.status === 'fulfilled') {
+                if (item.value.kind === 'image' && !item.value.path && !item.value.data) mediaFailed = true
+                else media.push(item.value)
+              } else { mediaFailed = true; log('[weixin] 媒体下载失败') }
+            }
+            if (mediaFailed) {
+              await sendText(parsed.fromUserId, '图片或媒体下载失败，请重新发送。').catch(() => log('[weixin] 媒体提示发送失败'))
+              // Never turn an image caption (e.g. /new) into a text-only command.
+              continue
             }
             if (parsed.text === '' && media.length === 0) continue
+            if (!current()) return
             void handler?.({
               chatId: parsed.fromUserId,
               userId: parsed.fromUserId,

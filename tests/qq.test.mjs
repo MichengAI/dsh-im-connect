@@ -253,7 +253,7 @@ test('QQ 收到 401 时清缓存重取 token 并重试一次', async () => {
   }
 })
 
-test('QQ 纯图片/文件消息不再静默丢弃，回复文字提示', async () => {
+test('QQ 不支持的文件类型不静默丢弃，回复文字提示', async () => {
   const originalFetch = globalThis.fetch
   const originalWebSocket = globalThis.WebSocket
   const posts = []
@@ -282,7 +282,7 @@ test('QQ 纯图片/文件消息不再静默丢弃，回复文字提示', async (
         d: {
           id: 'media-message',
           group_openid: 'group-openid',
-          attachments: [{ content_type: 1 }],
+          attachments: [{ content_type: 'application/pdf' }],
           author: { member_openid: 'member-openid', username: 'tester' },
         },
       }),
