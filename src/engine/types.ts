@@ -1,3 +1,4 @@
+import type { DeliveryRoute, DeliveryReceipt } from './delivery.js'
 /** 统一渠道契约。 */
 export interface ImMedia {
   kind: 'image' | 'voice-text' | 'file' | 'video'
@@ -32,6 +33,8 @@ export interface ChannelAdapter {
   start(): void | Promise<void>
   stop(): void | Promise<void>
   send(chatId: string, text: string): Promise<void>
+  /** 独立发送，不消费被动回复上下文；返回平台回执，异常交由投递层分类。 */
+  sendProactive?(route: DeliveryRoute, text: string, signal?: AbortSignal): Promise<DeliveryReceipt>
   setMessageHandler(handler: (msg: ImMessage) => void | Promise<void>): void
   status(): string
   loginUrl?(): string | undefined

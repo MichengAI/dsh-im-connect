@@ -9,16 +9,29 @@ window.__ModuleLoader__.load({
     const React = require("react");
     const { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } = React;
     const ReactDOM = require("react-dom");
-    const { RiskConfirmation, IconListPenOutline16 } = require("@deepseek-ai/dsh-client-ui-primitives");
+    const { createRoot } = require("react-dom/client");
+    const { RiskConfirmation, IconListPenOutline16, IconPlusOutline16, IconRefreshOutline16, IconDownloadOutline16, IconCopyOutline16, IconCloseOutline16, IconTrashOutline16, IconSendOutline16 } = require("@deepseek-ai/dsh-client-ui-primitives");
     const EMPTY_EXTRA_TABS = [];
     const inject = ["slots", "sessions", "workspaces", "locale"];
     const API_BASE = "/dsh-im-connect/api";
     const TAB_KEY = "dsh-im-connect.sidebar-tab";
     const ACCOUNT_SELECTION_KEY = "dsh-im-connect.settings.selected-account";
     const IM_LOCALE_NS = "im-connect";
+    const UPDATE_ICON_COMPONENTS = {
+      refresh: IconRefreshOutline16,
+      download: IconDownloadOutline16,
+      copy: IconCopyOutline16,
+      close: IconCloseOutline16,
+    };
+    function createPluginUpdateIcon(name) {
+      const element = document.createElement("span");
+      createRoot(element).render(React.createElement(UPDATE_ICON_COMPONENTS[name], { size: 16 }));
+      return element;
+    }
     const IM_LOCALES = {
       zh: {
-        "settings.label": "IM助理", "settings.title": "IM机器人", "settings.description": "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。", "settings.viewProject": "GitHub", "settings.feedback": "问题反馈",
+        "delivery.enabled": "允许主动投递", "delivery.name": "账号名称", "delivery.saveName": "保存名称", "delivery.limited": "微信投递受会话与平台限制", "delivery.targets": "接收目标", "delivery.add": "新增目标", "delivery.refresh": "刷新目标", "delivery.empty": "尚未保存接收目标", "delivery.targetName": "目标名称", "delivery.source": "已知会话", "delivery.choose": "请选择接收对象", "delivery.manual": "手动填写（高级）", "delivery.kind": "目标类型", "delivery.dm": "私聊", "delivery.group": "群聊", "delivery.nativeId": "平台目标 ID", "delivery.idType": "ID 类型", "delivery.threadId": "话题 ID（可选）", "delivery.save": "保存目标", "delivery.edit": "编辑目标", "delivery.delete": "删除目标", "delivery.deleteConfirm": "删除后，使用此目标的定时投递将失败。确定删除？", "delivery.test": "测试投递", "delivery.testText": "DSH IM 助理主动投递测试消息。", "delivery.sent": "平台已接受", "delivery.failed": "投递失败", "delivery.partial": "部分内容已发送", "delivery.unknown": "发送结果未知，请检查接收端", "delivery.progress": "已发送 {sent}/{total} 段", "delivery.off": "未允许投递", "delivery.on": "已允许投递",
+        "settings.label": "IM助理", "settings.title": "IM助理", "settings.description": "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。", "settings.viewProject": "GitHub", "settings.feedback": "问题反馈",
         "settings.aria": "IM助理", "settings.selectAccountTitle": "选择一个账号", "settings.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。", "settings.noAccountsTitle": "还没有接入账号", "settings.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。", "settings.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
         "account.workspace": "工作区", "account.currentWorkspace": "当前工作区", "account.selectWorkspace": "请选择工作区", "account.selectModel": "请选择模型", "account.selectPermission": "请选择权限", "account.privateAccess": "私聊准入", "account.privateApproved": "仅已批准用户", "account.privateAll": "允许所有私聊用户", "account.autoNameNote": "绑定成功后会自动生成账号名，无需手动填写。", "account.defaultName": "{channel}账号 {count}",
         "account.countZero": "0 个账号", "account.countOnline": "{online} / {total} 在线", "account.countOffline": "{total} / {total} 离线", "account.statusProcessing": "处理中…", "account.statusOnline": "在线", "account.statusOffline": "离线", "account.statusRunning": "运行正常", "account.statusNotConnected": "未连接", "account.receive": "接收消息", "account.receiveDescription": "关闭后保留账号配置，但不接收新消息", "account.removeConfirm": "确定移除这个账号？本机保存的配置和凭据将一并删除。",
@@ -37,7 +50,8 @@ window.__ModuleLoader__.load({
         "status.disconnected": "已断开", "status.reconnectFailed": "重连失败", "status.connectingSocket": "连接中", "status.waitHandshake": "等待网关握手", "status.authenticating": "鉴权中", "status.reconnecting": "重连中", "status.connectionError": "连接错误", "status.connectionFailed": "连接失败", "status.streamConnected": "Stream 已连接", "status.stopped": "已停止", "status.longConnection": "长连接已建立", "status.polling": "轮询中", "status.notLoggedIn": "未登录", "status.waitQr": "等待扫码", "status.loggedIn": "已登录", "status.loggedInRecovered": "已登录（自动恢复）", "status.loggingIn": "登录中",
       },
       en: {
-        "settings.label": "IM Assistant", "settings.title": "IM Bots", "settings.description": "Manage accounts across channels. Each account has its own workspace, model, and permission settings, stored only on this machine.", "settings.viewProject": "GitHub", "settings.feedback": "Issues",
+        "delivery.enabled": "Allow proactive delivery", "delivery.name": "Account name", "delivery.saveName": "Save name", "delivery.limited": "WeChat delivery is subject to session and platform limits", "delivery.targets": "Recipients", "delivery.add": "Add recipient", "delivery.refresh": "Refresh recipients", "delivery.empty": "No saved recipients", "delivery.targetName": "Recipient name", "delivery.source": "Known conversations", "delivery.choose": "Select a recipient", "delivery.manual": "Enter manually (advanced)", "delivery.kind": "Recipient type", "delivery.dm": "Direct message", "delivery.group": "Group", "delivery.nativeId": "Platform recipient ID", "delivery.idType": "ID type", "delivery.threadId": "Topic ID (optional)", "delivery.save": "Save recipient", "delivery.edit": "Edit recipient", "delivery.delete": "Delete recipient", "delivery.deleteConfirm": "Scheduled deliveries to this recipient will fail. Delete it?", "delivery.test": "Test delivery", "delivery.testText": "DSH IM proactive delivery test message.", "delivery.sent": "Accepted by platform", "delivery.failed": "Delivery failed", "delivery.partial": "Partially sent", "delivery.unknown": "Delivery uncertain; check the recipient", "delivery.progress": "Sent {sent}/{total} parts", "delivery.off": "Delivery disabled", "delivery.on": "Delivery enabled",
+        "settings.label": "IM Assistant", "settings.title": "IM Assistant", "settings.description": "Manage accounts across channels. Each account has its own workspace, model, and permission settings, stored only on this machine.", "settings.viewProject": "GitHub", "settings.feedback": "Issues",
         "settings.aria": "IM Assistant", "settings.selectAccountTitle": "Select an account", "settings.selectAccountDescription": "Choose an account on the left to view and edit its workspace, model, and permissions.", "settings.noAccountsTitle": "No accounts connected", "settings.noAccountsDescription": "Choose a channel on the left, then select Add account.", "settings.publicChatNotice": "Unapproved users can start chats, but they cannot approve tool calls.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
         "account.workspace": "Workspace", "account.currentWorkspace": "Current workspace", "account.selectWorkspace": "Select a workspace", "account.selectModel": "Select a model", "account.selectPermission": "Select a permission", "account.privateAccess": "Private chat access", "account.privateApproved": "Approved users only", "account.privateAll": "Allow all DM users", "account.autoNameNote": "The account name is generated automatically after setup.", "account.defaultName": "{channel} account {count}",
         "account.countZero": "0 accounts", "account.countOnline": "{online} / {total} online", "account.countOffline": "{total} / {total} offline", "account.statusProcessing": "Processing…", "account.statusOnline": "Online", "account.statusOffline": "Offline", "account.statusRunning": "Running normally", "account.statusNotConnected": "Not connected", "account.receive": "Receive messages", "account.receiveDescription": "Turn this off to keep the account settings without receiving new messages", "account.removeConfirm": "Remove this account? Its saved settings and credentials will also be deleted.",
@@ -183,8 +197,8 @@ window.__ModuleLoader__.load({
 .ima-ok{color:var(--ima-ok);font-size:14px;text-align:center;padding:24px 0}
 .ima-modal .ima-error{color:var(--ima-danger)}
 .ima-page.ima-account-page{max-width:1120px;padding-bottom:40px}
-.ima-account-shell{display:grid;grid-template-columns:minmax(330px,390px) minmax(360px,1fr);min-height:650px;border:1px solid var(--ima-line);border-radius:16px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,rgba(255,255,255,.018))}
-.ima-platforms{padding:0;border-right:1px solid var(--ima-line);background:var(--dsw-alias-bg-base,transparent)}
+.ima-account-shell{display:grid;grid-template-columns:minmax(330px,390px) minmax(360px,1fr);min-height:650px;border:1px solid var(--ima-line);border-radius:16px;overflow:hidden;background:transparent}
+.ima-platforms{padding:0;border-right:1px solid var(--ima-line);background:transparent}
 .ima-platform{border:0;border-bottom:1px solid var(--ima-line);border-radius:0;margin:0;overflow:visible;background:transparent}.ima-platform:last-child{border-bottom:0}.ima-platform.open{background:transparent}
 .ima-platform-head{display:flex;align-items:center;gap:10px;width:100%;min-height:64px;padding:10px 18px;border:0;border-radius:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
 .ima-platform:not(.open):not(.empty) .ima-platform-head:hover{background:var(--ima-card-hover)}.ima-platform.empty .ima-platform-head{cursor:default}.ima-platform-title{min-width:0;flex:1;font-size:14px;font-weight:650}.ima-platform-count{color:var(--ima-muted);font-size:12px;white-space:nowrap}.ima-platform-count.online{color:var(--ima-ok)}.ima-platform-count.offline,.ima-platform-count.partial{color:var(--ima-warning)}
@@ -197,6 +211,7 @@ window.__ModuleLoader__.load({
 .ima-form{display:flex;flex-direction:column;gap:16px;padding-top:20px}.ima-control{display:flex;flex-direction:column;gap:7px}.ima-control>span{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-control input,.ima-control select{box-sizing:border-box;width:100%;min-height:44px;padding:0 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font:13px inherit;outline:none}.ima-control input:focus,.ima-control select:focus{border-color:var(--ima-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-control option{background:#202124;color:#f2f3f5}
 .ima-switch-row{display:flex;align-items:center;justify-content:space-between;min-height:48px;padding:0 2px}.ima-switch-copy strong{display:block;font-size:13px}.ima-switch-copy small{display:block;margin-top:2px;color:var(--ima-muted);font-size:11px}
 .ima-inspector-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;padding-top:18px;border-top:1px solid var(--ima-line)}.ima-inspector-actions .ima-btn{flex:none;min-width:0;min-height:36px;padding:0 8px;font-size:12px;white-space:nowrap}.ima-inspector-actions .danger{margin-left:auto;color:var(--ima-danger);border-color:color-mix(in srgb,var(--ima-danger) 35%,transparent)}
+.ima-delivery{border-top:1px solid var(--ima-line);padding-top:16px;min-width:0}.ima-delivery-head{display:flex;align-items:center;gap:8px}.ima-delivery-head h4{font-size:14px;margin:0 auto 0 0}.ima-delivery-icon{width:34px;height:34px;flex:none;display:grid;place-items:center;border:1px solid var(--ima-line);border-radius:6px;background:transparent;color:var(--ima-text);cursor:pointer}.ima-delivery-icon:hover:not(:disabled){background:var(--ima-hover)}.ima-delivery-icon:disabled{opacity:.4;cursor:default}.ima-delivery-icon:focus-visible{outline:2px solid var(--ima-accent);outline-offset:2px}.ima-delivery-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--ima-line)}.ima-delivery-copy{flex:1;min-width:0;overflow-wrap:anywhere;font-size:13px}.ima-delivery-copy small{display:block;color:var(--ima-muted);margin-top:4px}.ima-delivery-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.ima-delivery-editor{padding-top:16px}.ima-delivery-editor fieldset{margin:0;padding:0;border:0;min-width:0;display:flex;flex-direction:column;gap:12px}.ima-delivery-editor input,.ima-delivery-editor select{min-width:0;max-width:100%;border-radius:8px}.ima-delivery-editor option{background:var(--ima-bg,#fff);color:var(--ima-text)}
 .ima-save-note{min-height:18px;color:var(--ima-muted);font-size:11px}.ima-save-note.ok{color:var(--ima-ok)}
 .ima-modal.ima-account-modal{width:min(560px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto}.ima-setup-section{margin:4px 0 14px;padding-bottom:14px;border-bottom:1px solid var(--ima-line)}
 .ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:7px}.ima-picker-field.wide{grid-column:1/-1}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-account-picker{width:100%}.ima-account-picker .ima-chip-btn{width:100%;height:auto;min-height:44px;justify-content:flex-start;padding:8px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font-size:13px;text-align:left}.ima-account-picker .ima-chip-btn:hover,.ima-account-picker.is-open .ima-chip-btn{border-color:var(--ima-accent);background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-account-picker .ima-chip-label{flex:1}.ima-account-picker .ima-chip-btn em{margin-left:auto}.ima-account-picker .ima-chip-menu{width:100%;min-width:100%;max-height:min(320px,calc(100vh - 120px))}.ima-account-picker.ima-model-select .ima-chip-btn{border-radius:9px}.ima-account-picker.ima-model-select .ima-chip-menu{width:max(100%,320px);min-width:100%}.ima-account-settings .ima-chip-dialog{grid-column:1/-1;margin-top:0}.ima-picker-note{grid-column:1/-1;color:var(--ima-muted);font-size:11px;line-height:1.5}.ima-picker-note.warning{color:var(--ima-warning)}
@@ -1214,6 +1229,70 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function DeliverySettings({ account, t }) {
+      const [data, setData] = useState({ targets: [], suggestions: [] });
+      const [editing, setEditing] = useState(null);
+      const [manual, setManual] = useState(false);
+      const [busy, setBusy] = useState(false);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState("");
+      const [result, setResult] = useState(null);
+      const revision = useRef(0);
+      const refresh = useCallback(async () => {
+        const rev = ++revision.current;
+        setLoading(true);
+        try {
+          const next = await api("/delivery/targets?accountId=" + encodeURIComponent(account.id));
+          if (rev !== revision.current) return;
+          if (!next.ok) throw new Error(next.error && next.error.message || t("error.load"));
+          setData(next); setError("");
+        } catch (err) { if (rev === revision.current) setError(err.message || t("error.load")); }
+        finally { if (rev === revision.current) setLoading(false); }
+      }, [account.id, t]);
+      useEffect(() => { refresh(); return () => { revision.current++; }; }, [refresh]);
+      const mutate = async (action, payload) => {
+        setBusy(true); setError(""); setResult(null);
+        try {
+          const value = await api("/delivery/" + action, { method: "POST", body: JSON.stringify({ accountId: account.id, ...payload }) });
+          if (value.ok === false) throw new Error(value.error && value.error.message || t("error.action"));
+          if (action === "messages") setResult({ targetId: payload.targetId, ...value });
+          else { setEditing(null); await refresh(); }
+        } catch (err) { setError(err.message || t("error.request")); }
+        finally { setBusy(false); }
+      };
+      const iconButton = (label, Icon, onClick, disabled) => h("button", { type: "button", className: "ima-delivery-icon", title: label, "aria-label": label, onClick, disabled: busy || disabled }, h(Icon));
+      const field = (label, child) => h("label", { className: "ima-control" }, h("span", null, label), React.cloneElement(child, { "aria-label": label }));
+      const change = patch => setEditing(previous => ({ ...previous, ...patch }));
+      return h("section", { className: "ima-delivery", "aria-label": t("delivery.targets") },
+        h("div", { className: "ima-delivery-head" }, h("h4", null, t("delivery.targets")),
+          iconButton(t("delivery.refresh"), IconRefreshOutline16, refresh, loading),
+          iconButton(t("delivery.add"), IconPlusOutline16, () => { setEditing({ name: "", kind: "dm", nativeId: "" }); setManual(data.suggestions.length === 0); setResult(null); }, loading)),
+        error && h("div", { className: "ima-error", role: "alert" }, error),
+        loading ? h("div", { className: "ima-save-note", role: "status" }, t("loading"))
+          : data.targets.length === 0 && !editing && h("p", { className: "ima-save-note" }, t("delivery.empty")),
+        data.targets.map(target => h("div", { className: "ima-delivery-row", key: target.id },
+          h("div", { className: "ima-delivery-copy" }, h("strong", null, target.name), h("small", null, t("delivery." + target.kind) + " · " + target.nativeId + (target.threadId ? " / " + target.threadId : "")),
+            result && result.targetId === target.id && h("div", { className: "ima-save-note", role: "status" }, t("delivery." + result.status) + " · " + t("delivery.progress", { sent: result.sentParts, total: result.totalParts }), result.uncertain && result.status !== "unknown" && h("div", null, t("delivery.unknown")), result.error && h("div", null, result.error.message))),
+          h("div", { className: "ima-delivery-actions" },
+            iconButton(t("delivery.edit"), IconListPenOutline16, () => { setEditing({ ...target }); setManual(true); }),
+            iconButton(t("delivery.test"), IconSendOutline16, () => mutate("messages", { targetId: target.id, text: t("delivery.testText") }), !account.deliveryEnabled || !account.connected),
+            iconButton(t("delivery.delete"), IconTrashOutline16, () => { if (window.confirm(t("delivery.deleteConfirm"))) mutate("target-delete", { targetId: target.id }); })))),
+        editing && h("form", { className: "ima-delivery-editor", onSubmit: event => { event.preventDefault(); if (!busy) mutate("target-save", { target: editing }); } },
+          h("fieldset", { disabled: busy },
+            field(t("delivery.targetName"), h("input", { value: editing.name, maxLength: 80, required: true, onChange: event => change({ name: event.target.value }) })),
+            !editing.id && field(t("delivery.source"), h("select", { value: manual ? "manual" : data.suggestions.findIndex(item => item.nativeId === editing.nativeId && item.kind === editing.kind), onChange: event => {
+              if (event.target.value === "manual") { setManual(true); return; }
+              const suggestion = data.suggestions[Number(event.target.value)];
+              if (suggestion) { setManual(false); setEditing(previous => ({ name: previous.name, ...suggestion })); }
+            } }, h("option", { value: -1, disabled: true }, t("delivery.choose")), data.suggestions.map((item, index) => h("option", { key: index, value: index }, t("delivery." + item.kind) + " · " + item.nativeId)), h("option", { value: "manual" }, t("delivery.manual")))),
+            manual && h(React.Fragment, null,
+              field(t("delivery.kind"), h("select", { value: editing.kind, onChange: event => { const { threadId, ...rest } = editing; setEditing({ ...rest, kind: event.target.value, ...(editing.idType ? { idType: "chat_id" } : {}) }); } }, h("option", { value: "dm" }, t("delivery.dm")), account.platform !== "weixin" && h("option", { value: "group" }, t("delivery.group")))),
+              field(t("delivery.nativeId"), h("input", { value: editing.nativeId, required: true, maxLength: 256, onChange: event => change({ nativeId: event.target.value }) })),
+              ["feishu", "lark"].includes(account.platform) && field(t("delivery.idType"), h("select", { value: editing.idType || "chat_id", onChange: event => change({ idType: event.target.value }) }, h("option", { value: "chat_id" }, "Chat ID"), editing.kind === "dm" && h("option", { value: "open_id" }, "Open ID"))),
+              account.platform === "telegram" && editing.kind === "group" && field(t("delivery.threadId"), h("input", { type: "number", min: 1, step: 1, value: editing.threadId || "", onChange: event => { const { threadId, ...rest } = editing; setEditing(event.target.value ? { ...rest, threadId: Number(event.target.value) } : rest); } }))),
+            h("div", { className: "ima-delivery-actions" }, h("button", { type: "submit", className: "ima-btn", disabled: !editing.name.trim() || !editing.nativeId.trim() }, t("delivery.save")), h("button", { type: "button", className: "ima-btn", onClick: () => setEditing(null) }, t("action.cancel"))))));
+    }
+
     function AccountInspector({ account, catalog, permissions, workspaces, createWorkspace, pickDirectory, modelT, permissionT, t, onAction, onSave }) {
       const [draft, setDraft] = useState(account);
       const [note, setNote] = useState("");
@@ -1222,7 +1301,7 @@ window.__ModuleLoader__.load({
         saveSeq.current += 1;
         setDraft(account);
         setNote("");
-      }, [account.id, account.cwd, account.permission, account.privateAccess, account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort]);
+      }, [account.id, account.name, account.deliveryEnabled, account.cwd, account.permission, account.privateAccess, account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort]);
       const save = (patch) => {
         const seq = ++saveSeq.current;
         const next = { ...draft, ...patch };
@@ -1236,8 +1315,10 @@ window.__ModuleLoader__.load({
           reasoningEffort: next.assistant.reasoningEffort || null,
           permission: next.permission,
           privateAccess: next.privateAccess,
+          deliveryEnabled: Boolean(next.deliveryEnabled),
         }).then((ok) => {
           if (seq === saveSeq.current) setNote(ok ? "status.saved" : "error.save");
+          if (seq === saveSeq.current && !ok) setDraft(account);
           return ok;
         });
       };
@@ -1262,6 +1343,8 @@ window.__ModuleLoader__.load({
           ),
         ),
         h("div", { className: "ima-form" },
+          h("label", { className: "ima-control" }, h("span", null, t("delivery.name")), h("input", { value: draft.name || "", maxLength: 80, disabled: note === "status.saving", onChange: event => setDraft({ ...draft, name: event.target.value }) })),
+          draft.name !== account.name && h("button", { type: "button", className: "ima-btn", disabled: note === "status.saving" || !draft.name.trim(), onClick: () => save({ name: draft.name }) }, t("delivery.saveName")),
           h(AccountSettingsPicker, {
             value: draft,
             onChange: applySettings,
@@ -1281,6 +1364,10 @@ window.__ModuleLoader__.load({
             h("button", { type: "button", className: draft.receiveEnabled ? "ima-switch" : "ima-switch off", role: "switch", "aria-checked": Boolean(draft.receiveEnabled), "aria-label": t("account.receive"), onClick: () => onAction(account.id, "receive", { receiveEnabled: !draft.receiveEnabled }) }, h("i")),
           ),
           h("div", { className: note === "status.saved" ? "ima-save-note ok" : "ima-save-note" }, note && t(note)),
+          h("div", { className: "ima-switch-row" },
+            h("div", { className: "ima-switch-copy" }, h("strong", null, t("delivery.enabled")), account.deliveryLimited && h("small", null, t("delivery.limited"))),
+            h("button", { type: "button", className: draft.deliveryEnabled ? "ima-switch" : "ima-switch off", role: "switch", "aria-checked": Boolean(draft.deliveryEnabled), "aria-label": t("delivery.enabled"), disabled: note === "status.saving", onClick: () => save({ deliveryEnabled: !draft.deliveryEnabled }) }, h("i"))),
+          h(DeliverySettings, { key: account.id, account, t }),
           h("div", { className: "ima-inspector-actions" },
             h("button", { className: "ima-btn", onClick: () => onAction(account.id, "check") }, t("action.checkConnection")),
             h("button", { className: "ima-btn", onClick: () => onAction(account.id, "reconnect") }, t("action.reconnectAccount")),
@@ -2251,6 +2338,15 @@ window.__ModuleLoader__.load({
       ensureStyle();
       ctx.effect(() => ctx.locale.register(IM_LOCALE_NS, IM_LOCALES), "im-connect: dictionaries");
       const t = ctx.locale.bind(IM_LOCALE_NS);
+      ctx.effect(() => observePluginUpdate({
+        endpoint: "/api/michengai/dsh-im-connect/update",
+        packageName: "@michengai/dsh-im-connect",
+        titleRowSelector: ".ima-title-row",
+        linksSelector: ".ima-title-links",
+        zhName: t("settings.title"),
+        enName: t("settings.title"),
+        createIcon: createPluginUpdateIcon,
+      }), "im-connect: plugin update ui");
       const permissionT = ctx.locale.bind("permission.access");
       const modelT = ctx.locale.bind("model");
       const subscribeLocale = (listener) => ctx.locale.subscribe(listener);

@@ -1,6 +1,7 @@
 import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
 import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
+import { DeliveryError } from '../engine/delivery.js'
 
 export interface TelegramConfig {
   token?: string
@@ -130,6 +131,17 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     },
     async send(chatId, text) {
       await api('sendMessage', { chat_id: Number(chatId), text })
+    },
+    async sendProactive(route, text, signal) {
+      const response = await fetch(`${API}/bot${token}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat_id: route.nativeId, text, ...(route.threadId ? { message_thread_id: route.threadId } : {}) }),
+        signal: timeoutSignal(30_000, signal),
+      })
+      const data = await response.json() as { ok?: boolean; error_code?: number; result?: { message_id?: number } }
+      if (data.ok === false) throw new DeliveryError('platform-rejected', `Telegram 拒绝发送（${data.error_code ?? response.status}），请检查目标、机器人权限或频率限制`)
+      if (!response.ok || data.result?.message_id === undefined) throw new Error('Telegram 未返回有效发送回执')
+      return { messageId: String(data.result.message_id) }
     },
     async sendAction(chatId) {
       await api('sendChatAction', { chat_id: Number(chatId), action: 'typing' }).catch(() => undefined)

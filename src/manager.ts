@@ -16,6 +16,7 @@ import type { ChannelAdapter, EngineConfig, ImMessage } from './engine/types.js'
 import { KeyedSerialQueue } from './engine/keyed-queue.js'
 import { backupCorruptFileSync, writeFileAtomicSync } from './engine/atomic-file.js'
 import { sameWorkspacePath } from './engine/workspace-path.js'
+import { DeliveryError, deliveryName, nameKey, validateDeliveryRoute, assertDeliveryText, deliverText, type DeliveryTarget } from './engine/delivery.js'
 
 export const API_CLIENT_HEADER = 'x-dsh-im-connect-client'
 const MAX_API_BODY_BYTES = 1024 * 1024
@@ -119,6 +120,8 @@ export interface ChannelState {
   name?: string
   enabled?: boolean
   receiveEnabled?: boolean
+  deliveryEnabled?: boolean
+  deliveryTargets?: DeliveryTarget[]
   lastError?: string
   config?: Record<string, string>
   assistant?: AssistantModel
@@ -136,6 +139,8 @@ export interface AccountView {
   nameOrdinal?: number
   connected: boolean
   receiveEnabled: boolean
+  deliveryEnabled: boolean
+  deliveryLimited: boolean
   configuredKeys: string[]
   status: string
   assistant: AssistantModel
@@ -289,6 +294,8 @@ export class ChannelManager {
       ...(autoName ? { nameOrdinal: Number(defaultNameSuffix || 1) } : {}),
       connected,
       receiveEnabled: connected && state.receiveEnabled !== false,
+      deliveryEnabled: state.deliveryEnabled === true,
+      deliveryLimited: platform === 'weixin',
       configuredKeys: Object.keys(config).filter((key) => Boolean(config[key]) && !key.endsWith('Ref')),
       status,
       assistant: normalizeAssistantModel(state.assistant ?? {}) ?? this.currentAssistant()!,
@@ -297,6 +304,89 @@ export class ChannelManager {
       privateAccess: state.privateAccess === 'all' ? 'all' : 'approved',
       lastCheckedAt: state.lastCheckedAt,
     }
+  }
+
+  /** 供 Chat/任务发现已获允许的账号；不返回凭据或模型配置。 */
+  deliveryAccounts() {
+    return this.list().flatMap(channel => channel.accounts).filter(account => account.deliveryEnabled).map(account => ({
+      accountId: account.id, platform: account.platform, name: account.name, connected: account.connected,
+      limited: account.deliveryLimited,
+    }))
+  }
+
+  private deliveryAccount(accountId: string): ChannelState {
+    if (!Object.hasOwn(this.store.channels, accountId)) throw new DeliveryError('unknown-account', '账号不存在', 404)
+    const state = this.store.channels[accountId]
+    if (!state) throw new DeliveryError('unknown-account', '账号不存在', 404)
+    return state
+  }
+
+  deliveryTargets(accountId: string) {
+    const state = this.deliveryAccount(accountId)
+    const platform = this.platformOf(accountId, state)
+    const targets = structuredClone(state.deliveryTargets ?? [])
+    const suggestions = new Map<string, ReturnType<typeof validateDeliveryRoute>>()
+    for (const record of this.sessions.list().filter(record => record.channel === accountId)) {
+      try {
+        const route = validateDeliveryRoute(platform, { kind: record.kind,
+          nativeId: platform === 'qq' && record.kind === 'group' ? record.chatId.replace(/^g:/, '') : record.chatId })
+        if (!targets.some(target => target.kind === route.kind && target.nativeId === route.nativeId && target.idType === route.idType && !target.threadId)) {
+          suggestions.set(JSON.stringify(route), route)
+        }
+      } catch { /* 旧会话缺少有效原生 ID 时不作为候选。 */ }
+    }
+    return { targets, suggestions: [...suggestions.values()].slice(0, 100) }
+  }
+
+  async saveDeliveryTarget(accountId: string, input: Record<string, unknown>): Promise<DeliveryTarget> {
+    return this.channelOperations.run(accountId, async () => {
+      const state = this.deliveryAccount(accountId)
+      const allowed = new Set(['id', 'name', 'kind', 'nativeId', 'idType', 'threadId'])
+      if (Object.keys(input).some(key => !allowed.has(key))) throw new DeliveryError('invalid-target', '目标包含未知字段')
+      const targets = state.deliveryTargets ?? []
+      if (input.id !== undefined && (typeof input.id !== 'string' || !targets.some(target => target.id === input.id))) {
+        throw new DeliveryError('unknown-target', '目标不存在', 404)
+      }
+      const name = deliveryName(input.name)
+      const route = validateDeliveryRoute(this.platformOf(accountId, state), input)
+      if (targets.some(target => target.id !== input.id && nameKey(target.name) === nameKey(name))) {
+        throw new DeliveryError('target-conflict', '同账号的投递目标不能重名', 409)
+      }
+      if (targets.some(target => target.id !== input.id && target.kind === route.kind && target.nativeId === route.nativeId
+        && target.idType === route.idType && target.threadId === route.threadId)) throw new DeliveryError('target-conflict', '相同接收目标已保存', 409)
+      if (input.id === undefined && targets.length >= 100) throw new DeliveryError('target-limit', '每个账号最多保存 100 个目标')
+      const target: DeliveryTarget = { id: typeof input.id === 'string' ? input.id : `tgt_${randomUUID()}`, name, ...route }
+      state.deliveryTargets = [...targets.filter(item => item.id !== target.id), target]
+      this.flush()
+      return structuredClone(target)
+    })
+  }
+
+  async deleteDeliveryTarget(accountId: string, targetId: string): Promise<void> {
+    return this.channelOperations.run(accountId, async () => {
+      const state = this.deliveryAccount(accountId)
+      if (!state.deliveryTargets?.some(target => target.id === targetId)) throw new DeliveryError('unknown-target', '目标不存在', 404)
+      state.deliveryTargets = state.deliveryTargets.filter(target => target.id !== targetId)
+      this.flush()
+    })
+  }
+
+  /** 每次调用重新检查许可；同账号的发送、停用及目标编辑按顺序执行。 */
+  async sendDelivery(accountId: string, targetId: string, text: unknown, signal?: AbortSignal) {
+    assertDeliveryText(text)
+    return this.channelOperations.run(accountId, async () => {
+      if (this.disposed) throw new DeliveryError('unavailable', '插件正在停止', 503)
+      const state = this.deliveryAccount(accountId)
+      if (!state.deliveryEnabled) throw new DeliveryError('delivery-disabled', '账号未允许主动投递', 403)
+      const target = state.deliveryTargets?.find(target => target.id === targetId)
+      if (!target) throw new DeliveryError('unknown-target', '投递目标不存在', 404)
+      const adapter = this.running.get(accountId)
+      if (!state.enabled || !adapter) throw new DeliveryError('offline', '账号未连接，请先在设置中连接账号', 503)
+      const route = validateDeliveryRoute(this.platformOf(accountId, state), { ...target })
+      const result = await deliverText(adapter, route, text, signal)
+      this.log(`[delivery] ${accountId}/${targetId} ${result.status} ${result.sentParts}/${result.totalParts}`)
+      return { accountId, targetId, ...result }
+    })
   }
 
   channelSessions() {
@@ -333,6 +423,10 @@ export class ChannelManager {
     const prev = this.store.channels[accountId] ?? {}
     const normalized = this.normalizeAccountSettings(id, settings, prev)
     if (!normalized.ok) return normalized
+    if (prev.deliveryEnabled) {
+      const error = this.deliveryNameError(id, normalized.settings.name, prev)
+      if (error) return { ok: false, error }
+    }
     if (id === 'weixin' && incoming.botToken) {
       await this.vault.set(credentialRef(accountId, 'botToken'), incoming.botToken)
       persistWeixinLogin(this.accountStateDir(accountId, id), {
@@ -353,7 +447,7 @@ export class ChannelManager {
       permission: normalized.settings.permission,
       privateAccess: normalized.settings.privateAccess,
       enabled: true,
-      receiveEnabled: true,
+      receiveEnabled: prev.deliveryEnabled ? prev.receiveEnabled !== false : true,
       config: nextConfig,
     }
     this.flush()
@@ -378,7 +472,7 @@ export class ChannelManager {
     if (!state?.enabled) return { ok: false, error: '渠道未配置' }
     state.receiveEnabled = receiveEnabled
     this.flush()
-    if (!receiveEnabled) await this.stopOne(id)
+    if (!receiveEnabled && !state.deliveryEnabled) await this.stopOne(id)
     else if (!this.running.has(id)) await this.startOne(id)
     return { ok: true }
   }
@@ -437,7 +531,7 @@ export class ChannelManager {
     await this.clearUnsupportedReasoningEfforts()
     for (const [id, state] of Object.entries(this.store.channels)) {
       if (this.disposed) return
-      if (state?.enabled && state.receiveEnabled !== false) {
+      if (state?.enabled && (state.receiveEnabled !== false || state.deliveryEnabled === true)) {
         const one = Date.now()
         await this.channelOperations.run(id, () => this.startOne(id)).catch((error) => {
           this.log(`[manager] 启动 ${id} 失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -485,6 +579,31 @@ export class ChannelManager {
           if (requestError) { send(res, requestError.status, { ok: false, error: requestError.error }); return }
           const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
         const parts = url.pathname.split('/').filter(Boolean)
+        if (parts[2] === 'delivery') {
+          if (parts.length !== 4) { send(res, 404, { ok: false, error: 'not found' }); return }
+          const action = parts[3]
+          if (req.method === 'GET' && action === 'accounts') { send(res, 200, { ok: true, accounts: this.deliveryAccounts() }); return }
+          if (req.method === 'GET' && action === 'targets') { send(res, 200, { ok: true, ...this.deliveryTargets(url.searchParams.get('accountId') ?? '') }); return }
+          if (req.method !== 'POST') { send(res, 405, { ok: false, error: 'method not allowed' }); return }
+          const body = await readJson(req)
+          const keys = action === 'target-save' ? ['accountId', 'target'] : action === 'target-delete' ? ['accountId', 'targetId'] : ['accountId', 'targetId', 'text']
+          if (Object.keys(body).some(key => !keys.includes(key)) || typeof body.accountId !== 'string') throw new DeliveryError('bad-request', '请求字段不合法', 400)
+          if (action === 'target-save') {
+            if (!body.target || typeof body.target !== 'object' || Array.isArray(body.target)) throw new DeliveryError('bad-request', '缺少目标配置', 400)
+            send(res, 200, { ok: true, target: await this.saveDeliveryTarget(body.accountId, body.target as Record<string, unknown>) }); return
+          }
+          if (typeof body.targetId !== 'string') throw new DeliveryError('bad-request', '缺少 targetId', 400)
+          if (action === 'target-delete') { await this.deleteDeliveryTarget(body.accountId, body.targetId); send(res, 200, { ok: true }); return }
+          if (action === 'messages') {
+            const controller = new AbortController()
+            const cancel = () => { if (!res.writableEnded) controller.abort() }
+            res.on('close', cancel)
+            try { send(res, 200, await this.sendDelivery(body.accountId, body.targetId, body.text, controller.signal)) }
+            finally { res.off('close', cancel) }
+            return
+          }
+          send(res, 404, { ok: false, error: 'not found' }); return
+        }
         if (parts[2] === 'assistant' && parts.length === 3) {
           if (req.method === 'GET') {
             send(res, 200, {
@@ -644,6 +763,7 @@ export class ChannelManager {
         }
         send(res, 404, { ok: false, error: 'not found' })
         } catch (error) {
+          if (error instanceof DeliveryError) { send(res, error.status, { ok: false, error: { code: error.code, message: error.message } }); return }
           // 单个路由异常不能让 HTTP 连接悬死，统一回 500 并落日志
           if (error instanceof ApiRequestError) {
             send(res, error.status, { ok: false, error: error.message })
@@ -675,13 +795,19 @@ export class ChannelManager {
   }
 
   async updateAccount(accountId: string, input: Record<string, unknown>): Promise<{ ok: boolean; error?: string; account?: AccountView }> {
-    if (!this.store.channels[accountId]) return { ok: false, error: '账号不存在' }
+    if (!Object.hasOwn(this.store.channels, accountId)) return { ok: false, error: '账号不存在' }
     return this.channelOperations.run(accountId, async () => {
       const state = this.store.channels[accountId]
       if (!state) return { ok: false, error: '账号不存在' }
       const platform = this.platformOf(accountId, state)
       const normalized = this.normalizeAccountSettings(platform, input, state)
       if (!normalized.ok) return normalized
+      if (input.deliveryEnabled !== undefined && typeof input.deliveryEnabled !== 'boolean') return { ok: false, error: '投递开关必须为布尔值' }
+      const deliveryEnabled = input.deliveryEnabled === undefined ? state.deliveryEnabled === true : input.deliveryEnabled === true
+      if (deliveryEnabled) {
+        const error = this.deliveryNameError(platform, normalized.settings.name, state)
+        if (error) return { ok: false, error }
+      }
       const previousCwd = normalizeWorkspacePath(state.cwd) ?? this.currentWorkspace()
       const resetSessions = !sameWorkspacePath(previousCwd, normalized.settings.cwd)
       const reloadSessions = resetSessions
@@ -692,8 +818,15 @@ export class ChannelManager {
       state.cwd = normalized.settings.cwd
       state.permission = normalized.settings.permission
       state.privateAccess = normalized.settings.privateAccess
+      state.deliveryEnabled = deliveryEnabled
       this.flush()
       if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
+      if (state.receiveEnabled === false) {
+        if (!deliveryEnabled) await this.stopOne(accountId)
+        else if (state.enabled && !this.running.has(accountId)) {
+          try { await this.startOne(accountId) } catch { return { ok: false, error: '投递设置已保存，但连接失败，请重新连接' } }
+        }
+      }
       return { ok: true, account: this.accountView(accountId, state) }
     })
   }
@@ -704,7 +837,7 @@ export class ChannelManager {
       try {
         const state = this.store.channels[accountId]!
         state.enabled = true
-        state.receiveEnabled = true
+        if (!state.deliveryEnabled) state.receiveEnabled = true
         await this.startOne(accountId)
         return { ok: true }
       } catch {
@@ -874,7 +1007,7 @@ export class ChannelManager {
       this.seedAllowedUser(id, readWeixinAllowedUserId(accountDir) || resolved.allowedUserId)
     }
     this.seedAllowedUser(id, resolved.ownerOpenId || resolved.allowedUserId)
-    this.engine.register(adapter)
+    this.engine.register(adapter, () => !this.disposed && this.store.channels[id]?.receiveEnabled !== false)
     this.running.set(id, adapter)
     // 渠道网络异常时 start 可能永久挂起，超时按启动失败处理（catch 会顺带 stop）
     const START_TIMEOUT_MS = 30_000
@@ -1023,7 +1156,17 @@ export class ChannelManager {
     if (changed) this.flush()
   }
 
+  private deliveryNameError(platform: ChannelId, name: string, previous: ChannelState): string | undefined {
+    try { deliveryName(name) } catch (error) { return (error as Error).message }
+    const prefix = `${CHANNEL_META[platform].label}账号`
+    if (name === prefix || (name.startsWith(`${prefix} `) && /^\d+$/.test(name.slice(prefix.length + 1)))) return '开启投递前请为账号设置明确名称'
+    if (Object.entries(this.store.channels).some(([id, other]) => other !== previous && other.deliveryEnabled
+      && this.platformOf(id, other) === platform && nameKey(other.name ?? '') === nameKey(name))) return '同渠道的投递账号不能重名'
+    return undefined
+  }
+
   private normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): { ok: true; settings: { name: string; assistant: AssistantModel; cwd: string; permission: PermissionPreset; privateAccess: 'approved' | 'all' } } | { ok: false; error: string } {
+    if (input.name !== undefined && typeof input.name !== 'string') return { ok: false, error: '账号名称必须为文字' }
     const fallback = this.currentAssistant()
     const assistant = normalizeAssistantModel({
       provider: input.provider ?? previous.assistant?.provider ?? fallback?.provider,

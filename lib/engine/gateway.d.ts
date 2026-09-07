@@ -36,7 +36,7 @@ export declare class ImEngine {
     setCwd(cwd: string): void;
     setPermission(permission: string): void;
     attachMappedSessions(): Promise<void>;
-    register(channel: ChannelAdapter): void;
+    register(channel: ChannelAdapter, accepts?: () => boolean): void;
     unregister(channelId: string): void;
     addAllowed(channelId: string, userId: string): void;
     reloadChannel(channelId: string, options?: {

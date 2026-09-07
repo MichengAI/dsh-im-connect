@@ -8,6 +8,8 @@ import { ChannelManager } from '../lib/manager.js'
 
 test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', () => {
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.equal(manifest.engines?.node, '^22.19.0 || >=24.0.0')
+  assert.equal(manifest.packageManager, 'pnpm@11.22.0')
   const dshPackages = [
     '@deepseek-ai/dsh-agent',
     '@deepseek-ai/dsh-client-locale',
@@ -143,6 +145,10 @@ test('渠道展开状态不叠加 hover，空渠道不可展开', () => {
 
 test('渠道列表、账号卡片和连接状态还原目标视觉层级', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /\.ima-account-shell\{[^}]*background:transparent/)
+  assert.match(client, /\.ima-platforms\{[^}]*background:transparent/)
+  assert.doesNotMatch(client, /\.ima-account-shell\{[^}]*background:var\(--dsw-alias-bg-layer-1/)
+  assert.doesNotMatch(client, /\.ima-platforms\{[^}]*background:var\(--dsw-alias-bg-base/)
   assert.match(client, /\.ima-platforms\{padding:0;border-right:1px solid var\(--ima-line\)/)
   assert.match(client, /\.ima-platform\{border:0;border-bottom:1px solid var\(--ima-line\);border-radius:0/)
   assert.match(client, /\.ima-platform-head\{[^}]*padding:10px 18px[^}]*border-radius:0/)
@@ -215,7 +221,8 @@ test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
   assert.match(client, /}, LocalizedSettingsPage\)\)/, '设置页本身必须订阅语言变化，模型词条才能立即刷新')
   assert.match(client, /"settings\.label": "IM Assistant"/)
   assert.match(client, /"settings\.label": "IM助理"/, '中文设置区标题是 Codex UI 的跨插件导航兼容标识')
-  assert.match(client, /"settings\.title": "IM Bots"/)
+  assert.match(client, /"settings\.title": "IM Assistant"/)
+  assert.match(client, /"settings\.title": "IM助理"/)
   assert.match(client, /"action\.addAccount": "Add account"/)
   assert.match(client, /"action\.checkConnection": "Check"/)
   assert.match(client, /"action\.removeAccount": "Remove"/)
@@ -237,7 +244,7 @@ test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
   const accountPage = client.slice(client.indexOf('function AccountInspector'), client.indexOf('const CHANNEL_RAIL_CSS'))
   assert.doesNotMatch(
     bindAndPicker + accountPage,
-    /生成二维码|请选择工作区|请选择模型|请选择权限|私聊准入|绑定成功后会自动生成账号名|保存中|已保存|运行正常|当前工作区|接收消息|检查连接|重新连接|移除接入|IM机器人|添加账号|处理中|在线|离线/,
+    /生成二维码|请选择工作区|请选择模型|请选择权限|私聊准入|绑定成功后会自动生成账号名|保存中|已保存|运行正常|当前工作区|接收消息|检查连接|重新连接|移除接入|IM助理|添加账号|处理中|在线|离线/,
     '多账号设置页的用户可见文案必须通过 Host i18n 解析',
   )
 })

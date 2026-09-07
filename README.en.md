@@ -22,6 +22,8 @@
 
 ## Features
 
+- Proactive text delivery: name an account, enable delivery, and save recipients in account settings. Use `/im-send` or the Agent tools to send messages. Requires compatible DSH `0.1.2-rc.1` or newer; WeChat remains subject to session limits. See the [usage guide](docs/02-产品与业务/05-主动投递.md) and [API reference](docs/03-技术架构/05-主动投递接口.md) (Chinese).
+
 - Connect DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram from **Settings → IM Assistant**.
 - Add multiple accounts under the same channel. Each account has its own workspace, model, reasoning effort, permission, private-access mode, credentials, allowlist, and session state.
 - Each IM chat maps to an independent DSH session under the workspace **Channels** tab, never mixed into web **Tasks**.

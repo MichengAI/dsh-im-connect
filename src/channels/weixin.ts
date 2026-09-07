@@ -11,6 +11,7 @@
  */
 
 import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
+import { DeliveryError } from '../engine/delivery.js'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, basename } from 'node:path'
@@ -251,13 +252,13 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     return h
   }
 
-  async function request(path: string, body: unknown, timeoutMs: number, tolerateRet1 = false): Promise<Json> {
+  async function request(path: string, body: unknown, timeoutMs: number, tolerateRet1 = false, signal?: AbortSignal): Promise<Json> {
     const baseUrl = state.baseUrl && state.baseUrl.trim() !== '' ? state.baseUrl : BASE_URL
     const res = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify(body),
-      signal: timeoutSignal(timeoutMs, lifecycle?.signal),
+      signal: timeoutSignal(timeoutMs, signal ?? lifecycle?.signal),
     })
     if (!res.ok) throw new Error(`weixin ${path} http ${res.status}`)
     const data = (await res.json()) as Json
@@ -265,6 +266,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     const errcode = Number(data.errcode ?? 0)
     if (tolerateRet1 && ret === 1 && errcode === 0) return data
     if (ret !== 0 || errcode !== 0) {
+      if (path === '/ilink/bot/sendmessage') throw new DeliveryError('platform-rejected', `微信拒绝发送（ret=${ret}, errcode=${errcode}），可能受会话或平台限制，请检查目标并由对方重新发消息后再尝试`)
       throw new Error(`weixin ${path} ret=${ret} errcode=${errcode} ${String(data.errmsg ?? '')}`)
     }
     return data
@@ -555,7 +557,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
 
   // ── 出站：文本 / 媒体 / typing ────────────────────────────────
 
-  async function sendRaw(toUserId: string, item: Json, clientId: string): Promise<void> {
+  async function sendRaw(toUserId: string, item: Json, clientId: string, signal?: AbortSignal): Promise<void> {
     const contextToken = state.contextTokens[toUserId]
     await request(
       '/ilink/bot/sendmessage',
@@ -572,6 +574,8 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         base_info: { channel_version: '1.0.0' },
       },
       15_000,
+      false,
+      signal,
     )
   }
 
@@ -725,6 +729,13 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     },
     async send(chatId, text) {
       await sendText(chatId, text)
+    },
+    async sendProactive(route, text, signal) {
+      signal?.throwIfAborted()
+      if (!botToken) throw new DeliveryError('offline', '微信账号未登录', 503)
+      if (!state.contextTokens[route.nativeId]) throw new DeliveryError('context-required', '微信目标缺少会话上下文，请先让对方发一条消息')
+      await sendRaw(route.nativeId, { type: ITEM_TEXT, text_item: { text } }, `dsh-im-connect:${Date.now()}:${randomBytes(8).toString('hex')}`, signal)
+      return {}
     },
     async sendAction(chatId) {
       await sendTypingStatus(chatId, 1)

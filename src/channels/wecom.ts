@@ -1,5 +1,6 @@
 import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
+import { DeliveryError } from '../engine/delivery.js'
 
 export interface WecomConfig {
   botId?: string
@@ -19,6 +20,20 @@ export function frameBody(frame: unknown): Record<string, unknown> {
   return body && typeof body === 'object' ? body : {}
 }
 
+export async function sendWecomProactive(client: Pick<WecomSdkClient, 'sendMessage'>, chatId: string, text: string) {
+  try {
+    const result = await client.sendMessage(chatId, { msgtype: 'markdown', markdown: { content: text } }) as { errcode?: number }
+    if (result?.errcode !== undefined && result.errcode !== 0) throw result
+    return {}
+  } catch (error) {
+    // 官方 SDK 对业务拒绝直接 reject 回执帧；网络/超时异常仍保留为结果未知。
+    if (error && typeof error === 'object' && 'errcode' in error && typeof error.errcode === 'number') {
+      throw new DeliveryError('platform-rejected', `企业微信拒绝发送（${error.errcode}），请检查目标和机器人权限`)
+    }
+    throw error
+  }
+}
+
 export function messageText(body: Record<string, unknown>): string {
   if (body.msgtype === 'text') return String((body.text as { content?: string } | undefined)?.content ?? '').trim()
   if (body.msgtype === 'voice') return String((body.voice as { content?: string } | undefined)?.content ?? '').trim()
@@ -33,7 +48,7 @@ export function messageText(body: Record<string, unknown>): string {
   return ''
 }
 
-/** 企业微信智能机器人必须按回调帧 replyStream，主动 sendMessage 用户看不到。 */
+/** 回合回复优先使用回调帧；主动投递必须直接调用 SDK，避免消耗待回复帧。 */
 export class WecomReplyBroker {
   // 同一聊天可能连续来多条消息，每条都有独立的回调帧，必须排队而不是单槽覆盖
   private readonly pending = new Map<string, Array<{ frame: unknown; streamId: string; started: boolean; expiresAt: number }>>()
@@ -223,6 +238,11 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     async send(chatId, text) {
       if (!broker) throw new Error('wecom: 尚未连接')
       await broker.send(chatId, text)
+    },
+    async sendProactive(route, text, signal) {
+      signal?.throwIfAborted()
+      if (!client) throw new DeliveryError('offline', '企业微信账号未连接', 503)
+      return sendWecomProactive(client, route.nativeId, text)
     },
     async sendAction(chatId) {
       await broker?.startThinking(chatId).catch(() => undefined)

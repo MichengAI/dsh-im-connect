@@ -171,9 +171,9 @@ export class ImEngine {
     return this.router.attachMappedSessions()
   }
 
-  register(channel: ChannelAdapter): void {
+  register(channel: ChannelAdapter, accepts: () => boolean = () => true): void {
     this.channels.set(channel.id, channel)
-    channel.setMessageHandler((msg) => this.enqueue(channel.id, msg))
+    channel.setMessageHandler((msg) => { if (accepts()) return this.enqueue(channel.id, msg) })
   }
 
   unregister(channelId: string): void {

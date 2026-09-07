@@ -9,6 +9,8 @@ import { mkdirSync } from 'node:fs'
 import { ChannelManager } from './manager.js'
 import type { EngineConfig } from './engine/types.js'
 import { createRotatingFileAppender } from './engine/file-log.js'
+import { registerDeliveryTools } from './delivery-tools.js'
+import { registerPluginUpdater } from './plugin-updater.js'
 
 export const name = 'dsh-im-connect'
 export const inject = [
@@ -19,6 +21,8 @@ export const inject = [
   'agentDefaultModel',
   'llm',
   'permissionPresets',
+  'tools',
+  'skills',
 ]
 
 export interface PluginConfig {
@@ -40,6 +44,11 @@ export const Config: Schema<PluginConfig> = Schema.object({
 })
 
 export function apply(ctx: Context, config: PluginConfig): void {
+  ctx.effect(() => registerPluginUpdater(ctx, {
+    endpoint: '/api/michengai/dsh-im-connect/update',
+    packageName: '@michengai/dsh-im-connect',
+    manifestUrl: new URL('../package.json', import.meta.url),
+  }), 'im-connect.plugin-updater')
   const permissionPresets = (ctx as Context & { permissionPresets: { defaultPreset: string } }).permissionPresets
   const stateDir = config.stateDir !== ''
     ? config.stateDir
@@ -65,6 +74,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
   const applyStarted = Date.now()
   const manager = new ChannelManager({ ctx, stateDir, log, engineConfig })
   log(`[boot] ChannelManager 构造 ${Date.now() - applyStarted}ms`)
+  ctx.effect(() => registerDeliveryTools(ctx, manager), 'im-connect.delivery-tools')
   ctx.effect(() => {
     manager.registerApi(ctx)
     void manager.initEnabled().finally(() => { void manager.attachMappedSessions() })
