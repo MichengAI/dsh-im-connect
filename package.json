@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-im-connect",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "DeepSeek Harness IM 助理：把本机 agent 接到微信、企微、钉钉、飞书、QQ、Telegram，会话与网页任务分列。",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
@@ -63,7 +63,7 @@
     "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.5 <0.2.0",
     "@deepseek-ai/dsh-client-ui-settings": ">=0.1.0-rc.5 <0.2.0",
     "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.5 <0.2.0",
-    "@deepseek-ai/dsh-host-webserver": ">=0.1.0-rc.5 <0.2.0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.2-rc.1 <0.2.0",
     "@deepseek-ai/schemastery": "^3.18.2"
   },
   "peerDependenciesMeta": {
@@ -80,6 +80,7 @@
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-settings": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-host-webserver": "0.1.2-rc.1",
     "@deepseek-ai/schemastery": "^3.18.2",
     "@types/node": "^22.10.0",
     "@types/qrcode": "^1.5.6",

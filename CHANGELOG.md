@@ -6,6 +6,10 @@ The five most recent published versions are listed below. Git tags and GitHub Re
 
 ## Unreleased
 
+## 0.1.36 - 2026-09-07
+
+- Aligned the DSH webserver peer and development dependency at `0.1.2-rc.1` so CI can resolve the package dependency graph.
+
 ## 0.1.35 - 2026-09-07
 
 - Added independent in-product update checks with automatic updates when a verified DSH update service is available and a profile-specific manual fallback otherwise.
