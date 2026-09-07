@@ -118,7 +118,6 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
       })
       if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)
     },
-    sendProactive(route, text, signal) { return cards.sendProactive(route, text, signal) },
     async beginReply(chatId): Promise<ReplyStream> {
       const target = targets.get(chatId)
       if (!target) throw new Error('dingtalk: 还没有卡片投放目标')

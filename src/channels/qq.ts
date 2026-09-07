@@ -1,7 +1,6 @@
 /** QQ 开放平台机器人：官方 WebSocket 网关，不是个人 QQ 号。 */
 import type { ChannelAdapter, ImMessage, ReplyStream } from '../engine/types.js'
 import { timeoutSignal } from '../engine/abort.js'
-import { DeliveryError } from '../engine/delivery.js'
 
 export interface QqChannelConfig {
   appId?: string
@@ -305,20 +304,6 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
     },
     async send(chatId, text) {
       await sendText(chatId, text)
-    },
-    async sendProactive(route, text, signal) {
-      signal?.throwIfAborted()
-      try { await ensureToken() } catch { throw new DeliveryError('authentication-failed', 'QQ 账号鉴权失败，请重新连接', 503) }
-      const path = route.kind === 'group' ? 'groups' : 'users'
-      const response = await fetch(`${API}/v2/${path}/${encodeURIComponent(route.nativeId)}/messages`, {
-        method: 'POST', headers: { Authorization: `QQBot ${accessToken}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ content: text, msg_type: 0 }),
-        signal: timeoutSignal(30_000, signal),
-      })
-      const data = await response.json() as { id?: string; code?: number }
-      if (data.code || (response.status >= 400 && response.status < 500)) throw new DeliveryError('platform-rejected', `QQ 拒绝主动发送（${data.code ?? response.status}），请检查主动消息许可、目标和频率限制`)
-      if (!response.ok || !data.id) throw new Error('QQ 未返回有效发送回执')
-      return { messageId: data.id }
     },
     async beginReply(chatId): Promise<ReplyStream> {
       return {

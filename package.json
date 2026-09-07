@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-im-connect",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "description": "DeepSeek Harness IM 助理：把本机 agent 接到微信、企微、钉钉、飞书、QQ、Telegram，会话与网页任务分列。",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
@@ -21,8 +21,6 @@
     "client.js",
     "cordis.patch.yml",
     "assets",
-    "docs/02-产品与业务/05-主动投递.md",
-    "docs/03-技术架构/05-主动投递接口.md",
     "README.md",
     "README.en.md",
     "SECURITY.md",
@@ -54,8 +52,6 @@
     "qrcode": "^1.5.4"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0",
-    "@deepseek-ai/dsh-skill": ">=0.1.2-rc.1 <0.2.0",
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-agent": ">=0.1.0-rc.5 <0.2.0",
     "@deepseek-ai/dsh-client-locale": ">=0.1.0-rc.5 <0.2.0",
@@ -72,8 +68,6 @@
     }
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-skill": "0.1.2-rc.1",
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-agent": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-locale": "0.1.2-rc.1",

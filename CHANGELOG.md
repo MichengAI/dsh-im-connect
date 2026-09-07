@@ -6,6 +6,10 @@ The five most recent published versions are listed below. Git tags and GitHub Re
 
 ## Unreleased
 
+## 0.1.37 - 2026-09-07
+
+- Withdraw the unfinished proactive delivery feature, including account delivery settings, `im-send`, Agent tools, and delivery HTTP endpoints. Existing IM replies and plugin update controls are retained.
+
 ## 0.1.36 - 2026-09-07
 
 - Aligned the DSH webserver peer and development dependency at `0.1.2-rc.1` so CI can resolve the package dependency graph.

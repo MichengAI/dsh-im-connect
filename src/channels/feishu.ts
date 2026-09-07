@@ -1,6 +1,5 @@
 import type { ChannelAdapter, ImMessage } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
-import { DeliveryError, type DeliveryRoute } from '../engine/delivery.js'
 
 export interface FeishuConfig {
   appId?: string
@@ -17,16 +16,6 @@ interface FeishuMention {
 export function isFeishuBotMentioned(mentions: FeishuMention[] | undefined, botOpenId: string): boolean {
   if (!botOpenId || !Array.isArray(mentions)) return false
   return mentions.some((mention) => mention.id?.open_id === botOpenId)
-}
-
-export async function sendFeishuProactive(client: { im: { message: { create(opts: unknown): Promise<unknown> } } }, route: DeliveryRoute, text: string) {
-  const result = await client.im.message.create({
-    params: { receive_id_type: route.idType ?? 'chat_id' },
-    data: { receive_id: route.nativeId, msg_type: 'text', content: JSON.stringify({ text }) },
-  }) as { code?: number; data?: { message_id?: string } }
-  if (result.code !== undefined && result.code !== 0) throw new DeliveryError('platform-rejected', `飞书/Lark 拒绝发送（${result.code}），请检查目标及应用权限`)
-  if (!result.data?.message_id) throw new Error('飞书未返回可确认的发送回执')
-  return { messageId: result.data.message_id }
 }
 
 export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig, log: (line: string) => void): ChannelAdapter | undefined {
@@ -109,11 +98,6 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         params: { receive_id_type: 'chat_id' },
         data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text }) },
       })
-    },
-    async sendProactive(route, text, signal) {
-      signal?.throwIfAborted()
-      if (!client) throw new DeliveryError('offline', '账号未连接', 503)
-      return sendFeishuProactive(client, route, text)
     },
     setMessageHandler(h) { handler = h },
     status() { return statusText },

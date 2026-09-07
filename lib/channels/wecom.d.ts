@@ -11,9 +11,8 @@ export interface WecomSdkClient {
     on(event: string, fn: (payload?: unknown) => void): void;
 }
 export declare function frameBody(frame: unknown): Record<string, unknown>;
-export declare function sendWecomProactive(client: Pick<WecomSdkClient, 'sendMessage'>, chatId: string, text: string): Promise<{}>;
 export declare function messageText(body: Record<string, unknown>): string;
-/** 回合回复优先使用回调帧；主动投递必须直接调用 SDK，避免消耗待回复帧。 */
+/** 企业微信智能机器人必须按回调帧 replyStream，主动 sendMessage 用户看不到。 */
 export declare class WecomReplyBroker {
     private readonly client;
     private readonly log;

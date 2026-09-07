@@ -2,7 +2,6 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ChannelId } from './engine/session-id.js';
 import { type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js';
 import type { EngineConfig } from './engine/types.js';
-import { type DeliveryTarget } from './engine/delivery.js';
 export declare const API_CLIENT_HEADER = "x-dsh-im-connect-client";
 interface ApiBodyReadResult {
     body: Record<string, unknown>;
@@ -29,8 +28,6 @@ export interface ChannelState {
     name?: string;
     enabled?: boolean;
     receiveEnabled?: boolean;
-    deliveryEnabled?: boolean;
-    deliveryTargets?: DeliveryTarget[];
     lastError?: string;
     config?: Record<string, string>;
     assistant?: AssistantModel;
@@ -47,8 +44,6 @@ export interface AccountView {
     nameOrdinal?: number;
     connected: boolean;
     receiveEnabled: boolean;
-    deliveryEnabled: boolean;
-    deliveryLimited: boolean;
     configuredKeys: string[];
     status: string;
     assistant: AssistantModel;
@@ -109,35 +104,6 @@ export declare class ChannelManager {
     });
     list(): ChannelView[];
     private accountView;
-    /** 供 Chat/任务发现已获允许的账号；不返回凭据或模型配置。 */
-    deliveryAccounts(): {
-        accountId: string;
-        platform: ChannelId;
-        name: string;
-        connected: boolean;
-        limited: boolean;
-    }[];
-    private deliveryAccount;
-    deliveryTargets(accountId: string): {
-        targets: DeliveryTarget[];
-        suggestions: import("./engine/delivery.js").DeliveryRoute[];
-    };
-    saveDeliveryTarget(accountId: string, input: Record<string, unknown>): Promise<DeliveryTarget>;
-    deleteDeliveryTarget(accountId: string, targetId: string): Promise<void>;
-    /** 每次调用重新检查许可；同账号的发送、停用及目标编辑按顺序执行。 */
-    sendDelivery(accountId: string, targetId: string, text: unknown, signal?: AbortSignal): Promise<{
-        status: "sent" | "failed" | "partial" | "unknown";
-        sentParts: number;
-        totalParts: number;
-        uncertain: boolean;
-        receipts: import("./engine/delivery.js").DeliveryReceipt[];
-        error?: {
-            code: string;
-            message: string;
-        };
-        accountId: string;
-        targetId: string;
-    }>;
     channelSessions(): {
         id: ChannelId;
         label: string;
@@ -203,7 +169,6 @@ export declare class ChannelManager {
     private load;
     private migrateAccountSettings;
     private clearUnsupportedReasoningEfforts;
-    private deliveryNameError;
     private normalizeAccountSettings;
     private accountIdFor;
     private resolveAccountId;
