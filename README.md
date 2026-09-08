@@ -22,14 +22,14 @@
 
 ## 功能概览
 
-- 在「设置 → IM助理」里连接钉钉、飞书、Lark、微信、企业微信、QQ、Telegram。
-- 同一渠道可添加多个账号；每个账号独立选择工作区、模型、推理强度、权限和私聊准入，凭据、白名单与会话状态也按账号隔离。
-- 每个 IM 聊天对应一条独立 DSH 会话，出现在工作区「频道」，不会混进网页「任务」。
-- 手机里直接下任务、看回复；DSH 发起交互时，可在原 IM 会话完成工具批准 / 拒绝、单选、多选和自定义回答。
-- 支持扫码绑定或手动填凭据；敏感字段写入 DSH `ctx.credentials`，不会进 `channels.json`。
-- 可把一句话复制到 DSH、Codex 或 WorkBuddy，让对方代装到本机 DSH。
-- 群聊不用绑定，@ 即可对话；私聊中，平台能返回身份的扫码用户自动放行，其他人要在设置页批准。
-- 扫码成功后配置弹窗自动关闭，设置页保持打开。
+不在电脑前，也能通过常用聊天软件把任务交给本机 DSH，并在同一聊天里接收回复、回答问题和处理工具审批。
+
+- **连接常用消息平台**：支持钉钉、飞书、Lark、微信、企业微信、QQ 和 Telegram。
+- **多个账号分别配置**：同一平台可添加多个账号，各自选择工作区、模型、推理强度、权限和私聊准入。
+- **手机上完成任务交互**：下任务、读回复、回答单选或多选问题；已批准用户可在私聊中批准或拒绝工具执行。
+- **聊天记录互不混淆**：每个 IM 聊天对应独立会话，在网页工作区「频道」中回看。
+- **按平台扫码或填写凭据**：在「设置 → IM助理」连接账号，管理消息接收开关。
+- **控制谁能使用**：群聊通过 @ 触发，私聊按账号的准入设置处理，详见下表。
 
 ## 谁可以驱动助手
 
@@ -114,13 +114,20 @@
 
 ## DSH 产品生态
 
-本产品既可以独立安装，也可以随桌面端或 Web 套件一起使用。它们共享同一个 DSH 核心，但面向不同的使用方式：
+想直接使用完整工作台，可下载 [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases)；已有 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 环境，可按需独立安装以下 8 个自研插件。桌面端已随附这些插件。
 
-| 产品 | 与本产品的关系 |
+| 插件 | 你可以用它做什么 |
 | --- | --- |
-| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | 本产品的运行宿主，提供模型、会话、工具和插件系统 |
-| [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop) | 下载安装即用的桌面产品，已内置本产品和其他 5 个功能产品 |
-| 6 个功能产品 | [Codex UI](https://github.com/MichengAI/dsh-codex-ui) · [IM Connect](https://github.com/MichengAI/dsh-im-connect) · [Automation](https://github.com/MichengAI/dsh-automation) · [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) · [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) · [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) |
+| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | 整理项目与会话、搜索任务、跳转对话轮次 |
+| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | 从微信、飞书、钉钉等消息平台下任务、收回复 |
+| [Automation](https://github.com/MichengAI/dsh-automation) | 按计划执行任务，查看每次运行的结果 |
+| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | 统一查找、启停、创建和导入本机技能 |
+| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | 搜索、恢复或清理已归档会话 |
+| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | 按任务选择并召唤专业角色 |
+| [BTW](https://github.com/MichengAI/dsh-btw) | 在当前上下文中临时旁问，不打断主任务 |
+| [Simplify](https://github.com/MichengAI/dsh-simplify) | 用 /simplify 整理 Git 改动范围内的代码 |
+
+桌面端介绍与下载站的源码见[官网仓库](https://github.com/MichengAI/dsh-codex-desktop-website)。
 
 ## 前置条件
 
@@ -131,39 +138,15 @@
 
 ## 安装
 
-`dsh plugin add` 会转发到 profile 目录里的 `pnpm add`。不写版本、不指定官方源时，本机镜像和最短发布间隔可能让你停在旧版。
+以下安装命令使用官方 npm 源。
 
-### 交给其他 Agent 一句话安装
+### 让 Agent 帮你安装（推荐）
 
-本插件运行在 DeepSeek Harness Web 里。把下面其中一句复制到 DSH、Codex 或 WorkBuddy，让它代你安装到本机 `web` profile。
-
-从 npm 安装：
+把下面这段话发给任意能够执行本机终端命令的 Agent。将 `web` 替换为实际使用的 profile；安装完成后，在 DSH 中使用本插件。
 
 ```text
-请把 DSH 插件 @michengai/dsh-im-connect 最新版装进本机 web profile，使用官方 npm 源执行：dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/。装完执行 dsh --profile web --dump-config，确认已挂载 im-connect，并提醒我重启 DSH Web 后硬刷新浏览器，打开「设置 → IM助理」。
+请将 DSH 插件 @michengai/dsh-im-connect 安装到本机 web profile，执行：dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/。安装后执行 dsh --profile web --dump-config，确认配置包含 im-connect，并告诉我如何重新加载 DSH 和开始使用。
 ```
-
-从源码安装：
-
-```text
-请从 https://github.com/MichengAI/dsh-im-connect 安装 DSH 插件：克隆仓库，执行 npm install 和 npm test，再在该目录执行 dsh plugin --profile web add .。不要只复制 lib。然后执行 dsh --profile web --dump-config，确认已挂载 im-connect，并提醒我重启 DSH Web 后硬刷新浏览器，打开「设置 → IM助理」。
-```
-
-| 产品 | 怎么用 |
-| --- | --- |
-| DSH | 把上面其中一句发给当前会话。 |
-| Codex | 把上面其中一句发给 Codex，让它在本机执行安装。 |
-| WorkBuddy | 把上面其中一句发给 WorkBuddy；源码安装也可同时粘贴仓库地址 `https://github.com/MichengAI/dsh-im-connect`。 |
-
-Codex 和 WorkBuddy 只负责代装；装好后仍要打开 DSH Web 使用「设置 → IM助理」。
-
-也可以自己执行同一条 npm 命令：
-
-```powershell
-dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/
-```
-
-未把 `dsh` 装进 PATH 时，把开头的 `dsh` 换成 `npx --yes @deepseek-ai/dsh`。
 
 ### 从官方 npm 安装最新版
 
@@ -179,24 +162,6 @@ dsh --profile web --dump-config
 需要钉死某一版时，把 `@latest` 换成具体版本，例如 `@0.1.28`。
 
 配置输出中应包含 `im-connect`。安装后重启 DSH Web 并在浏览器硬刷新。不要手工复制客户端文件，`dsh plugin add` 会同时应用 `cordis.patch.yml`。
-
-### 从源码安装
-
-适用于调试或使用未发布改动。克隆后的本地路径就是插件安装路径：
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location D:\Repository\deepseek-harness-plugin
-git clone https://github.com/MichengAI/dsh-im-connect.git
-Set-Location .\dsh-im-connect
-npm install
-npm test
-dsh plugin --profile web add .
-dsh --profile web --dump-config
-```
-
-完成后重启 DSH Web 并硬刷新浏览器。`dsh plugin ... add .` 会读取当前目录的包信息和 `cordis.patch.yml`；不要改为直接复制 `lib` 目录。
 
 ## 在线更新
 
@@ -238,6 +203,24 @@ dsh --profile web --dump-config
 DSH 后端保持本机监听；远程访问使用受控 HTTPS 反向代理，并在宿主配置实际访问地址的 `trustedHosts`、通过该地址登录。不要伪装 localhost 或删除认证检查来绕过 403；图片下载的 `additionalImageHosts` 不用于管理接口。详见 [管理面认证](SECURITY.md#管理面)。权限预设与 Chat 使用相同的 Host sandbox-policy；`danger-full-access` 不套沙箱。
 
 ## 二次开发
+
+### 从源码安装
+
+适用于调试或使用未发布改动。克隆后的本地路径就是插件安装路径：
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+Set-Location D:\Repository\deepseek-harness-plugin
+git clone https://github.com/MichengAI/dsh-im-connect.git
+Set-Location .\dsh-im-connect
+npm install
+npm test
+dsh plugin --profile web add .
+dsh --profile web --dump-config
+```
+
+完成后重启 DSH Web 并硬刷新浏览器。`dsh plugin ... add .` 会读取当前目录的包信息和 `cordis.patch.yml`；不要改为直接复制 `lib` 目录。
 
 本仓库用 `src` 开发，构建到 `lib`：
 

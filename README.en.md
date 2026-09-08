@@ -22,14 +22,14 @@
 
 ## Features
 
-- Connect DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram from **Settings → IM Assistant**.
-- Add multiple accounts under the same channel. Each account has its own workspace, model, reasoning effort, permission, private-access mode, credentials, allowlist, and session state.
-- Each IM chat maps to an independent DSH session under the workspace **Channels** tab, never mixed into web **Tasks**.
-- Send work and read replies from the phone. When DSH needs input, handle tool approval or denial, single choice, multiple choice, and custom answers in the originating IM conversation.
-- Bind by QR code or credentials. Secrets go into DSH `ctx.credentials`, not `channels.json`.
-- Paste one sentence into DSH, Codex, or WorkBuddy and let that agent install the plugin locally.
-- Groups need no binding, only a mention. In DMs, QR scanners are auto-allowed only when the platform returns their identity; everyone else must be approved on the settings page.
-- After a successful bind, the configure dialog closes by itself and Settings stays open.
+Send tasks to your local DSH through your usual messenger, even when you are away from the computer. Receive replies, answer questions, and handle tool approvals in the same chat.
+
+- **Connect familiar platforms**: DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram.
+- **Configure accounts separately**: each account has its own workspace, model, reasoning effort, permissions, and private-access mode.
+- **Handle task interactions on your phone**: send work, read replies, and answer single- or multiple-choice questions. Approved users can approve or deny tools in private chats.
+- **Keep chat records separate**: each IM chat has its own session under **Channels** in the web workspace.
+- **Connect by QR code or credentials**: use the platform-specific setup in **Settings → IM Assistant**, then control message reception per account.
+- **Control access**: groups trigger through mentions and private chats follow each account’s access settings, as detailed below.
 
 ## Who can drive the assistant
 
@@ -114,13 +114,20 @@ After connecting, drive the local assistant from each IM:
 
 ## DSH product ecosystem
 
-This product can be installed independently or used through the desktop app or Web suite. They share the same DSH core but serve different ways of working:
+For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases). If you already use [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), install any of these eight plugins individually. The desktop app includes all eight.
 
-| Product | Relationship to this product |
+| Plugin | What you can do |
 | --- | --- |
-| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | The host runtime that provides models, sessions, tools, and the plugin system |
-| [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop) | A ready-to-install desktop product with this product and the other five feature products built in |
-| Six feature products | [Codex UI](https://github.com/MichengAI/dsh-codex-ui) · [IM Connect](https://github.com/MichengAI/dsh-im-connect) · [Automation](https://github.com/MichengAI/dsh-automation) · [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) · [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) · [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) |
+| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | Organize projects and conversations, search tasks, and navigate chat turns |
+| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | Send tasks and receive replies through your usual messenger |
+| [Automation](https://github.com/MichengAI/dsh-automation) | Schedule tasks and review each run |
+| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | Find, enable, create, and import local skills |
+| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | Search, restore, or clean up archived conversations |
+| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | Choose and summon specialists for your task |
+| [BTW](https://github.com/MichengAI/dsh-btw) | Ask side questions without interrupting the main task |
+| [Simplify](https://github.com/MichengAI/dsh-simplify) | Use /simplify to improve code within your Git changes |
+
+The desktop introduction and download site is maintained in the [website repository](https://github.com/MichengAI/dsh-codex-desktop-website).
 
 ## Prerequisites
 
@@ -131,39 +138,15 @@ This product can be installed independently or used through the desktop app or W
 
 ## Installation
 
-`dsh plugin add` forwards to `pnpm add` in the profile directory. Without a version and official registry, a local mirror or minimum-release-age policy can leave you on an older build.
+The installation commands below use the official npm registry.
 
-### Ask another agent to install it
+### Ask an agent to install it (recommended)
 
-This plugin runs inside DeepSeek Harness Web. Copy one of the sentences below into DSH, Codex, or WorkBuddy and let that agent install it into your local `web` profile.
-
-From npm:
+Send the prompt below to any agent that can run terminal commands on your computer. Replace `web` with your actual profile. Once installed, use the plugin in DSH.
 
 ```text
-Install the latest DSH plugin @michengai/dsh-im-connect into my local web profile using the official npm registry: dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/. Then run dsh --profile web --dump-config, confirm im-connect is mounted, and remind me to restart DSH Web, hard-refresh the browser, and open Settings → IM Assistant.
+Install the DSH plugin @michengai/dsh-im-connect into my local web profile by running: dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/. Then run dsh --profile web --dump-config, confirm the configuration includes im-connect, and explain how to reload DSH and start using the plugin.
 ```
-
-From source:
-
-```text
-Install the DSH plugin from source at https://github.com/MichengAI/dsh-im-connect: clone it, run npm install and npm test, then run dsh plugin --profile web add . from that directory. Do not copy lib by itself. Then run dsh --profile web --dump-config, confirm im-connect is mounted, and remind me to restart DSH Web, hard-refresh the browser, and open Settings → IM Assistant.
-```
-
-| Product | How to use it |
-| --- | --- |
-| DSH | Send one of the sentences above to the current session. |
-| Codex | Send one of the sentences above to Codex and let it install locally. |
-| WorkBuddy | Send one of the sentences above to WorkBuddy; for a source install you can also paste `https://github.com/MichengAI/dsh-im-connect`. |
-
-Codex and WorkBuddy only install the plugin. After that, open DSH Web and use **Settings → IM Assistant**.
-
-You can also run the same npm command yourself:
-
-```powershell
-dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/
-```
-
-If `dsh` is not on PATH, replace the leading `dsh` with `npx --yes @deepseek-ai/dsh`.
 
 ### Install the latest package from the official npm registry
 
@@ -179,24 +162,6 @@ dsh --profile web --dump-config
 To pin a release, replace `@latest` with a version such as `@0.1.28`.
 
 The configuration output should contain `im-connect`. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: `dsh plugin add` also applies `cordis.patch.yml`.
-
-### Install from source
-
-Use this for debugging or unpublished changes. The cloned directory becomes the plugin source path:
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location D:\Repository\deepseek-harness-plugin
-git clone https://github.com/MichengAI/dsh-im-connect.git
-Set-Location .\dsh-im-connect
-npm install
-npm test
-dsh plugin --profile web add .
-dsh --profile web --dump-config
-```
-
-Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
 
 ## Updates
 
@@ -238,6 +203,24 @@ DingTalk replies prefer official AI Card streaming and fall back to plain text. 
 Keep the DSH backend listening on loopback. Remote access should use a controlled HTTPS reverse proxy, the actual authority in the Host's `trustedHosts`, and a login through that authority. Do not spoof localhost or remove authentication to bypass 403. Image-download `additionalImageHosts` does not configure management access; see [management authentication](SECURITY.md#管理面). Permission presets use the same host sandbox-policy values as Chat; `danger-full-access` does not wrap a sandbox.
 
 ## Secondary development
+
+### Install from source
+
+Use this for debugging or unpublished changes. The cloned directory becomes the plugin source path:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+Set-Location D:\Repository\deepseek-harness-plugin
+git clone https://github.com/MichengAI/dsh-im-connect.git
+Set-Location .\dsh-im-connect
+npm install
+npm test
+dsh plugin --profile web add .
+dsh --profile web --dump-config
+```
+
+Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
 
 This repository develops in `src` and builds to `lib`:
 
