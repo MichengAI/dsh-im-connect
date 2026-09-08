@@ -167,7 +167,7 @@ The settings title shows the installed version and a **Check for updates** butto
 
 ## Usage
 
-Open **Settings → IM Assistant**, select **Add account** under the target channel, then choose that account's workspace, model, permission, and private-access mode. The full guide is [Usage guide](docs/02-产品与业务/04-使用说明.md).
+Open **Settings → IM Assistant**, select **Add account** under the target channel, then choose that account's workspace, model, permission, and private-access mode.
 
 | Goal | Action | Notes |
 | --- | --- | --- |
@@ -252,8 +252,8 @@ npm test
 
 `prepublishOnly` runs the tests before publishing.
 
-## Documentation and license
+## License
 
-Project status, usage boundaries, architecture, and iteration records begin at the [documentation entry point](docs/00-交接入口/00-阅读导航.md). The detailed operational guide is [Usage guide](docs/02-产品与业务/04-使用说明.md). The default security posture is in [SECURITY.md](SECURITY.md).
+Security guidance is in [SECURITY.md](SECURITY.md).
 
 Licensed under [Apache License 2.0](LICENSE).
