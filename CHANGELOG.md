@@ -4,7 +4,7 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
-## Unreleased
+## 0.1.39 - 2026-09-09
 
 - Remove the unused legacy composer component while preserving the current host composer entry.
 
