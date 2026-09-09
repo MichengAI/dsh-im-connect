@@ -4,6 +4,14 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.40 - 2026-09-10
+
+- Fix #12: retain previous channel sessions after `/new`, `/clear`, and workspace changes. Opening, renaming, and archiving historical sessions no longer change the current IM chat binding.
+- Recover history indexes for recognizable IM IDs from persisted Host logs at startup while preserving archive state. Failed restoration never creates empty sessions, and unknown persistence state never removes indexes.
+- Synchronize automatic and manual Host titles while protecting manual names and legacy names with unknown ownership. New sessions use the first message or attachment name as a fallback with Unicode-safe truncation.
+- Keep channel entries when archiving or deletion fails; reliably deleted historical logs no longer retain invalid indexes because of stale archive markers. Align both READMEs and chat help.
+- All 416 tests pass locally with real Host-package contract tests enabled (0 skipped). End-to-end verification of the DSH UI, mobile channels, and Archive Manager remains outstanding. Restart DSH and refresh the page after upgrading.
+
 ## 0.1.39 - 2026-09-09
 
 - Remove the unused legacy composer component while preserving the current host composer entry.

@@ -176,7 +176,7 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 | Pause receiving | Select the account and turn off **Receive messages** on the right | Credentials and settings stay; only new inbound messages for that account pause |
 | Send work from IM | WeChat / Feishu / Lark / QQ QR scanners can DM immediately; DingTalk / WeCom scanners and other users need approval. Groups only need a mention | Each chat has its own channel session |
 | Split input | End with `..` to continue, `!!` to flush now | Default merge window is about 5 seconds |
-| Start a new session | Send `/new` or `/clear` | Affects only the current IM chat |
+| Start a new session | Send `/new` or `/clear` | Creates and switches the current IM session; previous sessions stay in the Channels list without affecting web tasks |
 | Status / help | Send `/status` or `/help` | Scoped to the current channel session |
 | Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
 | Answer an interactive question | Reply with an option number or text; separate multiple choices with commas, or enter a custom answer | Multiple questions arrive in order; only the initiating user can answer in a group |
