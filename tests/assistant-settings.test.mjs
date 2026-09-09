@@ -94,15 +94,15 @@ test('权限菜单直接使用 Host 官方列表与官方文案', () => {
   const manager = readFileSync(new URL('../src/manager.ts', import.meta.url), 'utf8')
   const router = readFileSync(new URL('../src/engine/router.ts', import.meta.url), 'utf8')
   assert.doesNotMatch(client, /const PERMISSIONS =/)
-  assert.match(client, /setPermissions\(data\.permissions \|\| \[\]\)/)
+  assert.match(client, /permissions: data\.permissions \|\| \[\]/)
   assert.match(client, /permissionLabel\(item, t\)/)
   assert.match(client, /"permission\.readOnly": "只读"/)
   assert.match(client, /"permission\.workspaceWrite": "工作区写入"/)
   assert.match(client, /"permission\.fullAccess": "完全访问"/)
   assert.match(client, /ctx\.locale\.bind\("permission\.access"\)/)
   assert.match(client, /ctx\.locale\.bind\("model"\)/)
-  assert.match(client, /label: props\.modelT\("menu\.model"\)/)
-  assert.match(client, /label: props\.modelT\("menu\.effort"\)/)
+  assert.match(client, /label: modelT\("menu\.model"\)/)
+  assert.match(client, /label: modelT\("menu\.effort"\)/)
   assert.doesNotMatch(client, /label: "Model"|label: "Effort"/, '模型选择器必须使用 Chat 的官方国际化词条')
   assert.match(manager, /official\.names\.map\(\(name\) => official\.optionOf\(name\)\)/)
   assert.match(manager, /permissions: this\.permissionOptions\(\)/)
@@ -166,11 +166,8 @@ test('渠道列表、账号卡片和连接状态还原目标视觉层级', () =>
   assert.match(client, /\.ima-account-state\.offline\{color:var\(--ima-warning\)\}/)
 })
 
-test('紧凑桌面窗口收窄设置弹窗和账号双栏，避免卡片横向错位', () => {
+test('账号详情操作按钮允许换行，保持标签可读', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  assert.match(client, /@media\(max-width:1280px\)\{\[role="dialog"\]\[aria-labelledby\]:has\(\.ima-account-page\)\{width:min\(920px,calc\(100vw - 48px\)\)/)
-  assert.match(client, /grid-template-columns:minmax\(300px,340px\) minmax\(320px,1fr\)/)
-  assert.match(client, /@media\(max-width:850px\)\{\[role="dialog"\]\[aria-labelledby\]:has\(\.ima-account-page\)\{width:calc\(100vw - 32px\)/)
   assert.match(client, /\.ima-inspector-actions\{[^}]*flex-wrap:wrap/)
   assert.match(client, /\.ima-inspector-actions \.ima-btn\{[^}]*flex:none[^}]*padding:0 8px[^}]*font-size:12px[^}]*white-space:nowrap/)
 })
@@ -240,7 +237,7 @@ test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
   assert.match(client, /function accountLabel\(account, t\)/)
   assert.match(client, /t\("error\.detailsInLog"\)/)
 
-  const bindAndPicker = client.slice(client.indexOf('function BindModal'), client.indexOf('function ComposerBar'))
+  const bindAndPicker = client.slice(client.indexOf('function BindModal'), client.indexOf('function AccountInspector'))
   const accountPage = client.slice(client.indexOf('function AccountInspector'), client.indexOf('const CHANNEL_RAIL_CSS'))
   assert.doesNotMatch(
     bindAndPicker + accountPage,
@@ -272,8 +269,8 @@ test('IM 模型菜单只使用适配器声明的模型与推理等级', () => {
   assert.doesNotMatch(client, /DEFAULT_EFFORTS/, '不能在客户端伪造 Low、Medium、High')
   assert.match(client, /const modelGroups = providers\.map/)
   assert.match(client, /reasoning && h\(ChipRow/)
-  assert.match(client, /props\.modelT\("empty\.models"\)/)
-  assert.match(client, /reasoning\.defaultEffort \? \[\] : \[\{ id: "", name: props\.modelT\("effort\.providerDefault"\) \}\]/)
+  assert.match(client, /modelT\("empty\.models"\)/)
+  assert.match(client, /reasoning\.defaultEffort \? \[\] : \[\{ id: "", name: modelT\("effort\.providerDefault"\) \}\]/)
   assert.match(manager, /resolveModelInfo\?/)
   assert.match(manager, /resolved\.reasoning\.efforts\.map/)
 })

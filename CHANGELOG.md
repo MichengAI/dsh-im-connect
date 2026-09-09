@@ -6,6 +6,11 @@ The five most recent published versions are listed below. Git tags and GitHub Re
 
 ## Unreleased
 
+- Remove the unused legacy composer component while preserving the current host composer entry.
+
+- Unified settings headings, descriptions, and action layouts; maintenance controls no longer squeeze titles or versions. The layout adapts to native DSH settings without Codex UI.
+- Keep account lists and details side by side in equal-width columns with compact channel rows; fix box sizing that caused horizontal overflow in the native settings dialog.
+
 ## 0.1.38 - 2026-09-08
 
 - Fix #11: move the settings API to `/api/dsh-im-connect`, following the REST prefix used by other DSH plugins. The route uses DSH’s public `connection.requestRejection`, preserving trusted-host, Origin, and authority-bound browser-cookie checks behind reverse proxies. Local requests also require login; unavailable authentication fails closed with retry/upgrade guidance.

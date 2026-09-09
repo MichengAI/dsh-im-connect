@@ -95,13 +95,8 @@ window.__ModuleLoader__.load({
 .ima-avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;border:2px solid #111}
 .ima-avatar.bot{background:#123524;margin-right:-8px;z-index:1}
 .ima-avatar.user{background:#3d3428}
-.ima-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.ima-title{margin:0;font-size:20px;line-height:28px;font-weight:650;letter-spacing:-.2px;text-align:left}
-.ima-sub{margin:4px 0 0;max-width:42em;color:var(--ima-muted);font-size:13px;line-height:1.5;text-align:left}
-.ima-composer-wrap{margin:0 0 16px}
-.ima-composer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:center;gap:4px;padding:4px 6px;border:1px solid var(--ima-line);border-radius:14px;background:var(--ima-card)}
-.ima-composer-left,.ima-composer-right{display:contents}
-.ima-composer .ima-chip{width:100%;min-width:0}
-.ima-composer .ima-chip-btn{width:100%;justify-content:center}
+.ima-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.ima-title{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.4px;white-space:nowrap;text-align:left}
+.ima-sub{margin:12px 0 0;max-width:42em;color:var(--ima-muted);font-size:14px;line-height:22px;text-align:left}
 .ima-chip{position:relative;min-width:0;z-index:1}
 .ima-chip.is-open{z-index:30}
 .ima-chip-btn{display:inline-flex;align-items:center;gap:6px;min-height:28px;height:28px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:var(--ima-muted);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer}
@@ -115,7 +110,6 @@ window.__ModuleLoader__.load({
 .ima-chip-row-main{display:inline-flex;align-items:center;gap:8px;min-width:0}
 .ima-chip-tick{width:6px;height:12px;border-right:1.6px solid var(--ima-accent);border-bottom:1.6px solid var(--ima-accent);transform:rotate(45deg) translateY(-2px);flex:none}
 .ima-chip-empty{padding:14px 12px;color:var(--ima-muted);font-size:12px;text-align:center}
-.ima-composer-hint{margin-top:8px;color:var(--ima-muted);font-size:12px;text-align:center}
 .ima-chip svg{flex:none}
 .ima-chip-row.is-kv .ima-chip-row-main{flex:none}
 .ima-chip-row-side{display:inline-flex;align-items:center;gap:8px;color:var(--ima-muted);font-size:12px;min-width:0}
@@ -123,9 +117,9 @@ window.__ModuleLoader__.load({
 .ima-chip-split{height:1px;margin:6px 8px;background:var(--ima-line)}
 .ima-chip-effort{color:var(--ima-muted);font-weight:500}
 .ima-model-select .ima-chip-btn{border-radius:24px;gap:4px}
-.ima-model-select .ima-chip-menu{width:min(240px,calc(100vw - 32px));min-width:240px;max-height:min(360px,calc(100vh - 96px));padding:4px;border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-base,#fff))}
+.ima-model-select .ima-chip-menu{width:max-content;min-width:min(240px,calc(100vw - 32px));max-width:calc(100vw - 32px);box-sizing:border-box;max-height:min(360px,calc(100vh - 96px));padding:4px;border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-base,#fff))}
 .ima-model-select .ima-chip-row{min-height:40px;padding:0 10px;font-size:14px}
-.ima-model-select .ima-chip-row-side{font-size:13px;color:var(--dsw-alias-label-tertiary,var(--ima-muted))}
+.ima-model-select .ima-chip-row-side>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ima-model-select .ima-chip-row-side{font-size:13px;color:var(--dsw-alias-label-tertiary,var(--ima-muted))}
 .ima-model-group+.ima-model-group{margin-top:4px}
 .ima-model-group-title{position:sticky;top:0;z-index:1;padding:5px 8px 3px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-base,#fff));color:var(--dsw-alias-label-tertiary,var(--ima-muted));font-size:12px;font-weight:500;line-height:18px}
 .ima-model-option{display:flex;width:100%;min-height:38px;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,var(--ima-text));text-align:left;cursor:pointer}
@@ -208,8 +202,8 @@ window.__ModuleLoader__.load({
 .ima-radio small{display:block;color:var(--ima-muted);margin-top:2px}
 .ima-ok{color:var(--ima-ok);font-size:14px;text-align:center;padding:24px 0}
 .ima-modal .ima-error{color:var(--ima-danger)}
-.ima-page.ima-account-page{max-width:1120px;padding-bottom:40px}
-.ima-account-shell{display:grid;grid-template-columns:minmax(330px,390px) minmax(360px,1fr);min-height:650px;border:1px solid var(--ima-line);border-radius:16px;overflow:hidden;background:transparent}
+.ima-page.ima-account-page{container-type:inline-size;min-width:0;max-width:1120px;padding-bottom:40px}
+.ima-account-shell{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));min-height:650px;border:1px solid var(--ima-line);border-radius:16px;overflow:hidden;background:transparent}
 .ima-platforms{padding:0;border-right:1px solid var(--ima-line);background:transparent}
 .ima-platform{border:0;border-bottom:1px solid var(--ima-line);border-radius:0;margin:0;overflow:visible;background:transparent}.ima-platform:last-child{border-bottom:0}.ima-platform.open{background:transparent}
 .ima-platform-head{display:flex;align-items:center;gap:10px;width:100%;min-height:64px;padding:10px 18px;border:0;border-radius:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
@@ -225,14 +219,31 @@ window.__ModuleLoader__.load({
 .ima-inspector-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;padding-top:18px;border-top:1px solid var(--ima-line)}.ima-inspector-actions .ima-btn{flex:none;min-width:0;min-height:36px;padding:0 8px;font-size:12px;white-space:nowrap}.ima-inspector-actions .danger{margin-left:auto;color:var(--ima-danger);border-color:color-mix(in srgb,var(--ima-danger) 35%,transparent)}
 .ima-save-note{min-height:18px;color:var(--ima-muted);font-size:11px}.ima-save-note.ok{color:var(--ima-ok)}
 .ima-modal.ima-account-modal{width:min(560px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto}.ima-setup-section{margin:4px 0 14px;padding-bottom:14px;border-bottom:1px solid var(--ima-line)}
-.ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:7px}.ima-picker-field.wide{grid-column:1/-1}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-account-picker{width:100%}.ima-account-picker .ima-chip-btn{width:100%;height:auto;min-height:44px;justify-content:flex-start;padding:8px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font-size:13px;text-align:left}.ima-account-picker .ima-chip-btn:hover,.ima-account-picker.is-open .ima-chip-btn{border-color:var(--ima-accent);background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-account-picker .ima-chip-label{flex:1}.ima-account-picker .ima-chip-btn em{margin-left:auto}.ima-account-picker .ima-chip-menu{width:100%;min-width:100%;max-height:min(320px,calc(100vh - 120px))}.ima-account-picker.ima-model-select .ima-chip-btn{border-radius:9px}.ima-account-picker.ima-model-select .ima-chip-menu{width:max(100%,320px);min-width:100%}.ima-account-settings .ima-chip-dialog{grid-column:1/-1;margin-top:0}.ima-picker-note{grid-column:1/-1;color:var(--ima-muted);font-size:11px;line-height:1.5}.ima-picker-note.warning{color:var(--ima-warning)}
-@media(max-width:1280px){[role="dialog"][aria-labelledby]:has(.ima-account-page){width:min(920px,calc(100vw - 48px));max-width:min(920px,calc(100vw - 48px))}.ima-account-shell{grid-template-columns:minmax(300px,340px) minmax(320px,1fr)}}
-@media(max-width:850px){[role="dialog"][aria-labelledby]:has(.ima-account-page){width:calc(100vw - 32px);max-width:calc(100vw - 32px)}.ima-account-shell{grid-template-columns:1fr}.ima-platforms{border-right:0;border-bottom:1px solid var(--ima-line)}.ima-inspector{padding:18px}}
-@media(max-width:620px){.ima-account-settings{grid-template-columns:1fr}.ima-picker-field.wide{grid-column:auto}.ima-account-picker.ima-model-select .ima-chip-menu{width:100%}}
+.ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:7px}.ima-picker-field.wide{grid-column:1/-1}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-account-picker{width:100%}.ima-account-picker .ima-chip-btn{width:100%;height:auto;min-height:44px;justify-content:flex-start;padding:8px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font-size:13px;text-align:left}.ima-account-picker .ima-chip-btn:hover,.ima-account-picker.is-open .ima-chip-btn{border-color:var(--ima-accent);background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-account-picker .ima-chip-label{flex:1}.ima-account-picker .ima-chip-btn em{margin-left:auto}.ima-account-picker .ima-chip-menu{width:100%;min-width:100%;max-height:min(320px,calc(100vh - 120px))}.ima-account-picker.ima-model-select .ima-chip-btn{border-radius:9px}.ima-account-picker.ima-model-select .ima-chip-menu{width:max-content;min-width:min(100%,calc(100vw - 32px));left:auto;right:0}.ima-account-settings .ima-chip-dialog{grid-column:1/-1;margin-top:0}.ima-picker-note{grid-column:1/-1;color:var(--ima-muted);font-size:11px;line-height:1.5}.ima-picker-note.warning{color:var(--ima-warning)}
+.ima-account-shell,.ima-account-shell *{box-sizing:border-box}
+.ima-platforms{min-width:0}
+.ima-platform-head{display:grid;grid-template-columns:24px minmax(0,1fr) 12px;gap:8px;padding:12px;min-height:76px}
+.ima-platform-head>.ima-logo,.ima-platform-head>.ima-logo svg{width:24px;height:24px}
+.ima-platform-title{grid-column:2;grid-row:1;overflow-wrap:anywhere}
+.ima-platform-caret{grid-column:3;grid-row:1;width:12px;margin:0}
+.ima-platform-count{grid-column:1/3;grid-row:2;font-size:11px;white-space:normal;padding-right:80px}
+.ima-platform-add{grid-column:1/4;grid-row:2;justify-self:end;min-height:28px;padding:0 8px;font-weight:500}
+.ima-account-list{padding:0 8px 10px}
+.ima-account-row{display:grid;grid-template-columns:7px minmax(0,1fr) 12px;gap:6px;min-height:60px;padding:10px 8px}
+.ima-account-row>.ima-logo{display:none}
+.ima-account-copy{grid-column:2;grid-row:1}
+.ima-account-row>.ima-dot{grid-column:1;grid-row:1}
+.ima-account-next{grid-column:3;grid-row:1;width:12px}
+.ima-account-state{grid-column:2;grid-row:2;font-size:11px}
+.ima-inspector{padding:18px 16px;overflow-wrap:anywhere}
+.ima-switch-row{gap:10px}.ima-switch-copy{min-width:0}
+@container(max-width:620px){.ima-inspector{padding:16px 12px}.ima-inspector-head{gap:8px}.ima-inspector-title{font-size:15px}.ima-platform-head{padding:10px 8px;gap:6px}.ima-platform-title{font-size:13px}.ima-inspector-empty{padding:16px;min-height:180px}}
+@container(max-width:420px){.ima-title{font-size:22px}.ima-platform-count{grid-column:1/4;padding-right:0}.ima-platform-add{grid-row:3;justify-self:start}.ima-inspector{padding:12px 8px}.ima-inspector-head{flex-wrap:wrap}}
+@media(max-width:620px){.ima-account-settings{grid-template-columns:1fr}.ima-picker-field.wide{grid-column:auto}}
 @media (prefers-reduced-motion:reduce){.ima-switch i{transition:none}}
 `;
 
-    const TITLE_LINK_CSS = ".ima-title-row{display:flex;align-items:center;gap:8px;min-width:0}.ima-title-links{display:flex;align-items:center;gap:4px}.ima-title-link{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap}.ima-title-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.ima-title-link:focus-visible{outline:2px solid var(--dsw-alias-state-success-primary);outline-offset:2px}.ima-title-link svg{flex:none}@media(max-width:720px){.ima-title-row{flex-wrap:wrap}}";
+    const TITLE_LINK_CSS = ".ima-title-row{display:flex;align-items:center;gap:8px 12px;min-width:0;flex-wrap:wrap}.ima-title-links{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.ima-title-link{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap}.ima-title-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.ima-title-link:focus-visible{outline:2px solid var(--dsw-alias-state-success-primary);outline-offset:2px}.ima-title-link svg{flex:none}@media(max-width:720px){.ima-title-row{flex-wrap:wrap}}";
 
     let styleEl = null;
     const ensureStyle = () => {
@@ -889,7 +900,6 @@ window.__ModuleLoader__.load({
                 ...group.models.map((item) => h(ModelChoiceRow, {
                   key: item.value,
                   label: item.label,
-                  description: item.description,
                   active: item.provider === provider && item.model === model,
                   onClick: () => {
                     const nextEffort = (item.reasoning && item.reasoning.defaultEffort) || "";
@@ -956,284 +966,6 @@ window.__ModuleLoader__.load({
           onCancel: () => { setFullAccessAcknowledged(false); setConfirmingFullAccess(false); },
           onConfirm: () => {
             update({ permission: "danger-full-access" });
-            setFullAccessAcknowledged(false);
-            setConfirmingFullAccess(false);
-          },
-        }),
-      );
-    }
-
-    function ComposerBar(props) {
-      const t = props.t || fallbackT;
-      const items = typeof props.useWorkspaces === "function"
-        ? (props.useWorkspaces((state) => (state && state.items) || []) || [])
-        : [];
-      const [providers, setProviders] = useState([]);
-      const [permissions, setPermissions] = useState([]);
-      const [provider, setProvider] = useState("");
-      const [model, setModel] = useState("");
-      const [effort, setEffort] = useState("");
-      const [cwd, setCwd] = useState("");
-      const [permission, setPermission] = useState("");
-      const [confirmingFullAccess, setConfirmingFullAccess] = useState(false);
-      const [fullAccessAcknowledged, setFullAccessAcknowledged] = useState(false);
-      const [open, setOpen] = useState("");
-      const [modelPane, setModelPane] = useState("root");
-      const [hint, setHint] = useState("");
-      const [adding, setAdding] = useState(false);
-      const [addPath, setAddPath] = useState("");
-      const [addBusy, setAddBusy] = useState(false);
-
-      useEffect(() => {
-        api("/assistant").then((data) => {
-          if (!data.ok) { setHint(serverText(data.error, t) || t("error.loadAssistant")); return; }
-          const list = data.providers || [];
-          setProviders(list);
-          setPermissions(data.permissions || []);
-          const current = data.assistant || {};
-          const nextProvider = current.provider || (list[0] && list[0].id) || "";
-          const models = ((list.find((item) => item.id === nextProvider) || {}).models) || [];
-          const nextModel = current.model || (models[0] && models[0].id) || "";
-          const found = models.find((item) => item.id === nextModel) || models[0];
-          setProvider(nextProvider);
-          setModel(nextModel);
-          setEffort(current.reasoningEffort || (found && found.reasoning && found.reasoning.defaultEffort) || "");
-          setCwd(data.cwd || "");
-          setPermission(data.permission || "");
-          if (!list.length) setHint(t("error.noModels"));
-        }).catch(() => setHint(t("error.loadAssistant")));
-      }, []);
-
-      const save = (body) => {
-        api("/assistant", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        }).then((data) => {
-          if (!data.ok) setHint(serverText(data.error, t) || t("error.save"));
-          else setHint("");
-        }).catch(() => setHint(t("error.save")));
-      };
-
-      const workspace = items.find((item) => item.path === cwd);
-      const modelGroups = providers.map((item) => ({
-        id: item.id,
-        name: item.name || item.id,
-        models: (item.models || []).map((entry) => ({
-        value: item.id + "::" + entry.id,
-        provider: item.id,
-        providerName: item.name || item.id,
-        model: entry.id,
-        label: entry.name || entry.id,
-        description: entry.description,
-        reasoning: entry.reasoning,
-        })),
-      })).filter((item) => item.models.length > 0);
-      const models = modelGroups.flatMap((item) => item.models);
-      const currentModel = models.find((item) => item.provider === provider && item.model === model);
-      const reasoning = currentModel && currentModel.reasoning;
-      const effectiveEffort = effort || (reasoning && reasoning.defaultEffort) || "";
-      const efforts = reasoning
-        ? [
-            ...(reasoning.defaultEffort ? [] : [{ id: "", name: props.modelT("effort.providerDefault") }]),
-            ...((reasoning.efforts || []).map((item) => ({ id: item.id, name: item.name || item.id, description: item.description }))),
-          ]
-        : [];
-      const effortLabel = reasoning
-        ? ((efforts.find((item) => item.id === effectiveEffort) || {}).name || effectiveEffort || props.modelT("effort.providerDefault"))
-        : "";
-      const permissionOptions = permissions.map((item) => ({
-        ...item,
-        label: permissionLabel(item, t),
-      }));
-      const perm = permissionOptions.find((item) => item.value === permission) || { label: permission || t("composer.permission") };
-      const modelFallback = props.modelT("trigger.fallback");
-
-      const addWorkspace = (path) => {
-        const next = (path || "").trim();
-        if (!next) { setHint(t("error.chooseWorkspace")); return Promise.resolve(); }
-        if (typeof props.createWorkspace !== "function") { setHint(t("error.workspaceUnavailable")); return Promise.resolve(); }
-        setAddBusy(true);
-        return Promise.resolve(props.createWorkspace({ path: next })).then((created) => {
-          const cwdPath = (created && (created.path || created.cwd)) || next;
-          setCwd(cwdPath);
-          save({ cwd: cwdPath });
-          setAdding(false);
-          setAddPath("");
-          setOpen("");
-        }).catch((error) => {
-          setHint((error && error.message) || t("error.addWorkspace"));
-        }).finally(() => setAddBusy(false));
-      };
-
-      const selectPermission = (next) => {
-        setOpen("");
-        if (next === permission) return;
-        if (next === "danger-full-access") {
-          setFullAccessAcknowledged(false);
-          setConfirmingFullAccess(true);
-          return;
-        }
-        setPermission(next);
-        save({ permission: next });
-      };
-
-      const onAddWorkspace = () => {
-        setOpen("");
-        if (typeof props.pickDirectory === "function") {
-          Promise.resolve(props.pickDirectory()).then((picked) => {
-            if (!picked) return;
-            return addWorkspace(picked);
-          }).catch(() => {
-            setAdding(true);
-            setAddPath("");
-          });
-          return;
-        }
-        setAdding(true);
-        setAddPath("");
-      };
-
-      return h("div", { className: "ima-composer-wrap" },
-        h("div", { className: "ima-composer", "aria-label": t("composer.aria") },
-          h("div", { className: "ima-composer-left" },
-            h(ChipMenu, {
-              open: open === "ws",
-              onToggle: (next) => setOpen(next ? "ws" : ""),
-              icon: h(FolderIcon),
-              label: (workspace && (workspace.title || workspace.path)) || cwd || t("composer.project"),
-              ariaLabel: t("composer.projectAria"),
-            },
-              items.length === 0 && h("div", { className: "ima-chip-empty" }, t("composer.noWorkspaces")),
-              ...items.map((item) => h(ChipRow, {
-                key: item.path,
-                icon: h(FolderIcon),
-                label: item.title || item.path,
-                active: item.path === cwd,
-                onClick: () => { setCwd(item.path); save({ cwd: item.path }); setOpen(""); },
-              })),
-              h("div", { className: "ima-chip-split" }),
-              h(ChipRow, {
-                icon: h(PlusIcon),
-                label: t("composer.addWorkspace"),
-                onClick: onAddWorkspace,
-              }),
-            ),
-            h(ChipMenu, {
-              open: open === "perm",
-              onToggle: (next) => setOpen(next ? "perm" : ""),
-              icon: h(ShieldIcon),
-              label: perm.label,
-              ariaLabel: t("composer.permission"),
-            },
-              ...permissionOptions.map((item) => h(ChipRow, {
-                key: item.value,
-                icon: h(ShieldIcon),
-                label: item.label,
-                active: item.value === permission,
-                onClick: () => selectPermission(item.value),
-              })),
-            ),
-          ),
-          h("div", { className: "ima-composer-right" },
-            h(ChipMenu, {
-              open: open === "model",
-              onToggle: (next) => {
-                setOpen(next ? "model" : "");
-                if (next) setModelPane("root");
-              },
-              align: "end",
-              className: "ima-model-select",
-              menuClassName: "ima-model-menu",
-              menuAria: props.modelT("menu.aria"),
-              label: (currentModel && currentModel.label) || modelFallback,
-              suffix: effortLabel,
-              ariaLabel: props.modelT("trigger.selectAria"),
-            },
-              modelPane === "root" && [
-                h(ChipRow, {
-                  key: "model",
-                  kv: true,
-                  label: props.modelT("menu.model"),
-                  hint: (currentModel && currentModel.label) || modelFallback,
-                  chevron: true,
-                  onClick: () => setModelPane("model"),
-                }),
-                reasoning && h(ChipRow, {
-                  key: "effort",
-                  kv: true,
-                  label: props.modelT("menu.effort"),
-                  hint: effortLabel || props.modelT("effort.providerDefault"),
-                  chevron: true,
-                  onClick: () => setModelPane("effort"),
-                }),
-              ],
-              modelPane === "model" && (
-                models.length === 0
-                  ? h("div", { className: "ima-chip-empty" }, props.modelT("empty.models"))
-                  : modelGroups.map((group) => h("section", { key: group.id, className: "ima-model-group", role: "group", "aria-label": group.name },
-                      h("div", { className: "ima-model-group-title" }, group.name),
-                      ...group.models.map((item) => h(ModelChoiceRow, {
-                        key: item.value,
-                        label: item.label,
-                        description: item.description,
-                        active: item.provider === provider && item.model === model,
-                        onClick: () => {
-                          const nextEffort = (item.reasoning && item.reasoning.defaultEffort) || "";
-                          setProvider(item.provider);
-                          setModel(item.model);
-                          setEffort(nextEffort);
-                          save({ provider: item.provider, model: item.model, reasoningEffort: nextEffort || null });
-                          setOpen("");
-                        },
-                      })),
-                    ))
-              ),
-              modelPane === "effort" && efforts.map((item) => h(ModelChoiceRow, {
-                key: item.id,
-                label: item.name,
-                description: item.description,
-                active: item.id === effectiveEffort,
-                onClick: () => {
-                  setEffort(item.id);
-                  if (provider && model) save({ provider, model, reasoningEffort: item.id || null });
-                  setOpen("");
-                },
-              })),
-            ),
-          ),
-        ),
-        adding && h("div", { className: "ima-chip-dialog" },
-          h("strong", null, t("composer.addWorkspace")),
-          h("input", {
-            value: addPath,
-            placeholder: t("composer.workspacePath"),
-            "aria-label": t("composer.workspacePath"),
-            onChange: (event) => setAddPath(event.target.value),
-          }),
-          h("div", { className: "ima-chip-dialog-actions" },
-            h("button", { className: "ima-btn", onClick: () => { setAdding(false); setAddPath(""); } }, t("action.cancel")),
-            h("button", {
-              className: "ima-btn primary",
-              disabled: addBusy || !addPath.trim(),
-              onClick: () => addWorkspace(addPath),
-            }, addBusy ? t("action.adding") : t("action.confirm")),
-          ),
-        ),
-        hint && h("div", { className: "ima-composer-hint" }, hint),
-        h(RiskConfirmation, {
-          open: confirmingFullAccess,
-          title: props.permissionT("confirm.title"),
-          description: props.permissionT("confirm.description"),
-          acknowledgeLabel: props.permissionT("confirm.acknowledge"),
-          cancelLabel: props.permissionT("confirm.cancel"),
-          confirmLabel: props.permissionT("confirm.enable"),
-          acknowledged: fullAccessAcknowledged,
-          onAcknowledgedChange: setFullAccessAcknowledged,
-          onCancel: () => { setFullAccessAcknowledged(false); setConfirmingFullAccess(false); },
-          onConfirm: () => {
-            setPermission("danger-full-access");
-            save({ permission: "danger-full-access" });
             setFullAccessAcknowledged(false);
             setConfirmingFullAccess(false);
           },
