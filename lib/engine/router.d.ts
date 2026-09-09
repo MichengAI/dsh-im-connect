@@ -99,7 +99,7 @@ export declare class SessionRouter {
     private knownSessionIds;
     ensure(sessionId: string): Promise<boolean>;
     disposeAll(): Promise<void>;
-    /** 配置重载触发的 dispose 只卸活句柄；归档/宿主删除才清映射。 */
+    /** 卸载不代表删除日志；只有可靠确认日志不存在才清除索引。 */
     onHostDisposed(sessionId: string): Promise<boolean>;
     followup(binding: ChatBinding, message: unknown): void;
     disposeChannel(channelId: string): Promise<void>;

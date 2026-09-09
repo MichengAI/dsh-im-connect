@@ -3,7 +3,7 @@ import { ImageInputError, imageInputFailure, imagePromptPart } from './image-inp
 import { ApprovalBroker } from './approval.js'
 import { SessionMerger } from './merge.js'
 import { SessionRouter } from './router.js'
-import { initialSessionTitle } from './session-title.js'
+import { initialSessionTitle, readSessionTitle } from './session-title.js'
 import { SeenStore } from './seen-store.js'
 import { SessionMapStore } from './session-store.js'
 import { isImSessionId, type ChatKind } from './session-id.js'
@@ -56,7 +56,7 @@ const HELP = [
   '',
   '直接发文字即可继续当前频道会话。',
   '结尾 .. 表示还有后续，!! 表示立即提交。',
-  '/new  开启全新会话（只影响当前 IM 聊天，不影响网页任务）',
+  '/new 或 /clear  开启并切换到新会话，旧会话保留在频道列表，不影响网页任务',
   '/status  查看当前频道会话',
   '/help  显示本帮助',
 ].join('\n')
@@ -389,9 +389,9 @@ export class ImEngine {
     if (!scope) this.inputScopes.set(channel.id, scope = new AbortController())
     const { signal } = scope
     const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
-    const title = initialSessionTitle(msg.text) || msg.username || msg.chatId
+    const initialTitle = initialSessionTitle(msg.text) || initialSessionTitle(msg.media?.find(item => item.name)?.name || '')
+    const title = initialTitle || msg.username || msg.chatId
     const binding = await this.router.getOrCreate(channel.id, kind, msg.chatId, title)
-    const initialTitle = initialSessionTitle(msg.text || msg.media?.find(item => item.name)?.name || '')
     if (initialTitle) this.router.setTitle(binding.sessionId, initialTitle, 'message')
     const content: Array<Record<string, unknown>> = []
     if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })
@@ -710,8 +710,8 @@ export class ImEngine {
     const sessionId = session.id ? String(session.id) : ''
     if (!isImSessionId(sessionId)) return
     if (event.type === 'session/title') {
-      const data = event.data as { title?: unknown; source?: { kind?: string } } | undefined
-      if (typeof data?.title === 'string') this.router.setTitle(sessionId, data.title, data.source?.kind === 'user' ? 'user' : 'host')
+      const title = readSessionTitle(event.data)
+      if (title) this.router.setTitle(sessionId, title.title, title.source)
       return
     }
     const binding = this.router.bindingForSession(sessionId)

@@ -6,6 +6,7 @@ import { readHostDefaultModel, resolveImAgentOptions } from './agent-options.js'
 import type { EngineConfig } from './types.js'
 import { KeyedSerialQueue } from './keyed-queue.js'
 import { sameWorkspacePath } from './workspace-path.js'
+import { readSessionTitle } from './session-title.js'
 
 const DEFAULT_DISPOSE_TIMEOUT_MS = 10_000
 
@@ -161,7 +162,10 @@ export class SessionRouter {
   setTitle(sessionId: string, title: string, source: 'message' | 'host' | 'user'): boolean {
     const rec = this.store.list().find((item) => item.sessionId === sessionId)
     if (!rec) return false
-    if (!title.trim() || source === 'message' && rec.titleSource || source === 'host' && rec.titleSource === 'user') return false
+    const acceptsInitialMessage = rec.titleSource === 'pending' || (!rec.titleSource && !rec.title.trim())
+    if (!title.trim()
+      || (source === 'message' && !acceptsInitialMessage)
+      || (source === 'host' && rec.titleSource === 'user')) return false
     if (rec.title === title && rec.titleSource === source) return true
     this.store.updateSession({
       ...rec,
@@ -214,7 +218,7 @@ export class SessionRouter {
       if (this.isArchived(sessionId)) return false
       const key = sessionKeyOf(rec.channel, rec.kind, rec.chatId)
       const current = this.live.get(key)
-      if (this.historical.has(sessionId) || current?.sessionId === sessionId && current.handle) return true
+      if (this.historical.has(sessionId) || (current?.sessionId === sessionId && current.handle)) return true
       const binding = await this.resume(rec)
       if (!binding) return false
       if (this.store.get(key)?.sessionId === sessionId) this.live.set(key, binding)
@@ -230,7 +234,7 @@ export class SessionRouter {
     this.historical.clear()
   }
 
-  /** 配置重载触发的 dispose 只卸活句柄；归档/宿主删除才清映射。 */
+  /** 卸载不代表删除日志；只有可靠确认日志不存在才清除索引。 */
   async onHostDisposed(sessionId: string): Promise<boolean> {
     if (this.reloadDisposed.delete(sessionId)) {
       this.historical.delete(sessionId)
@@ -240,14 +244,16 @@ export class SessionRouter {
       return false
     }
     const known = await this.knownSessionIds()
-    if (known?.has(sessionId)) {
+    if (known === undefined || known.has(sessionId)) {
       this.historical.delete(sessionId)
       for (const [key, item] of this.live) {
         if (item.sessionId === sessionId) this.live.delete(key)
       }
       return false
     }
-    return this.remove(sessionId)
+    const record = this.store.list().find(item => item.sessionId === sessionId)
+    if (!record) return false
+    return this.channelOperations.run(record.channel, () => this.removeFromChannel(sessionId, false))
   }
 
   followup(binding: ChatBinding, message: unknown): void {
@@ -351,6 +357,7 @@ export class SessionRouter {
       kind,
       chatId,
       title,
+      titleSource: 'pending',
       updatedAt: new Date().toISOString(),
     }
     this.store.upsert(key, record)
@@ -456,8 +463,8 @@ export class SessionRouter {
   private syncStoredTitle(sessionId: string, agent: unknown): void {
     const session = (agent as { session?: { snapshotEvents?: () => readonly { type: string; data?: unknown }[]; events?: readonly { type: string; data?: unknown }[] } } | undefined)?.session
     const events = session?.snapshotEvents?.() ?? session?.events ?? []
-    const latest = events.findLast(event => event.type === 'session/title')?.data as { title?: unknown; source?: { kind?: string } } | undefined
-    if (typeof latest?.title === 'string') this.setTitle(sessionId, latest.title, latest.source?.kind === 'user' ? 'user' : 'host')
+    const latest = readSessionTitle(events.findLast(event => event.type === 'session/title')?.data)
+    if (latest) this.setTitle(sessionId, latest.title, latest.source)
   }
 
   private async recoverHistory(): Promise<void> {

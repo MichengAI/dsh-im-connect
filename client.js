@@ -1662,6 +1662,8 @@ window.__ModuleLoader__.load({
       const visibleGroups = groups.map((g) => {
         const sessions = (g.sessions || []).map((sess) => {
           const host = props.sessionById && props.sessionById[sess.sessionId];
+          // 手动标题及来源未知的旧名称，交给后端可靠标题事件同步。
+          if (sess.titleSource === "user" || (!sess.titleSource && typeof sess.title === "string" && sess.title.trim())) return sess;
           return host && typeof host.title === "string" && host.title.trim()
             ? Object.assign({}, sess, { title: host.title }) : sess;
         }).filter((sess) => !archived.has(sess.sessionId));

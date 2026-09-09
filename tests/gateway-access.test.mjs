@@ -72,8 +72,47 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}, options = {}) {
     status() { return '轮询中' },
     ...(options.authorizes ? { authorizes: options.authorizes } : {}),
   })
-  return { engine, inbound, sent, handlers, dmSessionId, groupSessionId }
+  return { engine, inbound, sent, handlers, dmSessionId, groupSessionId, store }
 }
+
+test('宿主标题事件同步到频道索引，手动标题不被自动事件覆盖', async t => {
+  const { engine, handlers, dmSessionId, store } = makeEngine(t)
+  try {
+    const emitTitle = (title, kind) => handlers['session/event']({ id: dmSessionId }, {
+      type: 'session/title', data: { title, source: { kind } },
+    })
+    emitTitle('首条消息摘要', 'fallback')
+    assert.equal(store.get('telegram:dm:user-1').title, '首条消息摘要')
+    emitTitle('模型生成名称', 'provider')
+    assert.equal(store.get('telegram:dm:user-1').title, '模型生成名称')
+    emitTitle('手动名称', 'user')
+    emitTitle('迟到自动名称', 'provider')
+    assert.equal(store.get('telegram:dm:user-1').title, '手动名称')
+    emitTitle('再次手动改名', 'user')
+    assert.equal(store.get('telegram:dm:user-1').title, '再次手动改名')
+  } finally { engine.dispose() }
+})
+
+test('无效标题事件及非 IM 会话事件不修改存量名称', async t => {
+  const { engine, handlers, dmSessionId, store } = makeEngine(t)
+  try {
+    for (const data of [{ title: '未知来源' }, { title: '未知来源', source: { kind: 'unexpected' } }, { title: ' ', source: { kind: 'user' } }, { title: 42, source: { kind: 'user' } }]) {
+      handlers['session/event']({ id: dmSessionId }, { type: 'session/title', data })
+    }
+    handlers['session/event']({ id: 'web-session' }, { type: 'session/title', data: { title: '网页标题', source: { kind: 'user' } } })
+    assert.equal(store.get('telegram:dm:user-1').title, '测试')
+  } finally { engine.dispose() }
+})
+
+test('/help 说明新旧会话行为及 /clear 别名', async t => {
+  const { engine, inbound, sent } = makeEngine(t, undefined, undefined, {}, { resolvePrivateAccess: () => 'all' })
+  try {
+    await inbound({ chatId: 'user-1', userId: 'user-1', text: '/help', kind: 'dm', messageId: 'help-history' })
+    await waitFor(() => sent.length > 0)
+    assert.match(sent[0].text, /\/clear/)
+    assert.match(sent[0].text, /旧会话保留在频道列表/)
+  } finally { engine.dispose() }
+})
 
 test('账号显式允许所有私聊用户时覆盖渠道本地白名单', async (t) => {
   const { engine, inbound, sent } = makeEngine(t, undefined, undefined, {}, {

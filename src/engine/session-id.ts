@@ -13,7 +13,8 @@ export interface SessionRecord {
   kind: ChatKind
   chatId: string
   title: string
-  titleSource?: 'message' | 'host' | 'user'
+  /** pending 仅用于新会话占位名称；缺省表示旧数据来源未知。 */
+  titleSource?: 'pending' | 'message' | 'host' | 'user'
   updatedAt: string
 }
 

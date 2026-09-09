@@ -450,6 +450,44 @@ test('配置重载 dispose 不应删除频道映射', async (t) => {
 test('宿主真正销毁会话时才删除频道映射', async (t) => {
   const { router, store } = makeRouter(t)
   const first = await router.getOrCreate('wecom', 'dm', 'user-1', '你好')
+  router.ctx.get = name => name === 'sessionPersistence' ? { async list() { return [] } } : undefined
   assert.equal(await router.onHostDisposed(first.sessionId), true)
   assert.equal(store.get('wecom:dm:user-1'), undefined)
+})
+
+for (const mode of ['missing', 'failed', 'present']) {
+  test(`宿主卸载时持久化状态 ${mode} 保留索引并释放句柄`, async t => {
+    const { router, store } = makeRouter(t)
+    const first = await router.getOrCreate('wecom', 'dm', 'unload', '旧标题')
+    router.ctx.get = name => name !== 'sessionPersistence' || mode === 'missing' ? undefined : {
+      async list() {
+        if (mode === 'failed') throw new Error('磁盘暂不可读')
+        return [{ id: first.sessionId }]
+      },
+    }
+    assert.equal(await router.onHostDisposed(first.sessionId), false)
+    assert.equal(router.get('wecom', 'dm', 'unload'), undefined)
+    assert.equal(store.get('wecom:dm:unload').sessionId, first.sessionId)
+  })
+}
+
+test('旧格式非空标题不被升级后新消息覆盖，可靠宿主标题仍可同步', async t => {
+  const { router, store } = makeRouter(t)
+  const record = { sessionId: 'im:wecom:dm:legacy', channel: 'wecom', kind: 'dm', chatId: 'legacy', title: '原手动名称', updatedAt: '2026-09-01T00:00:00.000Z' }
+  store.upsert('wecom:dm:legacy', record)
+  assert.equal(router.setTitle(record.sessionId, '升级后消息', 'message'), false)
+  assert.equal(store.get('wecom:dm:legacy').title, '原手动名称')
+  assert.equal(router.setTitle(record.sessionId, '宿主持久化名称', 'host'), true)
+})
+
+test('确认日志已删除时清除历史索引，即使宿主仍残留归档标记', async t => {
+  const { router, store, archivedIds } = makeRouter(t)
+  const old = await router.getOrCreate('wecom', 'dm', 'deleted-history', '旧')
+  const current = await router.rotate('wecom', 'dm', 'deleted-history', '新')
+  await router.onHostDisposed(old.sessionId)
+  archivedIds.push(old.sessionId)
+  const originalGet = router.ctx.get
+  router.ctx.get = name => name === 'sessionPersistence' ? { async list() { return [{ id: current.sessionId }] } } : originalGet(name)
+  assert.equal(await router.onHostDisposed(old.sessionId), true)
+  assert.deepEqual(store.list().map(item => item.sessionId), [current.sessionId])
 })
