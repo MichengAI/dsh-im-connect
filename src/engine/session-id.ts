@@ -13,6 +13,7 @@ export interface SessionRecord {
   kind: ChatKind
   chatId: string
   title: string
+  titleSource?: 'message' | 'host' | 'user'
   updatedAt: string
 }
 

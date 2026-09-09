@@ -76,6 +76,7 @@ export declare class SessionRouter {
     private readonly log;
     private readonly resolveConfig;
     private readonly live;
+    private readonly historical;
     private readonly reloadDisposed;
     private readonly channelOperations;
     private readonly disposeTimeoutMs;
@@ -93,6 +94,7 @@ export declare class SessionRouter {
     rotate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding>;
     private rotateNow;
     rename(sessionId: string, title: string): boolean;
+    setTitle(sessionId: string, title: string, source: 'message' | 'host' | 'user'): boolean;
     pruneMissingSessions(): Promise<number>;
     private knownSessionIds;
     ensure(sessionId: string): Promise<boolean>;
@@ -111,6 +113,8 @@ export declare class SessionRouter {
     private resume;
     private createHandle;
     attachMappedSessions(): Promise<void>;
+    private syncStoredTitle;
+    private recoverHistory;
     private isArchived;
     private attachWorkspace;
     private resolveAgentOptions;

@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ChannelInstanceId, ChatKind, SessionRecord } from './session-id.js'
-import { createImSessionId, sessionKeyOf } from './session-id.js'
+import { createImSessionId, parseImSessionId, sessionKeyOf } from './session-id.js'
 import { SessionMapStore } from './session-store.js'
 import { readHostDefaultModel, resolveImAgentOptions } from './agent-options.js'
 import type { EngineConfig } from './types.js'
@@ -43,6 +43,7 @@ type AgentHost = Context & {
 
 export class SessionRouter {
   private readonly live = new Map<string, ChatBinding>()
+  private readonly historical = new Map<string, ChatBinding>()
   private readonly reloadDisposed = new Set<string>()
   private readonly channelOperations = new KeyedSerialQueue()
   private readonly disposeTimeoutMs: number
@@ -144,18 +145,28 @@ export class SessionRouter {
   private async rotateNow(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const old = this.live.get(key)
-    if (old?.handle) await this.disposeHandle(old)
+    if (old?.handle) {
+      this.reloadDisposed.add(old.sessionId)
+      await this.disposeHandle(old)
+    }
     this.live.delete(key)
-    this.store.remove(key)
+    this.store.retain(key)
     return this.create(channelId, kind, chatId, title)
   }
 
   rename(sessionId: string, title: string): boolean {
+    return this.setTitle(sessionId, title, 'user')
+  }
+
+  setTitle(sessionId: string, title: string, source: 'message' | 'host' | 'user'): boolean {
     const rec = this.store.list().find((item) => item.sessionId === sessionId)
     if (!rec) return false
-    this.store.upsert(sessionKeyOf(rec.channel, rec.kind, rec.chatId), {
+    if (!title.trim() || source === 'message' && rec.titleSource || source === 'host' && rec.titleSource === 'user') return false
+    if (rec.title === title && rec.titleSource === source) return true
+    this.store.updateSession({
       ...rec,
       title,
+      titleSource: source,
       updatedAt: new Date().toISOString(),
     })
     return true
@@ -167,7 +178,7 @@ export class SessionRouter {
     let removed = 0
     for (const rec of this.store.list()) {
       if (known.has(rec.sessionId)) continue
-      await this.remove(rec.sessionId)
+      await this.channelOperations.run(rec.channel, () => this.removeFromChannel(rec.sessionId, false))
       removed += 1
     }
     if (removed > 0) this.log(`[router] 已清理 ${removed} 条宿主已删除的频道映射`)
@@ -181,7 +192,8 @@ export class SessionRouter {
       const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { readonly id: string }[]> } | undefined
       const canListLive = typeof live?.list === "function"
       const canListStored = typeof persistence?.list === "function"
-      if (!canListLive && !canListStored) return undefined
+      // 仅凭活会话列表不能判断已卸载的历史日志是否被删除。
+      if (!canListStored) return undefined
       const ids = new Set<string>()
       if (canListLive && live.list) {
         for (const session of live.list()) ids.add(String(session.id))
@@ -198,19 +210,38 @@ export class SessionRouter {
   async ensure(sessionId: string): Promise<boolean> {
     const rec = this.store.list().find((item) => item.sessionId === sessionId)
     if (!rec) return false
-    await this.getOrCreate(rec.channel, rec.kind, rec.chatId, rec.title, { rebuildMissing: true })
-    return true
+    return this.channelOperations.run(rec.channel, async () => {
+      if (this.isArchived(sessionId)) return false
+      const key = sessionKeyOf(rec.channel, rec.kind, rec.chatId)
+      const current = this.live.get(key)
+      if (this.historical.has(sessionId) || current?.sessionId === sessionId && current.handle) return true
+      const binding = await this.resume(rec)
+      if (!binding) return false
+      if (this.store.get(key)?.sessionId === sessionId) this.live.set(key, binding)
+      else this.historical.set(sessionId, binding)
+      return true
+    })
   }
 
   async disposeAll(): Promise<void> {
-    const channels = [...new Set([...this.live.values()].map((item) => item.channelId))]
+    const channels = [...new Set([...this.live.values(), ...this.historical.values()].map((item) => item.channelId))]
     await Promise.all(channels.map((channelId) => this.disposeChannel(channelId)))
     this.live.clear()
+    this.historical.clear()
   }
 
   /** 配置重载触发的 dispose 只卸活句柄；归档/宿主删除才清映射。 */
   async onHostDisposed(sessionId: string): Promise<boolean> {
     if (this.reloadDisposed.delete(sessionId)) {
+      this.historical.delete(sessionId)
+      for (const [key, item] of this.live) {
+        if (item.sessionId === sessionId) this.live.delete(key)
+      }
+      return false
+    }
+    const known = await this.knownSessionIds()
+    if (known?.has(sessionId)) {
+      this.historical.delete(sessionId)
       for (const [key, item] of this.live) {
         if (item.sessionId === sessionId) this.live.delete(key)
       }
@@ -236,12 +267,18 @@ export class SessionRouter {
       // 工作区属于会话创建参数，不能拿旧 sessionId 在新目录恢复；仅解除映射，保留 Host 中的历史日志。
       for (const record of this.store.list()) {
         if (record.channel !== channelId) continue
-        this.store.remove(sessionKeyOf(record.channel, record.kind, record.chatId))
+        this.store.retain(sessionKeyOf(record.channel, record.kind, record.chatId))
       }
     })
   }
 
   private async disposeChannelNow(channelId: string): Promise<void> {
+    for (const [id, item] of this.historical) {
+      if (item.channelId !== channelId) continue
+      this.reloadDisposed.add(id)
+      await this.disposeHandle(item)
+      this.historical.delete(id)
+    }
     const entries = [...this.live].filter(([, item]) => item.channelId === channelId)
     for (const [, item] of entries) this.reloadDisposed.add(item.sessionId)
     await Promise.all(entries.map(async ([key, item]) => {
@@ -269,14 +306,21 @@ export class SessionRouter {
     if (result === 'timed-out') this.log(`[router] 卸载会话超时 ${item.sessionId}，已解除本地引用`)
   }
 
-  private async removeFromChannel(sessionId: string): Promise<boolean> {
+  private async removeFromChannel(sessionId: string, retainArchived = true): Promise<boolean> {
     const rec = this.store.list().find((item) => item.sessionId === sessionId)
     if (!rec) return false
     const key = sessionKeyOf(rec.channel, rec.kind, rec.chatId)
-    const live = this.live.get(key)
-    if (live?.handle) await this.disposeHandle(live)
-    this.live.delete(key)
-    this.store.remove(key)
+    const current = this.live.get(key)
+    const live = current?.sessionId === sessionId ? current : this.historical.get(sessionId)
+    if (live?.handle) {
+      this.reloadDisposed.add(sessionId)
+      await this.disposeHandle(live)
+    }
+    if (current?.sessionId === sessionId) this.live.delete(key)
+    this.historical.delete(sessionId)
+    if (retainArchived && this.isArchived(sessionId)) {
+      if (this.store.get(key)?.sessionId === sessionId) this.store.retain(key)
+    } else this.store.removeSession(sessionId)
     return true
   }
 
@@ -320,6 +364,7 @@ export class SessionRouter {
   private async resume(record: SessionRecord): Promise<ChatBinding | undefined> {
     const liveAgent = this.ctx.agents?.get?.(record.sessionId)
     if (liveAgent) {
+      this.syncStoredTitle(record.sessionId, liveAgent)
       const binding: ChatBinding = {
         key: sessionKeyOf(record.channel, record.kind, record.chatId),
         channelId: record.channel,
@@ -340,6 +385,7 @@ export class SessionRouter {
         },
         setup: this.presetSetup(record.channel),
       })
+      this.syncStoredTitle(record.sessionId, handle.agent)
       await this.attachWorkspace(record.sessionId, record.channel)
       return {
         key: sessionKeyOf(record.channel, record.kind, record.chatId),
@@ -398,11 +444,38 @@ export class SessionRouter {
 
   async attachMappedSessions(): Promise<void> {
     const started = Date.now()
+    await this.recoverHistory()
     await this.pruneMissingSessions()
     for (const record of this.store.list()) {
+      if (this.isArchived(record.sessionId)) continue
       await this.attachWorkspace(record.sessionId, record.channel)
     }
     this.log(`[boot] attachMappedSessions ${Date.now() - started}ms`)
+  }
+
+  private syncStoredTitle(sessionId: string, agent: unknown): void {
+    const session = (agent as { session?: { snapshotEvents?: () => readonly { type: string; data?: unknown }[]; events?: readonly { type: string; data?: unknown }[] } } | undefined)?.session
+    const events = session?.snapshotEvents?.() ?? session?.events ?? []
+    const latest = events.findLast(event => event.type === 'session/title')?.data as { title?: unknown; source?: { kind?: string } } | undefined
+    if (typeof latest?.title === 'string') this.setTitle(sessionId, latest.title, latest.source?.kind === 'user' ? 'user' : 'host')
+  }
+
+  private async recoverHistory(): Promise<void> {
+    try {
+      const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { id: string; createdAt?: number }[]> } | undefined
+      if (!persistence?.list) return
+      for (const header of await persistence.list()) {
+        const parsed = parseImSessionId(header.id)
+        if (!parsed) continue
+        this.store.saveHistory({
+          sessionId: header.id, ...parsed,
+          title: parsed.chatId,
+          updatedAt: new Date(Number.isFinite(header.createdAt) ? header.createdAt! : 0).toISOString(),
+        })
+      }
+    } catch (error) {
+      this.log(`[router] 恢复历史索引失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   private isArchived(sessionId: string): boolean {

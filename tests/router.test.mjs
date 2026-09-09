@@ -75,6 +75,93 @@ function createHandle(sessionId) {
   }
 }
 
+test('/new 保留历史，打开、改名和删除历史不改变当前绑定', async t => {
+  const { router, store } = makeRouter(t)
+  const first = await router.getOrCreate('wecom', 'dm', 'history', '旧会话')
+  const next = await router.rotate('wecom', 'dm', 'history', '新会话')
+  assert.equal(store.list().length, 2)
+  assert.equal(await router.ensure(first.sessionId), true)
+  assert.equal(router.lookup('wecom', 'dm', 'history').sessionId, next.sessionId)
+  assert.equal(router.rename(first.sessionId, '历史改名'), true)
+  assert.equal(store.get('wecom:dm:history').sessionId, next.sessionId)
+  assert.equal(await router.remove(first.sessionId), true)
+  assert.equal(router.lookup('wecom', 'dm', 'history').sessionId, next.sessionId)
+  assert.deepEqual(store.list().map(x => x.sessionId), [next.sessionId])
+})
+
+test('启动补回孤立日志且不自动设为当前会话，重复恢复保持幂等', async t => {
+  const { router, store } = makeRouter(t)
+  const id = 'im:wecom:dm:1724000000000:orphan'
+  router.ctx.get = name => name === 'sessionPersistence' ? { async list() { return [{ id }] } } : undefined
+  await router.attachMappedSessions()
+  await router.attachMappedSessions()
+  assert.deepEqual(store.list().map(x => x.sessionId), [id])
+  assert.equal(store.get('wecom:dm:orphan'), undefined)
+  assert.equal(await router.ensure(id), true)
+  assert.equal(store.get('wecom:dm:orphan'), undefined)
+})
+
+test('归档历史后保留索引，取消归档可重新打开且不改变当前会话', async t => {
+  const { router, store, archivedIds } = makeRouter(t)
+  const first = await router.getOrCreate('wecom', 'dm', 'archive', '旧')
+  const next = await router.rotate('wecom', 'dm', 'archive', '新')
+  archivedIds.push(first.sessionId)
+  await router.remove(first.sessionId)
+  assert.equal(store.list().length, 2)
+  assert.equal(await router.ensure(first.sessionId), false)
+  archivedIds.length = 0
+  assert.equal(await router.ensure(first.sessionId), true)
+  assert.equal(router.lookup('wecom', 'dm', 'archive').sessionId, next.sessionId)
+})
+
+test('只有活会话列表的宿主不能清除已卸载历史', async t => {
+  const { router, store } = makeRouter(t)
+  await router.getOrCreate('wecom', 'dm', 'offline', '旧')
+  router.ctx.get = name => name === 'sessions' ? { list: () => [] } : undefined
+  assert.equal(await router.pruneMissingSessions(), 0)
+  assert.equal(store.list().length, 1)
+})
+
+test('启动恢复保留归档标记，不把已归档会话重新挂入工作区', async t => {
+  const { router, store } = makeRouter(t)
+  const id = 'im:wecom:dm:1724000000000:archived'
+  const attached = []
+  router.ctx.get = name => {
+    if (name === 'sessionPersistence') return { async list() { return [{ id }] } }
+    if (name === 'workspaceRegistry') return { archivedSessionIds: [id], list: () => [{ path: '.', async attachSession(value) { attached.push(value) } }] }
+  }
+  await router.attachMappedSessions()
+  assert.equal(store.list().length, 1)
+  assert.deepEqual(attached, [])
+})
+
+test('命名从首条消息升级为宿主标题，手动标题不被自动结果覆盖', async t => {
+  const { router, store } = makeRouter(t)
+  const item = await router.getOrCreate('wecom', 'dm', 'title', '用户名')
+  router.setTitle(item.sessionId, '帮我分析订单', 'message')
+  router.setTitle(item.sessionId, '后续消息', 'message')
+  assert.equal(store.list()[0].title, '帮我分析订单')
+  router.setTitle(item.sessionId, '订单分析', 'host')
+  assert.equal(store.list()[0].title, '订单分析')
+  router.rename(item.sessionId, '季度订单')
+  router.setTitle(item.sessionId, '过期自动结果', 'host')
+  assert.equal(store.list()[0].title, '季度订单')
+})
+
+test('恢复历史时同步持久化标题，当前会话保持不变', async t => {
+  const { router, store } = makeRouter(t)
+  const old = await router.getOrCreate('wecom', 'dm', 'restore-title', '用户名')
+  const next = await router.rotate('wecom', 'dm', 'restore-title', '新会话')
+  router.ctx.agents.resume = async opts => {
+    const handle = createHandle(opts.resumeSessionId)
+    handle.agent.session.events.push({ type: 'session/title', data: { title: '宿主保存的历史标题', source: { kind: 'user' } } })
+    return handle
+  }
+  assert.equal(await router.ensure(old.sessionId), true)
+  assert.equal(store.list().find(item => item.sessionId === old.sessionId).title, '宿主保存的历史标题')
+  assert.equal(store.get('wecom:dm:restore-title').sessionId, next.sessionId)
+})
+
 function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds = new Set(), resolveConfig, disposeTimeoutMs } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'im-connect-router-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
@@ -269,7 +356,7 @@ test('入站恢复失败时轮换新会话，不按原 id 重建', async (t) => 
   assert.deepEqual(created, [next.sessionId])
 })
 
-test('点幽灵会话时按原 id 重建', async (t) => {
+test('打开缺失日志失败时不创建空会话冒充历史', async (t) => {
   const { router, store, created } = makeRouter(t, { resumeFails: new Set(['im:wecom:dm:old']) })
   store.upsert('wecom:dm:user-1', {
     sessionId: 'im:wecom:dm:old',
@@ -279,12 +366,12 @@ test('点幽灵会话时按原 id 重建', async (t) => {
     title: '旧会话',
     updatedAt: '2026-08-16T00:00:00.000Z',
   })
-  assert.equal(await router.ensure('im:wecom:dm:old'), true)
+  assert.equal(await router.ensure('im:wecom:dm:old'), false)
   assert.equal(store.get('wecom:dm:user-1')?.sessionId, 'im:wecom:dm:old')
-  assert.deepEqual(created, ['im:wecom:dm:old'])
+  assert.deepEqual(created, [])
 })
 
-test('原 id 与磁盘日志冲突时改为新建', async (t) => {
+test('打开失败不轮换当前绑定，也不创建不同 id 的会话', async (t) => {
   const oldId = 'im:wecom:dm:woOoKtPAAAvBcwwV96r5UweRxau8h0zw'
   const { router, store, created } = makeRouter(t, {
     resumeFails: new Set([oldId]),
@@ -298,11 +385,10 @@ test('原 id 与磁盘日志冲突时改为新建', async (t) => {
     title: '已归档',
     updatedAt: '2026-08-16T00:00:00.000Z',
   })
-  assert.equal(await router.ensure(oldId), true)
+  assert.equal(await router.ensure(oldId), false)
   const current = store.get('wecom:dm:user-1')?.sessionId
-  assert.notEqual(current, oldId)
-  assert.match(current, /^im:wecom:dm:\d+:user-1$/)
-  assert.deepEqual(created, [current])
+  assert.equal(current, oldId)
+  assert.deepEqual(created, [])
 })
 
 

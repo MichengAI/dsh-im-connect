@@ -37,3 +37,24 @@ test('损坏的会话映射先备份再回退为空', () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('旧格式加载后保留历史与当前绑定，重启不丢失且按 id 删除', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'im-connect-history-'))
+  try {
+    const file = join(dir, 'sessions.json')
+    const key = 'wecom:dm:user'
+    const first = { sessionId: 'im:wecom:dm:old', channel: 'wecom', kind: 'dm', chatId: 'user', title: '旧标题', updatedAt: '2026-09-01T00:00:00.000Z' }
+    writeFileSync(file, JSON.stringify({ [key]: first }), 'utf8')
+    const store = new SessionMapStore(file)
+    store.upsert(key, { ...first, sessionId: 'im:wecom:dm:new', title: '新标题' })
+    assert.deepEqual(JSON.parse(readFileSync(`${file}.before-history.json`, 'utf8')), { [key]: first })
+    const restarted = new SessionMapStore(file)
+    assert.equal(restarted.list().length, 2)
+    assert.equal(restarted.get(key).sessionId, 'im:wecom:dm:new')
+    restarted.removeSession(first.sessionId)
+    assert.equal(new SessionMapStore(file).list().length, 1)
+    assert.deepEqual(JSON.parse(readFileSync(`${file}.before-history.json`, 'utf8')), { [key]: first })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

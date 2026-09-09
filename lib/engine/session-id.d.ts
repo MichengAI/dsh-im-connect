@@ -11,6 +11,7 @@ export interface SessionRecord {
     kind: ChatKind;
     chatId: string;
     title: string;
+    titleSource?: 'message' | 'host' | 'user';
     updatedAt: string;
 }
 export declare function sessionKeyOf(channel: ChannelInstanceId, kind: ChatKind, chatId: string): string;
