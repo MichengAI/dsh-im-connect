@@ -1,5 +1,6 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "\u5361\u7247\u53D1\u9001\u72B6\u6001\u6682\u65F6\u65E0\u6CD5\u786E\u8BA4\u3002\u82E5\u5DF2\u6536\u5230\uFF0C\u8BF7\u76F4\u63A5\u4F7F\u7528\uFF1B\u672A\u6536\u5230\u53EF\u53D1\u9001 /menu \u91CD\u8BD5\u3002": "Card delivery could not be confirmed. Use it if it arrived; otherwise send /menu to try again.";
     readonly 暂停目标: "Pause goal";
     readonly 恢复目标: "Resume goal";
     readonly 刷新状态: "Refresh status";

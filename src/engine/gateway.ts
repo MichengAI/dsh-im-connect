@@ -81,7 +81,7 @@ export class ImEngine {
   private legacyServiceTimer?: NodeJS.Timeout
   private disposed = false
   private readonly questionSelections = new Map<string, Set<number>>()
-  private readonly choices = new ChoiceStore()
+  private readonly choices: ChoiceStore
   private readonly progress = new ProgressTracker()
   private readonly mergedMessages = new Map<string, ImMessage[]>()
   private readonly fileDelivery: FileDelivery
@@ -100,6 +100,7 @@ export class ImEngine {
     private readonly resolvePrivateAccess: (channelId: string) => 'approved' | 'all' = () => 'approved',
     private readonly resolveCommandPermissions: (channelId: string) => CommandPermissions = () => normalizeCommandPermissions(undefined),
   ) {
+    this.choices = new ChoiceStore(log)
     // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
     this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig)
     this.fileDelivery = new FileDelivery(ctx as unknown as { get(name: string): unknown }, log)

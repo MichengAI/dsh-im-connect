@@ -1,5 +1,6 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
+  "卡片发送状态暂时无法确认。若已收到，请直接使用；未收到可发送 /menu 重试。": "Card delivery could not be confirmed. Use it if it arrived; otherwise send /menu to try again.",
   "暂停目标": "Pause goal",
   "恢复目标": "Resume goal",
   "刷新状态": "Refresh status",

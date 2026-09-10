@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ChannelAdapter, ChoiceReceipt, ImMessage } from './types.js'
 import { replyText } from './command-locale.js'
+import { ChoiceSendError } from './choice-delivery.js'
 
 export interface Choice { label: string; value: string }
 type Entry = { key: string; session?: string; expires: number; choices: Choice[]; valid: () => boolean; allowNumber: boolean; receipt?: ChoiceReceipt; closedText?: string }
@@ -45,7 +46,13 @@ export class ChoiceStore {
         if (entry.closedText && entry.receipt) void Promise.resolve().then(() => entry.receipt!.close(entry.closedText!)).catch(() => this.log('[choices] 原卡片更新失败；操作不会重试，请查看后续回复'))
         return ''
       }
-      catch { /* 原生卡片不可用时保留同一份文字选择，不改变授权动作。 */ }
+      catch (error) {
+        const reason = error instanceof ChoiceSendError ? error.reason : 'send-failed'
+        this.log(`[choices] channel=${channel.id} reason=${reason} buttons=${choices.length} chars=${cardBody.length}`)
+        if (reason === 'delivery-unknown') return replyText('卡片发送状态暂时无法确认。若已收到，请直接使用；未收到可发送 /menu 重试。')
+      }
+    } else {
+      this.log(`[choices] channel=${channel.id} reason=${!channel.sendChoices ? 'native-unavailable' : choices.length > channel.choiceLimits!.maxButtons ? 'button-limit' : 'text-limit'} buttons=${choices.length} chars=${cardBody.length}`)
     }
     return body
   }

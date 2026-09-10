@@ -1,0 +1,1 @@
+{"version":3,"file":"choice-delivery.d.ts","sourceRoot":"","sources":["../../src/engine/choice-delivery.ts"],"names":[],"mappings":"AAAA,qCAAqC;AACrC,qBAAa,eAAgB,SAAQ,KAAK;IAC5B,QAAQ,CAAC,MAAM,EAAE,mBAAmB,GAAG,UAAU,GAAG,kBAAkB;gBAA7D,MAAM,EAAE,mBAAmB,GAAG,UAAU,GAAG,kBAAkB;CAInF;AAED,wBAAgB,eAAe,CAAC,KAAK,EAAE,OAAO,GAAG,eAAe,CAO/D"}

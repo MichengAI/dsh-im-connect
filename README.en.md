@@ -115,7 +115,7 @@ Menus include previous, next and back actions. WeCom menus paginate to fit card 
 
 Common command replies offer related next steps: for example, `/model` → select a model / adjust reasoning → back to menu. Supported channels offer buttons; text replies include the commands to send. Navigation buttons on ordinary result replies do not accept numeric shortcuts, so numbers remain chat input; only selection menus accept numbered replies. Oversized cards fall back to complete text.
 
-Telegram and Feishu/Lark use native buttons. WeCom uses cards when the button count fits platform limits. Other cases, DingTalk, QQ and Weixin use numbered text. Failed native sends fall back to text. Menus are scoped to the account, chat, operator and session, expire after 15 minutes or restart, and recheck permissions on selection. Used buttons cannot execute again.
+Telegram and Feishu/Lark use native buttons. WeCom uses cards when the button count fits platform limits. Other cases, DingTalk, QQ and Weixin use numbered text. Explicit rejections and capacity limits fall back to complete text. Uncertain network delivery produces a confirmation notice instead of resending the card. Menus are scoped to the account, chat, operator and session, expire after 15 minutes or restart, and recheck permissions on selection. Used buttons cannot execute again.
 
 Approvals and questions use the same native-button channels: allow once/reject, single-choice selection, and multiple selections followed by submit. Open questions retain text input. If a card cannot show the full prompt or fails to send, text is used without omitting approval details. Existing approval eligibility and requester restrictions apply; disabling commands does not disable pending approvals or questions.
 

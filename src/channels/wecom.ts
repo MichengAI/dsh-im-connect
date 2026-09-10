@@ -1,3 +1,4 @@
+import { choiceSendError } from '../engine/choice-delivery.js'
 import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
@@ -322,7 +323,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
         card_type: 'button_interaction', task_id: buttons[0]?.token.split(':')[0],
         main_title: { title: text.split('\n')[0]?.slice(0, 36) }, sub_title_text: text.slice(0, 500),
         button_list: buttons.map(button => ({ text: button.label.slice(0, 36), key: button.token, style: 1 })),
-      } })
+      } }).catch(error => { throw choiceSendError(error) })
       const sender = client
       const token = buttons[0]?.token.split(':')[0]
       return { close: async (status: string) => {

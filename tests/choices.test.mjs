@@ -1,7 +1,35 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ChoiceStore } from '../lib/engine/choices.js'
+import { ChoiceSendError, choiceSendError } from '../lib/engine/choice-delivery.js'
 const msg = { chatId: 'chat', userId: 'owner', kind: 'dm', text: '/menu' }
+
+test('发送结果未知不补发卡片内容，已到达按钮仍可使用；诊断不泄露平台错误', async () => {
+  const logs = [], store = new ChoiceStore(line => logs.push(line))
+  let token
+  const body = await store.show({ id: 'bot', sendChoices: async (_, __, buttons) => { token = buttons[0].token; throw choiceSendError(new Error('token=secret')) } }, msg, 'private content', [{ label: 'Help', value: '/help' }])
+  assert.match(body, /无法确认/)
+  assert.doesNotMatch(body, /private content/)
+  assert.equal(store.resolve('bot', { ...msg, actionToken: token }), '/help')
+  assert.match(logs[0], /delivery-unknown/)
+  assert.doesNotMatch(logs.join(''), /secret|private content/)
+})
+
+test('明确拒绝可完整降级，容量与权限原因分别记录', async () => {
+  const logs = [], store = new ChoiceStore(line => logs.push(line))
+  const channel = { id: 'bot', sendChoices: async () => { throw new ChoiceSendError('permission-denied') } }
+  assert.match(await store.show(channel, msg, 'Menu', [{ label: 'Help', value: '/help' }]), /1\. Help/)
+  assert.match(logs[0], /permission-denied/)
+  channel.choiceLimits = { maxButtons: 0, maxTextLength: 500 }
+  await store.show(channel, msg, 'Menu', [{ label: 'Help', value: '/help' }])
+  assert.match(logs.at(-1), /button-limit/)
+  channel.choiceLimits = { maxButtons: 6, maxTextLength: 1 }
+  await store.show(channel, msg, 'Menu', [{ label: 'Help', value: '/help' }])
+  assert.match(logs.at(-1), /text-limit/)
+  assert.equal(choiceSendError({ response: { status: 403 } }).reason, 'permission-denied')
+  assert.equal(choiceSendError({ status: 429 }).reason, 'rejected')
+  assert.equal(choiceSendError({ status: 503 }).reason, 'delivery-unknown')
+})
 
 test('有效选择收口原卡片；外人点击不修改卡片，重复点击不再更新', async () => {
   const updates = [], store = new ChoiceStore()

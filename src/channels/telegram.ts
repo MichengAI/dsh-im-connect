@@ -1,3 +1,4 @@
+import { choiceSendError } from '../engine/choice-delivery.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { fileForm, fileRequest } from './file-send.js'
 import { JsonStateFile } from '../engine/json-state.js'
@@ -56,7 +57,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     })
     const data = (await res.json()) as { ok: boolean; description?: string; error_code?: number; result: T }
     if (!data.ok) {
-      const error = new Error(`telegram ${method}: ${data.description ?? 'unknown'}`)
+      const error = Object.assign(new Error(`telegram ${method}: ${data.description ?? 'unknown'}`), { status: data.error_code, rejected: true })
       if (data.error_code === 401) (error as Error & { code?: string }).code = 'telegram-401'
       throw error
     }
@@ -235,7 +236,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       await fileRequest(`${API}/bot${token}/sendDocument`, { method: 'POST', body: form, signal: timeoutSignal(120_000, AbortSignal.any([...(signal ? [signal] : []), ...(lifecycle ? [lifecycle.signal] : [])])) })
     },
     async sendChoices(message, text, buttons) {
-      const sent = await api<{ message_id: number }>('sendMessage', { chat_id: message.chatId, text, reply_markup: { inline_keyboard: buttons.map(button => [{ text: button.label.slice(0, 60), callback_data: button.token }]) } })
+      const sent = await api<{ message_id: number }>('sendMessage', { chat_id: message.chatId, text, reply_markup: { inline_keyboard: buttons.map(button => [{ text: button.label.slice(0, 60), callback_data: button.token }]) } }).catch(error => { throw choiceSendError(error) })
       if (!Number.isSafeInteger(sent?.message_id)) return
       return { close: async (status: string) => {
         await api('editMessageText', { chat_id: message.chatId, message_id: sent.message_id, text: `${text}\n\n${status}`, reply_markup: { inline_keyboard: [] } })

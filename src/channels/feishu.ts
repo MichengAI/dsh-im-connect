@@ -1,3 +1,4 @@
+import { choiceSendError, ChoiceSendError } from '../engine/choice-delivery.js'
 import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
@@ -222,8 +223,8 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           ...buttons.map(button => ({ tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: button.label.slice(0, 60) },
             type: 'default', value: { token: button.token, group: message.kind === 'group' } }] })),
         ] }),
-      } }) as { code?: number; data?: { message_id?: string } } | undefined
-      if (result?.code) throw new Error('card-send-failed')
+      } }).catch(error => { throw choiceSendError(error) }) as { code?: number; data?: { message_id?: string } } | undefined
+      if (result?.code) throw new ChoiceSendError('rejected')
       const messageId = result?.data?.message_id
       const sender = client
       if (!messageId) return
