@@ -1,5 +1,8 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
+  '会话 ZIP 超过 32 MiB，未发送。请在网页 Chat 中执行 /export 下载。': 'The session ZIP exceeds 32 MiB and was not sent. Run /export in web Chat to download it.',
+  '会话已导出，ZIP 文件已发送。': 'Session exported. The ZIP file has been sent.',
+  '会话未能导出或发送。请在网页 Chat 中打开这条会话，执行 /export 下载 ZIP。': 'Could not export or send the session. Open this session in web Chat and run /export to download the ZIP.',
   '⏳排队中': '⏳Queued',
   '🤔思考中': '🤔Thinking',
   '⏳等待确认': '⏳Waiting for confirmation',
@@ -7,8 +10,6 @@ export const commandEnglish = {
   '❌处理失败': '❌Failed',
   '🚫已取消': '🚫Cancelled',
   '文件“{0}”未能发送，请在网页 Chat 中打开该文件；也可让助手重新交付。': 'Could not send "{0}". Open the file in Chat on the web, or ask the assistant to deliver it again.',
-  "请在网页 Chat 中打开这条会话，再执行 /export 导出 ZIP 会话日志。":
-    "Open this session in web Chat and run /export to download ZIP session logs.",
   "与 Chat 一致，此操作也会尝试保存后续 Chat 新会话的默认模型选择；已有其他会话不会主动修改。":
     "As in Chat, this also attempts to save the default model selection for future Chat sessions; other existing sessions are not changed.",
   会话与工作区: "Sessions and workspaces",
@@ -219,8 +220,8 @@ export const commandEnglish = {
     "Record session feedback: /feedback feedback-text",
   "提交代码简化审查：/simplify":
     "Submit a code simplification review: /simplify",
-  "在网页 Chat 中导出会话日志":
-    "Export session logs in web Chat",
+  "导出当前会话 ZIP 日志并发送文件":
+    "Export this session as a ZIP file",
   "命令已返回，但未提供结果说明。请在网页核对当前状态。":
     "The command returned without a result description. Check the current state on the web.",
   "命令执行失败，未提供具体原因。请在网页检查后重试。":

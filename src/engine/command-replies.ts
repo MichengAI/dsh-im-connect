@@ -14,7 +14,7 @@ export const extensionHelp = (): Record<string, string> => ({
   permission: replyText('查看当前权限及可选项：/permission'),
   feedback: replyText('记录会话反馈：/feedback 反馈内容'),
   simplify: replyText('提交代码简化审查：/simplify'),
-  export: replyText('在网页 Chat 中导出会话日志'),
+  export: replyText('导出当前会话 ZIP 日志并发送文件'),
 })
 
 export function extensionReply(command: string, result: { kind: string; text?: string }, goal?: { phase?: string; activation?: string }): string {

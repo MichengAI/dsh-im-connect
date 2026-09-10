@@ -1,5 +1,8 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly '\u4F1A\u8BDD ZIP \u8D85\u8FC7 32 MiB\uFF0C\u672A\u53D1\u9001\u3002\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6267\u884C /export \u4E0B\u8F7D\u3002': "The session ZIP exceeds 32 MiB and was not sent. Run /export in web Chat to download it.";
+    readonly '\u4F1A\u8BDD\u5DF2\u5BFC\u51FA\uFF0CZIP \u6587\u4EF6\u5DF2\u53D1\u9001\u3002': "Session exported. The ZIP file has been sent.";
+    readonly '\u4F1A\u8BDD\u672A\u80FD\u5BFC\u51FA\u6216\u53D1\u9001\u3002\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6253\u5F00\u8FD9\u6761\u4F1A\u8BDD\uFF0C\u6267\u884C /export \u4E0B\u8F7D ZIP\u3002': "Could not export or send the session. Open this session in web Chat and run /export to download the ZIP.";
     readonly '\u23F3\u6392\u961F\u4E2D': "⏳Queued";
     readonly '\uD83E\uDD14\u601D\u8003\u4E2D': "🤔Thinking";
     readonly '\u23F3\u7B49\u5F85\u786E\u8BA4': "⏳Waiting for confirmation";
@@ -7,7 +10,6 @@ export declare const commandEnglish: {
     readonly '\u274C\u5904\u7406\u5931\u8D25': "❌Failed";
     readonly '\uD83D\uDEAB\u5DF2\u53D6\u6D88': "🚫Cancelled";
     readonly '\u6587\u4EF6\u201C{0}\u201D\u672A\u80FD\u53D1\u9001\uFF0C\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6253\u5F00\u8BE5\u6587\u4EF6\uFF1B\u4E5F\u53EF\u8BA9\u52A9\u624B\u91CD\u65B0\u4EA4\u4ED8\u3002': "Could not send \"{0}\". Open the file in Chat on the web, or ask the assistant to deliver it again.";
-    readonly "\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6253\u5F00\u8FD9\u6761\u4F1A\u8BDD\uFF0C\u518D\u6267\u884C /export \u5BFC\u51FA ZIP \u4F1A\u8BDD\u65E5\u5FD7\u3002": "Open this session in web Chat and run /export to download ZIP session logs.";
     readonly "\u4E0E Chat \u4E00\u81F4\uFF0C\u6B64\u64CD\u4F5C\u4E5F\u4F1A\u5C1D\u8BD5\u4FDD\u5B58\u540E\u7EED Chat \u65B0\u4F1A\u8BDD\u7684\u9ED8\u8BA4\u6A21\u578B\u9009\u62E9\uFF1B\u5DF2\u6709\u5176\u4ED6\u4F1A\u8BDD\u4E0D\u4F1A\u4E3B\u52A8\u4FEE\u6539\u3002": "As in Chat, this also attempts to save the default model selection for future Chat sessions; other existing sessions are not changed.";
     readonly 会话与工作区: "Sessions and workspaces";
     readonly "/new \u2014 \u65B0\u5F00\u4F1A\u8BDD\uFF08\u4E5F\u53EF\u7528 /clear\uFF09\uFF1B\u65E7\u4F1A\u8BDD\u4FDD\u7559\u5728\u9891\u9053\u5217\u8868": "/new — Start a session (alias: /clear); previous sessions stay in the channel list";
@@ -157,7 +159,7 @@ export declare const commandEnglish: {
     readonly "\u67E5\u770B\u5F53\u524D\u6743\u9650\u53CA\u53EF\u9009\u9879\uFF1A/permission": "Current permissions and options: /permission";
     readonly "\u8BB0\u5F55\u4F1A\u8BDD\u53CD\u9988\uFF1A/feedback \u53CD\u9988\u5185\u5BB9": "Record session feedback: /feedback feedback-text";
     readonly "\u63D0\u4EA4\u4EE3\u7801\u7B80\u5316\u5BA1\u67E5\uFF1A/simplify": "Submit a code simplification review: /simplify";
-    readonly "\u5728\u7F51\u9875 Chat \u4E2D\u5BFC\u51FA\u4F1A\u8BDD\u65E5\u5FD7": "Export session logs in web Chat";
+    readonly "\u5BFC\u51FA\u5F53\u524D\u4F1A\u8BDD ZIP \u65E5\u5FD7\u5E76\u53D1\u9001\u6587\u4EF6": "Export this session as a ZIP file";
     readonly "\u547D\u4EE4\u5DF2\u8FD4\u56DE\uFF0C\u4F46\u672A\u63D0\u4F9B\u7ED3\u679C\u8BF4\u660E\u3002\u8BF7\u5728\u7F51\u9875\u6838\u5BF9\u5F53\u524D\u72B6\u6001\u3002": "The command returned without a result description. Check the current state on the web.";
     readonly "\u547D\u4EE4\u6267\u884C\u5931\u8D25\uFF0C\u672A\u63D0\u4F9B\u5177\u4F53\u539F\u56E0\u3002\u8BF7\u5728\u7F51\u9875\u68C0\u67E5\u540E\u91CD\u8BD5\u3002": "The command failed without details. Check on the web before retrying.";
     readonly "\u67E5\u770B\u8FD0\u884C\u72B6\u6001\uFF1A/status": "View running status: /status";

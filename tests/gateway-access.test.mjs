@@ -1016,3 +1016,27 @@ test('状态接口卡住不阻塞正常输入，未准入消息不触发状态�
     assert.equal(input.content[0].text, 'hi')
   } finally { f.engine.dispose(); release?.(undefined); channel.addStatusReaction = async () => undefined }
 })
+
+test('export 先检查私聊准入与命令权限，放行后只导出当前绑定', async t => {
+  let requests = 0
+  const files = []
+  const policy = { dm: { enabled: false, users: [] }, group: { enabled: false, users: [] } }
+  const services = { connection: { createSharedFetchHandler: () => ({ fetch: async request => {
+    requests++
+    assert.equal(new URL(request.url).searchParams.get('sessionId'), f.dmSessionId)
+    return new Response(new Uint8Array([80, 75]), { headers: { 'content-type': 'application/zip' } })
+  } }) } }
+  const f = makeEngine(t, undefined, undefined, services, { resolveCommandPermissions: () => policy })
+  t.after(() => f.engine.dispose())
+  f.engine.channels.get('telegram').sendFile = async (chatId, file) => { files.push({ chatId, file }) }
+  f.engine.addAllowed('telegram', 'user-1')
+  await f.inbound({ chatId: 'user-1', userId: 'stranger', kind: 'dm', text: '/export', messageId: 'export-denied' })
+  await waitFor(() => f.sent.some(item => item.text.includes('未授权')))
+  await f.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/export', messageId: 'export-disabled' })
+  await waitFor(() => f.sent.some(item => item.text.includes('未开启命令权限')))
+  assert.equal(requests, 0); assert.equal(files.length, 0)
+  policy.dm.enabled = true
+  await f.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/export', messageId: 'export-allowed' })
+  await waitFor(() => f.sent.some(item => item.text.includes('ZIP 文件已发送')))
+  assert.equal(requests, 1); assert.equal(files.length, 1); assert.equal(files[0].chatId, 'user-1')
+})

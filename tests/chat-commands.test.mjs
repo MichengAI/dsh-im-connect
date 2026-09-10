@@ -158,11 +158,11 @@ test('workspace 统一走 Router，传递选中目录与取消信号', async () 
   assert.equal(f.calls.some((c) => c[0] === 'create'), false)
 })
 
-test('export 明确提示网页导出，帮助不承诺 IM 下载', async () => {
+test('export 缺少回传能力时提示网页降级，帮助说明 ZIP 导出', async () => {
   const f = fixture()
   f.services.commands.list = () => [{ name: 'export', description: 'Download ZIP' }]
-  assert.match(await f.run('/export'), /网页.*导出/)
-  assert.match(await f.run('/help'), /export.*网页/)
+  await assert.rejects(f.run('/export'), /网页.*ZIP/)
+  assert.match(await f.run('/help'), /export.*ZIP/)
   assert.equal(f.calls.some((item) => item[0] === 'command'), false)
 })
 
@@ -256,7 +256,7 @@ test('命令回复使用宿主语言偏好，切换即时生效且用户内容�
   assert.match(await f.run('/workspace'), /Workspaces/)
   assert.match(await f.run('/sessions'), /Sessions · Page/)
   assert.match(await f.run('/queue'), /Queued messages/)
-  assert.match(await f.run('/export'), /web Chat/)
+  await assert.rejects(f.run('/export'), /web Chat/)
   assert.match(await f.run('/stop'), /Stop requested/)
   assert.match(await f.run('/steer 中文要求 {0} /model'), /中文要求 \{0\} \/model/)
   await assert.rejects(f.run('/new extra'), /does not accept arguments/)
@@ -446,4 +446,19 @@ test('工作区成功使用名称并保留路径，模型列表推荐其他模�
     await f.run('/workspace w1'),
     /Started a new session in 旅行计划/)
   assert.doesNotMatch(await f.run('/help'), /guide on the web/)
+})
+
+test('export 成功只在文件发完后返回，发送失败不伪报成功', async () => {
+  const f = fixture(), controller = new AbortController()
+  f.services.connection = { createSharedFetchHandler: () => ({ fetch: async () => new Response(new Uint8Array([80, 75]), { headers: { 'content-type': 'application/zip' } }) }) }
+  let release, finished = false
+  const channel = { id: 'bot', sendFile: async () => await new Promise(resolve => { release = resolve }) }
+  const work = f.runner.execute(channel, { chatId: 'chat', text: '/export' }, controller.signal).then(text => { finished = true; return text })
+  await new Promise(resolve => setImmediate(resolve)); assert.equal(finished, false)
+  release(); assert.match(await work, /已导出.*已发送/)
+  channel.sendFile = async () => { throw new Error('channel-error-token') }
+  await assert.rejects(f.runner.execute(channel, { chatId: 'chat', text: '/export' }, controller.signal), error => /未能导出或发送/.test(error.message) && !error.message.includes('token'))
+  await assert.rejects(f.run('/export other-id'), /不支持参数/)
+  f.router.lookup = () => undefined
+  await assert.rejects(f.run('/export'), /当前没有会话/)
 })

@@ -93,7 +93,7 @@ WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram can return files produce
 - File access follows Chat: files outside the workspace are allowed when the host can read them. The plugin does not extract arbitrary paths from reply text. Files created through shell commands need to be presented explicitly.
 - Newer hosts use Chat's complete-file download service and its configured size limit. DSH `0.1.2-rc.1` uses the host filesystem with a 32 MiB limit. Directories and symbolic links are not sent; channel-specific file limits still apply.
 - A failed transfer produces a message naming the file and does not stop the remaining files. Switching away from the session or stopping the account prevents pending delivery from continuing to a different target.
-- `/export` still exports session logs in web Chat; it is separate from delivering generated files. File delivery does not add general incoming-document support.
+- Send `/export` as a standalone command to receive the current linked session’s Chat ZIP logs in this chat, without child sessions. The ZIP limit is 32 MiB; channel limits also apply. If the file is too large or cannot be sent, use `/export` in web Chat. Paths and other session IDs are not accepted.
 
 ## Message progress
 
@@ -221,7 +221,7 @@ Send commands as separate text messages; image captions remain ordinary input. S
 - Models: as in Chat, `/model` and `/reasoning` also attempt to save the default for future sessions. Other existing sessions are not changed.
 - Stopping and queues: `/stop` submits a stop request and keeps queued messages. Pause an active goal separately with `/goal pause`. Use `/queue` to view and manage queued messages.
 - Forking: `/fork` requires at least one completed turn. If a fork was created but switching failed, follow the session ID and recovery instructions in the reply.
-- Permissions and export: `/permission` settings survive session restoration. Run `/export` in web Chat; IM does not invoke this web-only session-log export.
+- Permissions and export: `/permission` settings survive session restoration. `/export` follows private-chat admission and private/group command permissions. Completion is reported only after the ZIP file is sent.
 
 Command replies support Chinese and English and follow the language explicitly saved in web settings. With no preference or an unavailable language service, they default to Chinese. Dynamic names, paths, user content, and extension results remain unchanged. Tool approvals, interactive questions, and some channel errors are not yet fully localized.
 
