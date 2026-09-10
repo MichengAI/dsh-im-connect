@@ -147,10 +147,9 @@ export class SessionRouter {
     options?.signal?.throwIfAborted()
     // 新会话准备成功后才替换当前映射，失败时旧句柄仍可继续使用。
     const next = await this.create(channelId, kind, chatId, title, cwd, options?.signal)
-    if (old?.handle) {
-      this.reloadDisposed.add(old.sessionId)
-      await this.disposeHandle(old)
-    }
+    // dispose 会触发宿主 api-session/removed，导致未刷新的网页拒绝打开历史。
+    // 轮换只转入历史，句柄在渠道停用或插件重载时统一释放。
+    if (old) this.historical.set(old.sessionId, old)
     return next
   }
 
@@ -175,9 +174,10 @@ export class SessionRouter {
   isAdopted(sessionId: string): boolean { return this.store.list().some(record => record.sessionId === sessionId && record.adopted) }
 
   /** 显式换绑保留旧历史与运行句柄，不改变 Host 会话的归属或默认配置。 */
-  async bind(channelId: string, kind: ChatKind, chatId: string, sessionId: string, title: string, agent: unknown, cwd?: string): Promise<void> {
+  async bind(channelId: string, kind: ChatKind, chatId: string, sessionId: string, title: string, agent: unknown, cwd?: string, signal?: AbortSignal): Promise<void> {
     await this.channelOperations.run(channelId, async () => {
       const key = sessionKeyOf(channelId, kind, chatId)
+      signal?.throwIfAborted()
       const other = this.store.list().find(item => item.sessionId === sessionId && sessionKeyOf(item.channel, item.kind, item.chatId) !== key)
       if (other) throw new Error('该会话已关联其他聊天，不能重复绑定。')
       const old = this.live.get(key)
@@ -451,7 +451,7 @@ export class SessionRouter {
           ...this.resolveAgentOptions(record.channel),
           ...(this.resolveConfig(record.channel).reasoningEffort ? { reasoningEffort: this.resolveConfig(record.channel).reasoningEffort } : {}),
         },
-        setup: this.presetSetup(record.channel, record.agentPreset),
+        setup: this.presetSetup(record.channel, record.agentPreset, true),
       })
       this.syncStoredTitle(record.sessionId, handle.agent)
       await this.attachWorkspace(record.sessionId, record.channel, record.cwd)
@@ -595,18 +595,22 @@ export class SessionRouter {
     })
   }
 
-  private presetSetup(channelId: string, savedPreset?: string) {
+  private presetSetup(channelId: string, savedPreset?: string, restoring = false) {
     const ctx = this.ctx
     const config = this.resolveConfig(channelId)
     const preset = savedPreset || config.agentPreset || 'standard'
     const permission = config.permissionPreset
     return async (agentCtx: unknown) => {
+      const session = (agentCtx as { agent?: { session?: { snapshotEvents?: () => readonly { type: string }[]; events?: readonly { type: string }[] } } }).agent?.session
+      const events = session?.snapshotEvents?.() ?? session?.events
+      // 在挂载前读取历史；来源不可读取时也不冒险覆盖已有权限。
+      const preservePermission = restoring && (!events || events.some(event => ['permission/preset', 'sandbox/mode', 'approval/policy'].includes(event.type)))
       if (ctx.agentPresets?.mount) await ctx.agentPresets.mount(agentCtx, preset)
       // Account defaults belong in agentOptions (including on legacy Hosts),
       // not a second installModelSelection middleware. Its outer after-next
       // override would defeat Chat's session selection and image admission.
       // New sessions also persist their initial selection in createHandle().
-      if (permission) {
+      if (permission && !preservePermission) {
         try {
           const agent = (agentCtx as { agent?: { session?: unknown } }).agent
           const permissionPresets = ctx.permissionPresets

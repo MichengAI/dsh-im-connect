@@ -39,7 +39,7 @@ function fixture() {
   }
   const runner = new ChatCommands({ get: name => services[name] }, router, () => false)
   const run = (text, extra = {}) => runner.execute({ id: 'bot', label: '机器人', status: () => '在线' }, { chatId: 'chat', userId: 'u', kind: 'dm', text, ...extra }, new AbortController().signal)
-  return { calls, run, rows, services, runner }
+  return { calls, run, rows, services, runner, router }
 }
 
 test('Chat 注册命令动态发现、原样执行并返回宿主结果', async () => {
@@ -155,3 +155,62 @@ test('真实 Host 命令注册表执行同一 handler 并写入规范命令事�
   assert.equal(call[5].signal.aborted, false)
   assert.equal(f.calls.some(c => c[0] === 'create'), false)
  })
+
+test('export 明确提示网页导出，帮助不承诺 IM 下载', async () => {
+  const f = fixture()
+  f.services.commands.list = () => [{ name: 'export', description: 'Download ZIP' }]
+  assert.match(await f.run('/export'), /网页.*导出/)
+  assert.match(await f.run('/help'), /export.*网页/)
+  assert.equal(f.calls.some(item => item[0] === 'command'), false)
+})
+
+test('修改模型和推理说明 Chat 默认选择影响，纯查询不宣称修改', async () => {
+  const f = fixture()
+  assert.match(await f.run('/model p/m'), /后续.*Chat.*默认/)
+  assert.match(await f.run('/reasoning high'), /后续.*Chat.*默认/)
+  assert.doesNotMatch(await f.run('/model'), /后续/)
+})
+
+test('stop 提示暂停活跃目标并保留队列，不擅自修改目标', async () => {
+  const f = fixture()
+  f.services.goals = { get: () => ({ phase: 'active' }), pause: () => { throw new Error('不能擅自暂停') } }
+  const result = await f.run('/stop')
+  assert.match(result, /\/goal pause/)
+  assert.match(result, /排队/)
+  assert.equal(f.calls.filter(item => item[0] === 'cancel').length, 1)
+})
+
+for (const mode of ['resolve', 'bind', 'abort', 'attach']) {
+  test(`fork 创建后 ${mode} 返回新 ID 和补救方法，保留旧绑定`, async () => {
+    const f = fixture(), scope = new AbortController()
+    f.services.sessionController.fork = async () => {
+      if (mode === 'abort') scope.abort()
+      if (mode === 'attach') throw Object.assign(new Error('挂载失败'), { code: 'session/workspace-attach-failed', details: { sessionId: 'forked' } })
+      return { sessionId: 'forked' }
+    }
+    if (mode === 'resolve') f.services.sessionController.resolveAgent = async () => { throw new Error('暂时无法读取') }
+    if (mode === 'bind') f.router.bind = async () => { throw new Error('索引写入失败') }
+    const result = await f.runner.execute({ id: 'bot' }, { chatId: 'chat', kind: 'dm', text: '/fork' }, scope.signal)
+    assert.match(result, /forked/)
+    assert.match(result, /原会话|当前绑定/)
+    assert.match(result, /\/session forked|工作区/)
+    assert.equal(f.router.lookup().sessionId, 's1')
+  })
+}
+
+test('fork 成功切换，创建前失败则不虚报已创建', async () => {
+  const f = fixture()
+  f.services.sessionController.fork = async () => ({ sessionId: 'fork-ok' })
+  assert.match(await f.run('/fork'), /已分叉并切换会话：fork-ok/)
+  assert.equal(f.router.lookup().sessionId, 'fork-ok')
+  const failed = fixture()
+  failed.services.sessionController.fork = async () => { throw new Error('没有完整回合') }
+  await assert.rejects(failed.run('/fork'), /没有完整回合/)
+  assert.equal(failed.router.lookup().sessionId, 's1')
+})
+
+test('stop 附加目标查询失败仍报告已请求停止', async () => {
+  const f = fixture()
+  f.services.goals = { get() { throw new Error('状态不可用') } }
+  assert.match(await f.run('/stop'), /已请求停止/)
+})

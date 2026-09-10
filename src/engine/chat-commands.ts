@@ -4,6 +4,9 @@ import { randomUUID } from 'node:crypto'
 import type { ChannelAdapter, ImMessage } from './types.js'
 import type { SessionRouter } from './router.js'
 
+const EXPORT_HINT = '请在网页 Chat 中执行 /export 导出会话日志；IM 文件回传暂未支持。'
+const MODEL_DEFAULT_HINT = '与 Chat 一致，此操作也会更新后续 Chat 新会话的默认模型选择；已有其他会话不会主动修改。'
+
 interface Selection { provider: string; model: string; reasoningEffort?: string }
 interface Model { id: string; name: string; reasoning?: { efforts: Array<{ id: string; name: string }>; defaultEffort?: string } }
 interface Catalog { default: Selection; groups: Array<{ id: string; models: Model[] }> }
@@ -105,12 +108,13 @@ export class ChatCommands {
     if (msg.media?.length && ['help', 'new', 'clear', 'sessions', 'sessionlist', 'session', 'workspaces', 'workspacelist', 'workspace', 'models', 'status', 'current', 'stop', 'steer', 'rename', 'fork', 'model', 'reasoning', 'reasonings', 'reasoninglist', 'history', 'queue'].includes(command)) throw new Error('该控制命令不接受附件，请单独发送。')
     const current = this.router.lookup(channel.id, kind, msg.chatId)
     const requireCurrent = () => { if (!current) throw new Error('当前没有会话，请先发送消息或 /new。'); return current.sessionId }
+    if (command === 'export') return EXPORT_HINT
     if (command === 'help') {
       let commands: Descriptor[] = []
       if (current && this.host.get('commands') && this.host.get('sessionController')) {
         commands = await this.call('commands', 'list', await this.agent(current.sessionId))
       }
-      return CHAT_CONTROL_HELP + (commands.length ? '\n\nChat 命令：\n' + commands.map(item => `/${item.name} — ${item.description}`).join('\n') : '\n发送消息创建会话后，可查看该会话的 Chat 命令。')
+      return CHAT_CONTROL_HELP + (commands.length ? '\n\nChat 命令：\n' + commands.map(item => `/${item.name} — ${item.name === 'export' ? EXPORT_HINT : item.description}`).join('\n') : '\n发送消息创建会话后，可查看该会话的 Chat 命令。')
     }
     if (command === 'new' || command === 'clear') {
       if (current && this.host.get('sessionController')) await this.idle(current.sessionId, signal)
@@ -179,7 +183,16 @@ export class ChatCommands {
       return [`渠道：${channel.label}（${channel.status()}）`, `会话：${row?.projections?.values?.title || sessionId}`, sessionId,
         `工作区：${row?.cwd || '未知'}`, `状态：${row?.running ? '运行中' : '空闲'}`, model ? `模型：${model.provider}/${model.model}；推理：${model.reasoningEffort || '默认'}` : '模型：尚未记录'].join('\n')
     }
-    if (command === 'stop') { await this.call('sessionController', 'cancel', { sessionId }); return '已请求停止当前任务，Host 排队消息保留。' }
+    if (command === 'stop') {
+      await this.call('sessionController', 'cancel', { sessionId })
+      let goalHint = '如已启用目标任务，请用 /goal pause 暂停目标。'
+      try {
+        const goals = this.host.get('goals') as { get(agent: unknown): { phase?: string } | undefined } | undefined
+        if (goals) goalHint = goals.get(await this.agent(sessionId))?.phase === 'active'
+          ? '当前目标仍处于活跃状态，请用 /goal pause 暂停目标。' : ''
+      } catch { /* 停止已提交，附加状态查询失败不能把停止报告为失败。 */ }
+      return ['已请求停止当前运行；排队消息保留，可用 /queue 查看。', goalHint].filter(Boolean).join('\n')
+    }
     if (command === 'steer') {
       if (!input) throw new Error('用法：/steer <补充指令>')
       this.onSession(sessionId, msg)
@@ -196,9 +209,24 @@ export class ChatCommands {
       await this.idle(sessionId, signal)
       const workspace = (await this.workspaces(signal)).items.find(item => item.sessionIds.includes(sessionId))
       if (!workspace) throw new Error('当前会话工作区不可用，无法分叉。')
-      const result = await this.call<{ sessionId: string }>('sessionController', 'fork', { sessionId })
-      await this.router.bind(channel.id, kind, msg.chatId, result.sessionId, result.sessionId, await this.agent(result.sessionId), workspace.path)
-      return `已分叉并切换会话：${result.sessionId}`
+      let createdId: string | undefined
+      try {
+        signal.throwIfAborted()
+        // 必须先保留创建结果，再检查取消，避免已创建的分叉失去可追踪 ID。
+        const controller = this.service('sessionController')
+        if (typeof controller.fork !== 'function') throw new Error('当前 Host 不支持 fork。')
+        const result = await controller.fork({ sessionId }) as { sessionId: string }
+        createdId = result.sessionId
+        signal.throwIfAborted()
+        await this.router.bind(channel.id, kind, msg.chatId, createdId, createdId, await this.agent(createdId), workspace.path, signal)
+        return `已分叉并切换会话：${createdId}`
+      } catch (error) {
+        const partial = error as { code?: string; details?: { sessionId?: string } }
+        const attachFailed = partial?.code === 'session/workspace-attach-failed'
+        if (!createdId && attachFailed && typeof partial.details?.sessionId === 'string') createdId = partial.details.sessionId
+        if (!createdId) throw error
+        return `分叉已创建：${createdId}，但未能切换，当前绑定仍保留原会话。\n${attachFailed ? '请先在网页检查并修复该分叉的工作区归属，然后' : '可稍后'}发送 /session ${createdId} 接续。`
+      }
     }
     if (command === 'model' || command === 'reasoning' || command === 'reasonings' || command === 'reasoninglist') {
       const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
@@ -211,14 +239,14 @@ export class ChatCommands {
         const slash = id.indexOf('/')
         if (slash < 1) throw new Error('用法：/model <序号或provider/model> [推理等级]')
         const result = await this.call<{ selected: Selection }>('sessionController', 'selectModel', { sessionId, provider: id.slice(0, slash), model: id.slice(slash + 1), ...(reasoningEffort ? { reasoningEffort } : {}) })
-        return `当前会话模型：${result.selected.provider}/${result.selected.model}；推理：${result.selected.reasoningEffort || '默认'}`
+        return `当前会话模型：${result.selected.provider}/${result.selected.model}；推理：${result.selected.reasoningEffort || '默认'}\n${MODEL_DEFAULT_HINT}`
       }
       const model = catalog.groups.find(group => group.id === selected.provider)?.models.find(item => item.id === selected.model)
       const efforts = model?.reasoning?.efforts || []
       if (!input || command !== 'reasoning') return `当前推理：${selected.reasoningEffort || '默认'}\n${efforts.map(item => `${item.id} — ${item.name}`).join('\n') || '当前模型没有可选推理等级。'}`
       if (input !== '--default' && !efforts.some(item => item.id === input)) throw new Error('推理等级无效，请先 /reasoning 查看。')
       await this.call('sessionController', 'selectModel', { sessionId, provider: selected.provider, model: selected.model, ...(input === '--default' ? {} : { reasoningEffort: input }) })
-      return `推理等级已设为：${input === '--default' ? '默认' : input}`
+      return `推理等级已设为：${input === '--default' ? '默认' : input}\n${MODEL_DEFAULT_HINT}`
     }
     if (command === 'history') {
       const snapshot = await this.snapshot(sessionId, signal)

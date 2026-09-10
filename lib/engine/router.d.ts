@@ -99,7 +99,7 @@ export declare class SessionRouter {
     rename(sessionId: string, title: string): boolean;
     isAdopted(sessionId: string): boolean;
     /** 显式换绑保留旧历史与运行句柄，不改变 Host 会话的归属或默认配置。 */
-    bind(channelId: string, kind: ChatKind, chatId: string, sessionId: string, title: string, agent: unknown, cwd?: string): Promise<void>;
+    bind(channelId: string, kind: ChatKind, chatId: string, sessionId: string, title: string, agent: unknown, cwd?: string, signal?: AbortSignal): Promise<void>;
     setTitle(sessionId: string, title: string, source: 'message' | 'host' | 'user'): boolean;
     pruneMissingSessions(): Promise<number>;
     private knownSessionIds;

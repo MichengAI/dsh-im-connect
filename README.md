@@ -182,7 +182,7 @@ dsh --profile web --dump-config
 | 命令权限 | 点击账号右侧「设置」，调整私聊、群聊命令开关 | 先准入，再判断命令权限；关闭后仍可正常对话和回答审批、问题 |
 | 会话 / 工作区 | `/sessions`、`/session <序号或ID>`；`/workspaces`、`/workspace <序号或ID>` | 可接续普通 Chat 会话；选择工作区会新建会话，不修改账号默认配置 |
 | 任务控制 | `/stop`、`/steer <内容>`、`/queue` | 停止、补充指令、查看队列；停止保留 Host 排队消息 |
-| 模型 / 推理 | `/models`、`/model <序号或provider/model>`、`/reasoning [等级或 --default]` | 修改当前会话模型和推理强度 |
+| 模型 / 推理 | `/models`、`/model <序号或provider/model>`、`/reasoning [等级或 --default]` | 修改当前选择，并更新宿主后续 Chat 新会话的默认选择 |
 | 会话管理 | `/history`、`/rename <名称>`、`/fork` | 最近文字对话、改名、分叉并切换 |
 | 批准陌生人私聊 | 打开「设置 → IM助理」，在待批准列表点「批准」或「拒绝」 | 只影响私聊准入，不影响群聊 |
 | 回答交互问题 | 直接回复选项序号或文字；多选用逗号分隔，也可以输入自定义答案 | 多个问题会按顺序发送；群聊只接受任务发起者回答 |
@@ -192,6 +192,8 @@ dsh --profile web --dump-config
 通过 `/workspace` 新建后，`/new` 和当前会话归档后的续聊会保留所选工作区，并使用账号配置的模型、Agent 与权限预设。`/session` 接续已有会话、`/fork` 分叉则保留原会话配置。
 
 钉钉回复优先走官方 AI Card 流式卡片；创建失败则回退普通文本。Telegram 同一 Bot 不要同时开 Webhook。
+
+命令使用补充：`/export` 当前需在网页 Chat 中执行，IM 不会返回 ZIP 文件。`/model`、`/reasoning` 与 Chat 一致，会同时更新宿主后续新会话的默认选择；已有其他会话不会主动修改。`/permission` 的会话设置在恢复时保留。`/stop` 仅请求取消当前运行，队列保留，活跃目标请用 `/goal pause` 暂停。若分叉已创建但未切换，回复会保留分叉 ID，可按提示在网页检查后通过 `/session <ID>` 接续。
 
 ## 权限与安全边界
 

@@ -185,6 +185,8 @@ test('恢复历史时同步持久化标题，当前会话保持不变', async t 
   const { router, store } = makeRouter(t)
   const old = await router.getOrCreate('wecom', 'dm', 'restore-title', '用户名')
   const next = await router.rotate('wecom', 'dm', 'restore-title', '新会话')
+  // 模拟宿主独立卸载后从持久化日志恢复；普通轮换现在保留历史句柄。
+  await router.onHostDisposed(old.sessionId)
   router.ctx.agents.resume = async opts => {
     const handle = createHandle(opts.resumeSessionId)
     handle.agent.session.events.push({ type: 'session/title', data: { title: '宿主保存的历史标题', source: { kind: 'user' } } })
@@ -243,6 +245,57 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
   }, () => undefined, resolveConfig, { disposeTimeoutMs })
   return { router, store, created, createdOptions, archivedIds, permissionSelections, ctx }
 }
+
+test('轮换保留历史句柄，打开历史不换绑，停用统一释放且不重复释放', async t => {
+  const f = makeRouter(t)
+  const disposed = []
+  const bindings = []
+  for (let i = 0; i < 3; i++) {
+    const binding = await f.router.rotate('wecom', 'dm', 'web-history', '会话')
+    binding.handle.dispose = async () => { disposed.push(binding.sessionId) }
+    bindings.push(binding)
+  }
+  assert.deepEqual(disposed, [])
+  f.ctx.agents.resume = async () => { throw new Error('历史已有句柄，不应重新恢复') }
+  assert.equal(await f.router.ensure(bindings[0].sessionId), true)
+  assert.equal(f.router.lookup('wecom', 'dm', 'web-history').sessionId, bindings[2].sessionId)
+  await f.router.disposeAll()
+  assert.deepEqual(new Set(disposed), new Set(bindings.map(item => item.sessionId)))
+  assert.equal(disposed.length, 3)
+  await f.router.disposeAll()
+  assert.equal(disposed.length, 3)
+})
+
+test('真实网页 SessionManager 在 new 后无需刷新即可重新选择历史', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT }, async t => {
+  // 直接执行宿主的 select 方法；隔离浏览器通知依赖，保留真实的列表准入判断。
+  const source = readFileSync(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/client/sessions/manager.js'), 'utf8')
+  const start = source.indexOf('    select(sessionId) {')
+  const end = source.indexOf('    /**', start)
+  assert.ok(start >= 0 && end > start)
+  const browser = {
+    ...new Function('return ({' + source.slice(start, end) + '})')(),
+    summaries: [], sessions: new Map(), addresses: new Map(), catalogs: new Map(),
+    completedNotifications: new Set(), navigationAddress() {}, refreshSubagents() {}, notifier: { notifyNow() {} },
+    handleSessionAdded(row) { this.summaries.push(row) },
+    handleSessionRemoved(id) { this.summaries = this.summaries.filter(row => row.sessionId !== id) },
+  }
+  const f = makeRouter(t)
+  const create = f.ctx.agents.create
+  f.ctx.agents.create = async opts => {
+    const handle = await create(opts)
+    browser.handleSessionAdded({ sessionId: opts.sessionId, cwd: opts.meta.cwd, running: false })
+    // 真实 Host 把 session/disposed 转发为 api-session/removed。
+    handle.dispose = async () => { browser.handleSessionRemoved(opts.sessionId) }
+    return handle
+  }
+  const old = await f.router.getOrCreate('wecom', 'dm', 'browser', '你好')
+  browser.select(old.sessionId)
+  const next = await f.router.rotate('wecom', 'dm', 'browser', '新会话')
+  browser.select(next.sessionId)
+  assert.doesNotThrow(() => browser.select(old.sessionId))
+  assert.equal(f.router.lookup('wecom', 'dm', 'browser').sessionId, next.sessionId)
+  await f.router.disposeAll()
+})
 
 test('轮换创建失败保留原绑定和句柄，重试成功才切换', async t => {
   const f = makeRouter(t)
@@ -626,4 +679,29 @@ test('索引写入失败保留原磁盘映射与内存绑定', async t => {
   assert.equal(f.store.get('wecom:dm:write').sessionId, old.sessionId)
   assert.equal(f.router.lookup('wecom', 'dm', 'write').sessionId, old.sessionId)
   f.store.flush = flush
+})
+
+for (const type of ['permission/preset', 'sandbox/mode', 'approval/policy', 'legacy']) {
+  test(`恢复会话权限 ${type} 不被账号默认覆盖，旧空记录补默认`, async t => {
+    const f = makeRouter(t)
+    const old = await f.router.getOrCreate('wecom', 'dm', 'permissions', '旧')
+    await f.router.disposeChannel('wecom')
+    const session = { id: old.sessionId, snapshotEvents: () => type === 'legacy' ? [] : [{ type, data: {} }] }
+    f.ctx.agents.resume = async opts => {
+      await opts.setup({ agent: { session } })
+      return { agent: { session }, async dispose() {} }
+    }
+    const before = f.permissionSelections.length
+    await f.router.getOrCreate('wecom', 'dm', 'permissions', '继续')
+    assert.equal(f.permissionSelections.length - before, type === 'legacy' ? 1 : 0)
+  })
+}
+
+test('取消的换绑不改当前映射', async t => {
+  const f = makeRouter(t)
+  const old = await f.router.getOrCreate('wecom', 'dm', 'cancel-bind', '旧')
+  const scope = new AbortController()
+  scope.abort()
+  await assert.rejects(f.router.bind('wecom', 'dm', 'cancel-bind', 'forked', '分叉', {}, 'D:/chosen', scope.signal), { name: 'AbortError' })
+  assert.equal(f.router.lookup('wecom', 'dm', 'cancel-bind').sessionId, old.sessionId)
 })

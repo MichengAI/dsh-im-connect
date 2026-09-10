@@ -182,7 +182,7 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 | Command permissions | Open Settings on the account row and toggle DM/group commands | Admission is checked first; disabling commands keeps conversation and approval/question replies available |
 | Sessions / workspaces | `/sessions`, `/session <number or ID>`; `/workspaces`, `/workspace <number or ID>` | Resume ordinary Chat sessions; workspace selection creates a session without changing account defaults |
 | Task controls | `/stop`, `/steer <text>`, `/queue` | Stop, provide instructions, or inspect the queue; stopping preserves Host queued messages |
-| Model / reasoning | `/models`, `/model <number or provider/model>`, `/reasoning [effort or --default]` | Changes the current session's model and reasoning effort |
+| Model / reasoning | `/models`, `/model <number or provider/model>`, `/reasoning [effort or --default]` | Changes the current selection and updates the Host default for subsequent Chat sessions |
 | Session management | `/history`, `/rename <title>`, `/fork` | Recent text history, rename, or fork and switch |
 | Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
 | Answer an interactive question | Reply with an option number or text; separate multiple choices with commas, or enter a custom answer | Multiple questions arrive in order; only the initiating user can answer in a group |
@@ -192,6 +192,8 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 After `/workspace`, `/new` and continuing after archiving the current session keep the selected workspace and use the account model, Agent preset, and permission preset. `/session` and `/fork` preserve the original session configuration.
 
 DingTalk replies prefer official AI Card streaming and fall back to plain text. Do not enable Webhook on the same Telegram bot.
+
+Command notes: `/export` currently requires web Chat; IM does not return a ZIP file. Like Chat, `/model` and `/reasoning` also update the Host default for subsequent sessions without actively changing other existing sessions. Session `/permission` settings survive restoration. `/stop` requests cancellation of the current run and keeps the queue; use `/goal pause` to pause an active goal. If a fork is created but switching fails, the reply includes its ID and recovery instructions for `/session <ID>`.
 
 ## Permissions and safety limits
 
