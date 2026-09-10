@@ -1,4 +1,4 @@
-import { basename } from 'node:path'
+import { basename, resolve } from 'node:path'
 import type { ChannelAdapter } from './types.js'
 import { KeyedSerialQueue } from './keyed-queue.js'
 import { replyText, withReplyLocale } from './command-locale.js'
@@ -81,7 +81,6 @@ export class FileDelivery {
       if (this.sent.size > 256) this.sent.delete(this.sent.keys().next().value!)
       const files = this.host.get('workspaceFiles') as { readAll(scope: { sessionId: string; workspaceRoot: string }, path: string, signal: AbortSignal): Promise<{ data: string; eof: boolean; offset: number }> } | undefined
       for (const path of selected.paths) {
-        if (sent.has(path)) continue
         if (this.lifetime.signal.aborted) { ok = false; return }
         const current = target()
         if (!current || current.channel !== initial.channel || current.chatId !== initial.chatId) { ok = false; return }
@@ -89,6 +88,10 @@ export class FileDelivery {
         try {
           const cwd = session.header?.cwd ?? (this.host.get('sandboxPolicy') as { workspaceRoot?: string } | undefined)?.workspaceRoot
           if (!cwd || !current.channel.sendFile) throw new Error('file-delivery-unavailable')
+          // 同一文件可能同时以 write 的绝对路径和 present 的相对路径出现。
+          // 仅规范化去重键，实际读取仍由 Chat 服务校验原始路径。
+          const identity = resolve(cwd, path)
+          if (sent.has(identity)) continue
           const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(120_000)])
           const result = files?.readAll
             ? await files.readAll({ sessionId: String(session.id), workspaceRoot: cwd }, path, signal)
@@ -98,7 +101,7 @@ export class FileDelivery {
           const latest = target()
           if (!latest || latest.channel !== initial.channel || latest.chatId !== initial.chatId) { ok = false; return }
           await latest.channel.sendFile!(latest.chatId, { name, data: Buffer.from(result.data, 'base64') }, signal)
-          sent.add(path)
+          sent.add(identity)
         } catch (error) {
           ok = false
           if (this.lifetime.signal.aborted) { ok = false; return }

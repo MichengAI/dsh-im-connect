@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { resolve } from 'node:path'
 import { FileDelivery, filesForReply } from '../lib/engine/file-delivery.js'
 
 function fixture(paths = ['D:\\outside\\报告.pdf']) {
@@ -54,6 +55,29 @@ test('新回合不重发历史文件，按事件 turn 归属而非相邻 start �
   f.closing.data.turn = 2
   assert.deepEqual(filesForReply(f.events, f.closing).paths, [])
 })
+test('write 绝对路径与 present 相对路径只回传一次，下一回合允许再发', async t => {
+  const cwd = resolve('workspace')
+  const absolute = resolve(cwd, 'demo.txt')
+  const f = fixture([absolute]), s = delivery(t)
+  f.session.header.cwd = cwd
+  f.events.splice(-1, 0, { type: 'deliverables/presented', data: { turn: 1, files: [{ path: './demo.txt' }, { path: 'sub/../demo.txt' }] } })
+  await Promise.all([s.sender.deliver(f.session, f.closing, s.target), s.sender.deliver(f.session, f.closing, s.target)])
+  assert.equal(s.files.length, 1)
+  assert.equal(s.reads.length, 1)
+  assert.equal(s.reads[0][1], absolute)
+  const next = fixture(['demo.txt'])
+  next.session.header.cwd = cwd
+  for (const event of next.events) if (event.data?.turn) event.data.turn = 2
+  await s.sender.deliver(next.session, next.closing, s.target)
+  assert.equal(s.files.length, 2)
+})
+
+test('不同目录的同名文件仍分别回传', async t => {
+  const f = fixture(['one/demo.txt', 'two/demo.txt']), s = delivery(t)
+  await s.sender.deliver(f.session, f.closing, s.target)
+  assert.equal(s.files.length, 2)
+})
+
 test('工作区外路径原样交给 Chat 服务；并发重复事件只发一次', async t => {
   const f = fixture(), s = delivery(t)
   await Promise.all([s.sender.deliver(f.session, f.closing, s.target), s.sender.deliver(f.session, f.closing, s.target)])
