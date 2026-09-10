@@ -191,7 +191,7 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 
 After `/workspace`, `/new` and continuing after archiving the current session keep the selected workspace and use the account model, Agent preset, and permission preset. `/session` and `/fork` preserve the original session configuration.
 
-DingTalk replies prefer official AI Card streaming and fall back to plain text. Do not enable Webhook on the same Telegram bot.
+DingTalk replies prefer official AI Card streaming. If card creation fails, plain text preserves line breaks; code fences and list markers remain literal. Do not enable Webhook on the same Telegram bot.
 
 Send commands as separate text messages; image captions remain ordinary input. Start with `/help`; individual replies also suggest related actions.
 

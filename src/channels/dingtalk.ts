@@ -211,7 +211,8 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
           const res = await fetch(webhook, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ msgtype: 'markdown', markdown: { title: 'IM助理', text } }),
+            // 卡片不可用时保留原始换行，代码与列表以文本展示。
+            body: JSON.stringify({ msgtype: 'text', text: { content: text } }),
             signal: timeoutSignal(30_000),
           })
           if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)

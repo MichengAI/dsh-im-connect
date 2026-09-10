@@ -888,11 +888,11 @@ test('workspace → 普通消息回传 → new → 再回传使用同一创建�
   const send = text => f.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text, messageId: 'unified-' + seq++ })
   try {
     send('/workspace chosen')
-    await waitFor(() => f.sent.some(item => item.text.includes('新建并切换')))
+    await waitFor(() => f.sent.some(item => item.text.includes('开启新会话')))
     send('你好')
     await waitFor(() => f.sent.filter(item => item.text.startsWith('新会话回传')).length === 1)
     send('/new')
-    await waitFor(() => f.sent.some(item => item.text.includes('已开启新的频道会话')))
+    await waitFor(() => f.sent.some(item => item.text.includes('已开启新会话')))
     send('继续')
     await waitFor(() => f.sent.filter(item => item.text.startsWith('新会话回传')).length === 2)
     assert.equal(created.length, 2)

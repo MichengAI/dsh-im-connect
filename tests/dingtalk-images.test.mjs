@@ -166,3 +166,18 @@ test('Dingtalk ordinary replies preserve command line breaks as plain text', asy
     assert.equal(payload.markdown, undefined)
   } finally { await s.channel.stop(); mock.restoreAll() }
 })
+
+import { DingtalkCardClient } from '../lib/channels/dingtalk-card.js'
+test('Dingtalk card failure falls back to text preserving paragraphs, lists and code', async () => {
+  const s = setup()
+  mock.method(DingtalkCardClient.prototype, 'create', async () => { throw new Error('card unavailable') })
+  await s.channel.start()
+  try {
+    s.emit(s.event('fallback', { msgtype: 'text', text: { content: '你好' } }))
+    await tick()
+    const stream = await s.channel.beginReply('u')
+    const content = '第一行\n第二行\n\n- one\n- two\n```js\nconst a = 1\nconsole.log(a)\n```'
+    await stream.finish(content)
+    assert.deepEqual(JSON.parse(s.replies.at(-1).options.body), { msgtype: 'text', text: { content } })
+  } finally { await s.channel.stop(); mock.restoreAll() }
+})

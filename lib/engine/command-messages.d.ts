@@ -2,7 +2,6 @@
 export declare const commandEnglish: {
     readonly "\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6253\u5F00\u8FD9\u6761\u4F1A\u8BDD\uFF0C\u518D\u6267\u884C /export \u5BFC\u51FA ZIP \u65E5\u5FD7\u3002IM \u6587\u4EF6\u56DE\u4F20\u6682\u672A\u652F\u6301\u3002": "Open this session in web Chat and run /export to download ZIP logs. File return is not yet supported in IM.";
     readonly "\u4E0E Chat \u4E00\u81F4\uFF0C\u6B64\u64CD\u4F5C\u4E5F\u4F1A\u5C1D\u8BD5\u4FDD\u5B58\u540E\u7EED Chat \u65B0\u4F1A\u8BDD\u7684\u9ED8\u8BA4\u6A21\u578B\u9009\u62E9\uFF1B\u5DF2\u6709\u5176\u4ED6\u4F1A\u8BDD\u4E0D\u4F1A\u4E3B\u52A8\u4FEE\u6539\u3002": "As in Chat, this also attempts to save the default model selection for future Chat sessions; other existing sessions are not changed.";
-    readonly "IM \u52A9\u7406\u5DF2\u8FDE\u63A5\u3002\u76F4\u63A5\u53D1\u9001\u6587\u5B57\u5373\u53EF\u7EE7\u7EED\u804A\u5929\u3002": "IM assistant connected. Send text to continue chatting.";
     readonly 会话与工作区: "Sessions and workspaces";
     readonly "/new \u2014 \u65B0\u5F00\u4F1A\u8BDD\uFF08\u4E5F\u53EF\u7528 /clear\uFF09\uFF1B\u65E7\u4F1A\u8BDD\u4FDD\u7559\u5728\u9891\u9053\u5217\u8868": "/new — Start a session (alias: /clear); previous sessions stay in the channel list";
     readonly "/sessions [\u9875\u7801] \u2014 \u5217\u51FA\u4F1A\u8BDD\uFF1B/session \u5E8F\u53F7\u6216ID \u2014 \u5207\u6362\u4F1A\u8BDD": "/sessions [page] — List sessions; /session number-or-ID — Switch session";
@@ -22,8 +21,6 @@ export declare const commandEnglish: {
     readonly "\u65E0\u6CD5\u8BFB\u53D6\u4F1A\u8BDD\u5FEB\u7167\u3002": "Unable to read the session snapshot.";
     readonly "\u65E0\u6CD5\u8BFB\u53D6\u5DE5\u4F5C\u533A\u3002": "Unable to read workspaces.";
     readonly "\u5E8F\u53F7\u65E0\u6548\u6216\u5DF2\u8FC7\u671F\uFF0C\u5C1A\u672A\u5207\u6362\u3002\u8BF7\u53D1\u9001 /{0} \u83B7\u53D6\u65B0\u5217\u8868\u3002": "The number is invalid or expired. Nothing was switched. Send /{0} for a fresh list.";
-    readonly "\u8BF7\u5148\u5B8C\u6210\u5F53\u524D\u95EE\u9898\u6216\u5BA1\u6279\uFF0C\u518D\u5207\u6362\u4F1A\u8BDD\u3002": "Answer the pending question or approval before switching sessions.";
-    readonly "\u5F53\u524D\u4EFB\u52A1\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u5148 /stop\uFF0C\u7B49\u5F85\u505C\u6B62\u540E\u518D\u5207\u6362\u3002": "A task is running. Send /stop and wait for it to stop before switching.";
     readonly "\u5DE5\u4F5C\u533A\uFF1A{0}": "Workspace: {0}";
     readonly 默认推理: "Default reasoning";
     readonly "\u6A21\u578B\uFF1A{0}/{1} \u00B7 {2}": "Model: {0}/{1} · {2}";
@@ -47,7 +44,6 @@ export declare const commandEnglish: {
     readonly "\u76F4\u63A5\u53D1\u9001\u6D88\u606F\uFF0C\u6216 /new \u5F00\u59CB\u804A\u5929": "Send a message or /new to start chatting";
     readonly "\u6CA1\u6709\u7B2C {0} \u9875\uFF0C\u5171 {1} \u9875\u3002": "Page {0} does not exist. There are {1} pages.";
     readonly "\u8FD4\u56DE\u5217\u8868\uFF1A/sessions {0}": "Back to list: /sessions {0}";
-    readonly "\u4F1A\u8BDD\u5217\u8868 \u00B7 \u7B2C {0}/{1} \u9875 \u00B7 \u5171 {2} \u4E2A\n\u8303\u56F4\uFF1A\u5BBF\u4E3B\u666E\u901A\u4F1A\u8BDD\uFF0C\u5F52\u6863\u9879\u9700\u5148\u5728\u7F51\u9875\u6062\u590D\n\n": "Sessions · Page {0}/{1} · {2} total\nScope: regular Host sessions; restore archived sessions on the web first\n\n";
     readonly 未命名会话: "Untitled session";
     readonly "\u3014\u5F53\u524D\u3015": " [current]";
     readonly "\u5207\u6362\uFF1A/session {0}": "Switch: /session {0}";
@@ -66,16 +62,13 @@ export declare const commandEnglish: {
     readonly "\u6700\u8FD1\u8BB0\u5F55\uFF1A/history": "Recent messages: /history";
     readonly "\u91CD\u65B0\u5F00\u59CB\uFF1A/new": "Start over: /new";
     readonly "\u5DE5\u4F5C\u533A\u5217\u8868 \u00B7 \u5171 {0} \u4E2A\n\n": "Workspaces · {0} total\n\n";
-    readonly "\u65B0\u5EFA\u5E76\u5207\u6362\uFF1A/workspace 1": "Start a session and switch: /workspace 1";
     readonly "\u4E5F\u53EF\u4F7F\u7528\u5DF2\u5217\u51FA\u7684\u7EDD\u5BF9\u8DEF\u5F84\uFF1B\u65E7\u4F1A\u8BDD\u4FDD\u7559\uFF0C\u8D26\u53F7\u9ED8\u8BA4\u76EE\u5F55\u4E0D\u53D8\u3002": "You can also use a listed absolute path. Previous sessions and the account default directory are preserved.";
     readonly "\u522B\u540D\uFF1A/workspacelist\uFF1B\u5E8F\u53F7 15 \u5206\u949F\u5185\u6709\u6548\u3002": "Alias: /workspacelist. Numbers expire after 15 minutes.";
     readonly "\u8FD8\u6CA1\u6709\u53EF\u7528\u5DE5\u4F5C\u533A\u3002\u8BF7\u5148\u5728\u7F51\u9875\u6DFB\u52A0\uFF0C\u518D\u53D1\u9001 /workspaces\u3002": "No workspaces available. Add one on the web, then send /workspaces.";
     readonly "\u6CA1\u6709\u627E\u5230\u8FD9\u4E2A\u5DF2\u6DFB\u52A0\u7684\u5DE5\u4F5C\u533A\uFF0C\u5C1A\u672A\u5207\u6362\u3002\u53D1\u9001 /workspaces \u67E5\u770B\u53EF\u9009\u9879\uFF1B\u65B0\u76EE\u5F55\u8BF7\u5148\u5728\u7F51\u9875\u6DFB\u52A0\u3002": "That workspace has not been added. Nothing was switched. Send /workspaces for options; add new directories on the web first.";
-    readonly "\u5DF2\u5728 {0} \u65B0\u5EFA\u5E76\u5207\u6362\u4F1A\u8BDD\u3002\n\u65E7\u4F1A\u8BDD\u5DF2\u4FDD\u7559\uFF0C\u8D26\u53F7\u9ED8\u8BA4\u5DE5\u4F5C\u533A\u672A\u4FEE\u6539\uFF0C\u53EF\u4EE5\u76F4\u63A5\u53D1\u9001\u4EFB\u52A1\u3002": "Started and switched to a new session in {0}.\nPrevious sessions and the account default workspace are preserved. Send a task to begin.";
     readonly "\u67E5\u770B\u914D\u7F6E\uFF1A/status": "Configuration: /status";
     readonly "\u5207\u56DE\u65E7\u4F1A\u8BDD\uFF1A/sessions": "Switch back: /sessions";
     readonly "\u53EF\u7528\u6A21\u578B \u00B7 \u5171 {0} \u4E2A\n\n": "Available models · {0} total\n\n";
-    readonly "\u5207\u6362\uFF1A/model 1": "Switch: /model 1";
     readonly "\u67E5\u770B\u5F53\u524D\u6A21\u578B\uFF1A/model\uFF1B\u63A8\u7406\u9009\u9879\uFF1A/reasoning": "Current model: /model; reasoning options: /reasoning";
     readonly "\u5148\u53D1\u6D88\u606F\u6216 /new \u521B\u5EFA\u4F1A\u8BDD\uFF0C\u518D\u5207\u6362\u6A21\u578B\u3002": "Send a message or /new to create a session before switching models.";
     readonly "\u5E8F\u53F7 15 \u5206\u949F\u5185\u6709\u6548\u3002": "Numbers expire after 15 minutes.";
@@ -100,7 +93,6 @@ export declare const commandEnglish: {
     readonly "\u67E5\u770B\u961F\u5217\uFF1A/queue": "View queue: /queue";
     readonly "\u6E20\u9053\uFF1A{0}\uFF08{1}\uFF09": "Channel: {0} ({1})";
     readonly "\u4F1A\u8BDD\uFF1A{0}": "Session: {0}";
-    readonly 未知: "Unknown";
     readonly 运行中: "Running";
     readonly 空闲: "Idle";
     readonly "\u72B6\u6001\uFF1A{0}": "Status: {0}";
@@ -133,7 +125,6 @@ export declare const commandEnglish: {
     readonly "\u5207\u6362\u7528\u6CD5\uFF1A/model {0}/{1} [\u63A8\u7406\u7B49\u7EA7ID]": "Switch usage: /model {0}/{1} [reasoning-level-ID]";
     readonly "\u53C2\u6570\u8FC7\u591A\u3002\u7528\u6CD5\uFF1A/model \u5E8F\u53F7\u6216provider/model [\u63A8\u7406\u7B49\u7EA7ID]\uFF1B\u53EF\u7528\u6A21\u578B\uFF1A/models": "Too many arguments. Usage: /model number-or-provider/model [reasoning-level-ID]; available models: /models";
     readonly "\u7528\u6CD5\uFF1A/model <\u5E8F\u53F7\u6216provider/model> [\u63A8\u7406\u7B49\u7EA7]": "Usage: /model <number-or-provider/model> [reasoning-level]";
-    readonly "\u5F53\u524D\u4F1A\u8BDD\u6A21\u578B\uFF1A{0}/{1}\uFF1B\u63A8\u7406\uFF1A{2}\n{3}": "Current session model: {0}/{1}; reasoning: {2}\n{3}";
     readonly "\u8C03\u6574\u63A8\u7406\uFF1A/reasoning": "Adjust reasoning: /reasoning";
     readonly "\u67E5\u770B\u6A21\u578B\uFF1A/models": "View models: /models";
     readonly "\u53EF\u9009\u7B49\u7EA7\uFF1A\n": "Available levels:\n";
@@ -180,8 +171,6 @@ export declare const commandEnglish: {
     readonly "\u6E05\u9664\u76EE\u6807\uFF1A/goal clear": "Clear goal: /goal clear";
     readonly "\u67E5\u770B\u76EE\u6807\uFF1A/goal": "View goal: /goal";
     readonly "\u8BBE\u7F6E\u76EE\u6807\uFF1A/goal \u76EE\u6807\u5185\u5BB9": "Set a goal: /goal objective";
-    readonly 返回结果: "Result";
-    readonly 未能完成: "Could not complete";
     readonly "Agent \u9884\u8BBE\uFF1A{0}": "Agent preset: {0}";
     readonly "\u6743\u9650\uFF1A{0}": "Permissions: {0}";
     readonly 活跃: "Active";
@@ -196,7 +185,6 @@ export declare const commandEnglish: {
     readonly "\u547D\u4EE4\u6267\u884C\u5931\u8D25\uFF1A{0}\n\n\u67E5\u770B\u7528\u6CD5\uFF1A/help\uFF1B\u786E\u8BA4\u5F53\u524D\u4F1A\u8BDD\uFF1A/status": "Command failed: {0}\n\nUsage: /help; check current session: /status";
     readonly "\u8BF7\u67E5\u770B\u672C\u673A\u65E5\u5FD7\u3002": "Open DSH on your computer to check the error details.";
     readonly "IM \u52A9\u7406\u5DF2\u8FDE\u63A5 DeepSeek Harness\u3002\u76F4\u63A5\u53D1\u9001\u6587\u5B57\u5373\u53EF\u5F00\u59CB\u4EFB\u52A1\u3002": "IM assistant connected to DeepSeek Harness. Send a message to start a task.";
-    readonly "\u4F8B\u5982\uFF1A\u5E2E\u6211\u6574\u7406\u4ECA\u5929\u7684\u5F85\u529E\u3002\u67E5\u770B\u56FE\u7247\u6216\u6587\u4EF6\u652F\u6301\u8303\u56F4\uFF0C\u8BF7\u5728\u7F51\u9875\u6253\u5F00 IM \u52A9\u7406\u8BF4\u660E\u3002": "Try: Help me organize today's tasks. For supported images and files, see the IM assistant guide on the web.";
     readonly "\u8BF7\u5148\u5B8C\u6210\u5F53\u524D\u95EE\u9898\u6216\u5BA1\u6279\uFF0C\u518D\u6267\u884C /{0}\u3002": "Answer the pending question or approval, then run /{0} again.";
     readonly "\u5F53\u524D\u4EFB\u52A1\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u5148 /stop\uFF0C\u7B49\u5F85\u505C\u6B62\u540E\u518D\u6267\u884C /{0}\u3002": "A task is running. Send /stop, wait for it to stop, then run /{0} again.";
     readonly "\u4F1A\u8BDD\u5217\u8868 \u00B7 \u7B2C {0}/{1} \u9875 \u00B7 \u5171 {2} \u4E2A\n\n": "Sessions · Page {0}/{1} · {2} total\n\n";
@@ -215,5 +203,13 @@ export declare const commandEnglish: {
     readonly "/{0} \u672A\u80FD\u5B8C\u6210\n{1}": "/{0} couldn’t complete\n{1}";
     readonly "\u3014\u5DF2\u5173\u8054\u5176\u4ED6\u804A\u5929\u3015": " [connected to another chat]";
     readonly "\u3014\u8FD0\u884C\u4E2D\u3015": " [running]";
+    readonly "\u4F8B\u5982\uFF1A\u5E2E\u6211\u6574\u7406\u4ECA\u5929\u7684\u5F85\u529E\u3002": "Try: Help me organize today's tasks.";
+    readonly 已开启新会话: "New session started";
+    readonly "\u65B0\u5EFA\u5E76\u5207\u6362\uFF1A/workspace {0}": "Start a session in another workspace: /workspace {0}";
+    readonly "\u5F53\u524D\u53EA\u6709\u8FD9\u4E2A\u5DE5\u4F5C\u533A\u3002\u76F4\u63A5\u53D1\u6D88\u606F\u7EE7\u7EED\uFF0C\u6216 /new \u5F00\u542F\u65B0\u4F1A\u8BDD\u3002": "This is your only workspace. Send a message to continue, or /new to start fresh.";
+    readonly "\u5DF2\u5728\u300C{0}\u300D\u5F00\u542F\u65B0\u4F1A\u8BDD\u3002\n\u5DE5\u4F5C\u533A\uFF1A{1}\n\u65E7\u4F1A\u8BDD\u5DF2\u4FDD\u7559\uFF0C\u53EF\u4EE5\u76F4\u63A5\u53D1\u9001\u4EFB\u52A1\u3002": "Started a new session in {0}.\nWorkspace: {1}\nPrevious sessions are preserved. Send a task to begin.";
+    readonly "\u5207\u6362\uFF1A/model {0}": "Switch: /model {0}";
+    readonly "\u5F53\u524D\u6CA1\u6709\u5176\u4ED6\u53EF\u5207\u6362\u6A21\u578B\uFF0C\u7EE7\u7EED\u53D1\u9001\u6D88\u606F\u5373\u53EF\u3002": "No other models are available. Send a message to continue.";
+    readonly "\u5F53\u524D\u540D\u79F0\u5DF2\u662F\uFF1A{0}": "The session is already named: {0}";
 };
 //# sourceMappingURL=command-messages.d.ts.map
