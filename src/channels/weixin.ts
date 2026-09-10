@@ -278,13 +278,13 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     return h
   }
 
-  async function request(path: string, body: unknown, timeoutMs: number, tolerateRet1 = false): Promise<Json> {
+  async function request(path: string, body: unknown, timeoutMs: number, tolerateRet1 = false, signal?: AbortSignal): Promise<Json> {
     const baseUrl = state.baseUrl && state.baseUrl.trim() !== '' ? state.baseUrl : BASE_URL
     const res = await fetch(`${baseUrl}${path}`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify(body),
-      signal: timeoutSignal(timeoutMs, lifecycle?.signal),
+      signal: AbortSignal.any([timeoutSignal(timeoutMs, lifecycle?.signal), ...(signal ? [signal] : [])]),
     })
     if (!res.ok) throw new Error(`weixin ${path} http ${res.status}`)
     const data = (await res.json()) as Json
@@ -665,7 +665,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
 
   // ── 出站：文本 / 媒体 / typing ────────────────────────────────
 
-  async function sendRaw(toUserId: string, item: Json, clientId: string): Promise<void> {
+  async function sendRaw(toUserId: string, item: Json, clientId: string, signal?: AbortSignal): Promise<void> {
     const contextToken = state.contextTokens[toUserId]
     await request(
       '/ilink/bot/sendmessage',
@@ -681,7 +681,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         },
         base_info: { channel_version: '1.0.0' },
       },
-      15_000,
+      15_000, false, signal,
     )
   }
 
@@ -715,7 +715,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   }
 
   /** 上传本地文件到 CDN（与官方插件流程一致），返回组装媒体项所需参数。 */
-  async function uploadToCdn(filePath: string, toUserId: string, mediaType: number): Promise<{ downloadParam: string; aeskeyHex: string; rawsize: number; filesizeCiphertext: number }> {
+  async function uploadToCdn(filePath: string, toUserId: string, mediaType: number, signal?: AbortSignal): Promise<{ downloadParam: string; aeskeyHex: string; rawsize: number; filesizeCiphertext: number }> {
     const plaintext = await readFile(filePath)
     const rawsize = plaintext.length
     const rawfilemd5 = createHash('md5').update(plaintext).digest('hex')
@@ -735,7 +735,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         no_need_thumb: true,
         aeskey: aeskey.toString('hex'),
       },
-      20_000,
+      20_000, false, signal,
     )
     const uploadFullUrl = pickStr(resp, 'upload_full_url')?.trim()
     const uploadParam = pickStr(resp, 'upload_param')
@@ -747,7 +747,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
       body: new Uint8Array(ciphertext),
-      signal: timeoutSignal(120_000, lifecycle?.signal),
+      signal: AbortSignal.any([timeoutSignal(120_000, lifecycle?.signal), ...(signal ? [signal] : [])]),
     })
     if (upRes.status !== 200) {
       const errMsg = upRes.headers.get('x-error-message') ?? `HTTP ${upRes.status}`
@@ -759,12 +759,12 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   }
 
   /** 发送媒体文件（按 MIME 路由 图片/视频/文件），caption 作为前导文本。 */
-  async function sendMediaFile(toUserId: string, filePath: string, caption?: string): Promise<void> {
+  async function sendMediaFile(toUserId: string, filePath: string, caption?: string, signal?: AbortSignal): Promise<void> {
     const mime = mimeFromExt(guessExt(filePath))
     const now = Date.now()
     let item: Json
     if (mime.startsWith('image/')) {
-      const up = await uploadToCdn(filePath, toUserId, UPLOAD_IMAGE)
+      const up = await uploadToCdn(filePath, toUserId, UPLOAD_IMAGE, signal)
       item = {
         type: ITEM_IMAGE,
         image_item: {
@@ -777,7 +777,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         },
       }
     } else if (mime.startsWith('video/')) {
-      const up = await uploadToCdn(filePath, toUserId, UPLOAD_VIDEO)
+      const up = await uploadToCdn(filePath, toUserId, UPLOAD_VIDEO, signal)
       item = {
         type: ITEM_VIDEO,
         video_item: {
@@ -790,7 +790,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         },
       }
     } else {
-      const up = await uploadToCdn(filePath, toUserId, UPLOAD_FILE)
+      const up = await uploadToCdn(filePath, toUserId, UPLOAD_FILE, signal)
       item = {
         type: ITEM_FILE,
         file_item: {
@@ -805,7 +805,8 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       }
     }
     if (caption) await sendText(toUserId, caption)
-    await sendRaw(toUserId, item, `dsh-im-connect:${now}`)
+    signal?.throwIfAborted()
+    await sendRaw(toUserId, item, `dsh-im-connect:${now}:${randomBytes(4).toString('hex')}`, signal)
   }
 
   return {
@@ -838,6 +839,12 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     },
     async sendAction(chatId) {
       await sendTypingStatus(chatId, 1)
+    },
+    async sendFile(chatId, file, signal) {
+      signal = AbortSignal.any([timeoutSignal(120_000, lifecycle?.signal), ...(signal ? [signal] : [])])
+      signal.throwIfAborted()
+      const { withOutgoingPath } = await import('./file-send.js')
+      await withOutgoingPath(file, async path => { signal?.throwIfAborted(); await sendMediaFile(chatId, path, undefined, signal) })
     },
     async sendMedia(chatId, filePath, caption) {
       await sendMediaFile(chatId, filePath, caption)

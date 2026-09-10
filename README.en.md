@@ -85,6 +85,16 @@ The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram.
 - Channel download limits, host attachment size and format limits, DM access rules, and group mention requirements still apply.
 - This is inbound image analysis, not a promise that every channel supports sending images from the bot or generating images.
 
+## File delivery
+
+WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram can return files produced by the assistant. For example: “Create a PDF report and send me the file.”
+
+- Files successfully created or edited with Chat's supported file tools are sent after the reply. On hosts with `present`, explicitly presented files are also sent, including existing files.
+- File access follows Chat: files outside the workspace are allowed when the host can read them. The plugin does not extract arbitrary paths from reply text. Files created through shell commands need to be presented explicitly.
+- Newer hosts use Chat's complete-file download service and its configured size limit. DSH `0.1.2-rc.1` uses the host filesystem with a 32 MiB limit. Directories and symbolic links are not sent; channel-specific file limits still apply.
+- A failed transfer produces a message naming the file and does not stop the remaining files. Switching away from the session or stopping the account prevents pending delivery from continuing to a different target.
+- `/export` still exports session logs in web Chat; it is separate from delivering generated files. File delivery does not add general incoming-document support.
+
 ## Screenshots
 
 Add accounts under each channel in **Settings → IM Assistant**. Expand a channel, select an account, and configure its workspace, model, permission, private access, and receive state independently in its settings dialog:
@@ -200,7 +210,7 @@ Send commands as separate text messages; image captions remain ordinary input. S
 - Models: as in Chat, `/model` and `/reasoning` also attempt to save the default for future sessions. Other existing sessions are not changed.
 - Stopping and queues: `/stop` submits a stop request and keeps queued messages. Pause an active goal separately with `/goal pause`. Use `/queue` to view and manage queued messages.
 - Forking: `/fork` requires at least one completed turn. If a fork was created but switching failed, follow the session ID and recovery instructions in the reply.
-- Permissions and export: `/permission` settings survive session restoration. Run `/export` in web Chat; IM does not return ZIP files yet.
+- Permissions and export: `/permission` settings survive session restoration. Run `/export` in web Chat; IM does not invoke this web-only session-log export.
 
 Command replies support Chinese and English and follow the language explicitly saved in web settings. With no preference or an unavailable language service, they default to Chinese. Dynamic names, paths, user content, and extension results remain unchanged. Tool approvals, interactive questions, and some channel errors are not yet fully localized.
 

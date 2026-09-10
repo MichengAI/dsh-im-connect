@@ -1,4 +1,5 @@
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
+import { fileForm, fileRequest } from './file-send.js'
 import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
@@ -219,6 +220,11 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     },
     async send(chatId, text) {
       await api('sendMessage', { chat_id: Number(chatId), text })
+    },
+    async sendFile(chatId, file, signal) {
+      const form = fileForm(file, 'document')
+      form.append('chat_id', chatId)
+      await fileRequest(`${API}/bot${token}/sendDocument`, { method: 'POST', body: form, signal: timeoutSignal(120_000, AbortSignal.any([...(signal ? [signal] : []), ...(lifecycle ? [lifecycle.signal] : [])])) })
     },
     async sendAction(chatId) {
       await api('sendChatAction', { chat_id: Number(chatId), action: 'typing' }).catch(() => undefined)

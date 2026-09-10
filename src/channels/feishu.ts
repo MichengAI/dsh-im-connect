@@ -1,3 +1,4 @@
+import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
@@ -109,7 +110,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let client: ResourceClient & {
     request(opts: { url: string; method: 'GET' }): Promise<unknown>
-    im: { message: { create(opts: unknown): Promise<unknown> } }
+    im: { message: { create(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> } }
   } | undefined
   let ws: { close(opts?: { force?: boolean }): void } | undefined
   let statusText = '未连接'
@@ -200,6 +201,20 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         params: { receive_id_type: 'chat_id' },
         data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text }) },
       })
+    },
+    async sendFile(chatId, file, signal) {
+      if (!client || !lifecycle) throw new Error(`${id}: 尚未连接`)
+      const active = client
+      const scope = AbortSignal.any([timeoutSignal(120_000, lifecycle.signal), ...(signal ? [signal] : [])])
+      scope.throwIfAborted()
+      const uploaded = await fileOperation(active.im.file.create({ data: { file_type: 'stream', file_name: file.name, file: Buffer.from(file.data) } }), scope)
+      scope.throwIfAborted()
+      if (!uploaded?.file_key) throw new Error('file-upload-rejected')
+      const sent = await active.im.message.create({
+        params: { receive_id_type: 'chat_id' },
+        data: { receive_id: chatId, msg_type: 'file', content: JSON.stringify({ file_key: uploaded.file_key }) },
+      }) as { code?: number }
+      if (sent.code) throw new Error('file-send-rejected')
     },
     setMessageHandler(h) { handler = h },
     status() { return statusText },

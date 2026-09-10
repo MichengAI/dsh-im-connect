@@ -30,6 +30,7 @@ export declare class ImEngine {
     private readonly wrappedUserQuestionServices;
     private legacyServiceTimer?;
     private disposed;
+    private readonly fileDelivery;
     private readonly chatCommands;
     private readonly commandScopes;
     private readonly inputScopes;

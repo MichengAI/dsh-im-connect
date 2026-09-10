@@ -6,7 +6,7 @@ import type { ChannelAdapter, ImMessage } from './types.js'
 import { extensionHelp, extensionReply, oneLine, related } from './command-replies.js'
 import type { SessionRouter } from './router.js'
 
-const exportHint = () => replyText('请在网页 Chat 中打开这条会话，再执行 /export 导出 ZIP 日志。IM 文件回传暂未支持。')
+const exportHint = () => replyText('请在网页 Chat 中打开这条会话，再执行 /export 导出 ZIP 会话日志。')
 const modelDefaultHint = () => replyText('与 Chat 一致，此操作也会尝试保存后续 Chat 新会话的默认模型选择；已有其他会话不会主动修改。')
 
 interface Selection { provider: string; model: string; reasoningEffort?: string }

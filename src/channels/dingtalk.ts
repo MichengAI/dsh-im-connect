@@ -1,4 +1,5 @@
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
+import { fileForm, fileRequest } from './file-send.js'
 import { DingtalkCardClient, openDingtalkCardStream, type CardTarget } from './dingtalk-card.js'
 import { validateAdditionalImageHosts } from './image-host-policy.js'
 import { DingtalkTokenCache } from './dingtalk-token-cache.js'
@@ -186,6 +187,25 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
       targets.clear()
       statusText = '已停止'
     },
+    async sendFile(chatId, file, signal) {
+      const target = targets.get(chatId)
+      if (!target) throw new Error('dingtalk: 没有当前聊天目标')
+      const transfer = timeoutSignal(120_000, AbortSignal.any([lifecycle.signal, ...(signal ? [signal] : [])]))
+      const token = await tokens.get(transfer)
+      const uploaded = await fileRequest(`https://oapi.dingtalk.com/media/upload?access_token=${encodeURIComponent(token)}&type=file`, {
+        method: 'POST', body: fileForm(file, 'media'), signal: transfer,
+      })
+      if (typeof uploaded.media_id !== 'string' || !uploaded.media_id) throw new Error('dingtalk: 文件上传未返回 media_id')
+      transfer.throwIfAborted()
+      await fileRequest(`https://api.dingtalk.com/v1.0/robot/${target.type === 'group' ? 'groupMessages/send' : 'oToMessages/batchSend'}`, {
+        method: 'POST', signal: transfer,
+        headers: { 'content-type': 'application/json', 'x-acs-dingtalk-access-token': token },
+        body: JSON.stringify({ robotCode: clientId, msgKey: 'sampleFile',
+          msgParam: JSON.stringify({ mediaId: uploaded.media_id, fileName: file.name, fileType: file.name.includes('.') ? file.name.split('.').at(-1) : '' }),
+          ...(target.type === 'group' ? { openConversationId: target.openConversationId } : { userIds: [target.userId] }),
+        }),
+      })
+    },
     async send(chatId, text) {
       const webhook = webhooks.get(chatId)
       if (!webhook) throw new Error('dingtalk: 没有可回复的 webhook，请先在钉钉里发一条消息')
@@ -227,6 +247,5 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
     status() { return statusText },
   }
 }
-
 
 

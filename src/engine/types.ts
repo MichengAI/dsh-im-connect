@@ -32,6 +32,8 @@ export interface ChannelAdapter {
   start(): void | Promise<void>
   stop(): void | Promise<void>
   send(chatId: string, text: string): Promise<void>
+  /** 发送宿主已允许读取的完整文件；失败必须抛错，取消后不继续提交消息。 */
+  sendFile?(chatId: string, file: { name: string; data: Uint8Array }, signal?: AbortSignal): Promise<void>
   setMessageHandler(handler: (msg: ImMessage) => void | Promise<void>): void
   status(): string
   loginUrl?(): string | undefined

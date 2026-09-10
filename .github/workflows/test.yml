@@ -38,8 +38,16 @@ jobs:
           @deepseek-ai/dsh-attachment-local@${{ matrix.dsh }}
           @deepseek-ai/dsh-client-connection@${{ matrix.dsh }}
 
+      - name: 安装文件读取契约测试宿主
+        run: >-
+          npm install --prefix "$RUNNER_TEMP/dsh-file-contract" --ignore-scripts --no-audit --no-fund
+          @deepseek-ai/cordis@4.0.2
+          @deepseek-ai/dsh-fs-local@${{ matrix.dsh }}
+          ${{ matrix.dsh != '0.1.2-rc.1' && format('@deepseek-ai/dsh-api-workspace-files@{0}', matrix.dsh) || '' }}
+
       - name: 编译并测试
         env:
+          DSH_FILE_CONTRACT_ROOT: ${{ runner.temp }}/dsh-file-contract/node_modules/@deepseek-ai
           DSH_CHAT_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-api-session-controller
           DSH_ATTACHMENT_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-attachment-local
           DSH_CONNECTION_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-client-connection

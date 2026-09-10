@@ -6,6 +6,13 @@ export interface WecomConfig {
 }
 export interface WecomSdkClient {
     replyStream(frame: unknown, streamId: string, content: string, finish?: boolean): Promise<unknown>;
+    uploadMedia?(data: Buffer, options: {
+        type: 'file';
+        filename: string;
+    }): Promise<{
+        media_id: string;
+    }>;
+    replyMedia?(frame: unknown, type: 'file', mediaId: string): Promise<unknown>;
     sendMessage(chatId: string, body: unknown): Promise<unknown>;
     connect(): unknown;
     disconnect(): void;
@@ -20,8 +27,10 @@ export declare class WecomReplyBroker {
     private readonly newStreamId;
     private readonly ttlMs;
     private readonly pending;
+    private readonly lifetime;
+    private readonly replied;
     private readonly sweepTimer;
-    constructor(client: Pick<WecomSdkClient, 'replyStream' | 'sendMessage'>, log: (line: string) => void, newStreamId?: () => string, ttlMs?: number);
+    constructor(client: Pick<WecomSdkClient, 'replyStream' | 'sendMessage' | 'uploadMedia' | 'replyMedia'>, log: (line: string) => void, newStreamId?: () => string, ttlMs?: number);
     private prune;
     private pruneAll;
     remember(chatId: string, frame: unknown): string;
@@ -30,6 +39,10 @@ export declare class WecomReplyBroker {
     pendingCount(): number;
     dispose(): void;
     send(chatId: string, text: string): Promise<void>;
+    sendFile(chatId: string, file: {
+        name: string;
+        data: Uint8Array;
+    }, signal?: AbortSignal): Promise<void>;
     beginReply(chatId: string): Promise<ReplyStream>;
 }
 export declare function createWecomChannel(config: WecomConfig, log: (line: string) => void, dependencies?: {

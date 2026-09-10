@@ -1,4 +1,5 @@
 import { replyText, withReplyLocale } from './command-locale.js'
+import { FileDelivery, type DeliverySession } from './file-delivery.js'
 import { ChatCommands } from './chat-commands.js'
 import { canExecuteCommand, normalizeCommandPermissions, type CommandPermissions } from './command-permissions.js'
 import type { Context } from '@deepseek-ai/cordis'
@@ -76,6 +77,7 @@ export class ImEngine {
   private readonly wrappedUserQuestionServices = new WeakSet<object>()
   private legacyServiceTimer?: NodeJS.Timeout
   private disposed = false
+  private readonly fileDelivery: FileDelivery
   private readonly chatCommands: ChatCommands
   private readonly commandScopes = new Map<string, AbortController>()
   private readonly inputScopes = new Map<string, AbortController>()
@@ -93,6 +95,7 @@ export class ImEngine {
   ) {
     // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
     this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig)
+    this.fileDelivery = new FileDelivery(ctx as unknown as { get(name: string): unknown }, log)
     this.chatCommands = new ChatCommands(ctx as unknown as { get(name: string): unknown }, this.router, id => this.questions.has(id) || this.broker.has(id), (id, msg) => { if (msg.userId) this.sessionActors.set(id, msg.userId) })
     this.merger = new SessionMerger((config.mergeTimeoutSecs || 5) * 1000, (key, text) => {
       const sep = key.indexOf(':')
@@ -223,6 +226,7 @@ export class ImEngine {
     for (const channelId of this.inputScopes.keys()) this.cancelInputs(channelId)
     if (this.legacyServiceTimer) clearTimeout(this.legacyServiceTimer)
     for (const off of this.disposeEvents) off()
+    this.fileDelivery.dispose()
     this.broker.dispose()
     this.questions.dispose()
     this.merger.dispose()
@@ -725,7 +729,7 @@ export class ImEngine {
   }
 
   private async onSessionEvent(
-    session: { id?: string },
+    session: DeliverySession,
     event: { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } },
   ): Promise<void> {
     const sessionId = session.id ? String(session.id) : ''
@@ -768,36 +772,44 @@ export class ImEngine {
       return
     }
     if (event.type === 'assistant/message') {
-      const text = (event.data?.message?.content ?? [])
-        .filter((block) => block.type === 'text' && block.text)
-        .map((block) => block.text ?? '')
-        .join('\n')
-        .trim()
-      const taken = await this.streams.take(streamKey)
-      if (taken.stream) {
-        const finalText = text || taken.text
-        if (finalText) {
-          let delivered = true
-          try {
-            await taken.stream.finish(finalText)
-          } catch (error) {
-            // 收口失败时大概率没送出去，宁可小概率重复也不能让用户收不到回复
-            this.log(`[${channel.id}] 流式收口失败，改走普通投递: ${error instanceof Error ? error.message : String(error)}`)
-            delivered = await this.deliver(channel, binding.chatId, finalText)
+      try {
+        const text = (event.data?.message?.content ?? [])
+          .filter((block) => block.type === 'text' && block.text)
+          .map((block) => block.text ?? '')
+          .join('\n')
+          .trim()
+        const taken = await this.streams.take(streamKey)
+        if (taken.stream) {
+          const finalText = text || taken.text
+          if (finalText) {
+            let delivered = true
+            try {
+              await taken.stream.finish(finalText)
+            } catch (error) {
+              // 收口失败时大概率没送出去，宁可小概率重复也不能让用户收不到回复
+              this.log(`[${channel.id}] 流式收口失败，改走普通投递: ${error instanceof Error ? error.message : String(error)}`)
+              delivered = await this.deliver(channel, binding.chatId, finalText)
+            }
+            if (delivered) this.streams.markDelivered(streamKey)
           }
-          if (delivered) this.streams.markDelivered(streamKey)
+          return
         }
-        return
-      }
-      if (this.streams.consumeDelivered(streamKey)) {
-        this.log(`[${channel.id}] 忽略重复助手消息 ${sessionId}`)
-        return
-      }
-      if (text) {
-        this.log(`[${channel.id}] 准备回复 ${sessionId}，长度 ${text.length}`)
-        await this.deliver(channel, binding.chatId, text)
-      } else {
-        this.log(`[${channel.id}] 助手消息为空 ${sessionId}`)
+        if (this.streams.consumeDelivered(streamKey)) {
+          this.log(`[${channel.id}] 忽略重复助手消息 ${sessionId}`)
+          return
+        }
+        if (text) {
+          this.log(`[${channel.id}] 准备回复 ${sessionId}，长度 ${text.length}`)
+          await this.deliver(channel, binding.chatId, text)
+        } else {
+          this.log(`[${channel.id}] 助手消息为空 ${sessionId}`)
+        }
+      } finally {
+        await this.fileDelivery.deliver(session, event, () => {
+          const current = this.router.bindingForSession(sessionId)
+          return !this.disposed && current?.channelId === binding.channelId && current.chatId === binding.chatId
+            && this.channels.get(binding.channelId) === channel ? { channel, chatId: binding.chatId } : undefined
+        })
       }
     }
   }

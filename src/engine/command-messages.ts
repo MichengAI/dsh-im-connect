@@ -1,7 +1,8 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
-  "请在网页 Chat 中打开这条会话，再执行 /export 导出 ZIP 日志。IM 文件回传暂未支持。":
-    "Open this session in web Chat and run /export to download ZIP logs. File return is not yet supported in IM.",
+  '文件“{0}”未能发送，请在网页 Chat 中打开该文件；也可让助手重新交付。': 'Could not send "{0}". Open the file in Chat on the web, or ask the assistant to deliver it again.',
+  "请在网页 Chat 中打开这条会话，再执行 /export 导出 ZIP 会话日志。":
+    "Open this session in web Chat and run /export to download ZIP session logs.",
   "与 Chat 一致，此操作也会尝试保存后续 Chat 新会话的默认模型选择；已有其他会话不会主动修改。":
     "As in Chat, this also attempts to save the default model selection for future Chat sessions; other existing sessions are not changed.",
   会话与工作区: "Sessions and workspaces",
@@ -212,8 +213,8 @@ export const commandEnglish = {
     "Record session feedback: /feedback feedback-text",
   "提交代码简化审查：/simplify":
     "Submit a code simplification review: /simplify",
-  "需在网页 Chat 中导出，IM 暂不回传文件":
-    "Export in web Chat; IM file return is not yet supported",
+  "在网页 Chat 中导出会话日志":
+    "Export session logs in web Chat",
   "命令已返回，但未提供结果说明。请在网页核对当前状态。":
     "The command returned without a result description. Check the current state on the web.",
   "命令执行失败，未提供具体原因。请在网页检查后重试。":

@@ -90,3 +90,31 @@ test('流式收口与兜底投递都失败时不标记已投递，后续助手�
     engine.dispose()
   }
 })
+
+for (const mode of ['text', 'empty', 'stream']) test(`引擎 ${mode} 回复后投递成果文件`, async t => {
+  const { engine, handlers, sessionId } = makeFailingEngine(t)
+  const delivered = []
+  engine.register({ id: 'qq', label: 'QQ', maxMessageLength: 2000, start() {}, stop() {}, setMessageHandler() {}, status: () => 'connected',
+    send: async (_, text) => delivered.push(['text', text]),
+    sendFile: async (_, file) => delivered.push(['file', file.name, Buffer.from(file.data).toString()]),
+    ...(mode === 'stream' ? { beginReply: async () => ({ update: async () => {}, finish: async text => delivered.push(['stream', text]) }) } : {}),
+  })
+  // 直接测试会话事件入口，读取边界保留为宿主服务。
+  engine.ctx.get = name => name === 'workspaceFiles' ? { readAll: async () => ({ data: 'ZmlsZQ==', offset: 0, eof: true }) } : undefined
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 1 } },
+    { seq: 1, type: 'deliverables/presented', data: { turn: 1, files: [{ path: 'report.pdf' }] } },
+    { seq: 2, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, message: { content: mode === 'empty' ? [] : [{ type: 'text', text: 'done' }] } } },
+  ]
+  const session = { id: sessionId, header: { cwd: 'D:\\workspace' }, snapshotEvents: () => events }
+  try {
+    if (mode === 'stream') {
+      handlers['session/event'](session, { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text: 'done' } } })
+      await new Promise(r => setImmediate(r))
+    }
+    handlers['session/event'](session, events[2])
+    await waitFor(() => delivered.some(x => x[0] === 'file'))
+    assert.deepEqual(delivered.at(-1), ['file', 'report.pdf', 'file'])
+    assert.equal(delivered.length, mode === 'empty' ? 1 : 2)
+  } finally { engine.dispose() }
+})

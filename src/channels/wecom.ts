@@ -1,3 +1,4 @@
+import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
 import { requestChannelBytes, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
@@ -19,6 +20,8 @@ export interface WecomConfig {
 
 export interface WecomSdkClient {
   replyStream(frame: unknown, streamId: string, content: string, finish?: boolean): Promise<unknown>
+  uploadMedia?(data: Buffer, options: { type: 'file'; filename: string }): Promise<{ media_id: string }>
+  replyMedia?(frame: unknown, type: 'file', mediaId: string): Promise<unknown>
   sendMessage(chatId: string, body: unknown): Promise<unknown>
   connect(): unknown
   disconnect(): void
@@ -48,10 +51,12 @@ export function messageText(body: Record<string, unknown>): string {
 export class WecomReplyBroker {
   // 同一聊天可能连续来多条消息，每条都有独立的回调帧，必须排队而不是单槽覆盖
   private readonly pending = new Map<string, Array<{ frame: unknown; streamId: string; started: boolean; expiresAt: number }>>()
+  private readonly lifetime = new AbortController()
+  private readonly replied = new Map<string, { frame: unknown; expiresAt: number }>()
   private readonly sweepTimer: ReturnType<typeof setInterval>
 
   constructor(
-    private readonly client: Pick<WecomSdkClient, 'replyStream' | 'sendMessage'>,
+    private readonly client: Pick<WecomSdkClient, 'replyStream' | 'sendMessage' | 'uploadMedia' | 'replyMedia'>,
     private readonly log: (line: string) => void,
     private readonly newStreamId: () => string = () => `stream_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
     private readonly ttlMs = 120_000,
@@ -69,6 +74,7 @@ export class WecomReplyBroker {
   private pruneAll(): void {
     const now = Date.now()
     for (const chatId of this.pending.keys()) this.prune(chatId, now)
+    for (const [id, item] of this.replied) if (item.expiresAt <= now) this.replied.delete(id)
   }
 
   remember(chatId: string, frame: unknown): string {
@@ -87,6 +93,7 @@ export class WecomReplyBroker {
     const list = this.pending.get(chatId)
     if (!list?.length) return undefined
     const item = list.shift()
+    if (item) this.replied.set(chatId, item)
     if (list.length === 0) this.pending.delete(chatId)
     return item
   }
@@ -108,8 +115,10 @@ export class WecomReplyBroker {
   }
 
   dispose(): void {
+    this.lifetime.abort()
     clearInterval(this.sweepTimer)
     this.pending.clear()
+    this.replied.clear()
   }
 
   async send(chatId: string, text: string): Promise<void> {
@@ -125,6 +134,19 @@ export class WecomReplyBroker {
     }
     await this.client.sendMessage(chatId, { msgtype: 'markdown', markdown: { content: text } })
     this.log(`[wecom] 已主动推送 ${chatId}`)
+  }
+
+  async sendFile(chatId: string, file: { name: string; data: Uint8Array }, signal?: AbortSignal): Promise<void> {
+    signal = AbortSignal.any([this.lifetime.signal, ...(signal ? [signal] : [])])
+    this.pruneAll()
+    // 文本收口已经消费回调帧；附件复用该帧，不取走下一条输入的帧。
+    const item = this.replied.get(chatId) ?? this.pending.get(chatId)?.[0]
+    if (!item || !this.client.uploadMedia || !this.client.replyMedia) throw new Error('wecom-file-reply-unavailable')
+    signal?.throwIfAborted()
+    const uploaded = await fileOperation(this.client.uploadMedia(Buffer.from(file.data), { type: 'file', filename: file.name }), signal)
+    signal?.throwIfAborted()
+    if (item.expiresAt <= Date.now() || !uploaded.media_id) throw new Error('wecom-file-reply-expired')
+    await this.client.replyMedia(item.frame, 'file', uploaded.media_id)
   }
 
   async beginReply(chatId: string): Promise<ReplyStream> {
@@ -268,6 +290,10 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     async send(chatId, text) {
       if (!broker) throw new Error('wecom: 尚未连接')
       await broker.send(chatId, text)
+    },
+    async sendFile(chatId, file, signal) {
+      if (!broker) throw new Error('wecom: 尚未连接')
+      await broker.sendFile(chatId, file, signal)
     },
     async sendAction(chatId) {
       await broker?.startThinking(chatId).catch(() => undefined)
