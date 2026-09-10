@@ -151,3 +151,18 @@ test('Dingtalk picture-only callback delivers image and original message identit
     assert.match(s.replies[0].url, /token=pic$/)
   } finally { await s.channel.stop(); mock.restoreAll() }
 })
+
+test('Dingtalk ordinary replies preserve command line breaks as plain text', async () => {
+  const s = setup()
+  await s.channel.start()
+  try {
+    s.emit(s.event('help', { msgtype: 'text', text: { content: '/help' } }))
+    await tick()
+    const help = '会话与工作区\n/new — 新开会话\n/sessions — 列出会话\n\nModels\n/model — Current model\n/models — Available models'
+    await s.channel.send('u', help)
+    const payload = JSON.parse(s.replies.at(-1).options.body)
+    assert.equal(payload.msgtype, 'text')
+    assert.deepEqual(payload.text, { content: help })
+    assert.equal(payload.markdown, undefined)
+  } finally { await s.channel.stop(); mock.restoreAll() }
+})

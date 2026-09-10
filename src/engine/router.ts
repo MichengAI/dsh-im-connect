@@ -173,13 +173,19 @@ export class SessionRouter {
 
   isAdopted(sessionId: string): boolean { return this.store.list().some(record => record.sessionId === sessionId && record.adopted) }
 
+  /** 只返回是否占用，不向列表暴露其他聊天身份。 */
+  isBoundElsewhere(sessionId: string, channelId: string, kind: ChatKind, chatId: string): boolean {
+    const key = sessionKeyOf(channelId, kind, chatId)
+    return this.store.list().some(item => item.sessionId === sessionId && sessionKeyOf(item.channel, item.kind, item.chatId) !== key)
+  }
+
   /** 显式换绑保留旧历史与运行句柄，不改变 Host 会话的归属或默认配置。 */
   async bind(channelId: string, kind: ChatKind, chatId: string, sessionId: string, title: string, agent: unknown, cwd?: string, signal?: AbortSignal): Promise<void> {
     await this.channelOperations.run(channelId, async () => {
       const key = sessionKeyOf(channelId, kind, chatId)
       signal?.throwIfAborted()
-      const other = this.store.list().find(item => item.sessionId === sessionId && sessionKeyOf(item.channel, item.kind, item.chatId) !== key)
-      if (other) throw new Error('该会话已关联其他聊天，不能重复绑定。')
+      const other = this.isBoundElsewhere(sessionId, channelId, kind, chatId)
+      if (other) throw Object.assign(new Error('该会话已关联其他聊天，不能重复绑定。'), { code: 'im/session-in-use' })
       const old = this.live.get(key)
       const previous = this.store.list().find(item => item.sessionId === sessionId)
       this.store.upsert(key, { ...previous, channel: channelId, kind, chatId, sessionId, title: previous?.titleSource === 'user' ? previous.title : title, ...(cwd ? { cwd } : {}), adopted: true, updatedAt: new Date().toISOString() })

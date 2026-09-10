@@ -16,8 +16,8 @@ export declare const commandEnglish: {
     readonly "/steer \u8865\u5145\u8981\u6C42 \u2014 \u63D0\u4EA4\u8865\u5145\u6307\u4EE4\uFF1B/queue \u2014 \u67E5\u770B\u961F\u5217\u4E0E\u64CD\u4F5C\u65B9\u6CD5": "/steer instructions — Submit additional instructions; /queue — View and manage queued messages";
     readonly "\u4F8B\u5982\uFF1A\u5148\u53D1 /models\uFF0C\u518D\u53D1 /model \u5E8F\u53F7\u3002": "Example: send /models, then /model number.";
     readonly "\u547D\u4EE4\u5355\u72EC\u53D1\u9001\u4E3A\u6587\u5B57\uFF1B\u56FE\u7247\u8BF4\u660E\u6309\u666E\u901A\u6D88\u606F\u5904\u7406\u3002": "Send commands as standalone text. Image captions are treated as ordinary messages.";
-    readonly "\u5F53\u524D Host \u672A\u63D0\u4F9B {0}\uFF0C\u8BF7\u5347\u7EA7 DSH\u3002": "This Host does not provide {0}. Please upgrade DSH.";
-    readonly "\u5F53\u524D Host \u4E0D\u652F\u6301 {0}\u3002": "This Host does not support {0}.";
+    readonly "\u5F53\u524D Host \u672A\u63D0\u4F9B {0}\uFF0C\u8BF7\u5347\u7EA7 DSH\u3002": "Your DSH installation does not provide {0}. Update DSH on your computer.";
+    readonly "\u5F53\u524D Host \u4E0D\u652F\u6301 {0}\u3002": "Your DSH installation does not support {0}.";
     readonly "\u65E0\u6CD5\u6253\u5F00\u4F1A\u8BDD\u3002": "Unable to open the session.";
     readonly "\u65E0\u6CD5\u8BFB\u53D6\u4F1A\u8BDD\u5FEB\u7167\u3002": "Unable to read the session snapshot.";
     readonly "\u65E0\u6CD5\u8BFB\u53D6\u5DE5\u4F5C\u533A\u3002": "Unable to read workspaces.";
@@ -38,7 +38,7 @@ export declare const commandEnglish: {
     readonly "\n\u6269\u5C55\u547D\u4EE4\u6682\u65F6\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u4EE5\u4E0A\u5185\u7F6E\u5E2E\u52A9\u4ECD\u53EF\u4F7F\u7528\uFF1B\u7A0D\u540E\u91CD\u8BD5 /help\u3002": "\nExtension commands are temporarily unavailable. Built-in help above still applies; retry /help later.";
     readonly 机器人: "Bot";
     readonly "\n\n\u6269\u5C55\u547D\u4EE4\uFF1A\n": "\n\nExtension commands:\n";
-    readonly 已开启新的频道会话: "New channel session started";
+    readonly 已开启新的频道会话: "New session started";
     readonly "\u65E7\u4F1A\u8BDD\u5DF2\u4FDD\u7559\uFF0C\u76F4\u63A5\u53D1\u9001\u6D88\u606F\u5373\u53EF\u5F00\u59CB\u3002": "Previous sessions are preserved. Send a message to begin.";
     readonly "\u67E5\u770B\u65E7\u4F1A\u8BDD\uFF1A/sessions": "Previous sessions: /sessions";
     readonly "\u67E5\u770B\u5F53\u524D\u914D\u7F6E\uFF1A/status": "Current configuration: /status";
@@ -58,7 +58,7 @@ export declare const commandEnglish: {
     readonly "\u5F53\u524D\u4F1A\u8BDD\uFF1A{0}\n\u5DE5\u4F5C\u533A\uFF1A{1}\n\u4F1A\u8BDD ID\uFF1A{2}": "Current session: {0}\nWorkspace: {1}\nSession ID: {2}";
     readonly "\u5207\u6362\u4F1A\u8BDD\uFF1A/sessions": "Switch session: /sessions";
     readonly "\u8BE6\u7EC6\u72B6\u6001\uFF1A/status": "Detailed status: /status";
-    readonly "\u4F1A\u8BDD\u4E0D\u5B58\u5728\u6216\u4E0D\u662F\u53EF\u63A5\u5165\u7684\u666E\u901A\u4F1A\u8BDD\u3002": "This session does not exist or cannot be connected as a regular session.";
+    readonly "\u4F1A\u8BDD\u4E0D\u5B58\u5728\u6216\u4E0D\u662F\u53EF\u63A5\u5165\u7684\u666E\u901A\u4F1A\u8BDD\u3002": "This session is unavailable. Send /sessions to choose another.";
     readonly "\u8BF7\u5148\u5728 Chat \u6062\u590D\u8BE5\u5F52\u6863\u4F1A\u8BDD\u3002": "Restore this archived session in Chat first.";
     readonly "\u4F1A\u8BDD\u5DE5\u4F5C\u533A\u5F52\u5C5E\u65E0\u6548\u3002": "The session has an invalid workspace association.";
     readonly "\u76EE\u6807\u4F1A\u8BDD\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u5728 Chat \u505C\u6B62\u540E\u518D\u5207\u6362\u3002": "The target session is running. Stop it in Chat before switching.";
@@ -186,7 +186,7 @@ export declare const commandEnglish: {
     readonly "\u6743\u9650\uFF1A{0}": "Permissions: {0}";
     readonly 活跃: "Active";
     readonly 已暂停: "Paused";
-    readonly 受阻: "Blocked";
+    readonly 受阻: "Needs attention";
     readonly 已完成: "Complete";
     readonly "\u76EE\u6807\uFF1A{0}": "Goal: {0}";
     readonly 无目标: "No goal";
@@ -194,6 +194,26 @@ export declare const commandEnglish: {
     readonly "\u5F53\u524D\u804A\u5929\u672A\u5F00\u542F\u547D\u4EE4\u6743\u9650\uFF0C\u53EF\u4EE5\u7EE7\u7EED\u6B63\u5E38\u5BF9\u8BDD\u3002": "Commands are disabled in this chat. You can still chat normally.";
     readonly "\u547D\u4EE4\u5DF2\u53D6\u6D88\u3002\u67E5\u770B\u5F53\u524D\u72B6\u6001\uFF1A/status": "Command canceled. Check current status: /status";
     readonly "\u547D\u4EE4\u6267\u884C\u5931\u8D25\uFF1A{0}\n\n\u67E5\u770B\u7528\u6CD5\uFF1A/help\uFF1B\u786E\u8BA4\u5F53\u524D\u4F1A\u8BDD\uFF1A/status": "Command failed: {0}\n\nUsage: /help; check current session: /status";
-    readonly "\u8BF7\u67E5\u770B\u672C\u673A\u65E5\u5FD7\u3002": "Check the local logs.";
+    readonly "\u8BF7\u67E5\u770B\u672C\u673A\u65E5\u5FD7\u3002": "Open DSH on your computer to check the error details.";
+    readonly "IM \u52A9\u7406\u5DF2\u8FDE\u63A5 DeepSeek Harness\u3002\u76F4\u63A5\u53D1\u9001\u6587\u5B57\u5373\u53EF\u5F00\u59CB\u4EFB\u52A1\u3002": "IM assistant connected to DeepSeek Harness. Send a message to start a task.";
+    readonly "\u4F8B\u5982\uFF1A\u5E2E\u6211\u6574\u7406\u4ECA\u5929\u7684\u5F85\u529E\u3002\u67E5\u770B\u56FE\u7247\u6216\u6587\u4EF6\u652F\u6301\u8303\u56F4\uFF0C\u8BF7\u5728\u7F51\u9875\u6253\u5F00 IM \u52A9\u7406\u8BF4\u660E\u3002": "Try: Help me organize today's tasks. For supported images and files, see the IM assistant guide on the web.";
+    readonly "\u8BF7\u5148\u5B8C\u6210\u5F53\u524D\u95EE\u9898\u6216\u5BA1\u6279\uFF0C\u518D\u6267\u884C /{0}\u3002": "Answer the pending question or approval, then run /{0} again.";
+    readonly "\u5F53\u524D\u4EFB\u52A1\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u5148 /stop\uFF0C\u7B49\u5F85\u505C\u6B62\u540E\u518D\u6267\u884C /{0}\u3002": "A task is running. Send /stop, wait for it to stop, then run /{0} again.";
+    readonly "\u4F1A\u8BDD\u5217\u8868 \u00B7 \u7B2C {0}/{1} \u9875 \u00B7 \u5171 {2} \u4E2A\n\n": "Sessions · Page {0}/{1} · {2} total\n\n";
+    readonly "\u3014\u5DF2\u5F52\u6863\uFF0C\u9700\u5148\u5728\u7F51\u9875\u6062\u590D\u3015": " [archived — restore on the web first]";
+    readonly "\u5F52\u6863\u72B6\u6001\u6682\u65F6\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u5207\u6362\u65F6\u4F1A\u91CD\u65B0\u6821\u9A8C\u3002": "Archive status is unavailable. It will be checked again when you switch.";
+    readonly "{0}\u3014{1}\u3015\n{2}": "{0} [{1}]\n{2}";
+    readonly "{0}\uFF1A{1}{2}": "{0}: {1}{2}";
+    readonly "{0}\uFF1A{1}": "{0}: {1}";
+    readonly "\u5DF2\u5207\u6362\u6A21\u578B\uFF1A{0}/{1}\uFF1B\u63A8\u7406\uFF1A{2}\n{3}": "Switched model to: {0}/{1}; reasoning: {2}\n{3}";
+    readonly "\u5F53\u524D\u4F1A\u8BDD\u8FD8\u6CA1\u6709\u53EF\u5206\u53C9\u7684\u5B8C\u6574\u56DE\u5408\u3002\u8BF7\u5B8C\u6210\u4E00\u8F6E\u5BF9\u8BDD\u540E\u518D\u53D1\u9001 /fork\uFF1B\u4E5F\u53EF\u7528 /new \u5F00\u59CB\u3002": "There is no completed turn to fork yet. Finish one exchange, then send /fork; or start fresh with /new.";
+    readonly "\u5DF2\u8BF7\u6C42\u505C\u6B62\u3002\u5F53\u524D\u6CA1\u6709\u6B63\u5728\u6267\u884C\u7684\u4EFB\u52A1\uFF1B\u6392\u961F\u6D88\u606F\u4FDD\u7559\uFF0C\u53EF\u7528 /queue \u67E5\u770B\u3002": "Stop requested. No task is currently running. Queued messages are preserved; view them with /queue.";
+    readonly "\u4F1A\u8BDD ID\uFF1A{0}": "Session ID: {0}";
+    readonly "\u672A\u6388\u6743\uFF1A\u8BF7\u7BA1\u7406\u5458\u5728\u8BBE\u7F6E \u2192 IM\u52A9\u7406 \u4E2D\u6279\u51C6\u4F60\u7684\u8BBF\u95EE\u3002": "Access is pending approval. Ask the administrator to approve you in Settings → IM assistant.";
+    readonly "\u4E0A\u4E00\u6761\u6D88\u606F\u6B63\u5728\u5408\u5E76\uFF0C\u5C1A\u672A\u6267\u884C\u672C\u6B21\u547D\u4EE4\u3002\u7B49\u5F85\u63D0\u4EA4\u540E\u518D\u53D1 {0}\u3002": "Your previous messages are being combined. This command has not run. Send {0} again after they are submitted.";
+    readonly "\u8BE5\u4F1A\u8BDD\u5DF2\u5173\u8054\u5176\u4ED6\u804A\u5929\uFF0C\u4E0D\u80FD\u91CD\u590D\u63A5\u7EED\u3002\u8BF7\u7528 /sessions \u9009\u62E9\u5176\u4ED6\u4F1A\u8BDD\uFF0C\u6216 /new \u65B0\u5EFA\u3002": "This session is connected to another chat and cannot be connected again. Choose another with /sessions, or start one with /new.";
+    readonly "/{0} \u672A\u80FD\u5B8C\u6210\n{1}": "/{0} couldn’t complete\n{1}";
+    readonly "\u3014\u5DF2\u5173\u8054\u5176\u4ED6\u804A\u5929\u3015": " [connected to another chat]";
+    readonly "\u3014\u8FD0\u884C\u4E2D\u3015": " [running]";
 };
 //# sourceMappingURL=command-messages.d.ts.map

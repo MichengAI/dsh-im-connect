@@ -22,8 +22,9 @@ export declare class ChatCommands {
     private resolve;
     private idle;
     execute(channel: ChannelAdapter, msg: ImMessage, signal: AbortSignal): Promise<string>;
-    private localDetails;
+    /** 附加查询限时且独立降级，不能把已完成操作改报失败。 */
+    private optional;
+    private newDetails;
     private run;
 }
-export declare const CHAT_CONTROL_HELP: string;
 //# sourceMappingURL=chat-commands.d.ts.map

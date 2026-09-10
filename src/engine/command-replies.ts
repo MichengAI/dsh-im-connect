@@ -33,5 +33,5 @@ export function extensionReply(command: string, result: { kind: string; text?: s
         : [replyText("查看目标：/goal"), replyText("设置目标：/goal 目标内容")],
   }
   if (!extensionHelp()[command]) return body
-  return `/${command} · ${result.kind === 'success' ? replyText("返回结果") : replyText("未能完成")}\n${body}` + related(...(tips[command] || []))
+  return (result.kind === 'success' ? body : replyText('/{0} 未能完成\n{1}', command, body)) + related(...(tips[command] || []))
 }

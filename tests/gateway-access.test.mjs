@@ -901,3 +901,19 @@ test('workspace → 普通消息回传 → new → 再回传使用同一创建�
     assert.ok(f.store.list().some(row => row.sessionId === created[0].sessionId))
   } finally { f.engine.dispose() }
 })
+
+test('英文准入和输入合并提示不执行命令，并保留重试命令名', async t => {
+  let executions = 0
+  const services = { settings: { get: () => ({ preference: 'en' }) }, commands: { execute: () => { executions++ } } }
+  const { engine, inbound, sent } = makeEngine(t, undefined, undefined, services)
+  try {
+    inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/models', messageId: 'english-denied' })
+    await waitFor(() => sent.some(item => item.text.includes('pending approval')))
+    engine.addAllowed('telegram', 'user-1')
+    inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: 'pending..', messageId: 'english-pending' })
+    await waitFor(() => engine.merger.has('telegram:dm:user-1'))
+    inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/models', messageId: 'english-merge' })
+    await waitFor(() => sent.some(item => item.text.includes('This command has not run. Send /models again')))
+    assert.equal(executions, 0)
+  } finally { engine.dispose() }
+})

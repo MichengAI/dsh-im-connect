@@ -250,7 +250,7 @@ test('命令回复使用宿主语言偏好，切换即时生效且用户内容�
   assert.match(await f.run('/help'), /Sessions and workspaces/)
   assert.match(await f.run('/model'), /Current model:.*\nModel ID: p\/m/)
   assert.match(await f.run('/models'), /\[current\]/)
-  assert.match(await f.run('/reasoning'), /Reasoning|reasoning/)
+  assert.match(await f.run('/reasoning'), /Restore default: \/reasoning --default/)
   assert.match(await f.run('/workspace'), /Workspaces/)
   assert.match(await f.run('/sessions'), /Sessions · Page/)
   assert.match(await f.run('/queue'), /Queued messages/)
@@ -316,4 +316,81 @@ test('状态使用真实投影；可选数据失败保留可读取字段', async
   assert.match(await f.run('/status'), /模型：暂时无法读取/)
   assert.match(await f.run('/models'), /可用模型/)
   assert.match(await f.run('/new'), /已开启新的频道会话/)
+})
+
+test('新建缺少元数据仍明确显示字段，运行拦截按原命令提示', async () => {
+  const f = fixture()
+  f.services.sessionController.follow = async function* () { throw new Error('unavailable') }
+  const result = await f.run('/new')
+  assert.match(result, /工作区：暂时无法读取/)
+  assert.match(result, /模型：暂时无法读取/)
+  f.rows[0].running = true
+  await assert.rejects(f.run('/new'), /再执行 \/new/)
+  await assert.rejects(f.run('/fork'), /再执行 \/fork/)
+})
+
+test('会话列表标记归档并推荐非当前可用项，工作区使用真实名称', async () => {
+  const f = fixture()
+  f.rows.push({ sessionId: 's3' })
+  f.services.workspaceController.follow = async function* () { yield { value: { items: [{ workspaceId: 'w1', title: '旅行计划', path: 'D:\\one', sessionIds: ['s1', 's2', 's3'] }], archivedSessionIds: ['s2'] } } }
+  const list = await f.run('/sessions')
+  assert.match(list, /已归档/)
+  assert.match(list, /切换：\/session 3/)
+  assert.doesNotMatch(list, /切换：\/session [12]/)
+  assert.match(await f.run('/workspaces'), /旅行计划\nD:\\one/)
+  f.rows.splice(1)
+  assert.doesNotMatch(await f.run('/sessions'), /切换：\/session 1/)
+})
+
+test('英文整句包含标点，模型修改显示完成态', async () => {
+  const f = fixture()
+  f.services.settings = { get: () => ({ preference: 'en' }) }
+  assert.match(await f.run('/queue'), /q1 \[Waiting to run\]/)
+  assert.match(await f.run('/history'), /User: 你好/)
+  assert.match(await f.run('/model p/m'), /Switched model to: p\/m/)
+  assert.match(await f.run('/reasoning'), /Restore default: \/reasoning --default/)
+})
+
+test('状态优先目标操作，停止先提交且能报告当前空闲', async () => {
+  const f = fixture()
+  f.services.commands.list = () => [{ name: 'goal', description: '' }]
+  f.services.sessionController.follow = async function* () { yield { records: [], projections: { values: { goal: { goal: { phase: 'active' } } } } } }
+  assert.match(await f.run('/status'), /暂停目标：\/goal pause/)
+  const list = f.services.sessionController.list
+  f.services.sessionController.list = async () => { assert.ok(f.calls.some(c => c[0] === 'cancel')); return list() }
+  assert.match(await f.run('/stop'), /当前没有正在执行的任务/)
+})
+
+test('改名回显旧名称，分叉缺回合按错误码提供指引', async () => {
+  const f = fixture()
+  f.rows[0].projections = { values: { title: '旧名称' } }
+  assert.match(await f.run('/rename 新名称'), /旧名称 → 新名称/)
+  f.services.sessionController.fork = async () => { throw Object.assign(new Error('technical details'), { code: 'session/fork-unavailable' }) }
+  await assert.rejects(f.run('/fork'), /完整回合/)
+})
+
+test('占用项不推荐，归档查询失败不猜测可用性', async () => {
+  const f = fixture()
+  f.router.isBoundElsewhere = id => id === 's2'
+  assert.match(await f.run('/sessions'), /已关联其他聊天/)
+  assert.doesNotMatch(await f.run('/sessions'), /切换：\/session/)
+  f.services.workspaceController.follow = async function* () { throw new Error('unavailable') }
+  assert.match(await f.run('/sessions'), /归档状态暂时无法读取/)
+  f.router.bind = async () => { throw Object.assign(new Error('internal'), { code: 'im/session-in-use' }) }
+  f.services.workspaceController.follow = async function* () { yield { value: { items: [{ workspaceId: 'w', path: 'D:\\two', sessionIds: ['s2'] }], archivedSessionIds: [] } } }
+  f.services.settings = { get: () => ({ preference: 'en' }) }
+  await assert.rejects(f.run('/session s2'), /connected to another chat.*\/sessions/)
+})
+
+test('停止后的附加查询超时仍回复，不误报空闲；未知目标保留条件提示', async () => {
+  const f = fixture()
+  let querySignal
+  f.services.sessionController.list = (_request, signal) => { querySignal = signal; return new Promise(() => {}) }
+  f.services.goals = { get: () => ({}) }
+  const result = await f.run('/stop')
+  assert.equal(f.calls.filter(call => call[0] === 'cancel').length, 1)
+  assert.ok(querySignal.aborted)
+  assert.match(result, /已请求停止当前运行/)
+  assert.doesNotMatch(result, /当前没有正在执行/)
+  assert.match(result, /如已启用目标任务/)
 })

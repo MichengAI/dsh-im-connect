@@ -193,13 +193,17 @@ After `/workspace`, `/new` and continuing after archiving the current session ke
 
 DingTalk replies prefer official AI Card streaming and fall back to plain text. Do not enable Webhook on the same Telegram bot.
 
-Command notes: `/export` currently requires web Chat; IM does not return a ZIP file. Like Chat, `/model` and `/reasoning` also update the Host default for subsequent sessions without actively changing other existing sessions. Session `/permission` settings survive restoration. `/stop` requests cancellation of the current run and keeps the queue; use `/goal pause` to pause an active goal. If a fork is created but switching fails, the reply includes its ID and recovery instructions for `/session <ID>`.
+Send commands as separate text messages; image captions remain ordinary input. Start with `/help`; individual replies also suggest related actions.
 
-## Permissions and safety limits
+- Sessions and workspaces: list numbers expire after 15 minutes. Archived sessions are marked; restore them on the web first. Finish running tasks and pending interactions before switching.
+- Models: as in Chat, `/model` and `/reasoning` also attempt to save the default for future sessions. Other existing sessions are not changed.
+- Stopping and queues: `/stop` submits a stop request and keeps queued messages. Pause an active goal separately with `/goal pause`. Use `/queue` to view and manage queued messages.
+- Forking: `/fork` requires at least one completed turn. If a fork was created but switching failed, follow the session ID and recovery instructions in the reply.
+- Permissions and export: `/permission` settings survive session restoration. Run `/export` in web Chat; IM does not return ZIP files yet.
 
-Send commands as separate text messages; image captions remain ordinary input. `/help` discovers registered Chat commands for the current session and uses the same Host handlers. List numbers are stored per user for 15 minutes. Finish running tasks and pending interactions before switching. Queue edits use `/queue remove|steer|edit <message ID> [new text]`. Restore archived sessions in Chat before selecting them.
+Command replies support Chinese and English and follow the language explicitly saved in web settings. With no preference or an unavailable language service, they default to Chinese. Dynamic names, paths, user content, and extension results remain unchanged. Tool approvals, interactive questions, and some channel errors are not yet fully localized.
 
-Command replies support Chinese and English and follow the language explicitly saved in web settings. When no preference is set or the language service is unavailable, replies default to Chinese. Replies include related commands and usage examples; dynamic names, paths, user content, and Host extension results remain unchanged.
+## Permissions and security boundaries
 
 Command permission does not grant DM admission or replace tool approval. Enabled users can inspect and resume ordinary Chat sessions and execute registered Host commands. Each account has independent DM/group switches without user IDs; legacy configurations default to enabled for compatibility.
 
