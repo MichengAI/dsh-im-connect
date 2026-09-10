@@ -325,3 +325,5 @@ npm test
 Security guidance is in [SECURITY.md](SECURITY.md).
 
 Licensed under [Apache License 2.0](LICENSE).
+
+Agent presets: `/presets` (alias `/presetlist`) lists presets; `/preset` shows the current preset. `/preset number-or-ID` starts and switches to a new session in the current workspace, keeping previous sessions. Use `/preset id:ID` for numeric IDs and `/preset --default` for the default preset. Account defaults remain unchanged; later `/new` commands still use account settings. Native buttons support direct selection; text lists use numbers valid for 15 minutes.

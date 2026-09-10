@@ -325,3 +325,5 @@ npm test
 安全说明见 [SECURITY.md](SECURITY.md)。
 
 本项目采用 [Apache License 2.0](LICENSE)。
+
+Agent 预设：`/presets`（别名 `/presetlist`）查看目录，`/preset` 查看当前预设，`/preset 序号或ID` 使用预设在当前工作区新建并切换会话，旧会话保留。纯数字 ID 使用 `/preset id:ID`，`/preset --default` 使用宿主默认预设。账号默认设置不变，后续 `/new` 仍按账号设置创建。原生按钮渠道可直接选择，文字渠道使用列表序号（15 分钟有效）。

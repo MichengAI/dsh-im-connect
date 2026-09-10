@@ -17,6 +17,7 @@ export declare class ChatCommands {
     clear(): void;
     private service;
     private call;
+    private presets;
     private agent;
     private snapshot;
     private workspaces;

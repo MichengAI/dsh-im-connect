@@ -17,6 +17,7 @@ interface Row { sessionId: string; cwd?: string; running?: boolean; origin?: str
 interface Workspace { workspaceId: string; title?: string; path: string; sessionIds: string[] }
 interface HistoryEvent { type: string; data?: { message?: { role?: string; content?: Array<{ type: string; text?: string }> }; content?: Array<{ type: string; text?: string }>; source?: { kind?: string } } }
 interface Snapshot { projections?: { values?: { agentPreset?: string | null; permissions?: { currentValue: string; options: Array<{ value: string; name: string }> }; goal?: { goal: { phase: string } } | null; modelSelection?: { next?: Selection; lastUsed?: Selection } } }; records: Array<{ type: string; event?: HistoryEvent }> }
+interface Preset { id: string; name?: string; description?: string; isDefault?: boolean; broken?: string }
 interface Descriptor { name: string; description: string }
 export interface CommandHost { get(name: string): unknown }
 export const chatControlHelp = () => [
@@ -29,7 +30,8 @@ export const chatControlHelp = () => [
   replyText('/history — 最近文字记录；/rename 新名称 — 改名；/fork — 分叉'), '',
   replyText('模型与推理'),
   replyText('/model — 当前模型；/models — 可选模型'),
-  replyText('/reasoning — 当前推理等级和可选项'), '',
+  replyText('/reasoning — 当前推理等级和可选项'),
+  replyText('/presets — Agent 预设；/preset ID — 使用预设新建会话'), '',
   replyText('任务控制'),
   replyText('/status — 当前状态；/stop — 请求停止，保留队列'),
   replyText('/steer 补充要求 — 提交补充指令；/queue — 查看队列与操作方法'), '',
@@ -62,6 +64,10 @@ export class ChatCommands {
     return value
   }
 
+  private async presets(): Promise<Preset[]> {
+    return (await this.call<{ presets: Preset[] }>('agentPresets', 'remoteExportList')).presets
+  }
+
   private async agent(sessionId: string): Promise<unknown> {
     const result = await this.call<{ agent?: unknown; error?: { message?: string } }>('sessionController', 'resolveAgent', sessionId)
     if (!result.agent) throw new Error(result.error?.message || replyText('无法打开会话。'))
@@ -89,7 +95,7 @@ export class ChatCommands {
     if (!/^\d+$/.test(value)) return value
     const choice = this.choices.get(key)
     const selected = choice && Date.now() - choice.time < 15 * 60_000 ? choice.values[Number(value) - 1] : undefined
-    if (!selected) throw new Error(replyText('序号无效或已过期，尚未切换。请发送 /{0} 获取新列表。', key.endsWith(':models') ? 'models' : key.endsWith(':workspaces') ? 'workspaces' : 'sessions'))
+    if (!selected) throw new Error(replyText('序号无效或已过期，尚未切换。请发送 /{0} 获取新列表。', key.endsWith(':presets') ? 'presets' : key.endsWith(':models') ? 'models' : key.endsWith(':workspaces') ? 'workspaces' : 'sessions'))
     return selected
   }
 
@@ -104,10 +110,10 @@ export class ChatCommands {
     return withReplyLocale(this.host, () => this.lifetime.run(signal, async () => {
       try {
         // 原生渠道直接展示选择页，文字渠道沿用原列表及序号契约。
-        const list = /^\/(sessions|sessionlist|workspaces|workspacelist|models)(?:\s+(\d+))?\s*$/i.exec(msg.text.trim())
+        const list = /^\/(sessions|sessionlist|workspaces|workspacelist|models|presets|presetlist)(?:\s+(\d+))?\s*$/i.exec(msg.text.trim())
         if (list && channel.sendChoices && this.showChoices && !msg.media?.length) {
           const name = list[1]!.toLowerCase()
-          const section = name === 'sessionlist' ? 'sessions' : name === 'workspacelist' ? 'workspaces' : name
+          const section = name === 'sessionlist' ? 'sessions' : name === 'workspacelist' ? 'workspaces' : name === 'presetlist' ? 'presets' : name
           // 尚无会话时 /models 仍可浏览目录，不把查询变成必须创建会话的操作。
           if (section !== 'models' || this.router.lookup(channel.id, msg.kind ?? 'dm', msg.chatId)) {
             msg = { ...msg, text: `/menu ${section} ${list[2] || '1'}` }
@@ -173,16 +179,16 @@ export class ChatCommands {
     const input = match[2]!.trim()
     const kind = msg.kind === 'group' ? 'group' : 'dm'
     const scope = JSON.stringify([channel.id, kind, msg.chatId, msg.userId ?? ''])
-    if (msg.media?.length && ['help', 'new', 'clear', 'sessions', 'sessionlist', 'session', 'workspaces', 'workspacelist', 'workspace', 'models', 'status', 'current', 'stop', 'steer', 'rename', 'fork', 'model', 'reasoning', 'reasonings', 'reasoninglist', 'history', 'queue', 'export'].includes(command)) throw new Error(replyText('该控制命令不接受附件，请单独发送。'))
+    if (msg.media?.length && ['preset', 'presets', 'presetlist', 'help', 'new', 'clear', 'sessions', 'sessionlist', 'session', 'workspaces', 'workspacelist', 'workspace', 'models', 'status', 'current', 'stop', 'steer', 'rename', 'fork', 'model', 'reasoning', 'reasonings', 'reasoninglist', 'history', 'queue', 'export'].includes(command)) throw new Error(replyText('该控制命令不接受附件，请单独发送。'))
     const current = this.router.lookup(channel.id, kind, msg.chatId)
     const requireCurrent = () => { if (!current) throw new Error(replyText('当前没有会话，请先发送消息或 /new。')); return current.sessionId }
-    if (input && ['help', 'new', 'clear', 'workspaces', 'workspacelist', 'models', 'status', 'current', 'stop', 'fork', 'history', 'reasonings', 'reasoninglist', 'export'].includes(command)) throw new Error(replyText('/{0} 暂不支持参数。正确用法：/{1}', command, command))
+    if (input && ['presets', 'presetlist', 'help', 'new', 'clear', 'workspaces', 'workspacelist', 'models', 'status', 'current', 'stop', 'fork', 'history', 'reasonings', 'reasoninglist', 'export'].includes(command)) throw new Error(replyText('/{0} 暂不支持参数。正确用法：/{1}', command, command))
     if (command === 'menu' || command === 'm') {
       const parts = input.split(/\s+/)
       const rootPage = /^\d+$/.test(parts[0] ?? '')
       const [section = '', pageText = '1', ...extra] = rootPage ? ['', ...parts] : parts
       const page = Number(pageText)
-      if (extra.length || !['', 'sessions', 'workspaces', 'models'].includes(section) || !Number.isSafeInteger(page) || page < 1) throw new Error(replyText('用法：/menu [sessions|workspaces|models] [页码]'))
+      if (extra.length || !['', 'sessions', 'workspaces', 'models', 'presets'].includes(section) || !Number.isSafeInteger(page) || page < 1) throw new Error(replyText('用法：/menu [sessions|workspaces|models|presets] [页码]'))
       let choices: Choice[] = []
       let text = replyText('助手操作菜单')
       if (section === 'sessions') {
@@ -192,6 +198,9 @@ export class ChatCommands {
           && !this.router.isBoundElsewhere?.(row.sessionId, channel.id, kind, msg.chatId)).map(row => ({ label: oneLine(row.projections?.values?.title || row.sessionId), value: `/session ${row.sessionId}` }))
       } else if (section === 'workspaces') {
         choices = (await this.workspaces(signal)).items.map(item => ({ label: oneLine(item.title ? `${item.title} · ${item.path}` : item.path), value: `/workspace ${item.path}` }))
+      } else if (section === 'presets') {
+        choices = (await this.presets()).filter(item => !item.broken).map(item => ({ label: oneLine(item.name || item.id) + (item.isDefault ? replyText('〔默认〕') : ''), value: `/preset id:${item.id}` }))
+        choices.push({ label: replyText('跟随默认预设'), value: '/preset --default' })
       } else if (section === 'models') {
         requireCurrent()
         const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
@@ -203,6 +212,7 @@ export class ChatCommands {
           { label: replyText('选择工作区'), value: '/menu workspaces' },
           ...(current ? [{ label: replyText('选择模型'), value: '/menu models' }, { label: replyText('停止任务'), value: '/stop' },
             { label: replyText('导出会话'), value: '/export' }, { label: replyText('查看状态'), value: '/status' }] : []),
+          { label: replyText('选择预设'), value: '/menu presets' },
           { label: replyText('帮助'), value: '/help' },
         ]
       }
@@ -211,10 +221,11 @@ export class ChatCommands {
         const pageSize = channel.choiceLimits ? Math.max(1, channel.choiceLimits.maxButtons - 3) : 8
         const pages = Math.max(1, Math.ceil(choices.length / pageSize))
         if (page > pages) throw new Error(replyText('没有第 {0} 页，共 {1} 页。', page, pages))
-        const heading = section === 'sessions' ? replyText('选择会话') : section === 'workspaces' ? replyText('选择工作区') : section === 'models' ? replyText('选择模型') : replyText('助手操作菜单')
+        const heading = section === 'sessions' ? replyText('选择会话') : section === 'workspaces' ? replyText('选择工作区') : section === 'presets' ? replyText('选择预设') : section === 'models' ? replyText('选择模型') : replyText('助手操作菜单')
         // 企业微信正文空间有限，菜单展示导航，配置详情通过 /status 查询。
         text = channel.choiceLimits || section ? heading : text
         text += ` · ${page}/${pages}`
+        if (section === 'presets') text += '\n' + replyText('选择后在当前工作区新建并切换会话，旧会话保留。账号默认预设不变。')
         if (!choices.length) text += '\n' + replyText('暂无可选项，可返回菜单选择其他操作。')
         choices = choices.slice((page - 1) * pageSize, page * pageSize)
         if (section) this.remember(`${scope}:${section}`, choices.map(choice => choice.value.slice(choice.value.indexOf(' ') + 1)))
@@ -323,6 +334,44 @@ export class ChatCommands {
         ? replyText('切换：/model {0}', alternative + 1) : current && selected
           ? replyText('当前没有其他可切换模型，继续发送消息即可。')
           : '', current ? replyText('查看当前模型：/model；推理选项：/reasoning') : replyText('先发消息或 /new 创建会话，再切换模型。'), replyText('序号 15 分钟内有效。')) : replyText('暂无可用模型。请在网页配置模型服务，再发送 /models。')
+    }
+    if (command === 'presets' || command === 'presetlist' || command === 'preset') {
+      const presets = await this.presets()
+      const hint = replyText('选择后在当前工作区新建并切换会话，旧会话保留。账号默认预设不变。')
+      if (command !== 'preset') {
+        this.remember(scope + ':presets', presets.map(item => `id:${item.id}`))
+        return replyText('Agent 预设') + '\n' + presets.map((item, i) => `${i + 1}. ${oneLine(item.name || item.id)} (${item.id})${item.isDefault ? replyText('〔默认〕') : ''}${item.broken ? replyText('〔不可用〕') : ''}${item.description ? '\n' + oneLine(item.description) : ''}`).join('\n\n') + related(hint, replyText('用法：/preset 序号或ID；纯数字 ID：/preset id:ID；跟随默认：/preset --default'))
+      }
+      const sessionId = requireCurrent()
+      if (!input) {
+        const id = (await this.snapshot(sessionId, signal)).projections?.values?.agentPreset
+        return replyText('当前 Agent 预设：{0}', id ? oneLine(presets.find(item => item.id === id)?.name || id) : replyText('暂时无法读取')) + related(hint, replyText('用法：/preset 序号或ID；纯数字 ID：/preset id:ID；跟随默认：/preset --default'))
+      }
+      const resolved = this.resolve(scope + ':presets', input)
+      const id = resolved.startsWith('id:') ? resolved.slice(3) : resolved
+      const followDefault = resolved === '--default'
+      const preset = followDefault ? presets.find(item => item.isDefault) : presets.find(item => item.id === id)
+      if (!preset || preset.broken) throw new Error(replyText('预设不存在或不可用，请发送 /presets 重新选择。'))
+      await this.idle(sessionId, signal, 'preset')
+      const matches = (await this.workspaces(signal)).items.filter(item => item.sessionIds.includes(sessionId))
+      if (matches.length !== 1) throw new Error(replyText('无法确定当前工作区，请先用 /workspace 选择工作区。'))
+      const workspace = matches[0]!
+      let createdId: string | undefined
+      try {
+        const controller = this.service('sessionController')
+        if (typeof controller.create !== 'function') throw new Error(replyText('当前 Host 不支持 {0}。', 'create'))
+        signal.throwIfAborted()
+        const result = await controller.create({ workspaceId: workspace.workspaceId, ...(followDefault ? {} : { agentPreset: id }) }) as { sessionId: string; agentPreset?: string }
+        createdId = result.sessionId
+        signal.throwIfAborted()
+        await this.router.bind(channel.id, kind, msg.chatId, createdId, createdId, await this.agent(createdId), workspace.path, signal)
+        return replyText('已使用预设 {0} 新建并切换会话：{1}', result.agentPreset || preset.id, createdId) + '\n' + await this.newDetails({ sessionId: createdId }, signal) + related(hint)
+      } catch (error) {
+        const partial = error as { code?: string; details?: { sessionId?: string } }
+        if (!createdId && partial.code === 'session/workspace-attach-failed') createdId = partial.details?.sessionId
+        if (!createdId) throw error
+        return replyText('新会话已创建：{0}，但未能接续。请在网页检查工作区后发送 /session {0}；原聊天绑定保留。', createdId)
+      }
     }
     // Host 注册命令可直接用于首次会话，控制命令则要求已有目标。
     const controls = ['status', 'current', 'stop', 'steer', 'rename', 'fork', 'model', 'reasoning', 'reasonings', 'reasoninglist', 'history', 'queue']

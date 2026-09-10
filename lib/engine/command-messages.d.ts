@@ -1,5 +1,19 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "\u7528\u6CD5\uFF1A/menu [sessions|workspaces|models|presets] [\u9875\u7801]": "Usage: /menu [sessions|workspaces|models|presets] [page]";
+    readonly "\u65B0\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF1A{0}\uFF0C\u4F46\u672A\u80FD\u63A5\u7EED\u3002\u8BF7\u5728\u7F51\u9875\u68C0\u67E5\u5DE5\u4F5C\u533A\u540E\u53D1\u9001 /session {0}\uFF1B\u539F\u804A\u5929\u7ED1\u5B9A\u4FDD\u7559\u3002": "Session {0} was created but could not be connected. Check its workspace on the web, then send /session {0}. Your previous chat binding is kept.";
+    readonly "\u5DF2\u4F7F\u7528\u9884\u8BBE {0} \u65B0\u5EFA\u5E76\u5207\u6362\u4F1A\u8BDD\uFF1A{1}": "Started and switched to session {1} with preset {0}.";
+    readonly "\u65E0\u6CD5\u786E\u5B9A\u5F53\u524D\u5DE5\u4F5C\u533A\uFF0C\u8BF7\u5148\u7528 /workspace \u9009\u62E9\u5DE5\u4F5C\u533A\u3002": "The current workspace could not be determined. Choose one with /workspace first.";
+    readonly "\u9884\u8BBE\u4E0D\u5B58\u5728\u6216\u4E0D\u53EF\u7528\uFF0C\u8BF7\u53D1\u9001 /presets \u91CD\u65B0\u9009\u62E9\u3002": "This preset is missing or unavailable. Send /presets to choose again.";
+    readonly "\u5F53\u524D Agent \u9884\u8BBE\uFF1A{0}": "Current Agent preset: {0}";
+    readonly "\u7528\u6CD5\uFF1A/preset \u5E8F\u53F7\u6216ID\uFF1B\u7EAF\u6570\u5B57 ID\uFF1A/preset id:ID\uFF1B\u8DDF\u968F\u9ED8\u8BA4\uFF1A/preset --default": "Use /preset number or ID; for numeric IDs use /preset id:ID. Use /preset --default for the default preset.";
+    readonly "\u9009\u62E9\u540E\u5728\u5F53\u524D\u5DE5\u4F5C\u533A\u65B0\u5EFA\u5E76\u5207\u6362\u4F1A\u8BDD\uFF0C\u65E7\u4F1A\u8BDD\u4FDD\u7559\u3002\u8D26\u53F7\u9ED8\u8BA4\u9884\u8BBE\u4E0D\u53D8\u3002": "Selecting a preset starts and switches to a new session in this workspace. Previous sessions are kept. The account default stays unchanged.";
+    readonly 跟随默认预设: "Use default preset";
+    readonly 选择预设: "Choose preset";
+    readonly "Agent \u9884\u8BBE": "Agent presets";
+    readonly "\u3014\u4E0D\u53EF\u7528\u3015": " [unavailable]";
+    readonly "\u3014\u9ED8\u8BA4\u3015": " [default]";
+    readonly "/presets \u2014 Agent \u9884\u8BBE\uFF1B/preset ID \u2014 \u4F7F\u7528\u9884\u8BBE\u65B0\u5EFA\u4F1A\u8BDD": "/presets — Agent presets; /preset ID — start a session with a preset";
     readonly "\u5361\u7247\u53D1\u9001\u72B6\u6001\u6682\u65F6\u65E0\u6CD5\u786E\u8BA4\u3002\u82E5\u5DF2\u6536\u5230\uFF0C\u8BF7\u76F4\u63A5\u4F7F\u7528\uFF1B\u672A\u6536\u5230\u53EF\u53D1\u9001 /menu \u91CD\u8BD5\u3002": "Card delivery could not be confirmed. Use it if it arrived; otherwise send /menu to try again.";
     readonly 暂停目标: "Pause goal";
     readonly 恢复目标: "Resume goal";

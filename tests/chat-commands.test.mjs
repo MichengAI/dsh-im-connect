@@ -554,3 +554,48 @@ test('export 成功只在文件发完后返回，发送失败不伪报成功', a
   f.router.lookup = () => undefined
   await assert.rejects(f.run('/export'), /当前没有会话/)
 })
+
+function presetFixture(options = {}) {
+  const f = fixture(options)
+  f.services.agentPresets = { async remoteExportList() { return { presets: [
+    { id: 'standard', name: '通用助理', isDefault: true },
+    { id: '42', name: '代码助理' }, { id: 'broken', broken: 'invalid' },
+  ] } } }
+  return f
+}
+
+test('预设使用真实目录，新建并接入当前工作区，支持数字 ID', async () => {
+  const f = presetFixture()
+  assert.match(await f.run('/presets'), /代码助理/)
+  await f.run('/preset id:42')
+  assert.deepEqual(f.calls.find(c => c[0] === 'create')[1], { workspaceId: 'w1', agentPreset: '42' })
+  assert.equal(f.calls.find(c => c[0] === 'bind')[4], 'new')
+  assert.ok(!f.calls.some(c => c[0] === 'rotate'))
+})
+
+test('预设默认交宿主选择；坏预设和运行中不创建', async () => {
+  const f = presetFixture()
+  await f.run('/preset --default')
+  assert.deepEqual(f.calls.find(c => c[0] === 'create')[1], { workspaceId: 'w1' })
+  const bad = presetFixture()
+  await assert.rejects(bad.run('/preset broken'), /不可用/)
+  bad.rows[0].running = true
+  await assert.rejects(bad.run('/preset standard'), /正在运行/)
+  assert.ok(!bad.calls.some(c => c[0] === 'create'))
+})
+
+test('预设创建后换绑失败仍给出新会话 ID', async () => {
+  const f = presetFixture()
+  f.router.bind = async () => { throw new Error('binding failed') }
+  assert.match(await f.run('/preset standard'), /\/session new/)
+})
+
+test('预设原生列表不提供损坏项，页面说明会新建会话', async () => {
+  let shown
+  const f = presetFixture({ channel: { sendChoices() {}, choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (...args) => { shown = args; return '' } })
+  await f.run('/presets')
+  assert.match(shown[2], /新建/)
+  assert.ok(shown[3].some(c => c.value === '/preset id:42'))
+  assert.ok(!shown[3].some(c => c.value.includes('broken')))
+  assert.ok(shown[3].length <= 6)
+})
