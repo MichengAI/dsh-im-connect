@@ -105,9 +105,9 @@ test('Telegram images do not bypass group mention checks', async () => {
 
 test('Telegram ordinary document is not submitted as an image', async () => {
   const { msg, calls } = await receive({ caption: 'a file', document: { file_id: 'doc', mime_type: 'application/pdf' } })
-  assert.equal(msg.media, undefined)
+  assert.equal(msg.media[0].kind, 'file')
   assert.equal(msg.text, 'a file')
-  assert.ok(!calls.some(call => call.url.endsWith('/getFile')))
+  assert.ok(calls.some(call => call.url.endsWith('/getFile')))
 })
 
 test('Telegram image failure rejects whole prompt and reports missing image', async () => {

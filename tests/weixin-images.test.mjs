@@ -90,3 +90,26 @@ for (const fail of [false, true]) for (const text of ['', 'compare']) {
     } finally { await channel.stop(); globalThis.fetch = previous; rmSync(dir, { recursive: true, force: true }) }
   })
 }
+
+test('微信文件解密后提交字节，不把缓存路径当作文件输入', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weixin-file-'))
+  persistWeixinLogin(dir, { allowedUserId: 'user' })
+  const original = globalThis.fetch, received = []
+  const key = Buffer.alloc(16, 3), file = Buffer.from('pdf-content')
+  let polled = false
+  globalThis.fetch = async (url, init) => {
+    if (url.includes('/getupdates')) {
+      if (!polled) { polled = true; return Response.json({ ret: 0, msgs: [{ from_user_id: 'user', message_id: 'file', context_token: 'ctx', item_list: [{ type: 4, file_item: { file_name: 'report.pdf', media: { encrypt_query_param: 'file', aes_key: key.toString('base64') } } }] }] }) }
+      return new Promise((_, reject) => { if (init.signal.aborted) reject(init.signal.reason); else init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }) })
+    }
+    if (url.includes('/download')) return new Response(encryptAesEcb(file, key))
+    throw new Error('Unexpected request')
+  }
+  const channel = createWeixinChannel({ enabled: true, botToken: 'secret' }, () => {}, dir)
+  channel.setMessageHandler(message => received.push(message))
+  try {
+    await channel.start()
+    for (let i = 0; i < 50 && !received.length; i++) await new Promise(resolve => setTimeout(resolve, 10))
+    assert.equal(received[0].media[0].kind, 'file'); assert.deepEqual(received[0].media[0].data, file); assert.equal(received[0].media[0].path, undefined)
+  } finally { await channel.stop(); globalThis.fetch = original; rmSync(dir, { recursive: true, force: true }) }
+})

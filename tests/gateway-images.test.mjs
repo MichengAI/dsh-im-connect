@@ -269,3 +269,23 @@ for (const id of ['weixin', 'wecom', 'dingtalk', 'feishu', 'lark', 'qq', 'telegr
     assert.deepEqual(h.calls[0].content, [{ type: 'text', text: 'look' }, { type: 'image', data: png.toString('base64'), mediaType: 'image/png', name: 'photo.png' }])
   })
 }
+
+for (const caption of ['', '/new', '批准']) test(`通用文件经 Chat 凭据提交，说明文字不当命令：${caption}`, async t => {
+  const h = setup(t)
+  h.ctx.provide('fileUploads')
+  const uploads = []
+  h.ctx.set('fileUploads', { uploadStream: async request => { for await (const chunk of request.data) uploads.push(chunk); return { receiptId: 'r' } } })
+  await h.send({ text: caption, media: [{ kind: 'file', name: 'report.pdf', data: Buffer.from('pdf') }] })
+  assert.equal(h.calls.length, 1); assert.equal(h.messages.length, 0)
+  assert.deepEqual(h.calls[0].content.at(-1), { type: 'file', receiptId: 'r' }); assert.equal(uploads[0].toString(), 'pdf')
+})
+test('文件上传中切换账号配置，中断后不提交旧会话', async t => {
+  const h = setup(t)
+  h.ctx.provide('fileUploads')
+  let enter, release
+  const ready = new Promise(resolve => { enter = resolve })
+  h.ctx.set('fileUploads', { uploadStream: async () => { enter(); return await new Promise(resolve => { release = resolve }) } })
+  const work = h.send({ media: [{ kind: 'file', data: Buffer.from('file') }] })
+  await ready; h.engine.unregister('account-opaque-123'); release({ receiptId: 'r' }); await work
+  assert.equal(h.calls.length, 0)
+})

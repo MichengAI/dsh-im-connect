@@ -4,7 +4,7 @@ import { DingtalkCardClient, openDingtalkCardStream, type CardTarget } from './d
 import { validateAdditionalImageHosts } from './image-host-policy.js'
 import { DingtalkTokenCache } from './dingtalk-token-cache.js'
 import { timeoutSignal } from '../engine/abort.js'
-import { requestChannelBytes, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
+import { requestChannelBytes, fileMedia, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
 
 async function postDingtalk(path: string, body: unknown, signal: AbortSignal, headers: Record<string, string> = {}) {
   const bytes = await requestChannelBytes(`https://api.dingtalk.com/v1.0/${path}`, {
@@ -14,7 +14,7 @@ async function postDingtalk(path: string, body: unknown, signal: AbortSignal, he
   return JSON.parse(bytes.toString()) as Record<string, unknown>
 }
 
-async function downloadDingtalkImage(clientId: string, tokens: DingtalkTokenCache, downloadCode: string, signal: AbortSignal, additionalImageHosts: readonly string[], log: (line: string) => void): Promise<ImMedia> {
+async function downloadDingtalkImage(clientId: string, tokens: DingtalkTokenCache, downloadCode: string, signal: AbortSignal, additionalImageHosts: readonly string[], log: (line: string) => void, fileName?: string): Promise<ImMedia> {
   if (typeof downloadCode !== 'string' || !downloadCode.trim()) throw new Error('图片缺少 downloadCode')
   const token = await tokens.get(signal)
   const file = await postDingtalk('robot/messageFiles/download', { robotCode: clientId, downloadCode }, signal, {
@@ -30,7 +30,8 @@ async function downloadDingtalkImage(clientId: string, tokens: DingtalkTokenCach
     && !mediaUrl.username && !mediaUrl.password && !mediaUrl.port) mediaUrl.protocol = 'https:'
   log(`[dingtalk] 图片下载 host=${channelImageDownloadHost(mediaUrl.href)} sourceProtocol=${sourceProtocol} protocol=${mediaUrl.protocol} port=${mediaUrl.port || 'default'} userinfo=${Boolean(mediaUrl.username || mediaUrl.password)}`)
   // The temporary media URL must never receive the app secret or access token.
-  return imageMedia(await requestChannelBytes(mediaUrl.href, { signal, additionalTrustedHosts: additionalImageHosts }))
+  const bytes = await requestChannelBytes(mediaUrl.href, { signal, additionalTrustedHosts: additionalImageHosts })
+  return fileName !== undefined ? fileMedia(bytes, fileName) : imageMedia(bytes)
 }
 
 export interface DingtalkConfig {
@@ -41,7 +42,7 @@ export interface DingtalkConfig {
 
 export interface DingtalkRobotPayload {
   msgtype?: string
-  content?: { downloadCode?: string; richText?: Array<{ type?: string; text?: string; downloadCode?: string }> }
+  content?: { downloadCode?: string; fileName?: string; fileSize?: number; richText?: Array<{ type?: string; text?: string; downloadCode?: string }> }
   text?: { content?: string }
   senderStaffId?: string
   senderId?: string
@@ -130,7 +131,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
           const images = payload.msgtype === 'picture' ? [payload.content?.downloadCode ?? '']
             : payload.msgtype === 'richText' && Array.isArray(payload.content?.richText)
               ? payload.content.richText.filter(item => item && (item.type === 'picture' || 'downloadCode' in item)).map(item => item.downloadCode ?? '') : []
-          if (!parsed?.chatId || (!parsed.text && !images.length)) return { status: 'SUCCESS' }
+          if (!parsed?.chatId || (!parsed.text && !images.length && payload.msgtype !== 'file')) return { status: 'SUCCESS' }
           const work = (receiving.get(parsed.chatId) ?? Promise.resolve()).then(async () => {
             if (generation !== startedGeneration) return
             // Advance reply targets only when this message reaches the head of its chat queue.
@@ -140,6 +141,10 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
               : { type: 'user', userId: parsed.userId })
             const media: ImMedia[] = []
             try {
+              if (payload.msgtype === 'file') {
+                if ((payload.content?.fileSize ?? 0) > 20 * 1024 * 1024) throw new Error('文件超过大小限制')
+                media.push(await downloadDingtalkImage(clientId, tokens, payload.content?.downloadCode ?? '', signal, additionalImageHosts, log, payload.content?.fileName ?? 'file.bin'))
+              }
               if (images.length > MAX_CHANNEL_IMAGES) throw new Error('图片数量超过限制')
               for (const code of images) {
                 if (generation !== startedGeneration) return

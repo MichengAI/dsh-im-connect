@@ -3,7 +3,7 @@ import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
 import { timeoutSignal } from '../engine/abort.js'
-import { MAX_CHANNEL_IMAGES } from './channel-image-download.js'
+import { fileMedia, MAX_CHANNEL_IMAGES } from './channel-image-download.js'
 
 interface FeishuContentMessage {
   message_id?: string
@@ -26,6 +26,9 @@ export async function resolveFeishuContent(client: ResourceClient, message: Feis
   else if (message.message_type === 'image') {
     if (!content.image_key) throw new Error('图片资源缺失')
     keys.push(content.image_key)
+  } else if (message.message_type === 'file') {
+    if (!content.file_key) throw new Error('文件资源缺失')
+    keys.push(content.file_key)
   } else if (message.message_type === 'post') {
     const post = content.content ? content : content.zh_cn ?? content.en_us ?? Object.values(content)[0]
     if (!post || !Array.isArray(post.content)) throw new Error('富文本内容无效')
@@ -54,7 +57,7 @@ export async function resolveFeishuContent(client: ResourceClient, message: Feis
     })
     try {
       const resource = await Promise.race([
-        client.im.messageResource.get({ path: { message_id: message.message_id, file_key: key }, params: { type: 'image' } }).then(resource => {
+        client.im.messageResource.get({ path: { message_id: message.message_id, file_key: key }, params: { type: message.message_type === 'file' ? 'file' : 'image' } }).then(resource => {
           stream = resource.getReadableStream()
           if (signal.aborted) { stream.destroy(); throw new Error('图片下载已取消或超时') }
           return resource
@@ -74,6 +77,7 @@ export async function resolveFeishuContent(client: ResourceClient, message: Feis
           chunks.push(bytes)
         }
         if (!size) throw new Error('图片为空')
+        if (message.message_type === 'file') return fileMedia(Buffer.concat(chunks), content.file_name)
         return { kind: 'image' as const, data: Buffer.concat(chunks), mediaType: resource.headers?.['content-type']?.split(';')[0] }
       }
       media.push(await Promise.race([consume(), aborted]))
@@ -212,13 +216,14 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
     },
     async sendChoices(message, text, buttons) {
       if (!client) throw new Error('channel-unavailable')
-      await client.im.message.create({ params: { receive_id_type: 'chat_id' }, data: {
+      const result = await client.im.message.create({ params: { receive_id_type: 'chat_id' }, data: {
         receive_id: message.chatId, msg_type: 'interactive', content: JSON.stringify({ config: { wide_screen_mode: true }, elements: [
           { tag: 'markdown', content: text },
           ...buttons.map(button => ({ tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: button.label.slice(0, 60) },
             type: 'default', value: { token: button.token, group: message.kind === 'group' } }] })),
         ] }),
-      } })
+      } }) as { code?: number } | undefined
+      if (result?.code) throw new Error('card-send-failed')
     },
     async addStatusReaction(message, state, _label, signal) {
       if (!client || !message.messageId || state === 'cancelled') return

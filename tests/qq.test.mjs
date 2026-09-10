@@ -253,7 +253,7 @@ test('QQ 收到 401 时清缓存重取 token 并重试一次', async () => {
   }
 })
 
-test('QQ 不支持的文件类型不静默丢弃，回复文字提示', async () => {
+test('QQ 文件缺少下载地址时明确失败，不静默丢弃', async () => {
   const originalFetch = globalThis.fetch
   const originalWebSocket = globalThis.WebSocket
   const posts = []
@@ -290,7 +290,7 @@ test('QQ 不支持的文件类型不静默丢弃，回复文字提示', async ()
     await waitForImmediate()
     assert.equal(posts.length, 1)
     assert.match(posts[0].url, /\/v2\/groups\/group-openid\/messages$/)
-    assert.match(posts[0].body.content, /暂不支持/)
+    assert.match(posts[0].body.content, /失败/)
     assert.equal(posts[0].body.msg_id, 'media-message')
     await channel.stop()
   } finally {

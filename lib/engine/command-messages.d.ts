@@ -1,5 +1,8 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "\u5F53\u524D DSH \u4E0D\u652F\u6301 Chat \u6587\u4EF6\u8F93\u5165\uFF0C\u8BF7\u5347\u7EA7\u5230 0.1.5-rc.1 \u6216\u66F4\u65B0\u7684\u517C\u5BB9\u7248\u672C\u540E\u91CD\u65B0\u53D1\u9001\u3002": "This DSH version does not support Chat file input. Upgrade to 0.1.5-rc.1 or a newer supported version and resend.";
+    readonly "\u4E00\u6B21\u6700\u591A\u53D1\u9001 4 \u4E2A\u6587\u4EF6\uFF0C\u7D2F\u8BA1\u4E0D\u8D85\u8FC7 20 MiB\u3002": "Send up to 4 files at a time, totaling no more than 20 MiB.";
+    readonly "\u6587\u4EF6\u8F93\u5165\u5931\u8D25\uFF0C\u6574\u6761\u6D88\u606F\u672A\u63D0\u4EA4\u3002\u8BF7\u68C0\u67E5\u6587\u4EF6\u5927\u5C0F\u548C\u683C\u5F0F\u540E\u91CD\u65B0\u53D1\u9001\uFF0C\u6216\u5728\u7F51\u9875 Chat \u4E0A\u4F20\u3002": "File input failed; the message was not submitted. Check the size and format and resend, or upload in web Chat.";
     readonly "\u5DF2\u62D2\u7EDD\u3002": "Rejected.";
     readonly "\u5DF2\u6279\u51C6\u3002": "Approved.";
     readonly "\u8BF7\u7CBE\u51C6\u56DE\u590D\u300C\u6279\u51C6\u300D\u6216\u300C\u62D2\u7EDD\u300D\uFF08\u4E5F\u652F\u6301\uFF1A\u540C\u610F / \u4E0D\u540C\u610F / yes / allow / no / reject\uFF09\u3002": "Reply with allow or reject (yes/no also work).";

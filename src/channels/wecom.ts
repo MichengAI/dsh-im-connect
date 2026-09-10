@@ -1,7 +1,7 @@
 import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
-import { requestChannelBytes, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
+import { requestChannelBytes, fileMedia, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
 import { validateAdditionalImageHosts } from './image-host-policy.js'
 
 async function downloadWecomImage(image: { url?: string; aeskey?: string }, additionalImageHosts: readonly string[]): Promise<ImMedia> {
@@ -232,7 +232,8 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
         const images = body.msgtype === 'image' ? [(body.image as { url?: string; aeskey?: string }) ?? {}]
           : body.msgtype === 'mixed' && Array.isArray(mixed?.msg_item)
             ? mixed.msg_item.filter(item => item?.msgtype === 'image').map(item => item.image ?? {}) : []
-        if (!chatId || (!text && !images.length) || !['single', 'group'].includes(chattype)) {
+        const file = body.msgtype === 'file' ? body.file as { url?: string; aeskey?: string; filename?: string; file_name?: string } : undefined
+        if (!chatId || (!text && !images.length && !file) || !['single', 'group'].includes(chattype)) {
           log(`[wecom] 忽略一帧 chattype=${chattype || '-'} msgtype=${String(body.msgtype ?? '-')}`)
           return
         }
@@ -243,6 +244,12 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
           if (generation !== startedGeneration) return
           const media: ImMedia[] = []
           try {
+            if (file) {
+              if (!file.url || !file.aeskey) throw new Error('文件缺少下载信息')
+              const { decryptFile } = await import('@wecom/aibot-node-sdk')
+              const data = decryptFile(await requestChannelBytes(file.url, { additionalTrustedHosts: additionalImageHosts }), file.aeskey)
+              media.push(fileMedia(data, file.filename ?? file.file_name))
+            }
             if (images.length > MAX_CHANNEL_IMAGES) throw new Error('图片数量超过限制')
             for (const image of images) {
               if (generation !== startedGeneration) return

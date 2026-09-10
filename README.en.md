@@ -85,6 +85,16 @@ The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram.
 - Channel download limits, host attachment size and format limits, DM access rules, and group mention requirements still apply.
 - This is inbound image analysis, not a promise that every channel supports sending images from the bot or generating images.
 
+## File input
+
+Weixin, WeCom, DingTalk, Feishu, Lark, QQ and Telegram accept ordinary files through Chat’s upload service for the current session. Send PDFs, documents or spreadsheets for the assistant to process. Format support follows web Chat’s models, tools and file capabilities; uploading does not guarantee that every format can be understood directly.
+
+- Requires the file-upload service in DSH `0.1.5-rc.1` or `0.1.5-rc.2`. On `0.1.2-rc.1`, file input asks you to upgrade; existing text and image support is unchanged.
+- Up to 4 ordinary files per message, totaling 20 MiB. Channel download limits also apply.
+- Files become standard Chat attachments and are submitted with session-specific receipts, rather than local-path text.
+- Private admission and group mention rules remain in force. File captions such as `/new` or “allow” are content, not commands or approval responses.
+- Failed uploads do not submit partial text. Disabling or reloading an account prevents later submission to the old session. Generated files can be sent back after the reply.
+
 ## File delivery
 
 WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram can return files produced by the assistant. For example: “Create a PDF report and send me the file.”

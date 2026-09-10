@@ -132,3 +132,16 @@ test('Wecom image-only message reaches handler with original reply frame', async
     assert.equal(s.replies.at(-1)[0], frame)
   } finally { await s.channel.stop() }
 })
+
+test('企微文件按原始字节解密，不套用图片校验', async () => {
+  const data = Buffer.from('pdf-content'), key = Buffer.alloc(32, 7)
+  const pad = 32 - data.length % 32
+  const cipher = createCipheriv('aes-256-cbc', key, key.subarray(0, 16)); cipher.setAutoPadding(false)
+  network(Buffer.concat([cipher.update(Buffer.concat([data, Buffer.alloc(pad, pad)])), cipher.final()]))
+  const s = setup(null); await s.channel.start()
+  try {
+    s.emit(s.frame('file', { msgtype: 'file', file: { url: 'https://example.com/report', aeskey: key.toString('base64'), filename: '报告.pdf' } }))
+    await tick()
+    assert.equal(s.received[0].media[0].kind, 'file'); assert.deepEqual(s.received[0].media[0].data, data)
+  } finally { await s.channel.stop(); mock.restoreAll() }
+})

@@ -1,5 +1,9 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
+  "当前 DSH 不支持 Chat 文件输入，请升级到 0.1.5-rc.1 或更新的兼容版本后重新发送。": "This DSH version does not support Chat file input. Upgrade to 0.1.5-rc.1 or a newer supported version and resend.",
+  "一次最多发送 4 个文件，累计不超过 20 MiB。": "Send up to 4 files at a time, totaling no more than 20 MiB.",
+  "文件输入失败，整条消息未提交。请检查文件大小和格式后重新发送，或在网页 Chat 上传。": "File input failed; the message was not submitted. Check the size and format and resend, or upload in web Chat.",
+
   "已拒绝。": "Rejected.",
   "已批准。": "Approved.",
   "请精准回复「批准」或「拒绝」（也支持：同意 / 不同意 / yes / allow / no / reject）。": "Reply with allow or reject (yes/no also work).",

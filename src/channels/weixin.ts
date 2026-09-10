@@ -492,9 +492,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     const dl = await downloadCdn(mediaRef, aesKey)
     const fileName = fileItem ? pickStr(fileItem, 'file_name') ?? 'file.bin' : 'file.bin'
     if (!dl) return { kind: 'file', name: fileName }
-    const ext = guessExt(fileName)
-    const saved = saveMediaBuf(dl.buf, ext, 'file', fileName)
-    return { kind: 'file', path: saved, name: fileName, mediaType: mimeFromExt(ext) }
+    return { kind: 'file', data: dl.buf, name: fileName, mediaType: mimeFromExt(guessExt(fileName)) }
   }
 
   async function downloadVideoItem(item: Json): Promise<ImMedia> {

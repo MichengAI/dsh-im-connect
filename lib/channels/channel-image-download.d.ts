@@ -19,4 +19,6 @@ export declare function requestChannelBytes(rawUrl: string, options?: {
     signal?: AbortSignal;
     additionalTrustedHosts?: readonly string[];
 }): Promise<Buffer>;
+/** 通用文件不套用图片魔数验证，文件类型和格式由 Chat 接收策略判断。 */
+export declare function fileMedia(data: Buffer, name?: string, maxBytes?: number): ImMedia;
 //# sourceMappingURL=channel-image-download.d.ts.map

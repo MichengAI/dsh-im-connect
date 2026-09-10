@@ -160,3 +160,20 @@ for (const stop of [false, true, 'disconnect']) {
     } finally { mock.restoreAll(); release?.(png); await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
   })
 }
+
+test('QQ 通用文件使用已有安全下载器并转交原始字节', async () => {
+  const previousFetch = globalThis.fetch, previousWs = globalThis.WebSocket
+  let socket
+  const received = []
+  globalThis.WebSocket = class { constructor() { socket = this } close() {} }
+  globalThis.fetch = async url => Response.json(url.endsWith('/getAppAccessToken') ? { access_token: 'secret' } : { url: 'wss://qq.test' })
+  network(Buffer.from('pdf-content'))
+  const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
+  channel.setMessageHandler(message => received.push(message))
+  try {
+    await channel.start()
+    socket.onmessage({ data: JSON.stringify({ op: 0, t: 'C2C_MESSAGE_CREATE', d: { id: 'file', content: '/new', author: { user_openid: 'u' }, attachments: [{ content_type: 'application/pdf', url: 'https://multimedia.nt.qq.com/report.pdf', filename: 'report.pdf' }] } }) })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.equal(received[0].text, '/new'); assert.equal(received[0].media[0].kind, 'file'); assert.equal(received[0].media[0].data.toString(), 'pdf-content')
+  } finally { await channel.stop(); mock.restoreAll(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
+})

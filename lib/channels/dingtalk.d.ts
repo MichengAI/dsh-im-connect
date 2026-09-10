@@ -8,6 +8,8 @@ export interface DingtalkRobotPayload {
     msgtype?: string;
     content?: {
         downloadCode?: string;
+        fileName?: string;
+        fileSize?: number;
         richText?: Array<{
             type?: string;
             text?: string;

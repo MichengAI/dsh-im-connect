@@ -152,3 +152,10 @@ export async function requestChannelBytes(rawUrl: string, options: {
     else req.end(options.body)
   })
 }
+
+/** 通用文件不套用图片魔数验证，文件类型和格式由 Chat 接收策略判断。 */
+export function fileMedia(data: Buffer, name = 'file.bin', maxBytes = 20 * 1024 * 1024): ImMedia {
+  if (!data.length || data.length > maxBytes) throw new Error('文件为空或超过大小限制')
+  const leaf = name.replace(/\\/g, '/').split('/').pop()?.replace(/[\x00-\x1f]/g, '').slice(0, 200) || 'file.bin'
+  return { kind: 'file', data, name: leaf }
+}

@@ -178,3 +178,32 @@ for (const stop of [false, true]) {
     } finally { release({ headers: {}, getReadableStream: () => Readable.from([]) }); await Promise.all([first, second]); await channel.stop() }
   })
 }
+
+for (const id of ['feishu', 'lark']) test(`${id} 通用文件资源按 file 下载并保留字节和文件名`, async () => {
+  const calls = []
+  const client = { im: { messageResource: { get: async request => { calls.push(request); return { getReadableStream: () => Readable.from([Buffer.from('pdf')]) } } } } }
+  const result = await feishu.resolveFeishuContent(client, { message_id: 'file-message', message_type: 'file', content: JSON.stringify({ file_key: 'key', file_name: '../报告.pdf' }) })
+  assert.equal(calls[0].params.type, 'file')
+  assert.equal(result.media[0].kind, 'file'); assert.equal(result.media[0].name, '报告.pdf'); assert.equal(result.media[0].data.toString(), 'pdf')
+})
+
+test('飞书卡片回调只转交不透明 token，业务失败触发文字降级', async () => {
+  let events, code = 0
+  const received = [], sent = []
+  const sdk = { defaultHttpInstance: {}, Client: class {
+    request = async () => ({ bot: { open_id: 'bot' } })
+    im = { message: { create: async request => { sent.push(request); return { code } } } }
+  }, EventDispatcher: class { register(value) { events = value; return this } }, WSClient: class { async start() {} close() {} } }
+  const channel = feishu.createFeishuChannel('feishu', { appId: 'app', appSecret: 'secret' }, () => {}, async () => sdk)
+  channel.setMessageHandler(message => received.push(message))
+  try {
+    await channel.start()
+    await channel.sendChoices({ chatId: 'chat', kind: 'group' }, 'menu', [{ label: 'New', token: 'opaque:0' }])
+    const card = JSON.parse(sent[0].data.content)
+    assert.deepEqual(card.elements[1].actions[0].value, { token: 'opaque:0', group: true })
+    await events['card.action.trigger']({ operator: { open_id: 'user' }, context: { open_chat_id: 'chat' }, action: { value: { token: 'opaque:0', group: true } } })
+    assert.equal(received[0].actionToken, 'opaque:0'); assert.equal(received[0].userId, 'user'); assert.equal(received[0].text, '')
+    code = 999
+    await assert.rejects(channel.sendChoices({ chatId: 'chat' }, 'menu', [{ label: 'New', token: 'opaque:0' }]))
+  } finally { await channel.stop() }
+})

@@ -181,3 +181,17 @@ test('Dingtalk card failure falls back to text preserving paragraphs, lists and 
     assert.deepEqual(JSON.parse(s.replies.at(-1).options.body), { msgtype: 'text', text: { content } })
   } finally { await s.channel.stop(); mock.restoreAll() }
 })
+
+test('钉钉文件通过官方下载码取回二进制，不按图片验证', async () => {
+  const calls = network(call => Buffer.from(call.url.endsWith('/accessToken') ? JSON.stringify({ accessToken: 'token', expireIn: 7200 }) : call.url.endsWith('/download') ? JSON.stringify({ downloadUrl: 'https://static.dingtalk.com/report.pdf' }) : 'pdf-content'))
+  const s = setup()
+  await s.channel.start()
+  try {
+    s.emit(s.event('document', { msgtype: 'file', content: { downloadCode: 'code', fileName: '报告.pdf' } }))
+    await tick()
+    assert.equal(s.received[0].media[0].kind, 'file')
+    assert.equal(s.received[0].media[0].data.toString(), 'pdf-content')
+    assert.equal(s.received[0].media[0].name, '报告.pdf')
+    assert.equal(calls.at(-1).options.headers?.['x-acs-dingtalk-access-token'], undefined)
+  } finally { await s.channel.stop(); mock.restoreAll() }
+})

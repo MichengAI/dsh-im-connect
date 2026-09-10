@@ -2,7 +2,7 @@ import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/
 import { fileForm, fileRequest } from './file-send.js'
 import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
-import { imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
+import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
 
 export interface TelegramConfig {
   token?: string
@@ -75,7 +75,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
 
   async function downloadImages(message: NonNullable<TgUpdate['message']>): Promise<ImMedia[]> {
     const photo = message.photo?.length ? message.photo.reduce((best, candidate) => candidate.width * candidate.height > best.width * best.height ? candidate : best) : undefined
-    const document = message.document?.mime_type?.startsWith('image/') ? message.document : undefined
+    const document = message.document
     const image = photo ?? document
     if (!image) return []
     if ((image.file_size ?? 0) > MAX_CHANNEL_IMAGE_BYTES) throw new Error('图片超过大小限制')
@@ -100,7 +100,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         if (size > MAX_CHANNEL_IMAGE_BYTES) throw new Error('图片超过大小限制')
         chunks.push(value)
       }
-      const media = imageMedia(Buffer.concat(chunks))
+      const media = document && !document.mime_type?.startsWith('image/') ? fileMedia(Buffer.concat(chunks), document.file_name) : imageMedia(Buffer.concat(chunks))
       const name = document?.file_name?.replace(/\\/g, '/').split('/').pop()
       return [{ ...media, ...(name ? { name } : {}) }]
     } finally {

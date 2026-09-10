@@ -4,7 +4,7 @@ import { timeoutSignal } from '../engine/abort.js'
 
 import { validateAdditionalImageHosts } from './image-host-policy.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
-import { MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost, requestChannelBytes, imageMedia } from './channel-image-download.js'
+import { MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost, requestChannelBytes, imageMedia, fileMedia } from './channel-image-download.js'
 
 export interface QqChannelConfig {
   appId?: string
@@ -222,7 +222,7 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
               : (msg.author.user_openid ?? msg.author.id ?? '')
             if (!chatId || !userId) return
             remember(chatId, isGroup ? 'group' : 'dm', msg.id)
-            const images = (msg.attachments ?? []).filter(a => typeof a.content_type === 'string' && a.content_type.startsWith('image/'))
+            const images = (msg.attachments ?? [])
             const media: ImMedia[] = []
             try {
               if (images.length > MAX_CHANNEL_IMAGES) throw new Error('图片数量超过上限')
@@ -248,7 +248,7 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
                 downloadSignal.throwIfAborted()
                 remainingBytes -= data.length
                 if (!data.length) throw new Error('图片为空')
-                media.push({ ...imageMedia(data, MAX_MESSAGE_IMAGE_BYTES), name: image.filename })
+                media.push(image.content_type?.startsWith('image/') ? { ...imageMedia(data, MAX_MESSAGE_IMAGE_BYTES), name: image.filename } : fileMedia(data, image.filename, MAX_MESSAGE_IMAGE_BYTES))
               }
             } catch (error) {
               if (!current()) return
