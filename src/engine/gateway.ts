@@ -1,3 +1,4 @@
+import { MessageProgress, ProgressTracker } from './message-progress.js'
 import { replyText, withReplyLocale } from './command-locale.js'
 import { FileDelivery, type DeliverySession } from './file-delivery.js'
 import { ChatCommands } from './chat-commands.js'
@@ -77,6 +78,8 @@ export class ImEngine {
   private readonly wrappedUserQuestionServices = new WeakSet<object>()
   private legacyServiceTimer?: NodeJS.Timeout
   private disposed = false
+  private readonly progress = new ProgressTracker()
+  private readonly mergedMessages = new Map<string, ImMessage[]>()
   private readonly fileDelivery: FileDelivery
   private readonly chatCommands: ChatCommands
   private readonly commandScopes = new Map<string, AbortController>()
@@ -105,7 +108,7 @@ export class ImEngine {
       if (!channel) return
       const merged: ImMessage = { chatId: rest.split(':').slice(1).join(':') || rest, text, kind: rest.startsWith('group:') ? 'group' : 'dm' }
       // 合并窗口回调不在任何请求链路里，必须自兜底，否则 rejection 无人接
-      void this.inject(channel, merged).catch((error) => {
+      void this.inject(channel, merged, this.takeMergedMessages(key, merged)).catch((error) => {
         const detail = error instanceof Error ? error.message : String(error)
         this.log(`[${channelId}] 合并投递失败: ${detail}`)
         channel.send(merged.chatId, '消息处理失败，请查看本机日志。').catch(() => undefined)
@@ -113,6 +116,11 @@ export class ImEngine {
     })
     const on = (this.ctx as unknown as { on: (name: string, fn: (...args: unknown[]) => unknown, opts?: unknown) => () => void }).on
     if (typeof on === 'function') {
+      for (const kind of ['inserted', 'claimed', 'discarded']) {
+        this.disposeEvents.push(on(`agent/inbox/${kind}`, (...args: unknown[]) => {
+          this.progress.inbox(kind, args[0] as Parameters<ProgressTracker['inbox']>[1])
+        }, { global: true }))
+      }
       this.disposeEvents.push(on('session/event', (...args: unknown[]) => {
         void this.onSessionEvent(args[0] as { id?: string }, args[1] as { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } })
       }, { global: true }))
@@ -220,6 +228,8 @@ export class ImEngine {
 
   dispose(): void {
     this.disposed = true
+    this.progress.cancel()
+    this.mergedMessages.clear()
     this.chatCommands.clear()
     for (const scope of this.commandScopes.values()) scope.abort()
     this.commandScopes.clear()
@@ -255,6 +265,7 @@ export class ImEngine {
   }
 
   private cancelSessionInteractions(sessionId: string, reason?: unknown): void {
+    this.progress.cancel(undefined, sessionId)
     this.broker.cancel(sessionId)
     this.questions.cancel(sessionId, reason)
     this.sessionActors.delete(sessionId)
@@ -305,7 +316,7 @@ export class ImEngine {
         }
         const command = text.split(/\s+/, 1)[0]?.toLowerCase()
         const mergeKey = `${channelId}:${kind}:${msg.chatId}`
-        if (command === '/stop') this.merger.cancel(mergeKey)
+        if (command === '/stop') { this.merger.cancel(mergeKey); this.mergedMessages.delete(mergeKey) }
         else if (this.merger.has(mergeKey)) {
           await this.deliver(channel, msg.chatId, withReplyLocale(this.ctx, () => replyText('上一条消息正在合并，尚未执行本次命令。等待提交后再发 {0}。', command || '/help')))
           return
@@ -380,9 +391,10 @@ export class ImEngine {
         return
       }
       const mergeKey = `${channelId}:${msg.kind === 'group' ? 'group' : 'dm'}:${msg.chatId}`
+      this.mergedMessages.set(mergeKey, [...(this.mergedMessages.get(mergeKey) ?? []), msg])
       const merged = this.merger.ingest(mergeKey, text)
       if (merged.kind === 'flushed' && merged.text) {
-        await this.inject(channel, { ...msg, text: merged.text })
+        await this.inject(channel, { ...msg, text: merged.text }, this.takeMergedMessages(mergeKey, msg))
       }
     } catch (error) {
       this.log(`[${channelId}] 处理失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -405,48 +417,64 @@ export class ImEngine {
     }
   }
 
-  private async inject(channel: ChannelAdapter, msg: ImMessage): Promise<void> {
+  private takeMergedMessages(key: string, fallback: ImMessage): ImMessage[] {
+    const messages = this.mergedMessages.get(key) ?? [fallback]
+    this.mergedMessages.delete(key)
+    return messages
+  }
+
+  private async inject(channel: ChannelAdapter, msg: ImMessage, sources: ImMessage[] = [msg]): Promise<void> {
     if (this.disposed || this.channels.get(channel.id) !== channel) return
     let scope = this.inputScopes.get(channel.id)
     if (!scope) this.inputScopes.set(channel.id, scope = new AbortController())
     const { signal } = scope
-    const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
-    const initialTitle = initialSessionTitle(msg.text) || initialSessionTitle(msg.media?.find(item => item.name)?.name || '')
-    const title = initialTitle || msg.username || msg.chatId
-    const binding = await this.router.getOrCreate(channel.id, kind, msg.chatId, title)
-    if (initialTitle) this.router.setTitle(binding.sessionId, initialTitle, 'message')
-    const content: Array<Record<string, unknown>> = []
-    if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })
-    for (const media of msg.media ?? []) {
-      if (media.kind === 'image') content.push(await imagePromptPart(media))
-      else if (media.kind === 'voice-text' && media.text) content.push({ type: 'text', text: `[语音] ${media.text}` })
-      else if (media.path) content.push({ type: 'text', text: `[附件 ${media.name ?? media.kind}] ${media.path}` })
-    }
-    if (signal.aborted || content.length === 0) return
-    if (msg.userId) this.sessionActors.set(binding.sessionId, msg.userId)
-    this.streams.reset(`${channel.id}:${msg.chatId}`)
-    await channel.sendAction?.(msg.chatId, 'typing').catch(() => undefined)
-    if (signal.aborted) return
-    if (content.some(part => part.type === 'image')) {
-      // Use Chat's public admission entry: session-local model selection, shared
-      // model-switch serialization, and durable attachment validation/storage.
-      // Optional lookup preserves text-only operation on older Hosts. Keep
-      // strict lookup so a pending or unloading provider is never invoked.
-      const controller = (this.ctx as unknown as { get(name: string): unknown }).get('sessionController') as {
-        prompt(request: { requestId: string; sessionId: string; mode: 'queue'; content: Array<Record<string, unknown>> }, signal: AbortSignal): Promise<unknown>
-      } | undefined
-      if (!controller?.prompt) throw new ImageInputError('当前 Host 不支持 Chat 图片输入，请升级 DeepSeek Harness。')
-      await controller.prompt({ requestId: crypto.randomUUID(), sessionId: binding.sessionId, mode: 'queue', content }, signal)
-    } else this.router.followup(binding, {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-      source: { kind: 'user' },
-    })
-    this.log(`[${channel.id}] 已注入 ${binding.sessionId}`)
+    const items = sources.map(source => new MessageProgress(channel, source, this.ctx, this.log, 'queued'))
+    let accepted = false
+    let reject = () => { for (const item of items) item.finish('error') }
+    try {
+      const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
+      const initialTitle = initialSessionTitle(msg.text) || initialSessionTitle(msg.media?.find(item => item.name)?.name || '')
+      const title = initialTitle || msg.username || msg.chatId
+      const binding = await this.router.getOrCreate(channel.id, kind, msg.chatId, title)
+      if (initialTitle) this.router.setTitle(binding.sessionId, initialTitle, 'message')
+      const content: Array<Record<string, unknown>> = []
+      if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })
+      for (const media of msg.media ?? []) {
+        if (media.kind === 'image') content.push(await imagePromptPart(media))
+        else if (media.kind === 'voice-text' && media.text) content.push({ type: 'text', text: `[语音] ${media.text}` })
+        else if (media.path) content.push({ type: 'text', text: `[附件 ${media.name ?? media.kind}] ${media.path}` })
+      }
+      if (signal.aborted || content.length === 0) return
+      if (msg.userId) this.sessionActors.set(binding.sessionId, msg.userId)
+      this.streams.reset(`${channel.id}:${msg.chatId}`)
+      if (signal.aborted) return
+      const requestId = crypto.randomUUID()
+      reject = this.progress.begin(binding.sessionId, requestId, items)
+      if (content.some(part => part.type === 'image')) {
+        // Use Chat's public admission entry: session-local model selection, shared
+        // model-switch serialization, and durable attachment validation/storage.
+        // Optional lookup preserves text-only operation on older Hosts. Keep
+        // strict lookup so a pending or unloading provider is never invoked.
+        const controller = (this.ctx as unknown as { get(name: string): unknown }).get('sessionController') as {
+          prompt(request: { requestId: string; sessionId: string; mode: 'queue'; content: Array<Record<string, unknown>> }, signal: AbortSignal): Promise<unknown>
+        } | undefined
+        if (!controller?.prompt) throw new ImageInputError('当前 Host 不支持 Chat 图片输入，请升级 DeepSeek Harness。')
+        await controller.prompt({ requestId, sessionId: binding.sessionId, mode: 'queue', content }, signal)
+      } else this.router.followup(binding, {
+        id: requestId,
+        role: 'user',
+        content,
+        source: { kind: 'user', rpcId: requestId },
+      })
+      accepted = true
+      this.log(`[${channel.id}] 已注入 ${binding.sessionId}`)
+    } catch (error) { reject(); throw error }
+    finally { if (!accepted) for (const item of items) item.finish('cancelled') }
   }
 
   private cancelInputs(channelId: string): void {
+    this.progress.cancel(channelId)
+    for (const key of this.mergedMessages.keys()) if (key.startsWith(channelId + ':')) { this.mergedMessages.delete(key); this.merger.cancel(key) }
     for (const [key, scope] of this.commandScopes) if (key.startsWith(channelId + ':')) scope.abort()
     this.inputScopes.get(channelId)?.abort()
     this.inputScopes.delete(channelId)
@@ -466,6 +494,13 @@ export class ImEngine {
   }
 
   private async onApproval(req: ApprovalRequestLike, next: () => Promise<unknown>): Promise<unknown> {
+    const id = String(req.agent?.session?.id ?? req.agent?.id ?? req.session?.id ?? '')
+    const resume = this.progress.waiting(id, true)
+    try { return await this.handleApproval(req, next) }
+    finally { resume() }
+  }
+
+  private async handleApproval(req: ApprovalRequestLike, next: () => Promise<unknown>): Promise<unknown> {
     const currentContract = req.agent !== undefined
     const rawSessionId = req.agent?.session?.id ?? req.agent?.id ?? req.session?.id
     const sessionId = rawSessionId ? String(rawSessionId) : ''
@@ -548,6 +583,7 @@ export class ImEngine {
       // observer now, then await the same promise after presentation completes.
       void wait.catch(() => undefined)
       if (actor) this.questionActors.set(sessionId, actor)
+      const resume = this.progress.waiting(sessionId, true)
       try {
         const delivery = await this.deliverQuestionInteraction(sessionId, channel, binding.chatId, formatUserQuestion(
           typedQuestions[0]!,
@@ -573,6 +609,7 @@ export class ImEngine {
         }
         throw error
       } finally {
+        resume()
         this.questionActors.delete(sessionId)
         this.questionPromptDelivered.delete(sessionId)
       }
@@ -728,9 +765,22 @@ export class ImEngine {
     return lines.join('\n')
   }
 
-  private async onSessionEvent(
+  private onSessionEvent(session: DeliverySession, event: { type?: string; surfaceOp?: unknown; data?: any }): Promise<void> {
+    const id = String(session.id ?? '')
+    this.progress.event(id, event)
+    const outcome = { ok: true }
+    const work = this.processSessionEvent(session, event, outcome)
+    if (event.type === 'assistant/message' && event.surfaceOp === 'append'
+      && !event.data?.message?.content?.some((part: { type?: string }) => part.type === 'tool-call')) {
+      this.progress.delivery(id, event.data?.turn, work.then(() => outcome.ok, () => false))
+    }
+    return work.catch(error => { this.log(`[im-progress] 会话回复失败: ${error instanceof Error ? error.name : 'Error'}`) })
+  }
+
+  private async processSessionEvent(
     session: DeliverySession,
     event: { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } },
+    outcome: { ok: boolean },
   ): Promise<void> {
     const sessionId = session.id ? String(session.id) : ''
     if (!this.router.bindingForSession(sessionId)) return
@@ -788,8 +838,9 @@ export class ImEngine {
             } catch (error) {
               // 收口失败时大概率没送出去，宁可小概率重复也不能让用户收不到回复
               this.log(`[${channel.id}] 流式收口失败，改走普通投递: ${error instanceof Error ? error.message : String(error)}`)
-              delivered = await this.deliver(channel, binding.chatId, finalText)
+              delivered = await this.deliver(channel, binding.chatId, finalText, outcome)
             }
+            outcome.ok = outcome.ok && delivered
             if (delivered) this.streams.markDelivered(streamKey)
           }
           return
@@ -800,22 +851,24 @@ export class ImEngine {
         }
         if (text) {
           this.log(`[${channel.id}] 准备回复 ${sessionId}，长度 ${text.length}`)
-          await this.deliver(channel, binding.chatId, text)
+          const delivered = await this.deliver(channel, binding.chatId, text, outcome)
+          outcome.ok = outcome.ok && delivered
         } else {
           this.log(`[${channel.id}] 助手消息为空 ${sessionId}`)
         }
       } finally {
-        await this.fileDelivery.deliver(session, event, () => {
+        const filesOk = await this.fileDelivery.deliver(session, event, () => {
           const current = this.router.bindingForSession(sessionId)
           return !this.disposed && current?.channelId === binding.channelId && current.chatId === binding.chatId
             && this.channels.get(binding.channelId) === channel ? { channel, chatId: binding.chatId } : undefined
         })
+        outcome.ok = outcome.ok && filesOk
       }
     }
   }
 
   /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
-  private async deliver(channel: ChannelAdapter, chatId: string, text: string): Promise<boolean> {
+  private async deliver(channel: ChannelAdapter, chatId: string, text: string, outcome?: { ok: boolean }): Promise<boolean> {
     let deliveredAny = false
     for (const chunk of splitText(text, channel.maxMessageLength)) {
       try {
@@ -823,6 +876,7 @@ export class ImEngine {
         deliveredAny = true
         this.log(`[${channel.id}] 已投递 ${chatId}，长度 ${chunk.length}`)
       } catch (error) {
+        if (outcome) outcome.ok = false
         this.log(`[${channel.id}] 回复失败: ${error instanceof Error ? error.message : String(error)}`)
       }
     }

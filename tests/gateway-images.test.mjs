@@ -47,12 +47,20 @@ test('image admission ignores an inactive Cordis provider until it becomes activ
 })
 
 for (const lifecycle of ['dispose', 'reload', 'reset', 'unregister', 'model', 'cwd', 'permission']) {
-  test(`image waiting on typing cannot prompt a stale binding after ${lifecycle}`, async t => {
+  test(`image preparation cannot prompt a stale binding after ${lifecycle}`, async t => {
     const h = setup(t)
     let release, entered
     const started = new Promise(resolve => { entered = resolve })
-    h.engine.channels.get('account-opaque-123').sendAction = async () => { entered(); await new Promise(resolve => { release = resolve }) }
-    const inflight = h.send()
+    const { default: fs } = await import('node:fs/promises')
+    const { syncBuiltinESMExports } = await import('node:module')
+    const original = fs.readFile
+    t.mock.method(fs, 'readFile', async (...args) => {
+      if (args[0] !== 'status-lifecycle.png') return original(...args)
+      entered(); await new Promise(resolve => { release = resolve }); return png
+    })
+    syncBuiltinESMExports()
+    t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports() })
+    const inflight = h.send({ media: [{ kind: 'image', path: 'status-lifecycle.png' }] })
     await started
     if (lifecycle === 'dispose') h.engine.dispose()
     else if (lifecycle === 'unregister') h.engine.unregister('account-opaque-123')

@@ -30,6 +30,8 @@ export declare class ImEngine {
     private readonly wrappedUserQuestionServices;
     private legacyServiceTimer?;
     private disposed;
+    private readonly progress;
+    private readonly mergedMessages;
     private readonly fileDelivery;
     private readonly chatCommands;
     private readonly commandScopes;
@@ -58,10 +60,12 @@ export declare class ImEngine {
     private rejectUnauthorized;
     private handleInbound;
     private handleCommand;
+    private takeMergedMessages;
     private inject;
     private cancelInputs;
     private answerApproval;
     private onApproval;
+    private handleApproval;
     private onUserQuestions;
     /**
      * DSH 0.1.1-rc.2 exposes a mutable provider behind a stable service.ask.
@@ -77,6 +81,7 @@ export declare class ImEngine {
     private runInteraction;
     private approvalPrompt;
     private onSessionEvent;
+    private processSessionEvent;
     /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
     private deliver;
     private deliverQuestionInteraction;

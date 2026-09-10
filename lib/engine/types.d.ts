@@ -22,6 +22,7 @@ export interface ReplyStream {
     update(text: string): Promise<void>;
     finish(text: string): Promise<void>;
 }
+export type MessageStatus = 'queued' | 'processing' | 'waiting' | 'success' | 'error' | 'cancelled' | 'cleared';
 export interface ChannelAdapter {
     readonly id: string;
     readonly label: string;
@@ -37,6 +38,11 @@ export interface ChannelAdapter {
     setMessageHandler(handler: (msg: ImMessage) => void | Promise<void>): void;
     status(): string;
     loginUrl?(): string | undefined;
+    /** 状态回应针对原消息，不依赖聊天最近一条消息的可变槽位。 */
+    addStatusReaction?(message: ImMessage, state: MessageStatus, label: string, signal: AbortSignal): Promise<string | undefined>;
+    removeStatusReaction?(message: ImMessage, reaction: string, signal: AbortSignal): Promise<void>;
+    typingIntervalMs?: number;
+    stopAction?(chatId: string): Promise<void>;
     sendAction?(chatId: string, action: 'typing'): Promise<void>;
     sendMedia?(chatId: string, filePath: string, caption?: string): Promise<void>;
     /** 渠道本地白名单。true 放行，false 硬拒绝，undefined 交给引擎白名单。 */

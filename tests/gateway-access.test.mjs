@@ -961,3 +961,58 @@ test('英文准入和输入合并提示不执行命令，并保留重试命令�
     assert.equal(executions, 0)
   } finally { engine.dispose() }
 })
+
+for (const mode of ['success', 'file-failure', 'partial-text']) test(`消息状态与真实引擎入口、文件投递结果关联：${mode}`, async t => {
+  const f = makeEngine(t, undefined, undefined, {
+    workspaceFiles: { readAll: async () => ({ data: 'eA==', offset: 0, eof: true }) },
+  })
+  const statuses = [], originals = []
+  const channel = f.engine.channels.get('telegram')
+  channel.addStatusReaction = async (message, state) => { statuses.push(state); originals.push(message.messageId); return state }
+  channel.removeStatusReaction = async () => {}
+  channel.sendFile = async () => { if (mode === 'file-failure') throw new Error('upload rejected') }
+  if (mode === 'partial-text') {
+    channel.maxMessageLength = 4
+    let sends = 0
+    channel.send = async () => { if (++sends > 1) throw new Error('second chunk failed') }
+  }
+  let message
+  f.engine.ctx.agents.get = () => ({ followup: input => { message = input } })
+  f.engine.addAllowed('telegram', 'user-1')
+  try {
+    f.inbound({ chatId: 'user-1', userId: 'user-1', text: 'make report!!', messageId: 'source-one' })
+    await waitFor(() => Boolean(message))
+    const events = [], session = { id: f.dmSessionId, header: { cwd: 'D:\\workspace' }, snapshotEvents: () => events }
+    const emit = (type, data, surfaceOp) => {
+      const event = { seq: events.length, type, data, surfaceOp }; events.push(event)
+      f.handlers['session/event'](session, event)
+    }
+    emit('turn/start', { turn: 1 })
+    f.handlers['agent/inbox/claimed']({ agent: { session }, message, turn: 1 })
+    emit('user/message', message, 'append')
+    emit('deliverables/presented', { turn: 1, files: [{ path: 'report.pdf' }] })
+    emit('assistant/message', { turn: 1, message: { content: [{ type: 'text', text: 'report complete' }] } }, 'append')
+    emit('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    await waitFor(() => statuses.includes(mode === 'success' ? 'success' : 'error'))
+    assert.ok(originals.every(id => id === 'source-one'))
+    assert.equal(statuses.includes('success'), mode === 'success')
+  } finally { f.engine.dispose() }
+})
+
+test('状态接口卡住不阻塞正常输入，未准入消息不触发状态请求', async t => {
+  const f = makeEngine(t)
+  let input, statusCalls = 0
+  f.engine.ctx.agents.get = () => ({ followup: message => { input = message } })
+  const channel = f.engine.channels.get('telegram')
+  let release
+  channel.addStatusReaction = async () => { statusCalls++; return new Promise(resolve => { release = resolve }) }
+  try {
+    f.inbound({ chatId: 'user-1', userId: 'user-1', text: 'hi!!', messageId: 'denied' })
+    await waitFor(() => f.sent.length > 0)
+    assert.equal(statusCalls, 0)
+    f.engine.addAllowed('telegram', 'user-1')
+    f.inbound({ chatId: 'user-1', userId: 'user-1', text: 'hi!!', messageId: 'allowed' })
+    await waitFor(() => input && statusCalls === 1)
+    assert.equal(input.content[0].text, 'hi')
+  } finally { f.engine.dispose(); release?.(undefined); channel.addStatusReaction = async () => undefined }
+})

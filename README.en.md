@@ -95,6 +95,17 @@ WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram can return files produce
 - A failed transfer produces a message naming the file and does not stop the remaining files. Switching away from the session or stopping the account prevents pending delivery from continuing to a different target.
 - `/export` still exports session logs in web Chat; it is separate from delivering generated files. File delivery does not add general incoming-document support.
 
+## Message progress
+
+Regular chat messages follow the actual task state. Commands continue to use text replies.
+
+- DingTalk: labels on the original message show queued, thinking, waiting for confirmation, done, failed, or cancelled.
+- Feishu / Lark: reactions indicate processing, done, or failed. Waiting keeps the processing reaction; cancellation removes it.
+- Telegram: 👀 processing, 🤔 waiting for confirmation, 👍 done, and 👎 failed. Cancellation removes the reaction. Typing is refreshed while processing.
+- Weixin: typing is refreshed while processing and stopped when finished or waiting for confirmation. WeCom and QQ retain their existing reply behavior.
+
+Done means the turn completed normally and both text and files were delivered. Stopped or failed tasks and later queued messages are not marked done. Channel permissions and network conditions may prevent status updates without blocking chat. Text labels follow the web language setting.
+
 ## Screenshots
 
 Add accounts under each channel in **Settings → IM Assistant**. Expand a channel, select an account, and configure its workspace, model, permission, private access, and receive state independently in its settings dialog:

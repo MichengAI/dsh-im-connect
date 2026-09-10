@@ -84,6 +84,8 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
   let generation = 0
   let lifecycle = new AbortController()
   const tokens = new DingtalkTokenCache(signal => postDingtalk('oauth2/accessToken', { appKey: clientId, appSecret: clientSecret }, signal))
+  // 短超时的状态请求不能取消文件或普通消息共用的鉴权请求。
+  const reactionTokens = new DingtalkTokenCache(signal => postDingtalk('oauth2/accessToken', { appKey: clientId, appSecret: clientSecret }, signal))
   const receiving = new Map<string, Promise<void>>()
   const webhooks = new Map<string, string>()
   const targets = new Map<string, CardTarget>()
@@ -107,6 +109,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
       lifecycle = new AbortController()
       const signal = lifecycle.signal
       tokens.clear()
+      reactionTokens.clear()
       receiving.clear()
       webhooks.clear()
       targets.clear()
@@ -155,7 +158,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
               return
             }
             if (generation !== startedGeneration) return
-            await handler?.({ ...parsed, media, addressed: true })
+            await handler?.({ ...parsed, media, addressed: true, context: { conversationId: payload.conversationId } })
           }).catch(error => { log(`[dingtalk] 消息处理或图片错误提示发送失败: ${channelImageFailureReason(error)}`) })
           receiving.set(parsed.chatId, work)
           void work.finally(() => { if (receiving.get(parsed.chatId) === work) receiving.delete(parsed.chatId) })
@@ -169,6 +172,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
         if (generation !== startedGeneration) return
         lifecycle.abort()
         tokens.clear()
+        reactionTokens.clear()
         client?.disconnect()
         client = undefined
         const message = error instanceof Error ? error.message : String(error)
@@ -180,12 +184,34 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
       generation++
       lifecycle.abort()
       tokens.clear()
+      reactionTokens.clear()
       receiving.clear()
       client?.disconnect()
       client = undefined
       webhooks.clear()
       targets.clear()
       statusText = '已停止'
+    },
+    async addStatusReaction(message, _state, label, signal) {
+      const conversationId = message.context?.conversationId
+      if (!message.messageId || typeof conversationId !== 'string' || !conversationId) return
+      const token = await reactionTokens.get(signal)
+      const result = await postDingtalk('robot/emotion/reply', {
+        robotCode: clientId, openMsgId: message.messageId, openConversationId: conversationId,
+        emotionType: 2, emotionName: label,
+        textEmotion: { emotionId: '2659900', emotionName: label, text: label, backgroundId: 'im_bg_1' },
+      }, signal, { 'x-acs-dingtalk-access-token': token })
+      if (result.success === false) throw new Error('reaction-rejected')
+      return label
+    },
+    async removeStatusReaction(message, reaction, signal) {
+      const token = await reactionTokens.get(signal)
+      const result = await postDingtalk('robot/emotion/recall', {
+        robotCode: clientId, openMsgId: message.messageId, openConversationId: message.context?.conversationId,
+        emotionType: 2, emotionName: reaction,
+        textEmotion: { emotionId: '2659900', emotionName: reaction, text: reaction, backgroundId: 'im_bg_1' },
+      }, signal, { 'x-acs-dingtalk-access-token': token })
+      if (result.success === false) throw new Error('reaction-rejected')
     },
     async sendFile(chatId, file, signal) {
       const target = targets.get(chatId)

@@ -837,6 +837,8 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     async send(chatId, text) {
       await sendText(chatId, text)
     },
+    typingIntervalMs: 5000,
+    async stopAction(chatId) { await sendTypingStatus(chatId, 2) },
     async sendAction(chatId) {
       await sendTypingStatus(chatId, 1)
     },

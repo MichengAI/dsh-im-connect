@@ -1,5 +1,11 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly '\u23F3\u6392\u961F\u4E2D': "⏳Queued";
+    readonly '\uD83E\uDD14\u601D\u8003\u4E2D': "🤔Thinking";
+    readonly '\u23F3\u7B49\u5F85\u786E\u8BA4': "⏳Waiting for confirmation";
+    readonly '\u2705\u5DF2\u5B8C\u6210': "✅Done";
+    readonly '\u274C\u5904\u7406\u5931\u8D25': "❌Failed";
+    readonly '\uD83D\uDEAB\u5DF2\u53D6\u6D88': "🚫Cancelled";
     readonly '\u6587\u4EF6\u201C{0}\u201D\u672A\u80FD\u53D1\u9001\uFF0C\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6253\u5F00\u8BE5\u6587\u4EF6\uFF1B\u4E5F\u53EF\u8BA9\u52A9\u624B\u91CD\u65B0\u4EA4\u4ED8\u3002': "Could not send \"{0}\". Open the file in Chat on the web, or ask the assistant to deliver it again.";
     readonly "\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6253\u5F00\u8FD9\u6761\u4F1A\u8BDD\uFF0C\u518D\u6267\u884C /export \u5BFC\u51FA ZIP \u4F1A\u8BDD\u65E5\u5FD7\u3002": "Open this session in web Chat and run /export to download ZIP session logs.";
     readonly "\u4E0E Chat \u4E00\u81F4\uFF0C\u6B64\u64CD\u4F5C\u4E5F\u4F1A\u5C1D\u8BD5\u4FDD\u5B58\u540E\u7EED Chat \u65B0\u4F1A\u8BDD\u7684\u9ED8\u8BA4\u6A21\u578B\u9009\u62E9\uFF1B\u5DF2\u6709\u5176\u4ED6\u4F1A\u8BDD\u4E0D\u4F1A\u4E3B\u52A8\u4FEE\u6539\u3002": "As in Chat, this also attempts to save the default model selection for future Chat sessions; other existing sessions are not changed.";

@@ -31,12 +31,4 @@ export async function withOutgoingPath(file: OutgoingFile, send: (path: string) 
   } finally { await rm(dir, { recursive: true, force: true }) }
 }
 
-/** SDK 不接收 AbortSignal 时及时结束等待；后续发送仍需检查同一信号。 */
-export function fileOperation<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const aborted = () => reject(signal.reason)
-    signal.addEventListener('abort', aborted, { once: true })
-    operation.then(resolve, reject).finally(() => signal.removeEventListener('abort', aborted))
-    if (signal.aborted) aborted()
-  })
-}
+export { fileOperation } from '../engine/abort.js'

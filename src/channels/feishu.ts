@@ -110,7 +110,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let client: ResourceClient & {
     request(opts: { url: string; method: 'GET' }): Promise<unknown>
-    im: { message: { create(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> } }
+    im: { messageReaction: { create(opts: unknown): Promise<{ code?: number; data?: { reaction_id?: string } }>; delete(opts: unknown): Promise<{ code?: number }> }; message: { create(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> } }
   } | undefined
   let ws: { close(opts?: { force?: boolean }): void } | undefined
   let statusText = '未连接'
@@ -201,6 +201,22 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         params: { receive_id_type: 'chat_id' },
         data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text }) },
       })
+    },
+    async addStatusReaction(message, state, _label, signal) {
+      if (!client || !message.messageId || state === 'cancelled') return
+      const emoji = state === 'success' ? 'DONE' : state === 'error' ? 'ERROR' : 'OnIt'
+      signal.throwIfAborted()
+      const result = await fileOperation(client.im.messageReaction.create({
+        path: { message_id: message.messageId }, data: { reaction_type: { emoji_type: emoji } },
+      }), signal)
+      if (result.code || !result.data?.reaction_id) throw new Error('reaction-rejected')
+      return result.data.reaction_id
+    },
+    async removeStatusReaction(message, reaction, signal) {
+      if (!client) return
+      signal.throwIfAborted()
+      const result = await fileOperation(client.im.messageReaction.delete({ path: { message_id: message.messageId, reaction_id: reaction } }), signal)
+      if (result.code) throw new Error('reaction-rejected')
     },
     async sendFile(chatId, file, signal) {
       if (!client || !lifecycle) throw new Error(`${id}: 尚未连接`)
