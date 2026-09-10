@@ -1,3 +1,4 @@
+import { preparePromptAgent, promptServices } from './host-prompt-fixture.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -63,6 +64,7 @@ test('real Chat selection owns assembly and request after account initialization
   }
   const binding = await router.getOrCreate('wecom', 'dm', 'selection-contract', 'image')
   const agent = binding.handle.agent
+  preparePromptAgent(agent)
   const assemble = () => agentCtx.waterfall('system-prompt/assemble', {}, {}, async () => ({ variables: { provider: options.provider, model: options.model } }))
   const request = () => agentCtx.waterfall('agent/request', {}, async () => ({ ...options }))
   // Older text-only hosts still use the account's initial options and effort.
@@ -76,6 +78,7 @@ test('real Chat selection owns assembly and request after account initialization
     llm: { listProviders: () => [{ id: 'chat' }], async resolveModelInfo(provider, model) { resolved.push([provider, model]); return { inputModalities: ['text', 'image'] } } },
     attachments: { async saveImages(images) { return images.map(() => ({ attachmentId: 'image', mediaType: 'image/png', bytes: 1, width: 1, height: 1 })) } },
   }
+  Object.assign(host, promptServices(process.env.DSH_CHAT_CONTRACT_ROOT, host.attachments))
   const owner = new ApiSessionAgentController(host)
   const selection = owner.selectionFor(agent)
   assert.deepEqual(selection.current, { provider: 'account', model: 'text-only', reasoningEffort: 'high' })

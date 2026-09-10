@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   test:
-    name: Node.js 24
+    name: Node.js 24 / DSH ${{ matrix.dsh }}
+    strategy:
+      fail-fast: false
+      matrix:
+        dsh: [0.1.2-rc.1, 0.1.5-rc.1]
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
@@ -26,13 +30,13 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
-      - name: 安装图片与管理认证契约测试宿主（隔离插件依赖）
+      - name: 安装会话、命令、图片与管理认证契约测试宿主（隔离插件依赖）
         run: >-
           npm install --prefix "$RUNNER_TEMP/dsh-image-contract" --no-audit --no-fund
-          @deepseek-ai/dsh-api-session-controller@0.1.2-rc.1
-          @deepseek-ai/dsh-commands@0.1.2-rc.1
-          @deepseek-ai/dsh-attachment-local@0.1.2-rc.1
-          @deepseek-ai/dsh-client-connection@0.1.2-rc.1
+          @deepseek-ai/dsh-api-session-controller@${{ matrix.dsh }}
+          @deepseek-ai/dsh-commands@${{ matrix.dsh }}
+          @deepseek-ai/dsh-attachment-local@${{ matrix.dsh }}
+          @deepseek-ai/dsh-client-connection@${{ matrix.dsh }}
 
       - name: 编译并测试
         env:

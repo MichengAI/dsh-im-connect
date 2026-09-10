@@ -17,13 +17,14 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
     '@deepseek-ai/dsh-client-ui-primitives',
     '@deepseek-ai/dsh-client-ui-settings',
     '@deepseek-ai/dsh-client-ui-slots',
+    '@deepseek-ai/dsh-host-webserver',
   ]
   const developmentPackages = dshPackages.filter((packageName) => packageName !== '@deepseek-ai/dsh-client-runtime')
   for (const packageName of dshPackages) {
-    assert.equal(manifest.peerDependencies[packageName], '>=0.1.0-rc.5 <0.2.0')
+    assert.equal(manifest.peerDependencies[packageName], '0.1.2-rc.1 || 0.1.5-rc.1')
   }
   for (const packageName of developmentPackages) {
-    assert.equal(manifest.devDependencies[packageName], '0.1.2-rc.1')
+    assert.equal(manifest.devDependencies[packageName], '0.1.5-rc.1')
   }
   assert.equal(manifest.peerDependenciesMeta['@deepseek-ai/dsh-client-runtime'].optional, true)
 })

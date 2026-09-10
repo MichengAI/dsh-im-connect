@@ -1,3 +1,4 @@
+import { preparePromptAgent, promptServices, promptAdmission } from './host-prompt-fixture.mjs'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -179,6 +180,7 @@ test('real DSH Chat admission: current selection, durable refs, unknown modaliti
   const h = setup(t)
   const received = [], saved = [], resolved = []
   const agent = { id: h.sessionId, ctx: new Context(), session: { id: h.sessionId, header: {}, requestHeader: () => undefined }, followup: message => received.push(message) }
+  preparePromptAgent(agent)
   let modalities = ['text', 'image']
   const ref = { attachmentId: 'durable-image', mediaType: 'image/png', bytes: png.length, width: 1, height: 1 }
   let release, entered
@@ -191,6 +193,7 @@ test('real DSH Chat admission: current selection, durable refs, unknown modaliti
     llm: { listProviders: () => [{ id: 'session-provider' }], async resolveModelInfo(provider, model) { resolved.push([provider, model]); return { inputModalities: modalities } } },
     attachments: { async saveImages(images) { saved.push(images); if (gate) { entered(); await new Promise(resolve => { release = resolve }) }; return images.map(() => ref) } },
   }
+  Object.assign(host, promptServices(root, host.attachments))
   const owner = new ApiSessionAgentController(host)
   owner.selectionFor(agent).current = { provider: 'session-provider', model: 'session-vision' }
   const controller = Object.create(SessionController.prototype)
@@ -228,11 +231,10 @@ test('real host attachment store persists and reopens uploaded channel image', {
   const { pathToFileURL } = await import('node:url')
   const root = process.env.DSH_ATTACHMENT_CONTRACT_ROOT
   const { LocalAttachmentStore } = await import(pathToFileURL(join(root, 'lib/index.js')).href)
-  const { admitPromptContent } = await import(pathToFileURL(join(root, '../dsh-attachment/lib/index.js')).href)
   const h = setup(t)
   const attachments = new LocalAttachmentStore(new Context(), { dshHome: h.dir })
   await h.send()
-  const content = await admitPromptContent(attachments, h.calls[0].content)
+  const content = await promptAdmission(root, attachments, h.calls[0].content)
   const ref = content[1].attachment
   assert.equal(content[1].type, 'image')
   assert.equal(ref.mediaType, 'image/png')
@@ -244,7 +246,7 @@ test('real host attachment store persists and reopens uploaded channel image', {
   const stored = await reopened.readImage(ref)
   assert.deepEqual(stored.ref, ref)
   assert.equal(stored.data.length, ref.bytes)
-  await assert.rejects(admitPromptContent(reopened, [{ type: 'image', mediaType: 'image/png', data: Buffer.from('not a raster').toString('base64') }]))
+  await assert.rejects(promptAdmission(root, reopened, [{ type: 'image', mediaType: 'image/png', data: Buffer.from('not a raster').toString('base64') }]))
 })
 
 for (const id of ['weixin', 'wecom', 'dingtalk', 'feishu', 'lark', 'qq', 'telegram', 'account-opaque-123']) {
