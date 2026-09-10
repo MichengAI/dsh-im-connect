@@ -4,7 +4,7 @@ import { replyText } from './command-locale.js'
 import { ChoiceSendError } from './choice-delivery.js'
 
 export interface Choice { label: string; value: string }
-type Entry = { key: string; session?: string; expires: number; choices: Choice[]; valid: () => boolean; allowNumber: boolean; receipt?: ChoiceReceipt; closedText?: string }
+type Entry = { key: string; session?: string; expires: number; choices: Choice[]; valid: () => boolean; allowNumber: boolean; receipt?: ChoiceReceipt; closedText?: string; expiredText: string; selectedTexts: string[] }
 /** 所有按钮只携带随机索引；服务端保留动作，并绑定账号、聊天、操作者和会话。 */
 export class ChoiceStore {
   private entries = new Map<string, Entry>()
@@ -15,12 +15,12 @@ export class ChoiceStore {
     entry.closedText = text
     if (entry.receipt) void Promise.resolve().then(() => entry.receipt!.close(text)).catch(() => this.log('[choices] 原卡片更新失败；操作不会重试，请查看后续回复'))
   }
-  private retire(token: string, text = replyText('此卡片已失效，请打开新的 /menu。')): void {
+  private retire(token: string, text?: string): void {
     const entry = this.entries.get(token)
     if (!entry) return
     this.entries.delete(token)
     if (this.scopes.get(entry.key) === token) this.scopes.delete(entry.key)
-    this.close(entry, text)
+    this.close(entry, text ?? entry.expiredText)
   }
   private key(channel: string, msg: ImMessage): string { return JSON.stringify([channel, msg.kind ?? 'dm', msg.chatId, msg.userId ?? '']) }
   clear(channel?: string): void {
@@ -33,7 +33,11 @@ export class ChoiceStore {
     for (const [token, entry] of this.entries) if (entry.expires <= Date.now()) this.retire(token)
     if (this.entries.size >= 512) this.retire(this.entries.keys().next().value!)
     const token = randomUUID()
-    const entry: Entry = { key, session, expires: Date.now() + 15 * 60_000, choices, valid, allowNumber }
+    // 回调与停用可能发生在语言作用域外，收口文案沿用发送时的卡片语言。
+    const entry: Entry = { key, session, expires: Date.now() + 15 * 60_000, choices, valid, allowNumber,
+      expiredText: replyText('此卡片已失效，请打开新的 /menu。'),
+      selectedTexts: choices.map(choice => replyText('已选择：{0}。此卡片已结束，请查看后续操作结果。', choice.label)),
+    }
     this.entries.set(token, entry)
     this.scopes.set(key, token)
     const body = text + '\n\n' + choices.map((choice, i) => `${allowNumber ? `${i + 1}. ` : ''}${choice.label}${choice.value.startsWith('/') ? ` — ${choice.value}` : ''}`).join('\n') + '\n\n' + hint
@@ -71,7 +75,7 @@ export class ChoiceStore {
     if (entry.expires <= Date.now() || !entry.valid()) { this.retire(token); return '' }
     const index = explicit ? Number(explicit.split(':')[1]) : Number(msg.text.trim()) - 1
     if (!Number.isSafeInteger(index) || index < 0 || !entry.choices[index]) return ''
-    this.retire(token, replyText('已选择：{0}。此卡片已结束，请查看后续操作结果。', entry.choices[index]!.label))
+    this.retire(token, entry.selectedTexts[index])
     return entry.choices[index]!.value
   }
 }

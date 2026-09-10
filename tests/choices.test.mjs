@@ -2,7 +2,24 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ChoiceStore } from '../lib/engine/choices.js'
 import { ChoiceSendError, choiceSendError } from '../lib/engine/choice-delivery.js'
+import { withReplyLocale } from '../lib/engine/command-locale.js'
 const msg = { chatId: 'chat', userId: 'owner', kind: 'dm', text: '/menu' }
+
+test('英文卡片在语言作用域外点击和清理仍使用英文收口', async () => {
+  const updates = [], store = new ChoiceStore()
+  let token
+  const channel = { id: 'bot', sendChoices: async (_, __, buttons) => { token = buttons[0].token; return { close: async text => { updates.push(text) } } } }
+  const show = () => withReplyLocale({ get: () => ({ get: () => ({ preference: 'en' }) }) }, () => store.show(channel, msg, 'Menu', [{ label: 'Help', value: '/help' }]))
+  await show()
+  store.resolve('bot', { ...msg, actionToken: token })
+  await tick()
+  assert.match(updates[0], /^Selected: Help/)
+  await show()
+  store.clear()
+  await tick()
+  assert.match(updates[1], /^This card is no longer active/)
+  function tick() { return new Promise(resolve => setImmediate(resolve)) }
+})
 
 test('发送结果未知不补发卡片内容，已到达按钮仍可使用；诊断不泄露平台错误', async () => {
   const logs = [], store = new ChoiceStore(line => logs.push(line))
