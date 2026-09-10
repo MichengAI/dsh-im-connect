@@ -1,5 +1,7 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
+  "此卡片已失效，请打开新的 /menu。": "This card is no longer active. Open a new /menu.",
+  "已选择：{0}。此卡片已结束，请查看后续操作结果。": "Selected: {0}. This card is closed; see the following reply for the result.",
   "调整推理": "Adjust reasoning",
   "查看队列": "View queue",
   "接下来可以：": "Next steps:",

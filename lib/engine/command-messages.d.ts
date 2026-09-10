@@ -1,5 +1,7 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "\u6B64\u5361\u7247\u5DF2\u5931\u6548\uFF0C\u8BF7\u6253\u5F00\u65B0\u7684 /menu\u3002": "This card is no longer active. Open a new /menu.";
+    readonly "\u5DF2\u9009\u62E9\uFF1A{0}\u3002\u6B64\u5361\u7247\u5DF2\u7ED3\u675F\uFF0C\u8BF7\u67E5\u770B\u540E\u7EED\u64CD\u4F5C\u7ED3\u679C\u3002": "Selected: {0}. This card is closed; see the following reply for the result.";
     readonly 调整推理: "Adjust reasoning";
     readonly 查看队列: "View queue";
     readonly "\u63A5\u4E0B\u6765\u53EF\u4EE5\uFF1A": "Next steps:";

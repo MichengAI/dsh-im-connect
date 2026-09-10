@@ -3,6 +3,31 @@ import assert from 'node:assert/strict'
 import { ChoiceStore } from '../lib/engine/choices.js'
 const msg = { chatId: 'chat', userId: 'owner', kind: 'dm', text: '/menu' }
 
+test('有效选择收口原卡片；外人点击不修改卡片，重复点击不再更新', async () => {
+  const updates = [], store = new ChoiceStore()
+  let token
+  await store.show({ id: 'bot', sendChoices: async (_, __, buttons) => { token = buttons[0].token; return { close: async text => { updates.push(text) } } } }, msg, 'Menu', [{ label: 'New', value: '/new' }])
+  assert.equal(store.resolve('bot', { ...msg, userId: 'other', actionToken: token }), '')
+  await Promise.resolve()
+  assert.equal(updates.length, 0)
+  assert.equal(store.resolve('bot', { ...msg, actionToken: token }), '/new')
+  assert.equal(store.resolve('bot', { ...msg, actionToken: token }), '')
+  await Promise.resolve()
+  assert.equal(updates.length, 1)
+  assert.match(updates[0], /New/)
+})
+
+test('卡片更新失败不重发、不阻断动作并保留诊断', async () => {
+  const logs = [], store = new ChoiceStore(line => logs.push(line))
+  let token, sends = 0
+  await store.show({ id: 'bot', sendChoices: async (_, __, buttons) => { sends++; token = buttons[0].token; return { close: async () => { throw new Error('secret') } } } }, msg, 'Menu', [{ label: 'Help', value: '/help' }])
+  assert.equal(store.resolve('bot', { ...msg, actionToken: token }), '/help')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(sends, 1)
+  assert.equal(logs.length, 1)
+  assert.doesNotMatch(logs[0], /secret/)
+})
+
 test('回复导航不抢占数字聊天，但按钮仍执行绑定动作', async () => {
   const store = new ChoiceStore()
   let token

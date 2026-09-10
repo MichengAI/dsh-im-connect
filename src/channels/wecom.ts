@@ -23,6 +23,7 @@ export interface WecomSdkClient {
   uploadMedia?(data: Buffer, options: { type: 'file'; filename: string }): Promise<{ media_id: string }>
   replyMedia?(frame: unknown, type: 'file', mediaId: string): Promise<unknown>
   sendMessage(chatId: string, body: unknown): Promise<unknown>
+  updateTemplateCard?(frame: unknown, card: unknown): Promise<unknown>
   connect(): unknown
   disconnect(): void
   on(event: string, fn: (payload?: unknown) => void): void
@@ -186,6 +187,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
   let statusText = '未连接'
   let generation = 0
   const receiving = new Map<string, Promise<void>>()
+  const choiceFrames = new Map<string, unknown>()
 
   return {
     id: 'wecom',
@@ -216,10 +218,12 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
         const group = body.chattype === 'group'
         const chatId = group ? body.chatid : userId
         if (!userId || !chatId || typeof callback?.event_key !== 'string') return
+        const token = callback.event_key.split(':')[0]
+        choiceFrames.set(token, frame)
         broker?.remember(chatId, frame)
         void Promise.resolve(handler?.({ chatId, userId, kind: group ? 'group' : 'dm', addressed: true, text: '',
           actionToken: callback.event_key, messageId: body.msgid,
-        })).catch(() => log('[wecom] 按钮操作失败'))
+        })).catch(() => log('[wecom] 按钮操作失败')).finally(() => { if (choiceFrames.get(token) === frame) choiceFrames.delete(token) })
       })
       client.on('message', (frame) => {
         const body = frameBody(frame)
@@ -319,6 +323,16 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
         main_title: { title: text.split('\n')[0]?.slice(0, 36) }, sub_title_text: text.slice(0, 500),
         button_list: buttons.map(button => ({ text: button.label.slice(0, 36), key: button.token, style: 1 })),
       } })
+      const sender = client
+      const token = buttons[0]?.token.split(':')[0]
+      return { close: async (status: string) => {
+        const frame = token ? choiceFrames.get(token) : undefined
+        // 企业微信只能在当前卡片事件的五秒回复窗口内更新，不能拿普通消息帧更新旧卡。
+        if (!frame || !sender.updateTemplateCard) return
+        await sender.updateTemplateCard(frame, { card_type: 'text_notice', task_id: token,
+          main_title: { title: status.slice(0, 36) }, sub_title_text: text,
+        })
+      } }
     },
     async sendFile(chatId, file, signal) {
       if (!broker) throw new Error('wecom: 尚未连接')

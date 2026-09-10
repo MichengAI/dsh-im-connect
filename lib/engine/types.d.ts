@@ -24,6 +24,10 @@ export interface ReplyStream {
     finish(text: string): Promise<void>;
 }
 export type MessageStatus = 'queued' | 'processing' | 'waiting' | 'success' | 'error' | 'cancelled' | 'cleared';
+/** 已发送卡片的更新句柄；更新只能修改原消息，不能再次发送。 */
+export interface ChoiceReceipt {
+    close(text: string): Promise<void>;
+}
 export interface ChannelAdapter {
     readonly id: string;
     readonly label: string;
@@ -39,7 +43,7 @@ export interface ChannelAdapter {
     sendChoices?(message: ImMessage, text: string, buttons: Array<{
         label: string;
         token: string;
-    }>): Promise<void>;
+    }>): Promise<void | ChoiceReceipt>;
     /** 发送宿主已允许读取的完整文件；失败必须抛错，取消后不继续提交消息。 */
     sendFile?(chatId: string, file: {
         name: string;

@@ -14,6 +14,7 @@ export interface WecomSdkClient {
     }>;
     replyMedia?(frame: unknown, type: 'file', mediaId: string): Promise<unknown>;
     sendMessage(chatId: string, body: unknown): Promise<unknown>;
+    updateTemplateCard?(frame: unknown, card: unknown): Promise<unknown>;
     connect(): unknown;
     disconnect(): void;
     on(event: string, fn: (payload?: unknown) => void): void;

@@ -5,8 +5,12 @@ export interface Choice {
 }
 /** 所有按钮只携带随机索引；服务端保留动作，并绑定账号、聊天、操作者和会话。 */
 export declare class ChoiceStore {
+    private readonly log;
     private entries;
     private scopes;
+    constructor(log?: (line: string) => void);
+    private close;
+    private retire;
     private key;
     clear(channel?: string): void;
     show(channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, valid?: () => boolean, hint?: string, allowNumber?: boolean): Promise<string>;

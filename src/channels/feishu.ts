@@ -114,7 +114,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let client: ResourceClient & {
     request(opts: { url: string; method: 'GET' }): Promise<unknown>
-    im: { messageReaction: { create(opts: unknown): Promise<{ code?: number; data?: { reaction_id?: string } }>; delete(opts: unknown): Promise<{ code?: number }> }; message: { create(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> } }
+    im: { messageReaction: { create(opts: unknown): Promise<{ code?: number; data?: { reaction_id?: string } }>; delete(opts: unknown): Promise<{ code?: number }> }; message: { create(opts: unknown): Promise<unknown>; patch(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> } }
   } | undefined
   let ws: { close(opts?: { force?: boolean }): void } | undefined
   let statusText = '未连接'
@@ -222,8 +222,17 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           ...buttons.map(button => ({ tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: button.label.slice(0, 60) },
             type: 'default', value: { token: button.token, group: message.kind === 'group' } }] })),
         ] }),
-      } }) as { code?: number } | undefined
+      } }) as { code?: number; data?: { message_id?: string } } | undefined
       if (result?.code) throw new Error('card-send-failed')
+      const messageId = result?.data?.message_id
+      const sender = client
+      if (!messageId) return
+      return { close: async (status: string) => {
+        const updated = await sender.im.message.patch({ path: { message_id: messageId }, data: { content: JSON.stringify({ config: { wide_screen_mode: true }, elements: [
+          { tag: 'markdown', content: text }, { tag: 'div', text: { tag: 'plain_text', content: status } },
+        ] }) } }) as { code?: number } | undefined
+        if (updated?.code) throw new Error('card-update-failed')
+      } }
     },
     async addStatusReaction(message, state, _label, signal) {
       if (!client || !message.messageId || state === 'cancelled') return
