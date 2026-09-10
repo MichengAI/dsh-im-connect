@@ -113,11 +113,12 @@ export class ChatCommands {
             msg = { ...msg, text: `/menu ${section} ${list[2] || '1'}` }
           }
         }
-        const text = await this.run(channel, msg, signal)
+        const navigation: { choices?: Choice[] } = {}
+        const text = await this.run(channel, msg, signal, navigation)
         if (!text) return text
         const command = /^\/([a-z][a-z0-9_-]*)/i.exec(msg.text.trim())?.[1]?.toLowerCase() ?? ''
         const current = this.router.lookup(channel.id, msg.kind ?? 'dm', msg.chatId)
-        const choices = commandNavigation(command, !!current)
+        const choices = navigation.choices ?? commandNavigation(command, !!current)
         if (!choices.length) return text
         const fallback = text + related(replyText('接下来可以：'), ...choices.map(choice => `${choice.label} — ${choice.value}`))
         // 导航发送失败不能把已完成的命令改报失败；新会话的按钮绑定切换后的会话。
@@ -164,7 +165,7 @@ export class ChatCommands {
     return [replyText('工作区：{0}', cwd || replyText('暂时无法读取')), model ? replyText('模型：{0}/{1} · {2}', model.provider, model.model, model.reasoningEffort || replyText('默认推理')) : replyText('模型：暂时无法读取')].join('\n')
   }
 
-  private async run(channel: ChannelAdapter, msg: ImMessage, signal: AbortSignal): Promise<string> {
+  private async run(channel: ChannelAdapter, msg: ImMessage, signal: AbortSignal, navigation: { choices?: Choice[] }): Promise<string> {
     signal.throwIfAborted()
     const match = /^\/([a-z][a-z0-9_-]*)([\s\S]*)$/i.exec(msg.text.trim())
     if (!match) throw new Error(replyText('命令格式无效，请发送 /help。'))
@@ -364,20 +365,25 @@ export class ChatCommands {
         for await (const frame of stream) { queueCount = frame.value.queues[sessionId]?.length || 0; details.push(replyText('排队消息：{0} 条', queueCount)); break }
       } catch { signal.throwIfAborted() }
 
-      const actions: string[] = []
-      if (values?.goal?.goal.phase === 'active') {
+      const actions: Choice[] = []
+      const phase = values?.goal?.goal.phase
+      if (phase === 'active' || phase === 'paused' || phase === 'blocked') {
         const registered = await this.optional(async () => this.call<Descriptor[]>('commands', 'list', await this.agent(sessionId)), signal)
-        if (registered?.some((item) => item.name === 'goal')) actions.push(replyText('暂停目标：/goal pause'))
+        if (registered?.some((item) => item.name === 'goal')) actions.push(phase === 'active'
+          ? { label: replyText('暂停目标'), value: '/goal pause' }
+          : { label: replyText('恢复目标'), value: '/goal resume' })
       }
-      if (row?.running === true) actions.push(replyText('补充要求：/steer 补充内容'), replyText('请求停止：/stop'))
-      if (queueCount) actions.push(replyText('查看队列：/queue'))
-      actions.push(replyText('最近记录：/history'), replyText('模型设置：/model'), replyText('切换会话：/sessions'))
+      if (row?.running === true) actions.push({ label: replyText('停止任务'), value: '/stop' })
+      if (queueCount) actions.push({ label: replyText('查看队列'), value: '/queue' })
+      if (!actions.length) actions.push({ label: replyText('刷新状态'), value: '/status' }, { label: replyText('最近记录'), value: '/history' })
+      navigation.choices = [...actions.slice(0, 3), { label: replyText('返回菜单'), value: '/menu' }]
       return [replyText('会话：{0}', oneLine(row?.projections?.values?.title || sessionId)),
         replyText('状态：{0}', row?.running === true ? replyText('运行中') : row?.running === false ? replyText('空闲') : replyText('暂时无法读取')),
         replyText('工作区：{0}', row?.cwd || replyText('暂时无法读取')),
         model ? replyText('模型：{0}/{1}；推理：{2}', model.provider, model.model, model.reasoningEffort || replyText('默认')) : replyText('模型：暂时无法读取'),
         ...details, replyText('渠道：{0}（{1}）', channel.label, channel.status()), replyText('会话 ID：{0}', sessionId),
-        ].join('\n') + related(...actions.slice(0, 3))
+        ].join('\n') + related(...(row?.running === true ? [replyText('补充要求：/steer 补充内容')] : []),
+          ...actions.slice(0, 3).map(action => replyText('{0}：{1}', action.label, action.value)))
     }
     if (command === 'stop') {
       await this.call('sessionController', 'cancel', { sessionId })

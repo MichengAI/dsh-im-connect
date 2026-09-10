@@ -108,6 +108,23 @@ test('切换会话后的导航绑定新会话，避免按钮刚生成就失效',
   assert.equal(shown[5], false)
 })
 
+for (const state of ['running', 'idle', 'unknown', 'paused', 'active']) test(`状态按钮按实际状态生成：${state}`, async () => {
+  let shown
+  const f = fixture({ channel: { sendChoices() {} }, showChoices: async (...args) => { shown = args; return '' } })
+  f.rows[0].running = state === 'running'
+  if (state === 'unknown') f.services.sessionController.list = async () => { throw new Error('unavailable') }
+  f.services.sessionController.control = async function* () { yield { value: { queues: {} } } }
+  f.services.commands.list = () => [{ name: 'goal' }]
+  f.services.sessionController.follow = async function* () { yield { projections: { values: { goal: ['paused', 'active'].includes(state) ? { goal: { phase: state } } : null } }, records: [] } }
+  await f.run('/status')
+  const actions = shown[3].map(choice => choice.value)
+  assert.equal(actions.includes('/stop'), state === 'running')
+  assert.equal(actions.includes('/goal resume'), state === 'paused')
+  assert.equal(actions.includes('/goal pause'), state === 'active')
+  assert.equal(actions.includes('/queue'), false)
+  assert.equal(actions.at(-1), '/menu')
+})
+
 test('英文命令导航完整翻译并保留可发送命令', async () => {
   const f = fixture()
   f.services.settings = { get: () => ({ preference: 'en' }) }

@@ -1,5 +1,9 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly 暂停目标: "Pause goal";
+    readonly 恢复目标: "Resume goal";
+    readonly 刷新状态: "Refresh status";
+    readonly 最近记录: "Recent messages";
     readonly "\u6B64\u5361\u7247\u5DF2\u5931\u6548\uFF0C\u8BF7\u6253\u5F00\u65B0\u7684 /menu\u3002": "This card is no longer active. Open a new /menu.";
     readonly "\u5DF2\u9009\u62E9\uFF1A{0}\u3002\u6B64\u5361\u7247\u5DF2\u7ED3\u675F\uFF0C\u8BF7\u67E5\u770B\u540E\u7EED\u64CD\u4F5C\u7ED3\u679C\u3002": "Selected: {0}. This card is closed; see the following reply for the result.";
     readonly 调整推理: "Adjust reasoning";
