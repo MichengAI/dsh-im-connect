@@ -550,7 +550,12 @@ export class SessionRouter {
     try {
       const persistence = this.ctx.get?.('sessionPersistence') as SessionPersistenceList | undefined
       if (!persistence?.list) return
-      for (const header of (await persistence.list()).map(storedHeader)) {
+      for (const item of await persistence.list()) {
+        let header: StoredHeader
+        try { header = storedHeader(item) } catch (error) {
+          this.log(`[router] 跳过无法识别的历史条目: ${error instanceof Error ? error.message : String(error)}`)
+          continue
+        }
         const parsed = parseImSessionId(header.id)
         if (!parsed) continue
         this.store.saveHistory({

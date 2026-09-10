@@ -43,6 +43,20 @@ for (const shape of ['legacy', 'stat', 'invalid']) {
   })
 }
 
+for (const shape of ['legacy', 'stat']) {
+  test(`历史恢复跳过坏条目并保留前后有效记录：${shape}`, async t => {
+    const f = makeRouter(t)
+    const headers = ['before', 'after'].map(chatId => ({ id: `im:wecom:dm:1724000000000:${chatId}`, cwd: 'D:/recovered', createdAt: 1000 }))
+    const entry = header => shape === 'stat' ? { header, eventCount: 1 } : header
+    f.ctx.get = name => name === 'sessionPersistence' ? { list: async () => [entry(headers[0]), {}, null, entry(headers[1])] } : undefined
+    await f.router.attachMappedSessions()
+    await f.router.attachMappedSessions()
+    assert.deepEqual(f.store.list().map(item => item.sessionId).sort(), headers.map(item => item.id).sort())
+    assert.equal(f.store.get('wecom:dm:before'), undefined)
+    assert.equal(f.store.get('wecom:dm:after'), undefined)
+  })
+}
+
 test('新版持久化列表恢复历史头信息且幂等', async t => {
   const f = makeRouter(t)
   const header = { id: 'im:wecom:dm:1724000000000:recovered', cwd: 'D:/recovered', createdAt: 1000 }

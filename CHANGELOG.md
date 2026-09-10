@@ -2,7 +2,16 @@
 
 [简体中文](CHANGELOG.zh-CN.md)
 
-The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
+Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
+
+## 0.1.42 - 2026-09-10
+
+- Support DSH 0.1.2-rc.1 and 0.1.5-rc.1. Fix session creation, workspace switching, and session restoration on the newer DSH version.
+- Fix IM tool approvals failing to show operation details and requiring users to approve on the web.
+- Improve history recovery: an unrecognized record no longer blocks other sessions from being restored, and existing history entries are preserved when their logs cannot be reliably checked.
+- Fix account setup and settings dialogs appearing behind the chat area on narrow screens.
+- Restart DSH and refresh the page after upgrading.
+
 
 ## 0.1.41 - 2026-09-10
 
