@@ -4,6 +4,16 @@
 
 The five most recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.41 - 2026-09-10
+
+- Add independent command switches for private and group chats on each account. Normal chat remains available when commands are disabled, and existing private-chat admission rules still apply.
+- Manage sessions, workspaces, models, and reasoning levels from IM. View history, rename or fork sessions, stop tasks, add instructions, and manage queued messages. `/help` also lists the Chat extension commands currently available.
+- Improve account settings with full-width channel cards, settings dialogs, and receive-message switches on account rows. Add Agent preset selection and fix the unresponsive Add Workspace action.
+- Fix previous sessions failing to open on the web after `/new`, and missing replies after switching workspaces. New sessions use the selected workspace and account settings while preserving previous sessions.
+- Make command replies clearer with results, current settings, and suggested next actions. Lists identify archived sessions and sessions connected to another chat. Support Chinese and English using the language saved in web settings.
+- Preserve line breaks in DingTalk command replies. If AI Card creation fails, replies fall back to plain text with line breaks intact.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.40 - 2026-09-10
 
 - Fix #12: previous sessions stay in the channel list after `/new`, `/clear`, or a workspace change. Open, rename, or archive them without changing the new session used by your current chat.
