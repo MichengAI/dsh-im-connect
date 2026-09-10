@@ -10,6 +10,19 @@ import { readSessionTitle } from './session-title.js'
 
 const DEFAULT_DISPOSE_TIMEOUT_MS = 10_000
 
+type StoredHeader = { id: string; createdAt?: number; cwd?: string }
+type SessionPersistenceList = { list?: () => Promise<readonly unknown[]> }
+
+function storedHeader(item: unknown): StoredHeader {
+  const value = item as { header?: unknown } | null
+  const header = (value?.header ?? item) as StoredHeader | null
+  // 新版返回 stat.header，旧版直接返回 header；未知结构不能充当日志已删除的证据。
+  if (!header || typeof header.id !== 'string' || !header.id) throw new Error('无法识别宿主持久化会话条目')
+  return header
+}
+
+type SetupAgent = { session?: { snapshotEvents?: () => readonly { type: string }[]; events?: readonly { type: string }[] } }
+
 export interface ChatBinding {
   key: string
   channelId: ChannelInstanceId
@@ -230,7 +243,7 @@ export class SessionRouter {
     try {
       // 未 inject sessions 时不能读 ctx.sessions，否则 Cordis 会直接把 Host 打挂
       const live = this.ctx.get?.('sessions') as { list?: () => readonly { readonly id: string }[] } | undefined
-      const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { readonly id: string }[]> } | undefined
+      const persistence = this.ctx.get?.('sessionPersistence') as SessionPersistenceList | undefined
       const canListLive = typeof live?.list === "function"
       const canListStored = typeof persistence?.list === "function"
       // 仅凭活会话列表不能判断已卸载的历史日志是否被删除。
@@ -240,7 +253,7 @@ export class SessionRouter {
         for (const session of live.list()) ids.add(String(session.id))
       }
       if (canListStored && persistence.list) {
-        for (const header of await persistence.list()) ids.add(String(header.id))
+        for (const item of await persistence.list()) ids.add(storedHeader(item).id)
       }
       return ids
     } catch {
@@ -378,10 +391,10 @@ export class SessionRouter {
     const rec = this.store.list().find(item => item.sessionId === sessionId)
     if (!rec) return true
     return this.channelOperations.run(rec.channel, async () => {
-      const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { id: string }[]> } | undefined
+      const persistence = this.ctx.get?.('sessionPersistence') as SessionPersistenceList | undefined
       if (!persistence?.list) return false
       try {
-        if ((await persistence.list()).some(item => item.id === sessionId)) return false
+        if ((await persistence.list()).map(storedHeader).some(header => header.id === sessionId)) return false
       } catch { return false }
       return this.removeFromChannel(sessionId, false)
     })
@@ -535,9 +548,9 @@ export class SessionRouter {
 
   private async recoverHistory(): Promise<void> {
     try {
-      const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { id: string; createdAt?: number; cwd?: string }[]> } | undefined
+      const persistence = this.ctx.get?.('sessionPersistence') as SessionPersistenceList | undefined
       if (!persistence?.list) return
-      for (const header of await persistence.list()) {
+      for (const header of (await persistence.list()).map(storedHeader)) {
         const parsed = parseImSessionId(header.id)
         if (!parsed) continue
         this.store.saveHistory({
@@ -606,8 +619,10 @@ export class SessionRouter {
     const config = this.resolveConfig(channelId)
     const preset = savedPreset || config.agentPreset || 'standard'
     const permission = config.permissionPreset
-    return async (agentCtx: unknown) => {
-      const session = (agentCtx as { agent?: { session?: { snapshotEvents?: () => readonly { type: string }[]; events?: readonly { type: string }[] } } }).agent?.session
+    return async (agentCtx: unknown, explicitAgent?: SetupAgent) => {
+      // 0.1.5 显式传入 Agent；仅旧版单参数契约读取作用域属性。
+      const agent = explicitAgent ?? (agentCtx as { agent?: SetupAgent }).agent
+      const session = agent?.session
       const events = session?.snapshotEvents?.() ?? session?.events
       // 在挂载前读取历史；来源不可读取时也不冒险覆盖已有权限。
       const preservePermission = restoring && (!events || events.some(event => ['permission/preset', 'sandbox/mode', 'approval/policy'].includes(event.type)))
@@ -618,7 +633,6 @@ export class SessionRouter {
       // New sessions also persist their initial selection in createHandle().
       if (permission && !preservePermission) {
         try {
-          const agent = (agentCtx as { agent?: { session?: unknown } }).agent
           const permissionPresets = ctx.permissionPresets
           if (!permissionPresets) throw new Error('Host 未提供官方权限预设服务')
           if (agent?.session) permissionPresets.set(agent.session, permission)

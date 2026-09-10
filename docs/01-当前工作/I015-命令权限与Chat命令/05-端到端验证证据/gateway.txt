@@ -1,0 +1,45 @@
+2026-09-10T14:23:35.327Z [interaction] 已接管 userQuestions service 的 IM 会话
+2026-09-10T14:23:35.329Z [boot] ChannelManager 构造 3ms
+2026-09-10T14:23:35.330Z [manager] API 已注册 /api/dsh-im-connect
+2026-09-10T14:23:35.330Z [boot] apply 完成 4ms
+2026-09-10T14:23:35.331Z [boot] initEnabled 1ms
+2026-09-10T14:23:35.341Z [boot] attachMappedSessions 10ms
+2026-09-10T14:28:39.046Z [interaction] 已接管 userQuestions service 的 IM 会话
+2026-09-10T14:28:39.050Z [boot] ChannelManager 构造 6ms
+2026-09-10T14:28:39.050Z [manager] API 已注册 /api/dsh-im-connect
+2026-09-10T14:28:39.051Z [boot] apply 完成 7ms
+2026-09-10T14:28:39.051Z [boot] initEnabled 1ms
+2026-09-10T14:28:39.059Z [boot] attachMappedSessions 8ms
+2026-09-10T14:32:30.782Z [manager] telegram 连接失败: Unexpected token 'u', "unhandled "... is not valid JSON
+2026-09-10T14:33:31.780Z [telegram] 开始长轮询
+2026-09-10T14:33:31.784Z [manager] telegram_130ebed2f48d 已启动：轮询中
+2026-09-10T14:33:31.797Z [telegram_130ebed2f48d] 拒绝未授权用户 456
+2026-09-10T14:33:42.764Z [telegram_130ebed2f48d] 拒绝未授权用户 456
+2026-09-10T14:34:33.377Z [router] telegram_130ebed2f48d 使用模型 e2e-local/e2e-model
+2026-09-10T14:34:33.390Z [telegram_130ebed2f48d] 合并投递失败: cannot get property "agent" without inject
+2026-09-10T14:35:26.495Z [router] telegram_130ebed2f48d 使用模型 e2e-local/e2e-model
+2026-09-10T14:35:26.505Z [telegram_130ebed2f48d] 命令失败: cannot get property "agent" without inject
+2026-09-10T14:35:26.515Z [telegram_130ebed2f48d] 已投递 123，长度 76
+2026-09-10T14:37:29.975Z [telegram_130ebed2f48d] 已投递 123，长度 331
+2026-09-10T14:37:47.753Z [telegram_130ebed2f48d] 已投递 123，长度 129
+2026-09-10T14:38:01.317Z [telegram_130ebed2f48d] 已投递 123，长度 136
+2026-09-10T14:38:19.417Z [telegram_130ebed2f48d] 已注入 session-35d0eb50-761a-43d1-838c-76f129ca93b4
+2026-09-10T14:38:19.447Z [telegram_130ebed2f48d] 准备回复 session-35d0eb50-761a-43d1-838c-76f129ca93b4，长度 17
+2026-09-10T14:38:19.448Z [telegram_130ebed2f48d] 回合结束 session-35d0eb50-761a-43d1-838c-76f129ca93b4: completed
+2026-09-10T14:38:19.450Z [telegram_130ebed2f48d] 已投递 123，长度 17
+2026-09-10T14:39:02.684Z [telegram_130ebed2f48d] 已投递 123，长度 132
+2026-09-10T14:39:03.200Z [telegram_130ebed2f48d] 已投递 123，长度 53
+2026-09-10T14:39:03.704Z [router] telegram_130ebed2f48d 使用模型 e2e-local/e2e-model
+2026-09-10T14:39:03.707Z [telegram_130ebed2f48d] 命令失败: cannot get property "agent" without inject
+2026-09-10T14:39:03.708Z [telegram_130ebed2f48d] 已投递 123，长度 76
+2026-09-10T14:39:04.219Z [telegram_130ebed2f48d] 已投递 123，长度 132
+2026-09-10T14:39:04.740Z [telegram_130ebed2f48d] 已投递 123，长度 197
+2026-09-10T14:39:05.251Z [router] telegram_130ebed2f48d 使用模型 e2e-local/e2e-model
+2026-09-10T14:39:05.254Z [telegram_130ebed2f48d] 命令失败: cannot get property "agent" without inject
+2026-09-10T14:39:05.254Z [telegram_130ebed2f48d] 已投递 123，长度 76
+2026-09-10T14:40:26.500Z [telegram_130ebed2f48d] 已投递 123，长度 402
+2026-09-10T14:41:53.046Z [telegram_130ebed2f48d] 已投递 123，长度 64
+2026-09-10T14:42:30.661Z [telegram_130ebed2f48d] 已注入 session-35d0eb50-761a-43d1-838c-76f129ca93b4
+2026-09-10T14:42:30.691Z [telegram_130ebed2f48d] 准备回复 session-35d0eb50-761a-43d1-838c-76f129ca93b4，长度 17
+2026-09-10T14:42:30.692Z [telegram_130ebed2f48d] 回合结束 session-35d0eb50-761a-43d1-838c-76f129ca93b4: completed
+2026-09-10T14:42:30.695Z [telegram_130ebed2f48d] 已投递 123，长度 17

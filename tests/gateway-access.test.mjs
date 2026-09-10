@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import test from 'node:test'
 import { ImEngine } from '../lib/engine/gateway.js'
 import { SessionMapStore } from '../lib/engine/session-store.js'
@@ -265,6 +266,49 @@ test('群聊 @ 后无需绑定', async (t) => {
     engine.dispose()
   }
 })
+
+for (const eventType of ['tool/call', 'tool/code-dispatch-start', 'tool/ptc-dispatch-start']) {
+  test(`真实 Session 审批读取快照并完成 IM 回执：${eventType}`, { skip: !process.env.DSH_CHAT_CONTRACT_ROOT }, async t => {
+    const root = dirname(process.env.DSH_CHAT_CONTRACT_ROOT)
+    const { Session, SessionId } = await import(pathToFileURL(join(root, 'dsh-session/lib/index.js')).href)
+    const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t)
+    engine.addAllowed('telegram', 'user-1')
+    const session = Session.create(SessionId(dmSessionId))
+    const key = eventType === 'tool/call' ? 'callId' : 'subCallId'
+    session.append(eventType, { [key]: 'real-call', rootCallId: 'root', parentCallId: 'root', name: 'bash', arguments: { command: 'npm test' } })
+    session.append(eventType, { [key]: 'other-call', rootCallId: 'root', parentCallId: 'root', name: 'bash', arguments: { command: 'wrong-command' } })
+    const before = session.snapshotEvents()
+    try {
+      const pending = handlers['approval/request']({ agent: { id: dmSessionId, session }, toolName: 'bash', callId: 'real-call' }, async () => 'browser-owned')
+      await waitFor(() => sent.length > 0)
+      assert.equal(sent.some(item => item.text.includes('npm test')), true)
+      assert.equal(sent.some(item => item.text.includes('wrong-command')), false)
+      inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'real-session-approval' })
+      assert.equal(await pending, 'allowed-once')
+      assert.deepEqual(session.snapshotEvents(), before)
+    } finally { engine.dispose() }
+  })
+}
+
+for (const eventType of ['tool/code-dispatch-start', 'tool/ptc-dispatch-start']) {
+  test(`嵌套工具审批展示对应参数：${eventType}`, async t => {
+    const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t)
+    engine.addAllowed('telegram', 'user-1')
+    try {
+      const pending = handlers['approval/request']({
+        agent: { id: dmSessionId, session: { id: dmSessionId, events: [
+          { type: eventType, data: { subCallId: 'nested', name: 'bash', arguments: { command: 'npm test' } } },
+          { type: eventType, data: { subCallId: 'other', name: 'bash', arguments: { command: 'wrong-command' } } },
+        ] } },
+        toolName: 'bash', callId: 'nested',
+      }, async () => 'browser-owned')
+      await waitFor(() => sent.some(item => item.text.includes('npm test')))
+      assert.equal(sent.some(item => item.text.includes('wrong-command')), false)
+      inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'nested-approval' })
+      assert.equal(await pending, 'allowed-once')
+    } finally { engine.dispose() }
+  })
+}
 
 test('白名单用户可通过命令；群聊不能批准工具', async (t) => {
   const { engine, inbound, sent, handlers, dmSessionId, groupSessionId } = makeEngine(t)

@@ -1,0 +1,162 @@
+{
+  "messages": [
+    {
+      "method": "sendMessage",
+      "message_id": 2,
+      "chat": {
+        "id": 123
+      },
+      "text": "未授权：请管理员在设置 → IM助理 中批准你的访问。"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 4,
+      "chat": {
+        "id": 123
+      },
+      "text": "未授权：请管理员在设置 → IM助理 中批准你的访问。"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 6,
+      "chat": {
+        "id": 123
+      },
+      "text": "消息处理失败，请查看本机日志。"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 8,
+      "chat": {
+        "id": 123
+      },
+      "text": "命令执行失败：cannot get property \"agent\" without inject\n\n查看用法：/help；确认当前会话：/status"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 10,
+      "chat": {
+        "id": 123
+      },
+      "text": "可用模型 · 共 5 个\n\n1. DeepSeek-V41-Flash\ndeepseek-official/deepseek-flash\n\n2. DeepSeek-V4-Flash\ndeepseek-official/deepseek-v4-flash\n\n3. DeepSeek-V4-Pro\ndeepseek-official/deepseek-v4-pro\n\n4. DeepSeek-V4-Flash-Vision-Exp\ndeepseek-official/deepseek-v4-flash-vision-exp\n\n5. e2e-model\ne2e-local/e2e-model\n\n先发消息或 /new 创建会话，再切换模型。\n序号 15 分钟内有效。"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 12,
+      "chat": {
+        "id": 123
+      },
+      "text": "会话列表 · 第 1/1 页 · 共 1 个\n\n1. E2E 助手已收到消息并完成回复。\nsession-35d0eb50-761a-43d1-838c-76f129ca93b4\n\n切换：/session 1\n序号 15 分钟内有效，也可使用完整会话 ID。"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 14,
+      "chat": {
+        "id": 123
+      },
+      "text": "已切换会话：E2E 助手已收到消息并完成回复。\n工作区：C:\\Users\\YUJIYU\\AppData\\Local\\Temp\\dsh-im-e2e-616d83ac\\workspace-one\n接下来的消息会发送到此会话。\n\n最近记录：/history\n重新开始：/new"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 16,
+      "chat": {
+        "id": 123
+      },
+      "text": "E2E 助手已收到消息并完成回复。"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 18,
+      "chat": {
+        "id": 123
+      },
+      "text": "最近文字记录（不是完整历史）\n\n用户：E2E 网页对照消息\n\n助手：E2E 助手已收到消息并完成回复。\n\n用户：E2E 接续已有会话\n\n助手：E2E 助手已收到消息并完成回复。\n\n继续此会话：直接发消息\n换一个会话：/sessions\n完整记录：在网页打开当前会话"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 20,
+      "chat": {
+        "id": 123
+      },
+      "text": "当前会话已改名：E2E 助手已收到消息并完成回复。 → E2E手动标题\n\n查看会话列表：/sessions"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 22,
+      "chat": {
+        "id": 123
+      },
+      "text": "命令执行失败：cannot get property \"agent\" without inject\n\n查看用法：/help；确认当前会话：/status"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 24,
+      "chat": {
+        "id": 123
+      },
+      "text": "最近文字记录（不是完整历史）\n\n用户：E2E 网页对照消息\n\n助手：E2E 助手已收到消息并完成回复。\n\n用户：E2E 接续已有会话\n\n助手：E2E 助手已收到消息并完成回复。\n\n继续此会话：直接发消息\n换一个会话：/sessions\n完整记录：在网页打开当前会话"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 26,
+      "chat": {
+        "id": 123
+      },
+      "text": "工作区列表 · 共 1 个\n\n1. workspace-one\nC:\\Users\\YUJIYU\\AppData\\Local\\Temp\\dsh-im-e2e-616d83ac\\workspace-one〔当前〕\n\n当前只有这个工作区。直接发消息继续，或 /new 开启新会话。\n也可使用已列出的绝对路径；旧会话保留，账号默认目录不变。\n别名：/workspacelist；序号 15 分钟内有效。"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 28,
+      "chat": {
+        "id": 123
+      },
+      "text": "命令执行失败：cannot get property \"agent\" without inject\n\n查看用法：/help；确认当前会话：/status"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 30,
+      "chat": {
+        "id": 123
+      },
+      "text": "Session: E2E手动标题\nStatus: Idle\nWorkspace: C:\\Users\\YUJIYU\\AppData\\Local\\Temp\\dsh-im-e2e-616d83ac\\workspace-one\nModel: e2e-local/e2e-model; reasoning: Default\nAgent preset: standard\nPermissions: workspace-write\nGoal: No goal\nQueued messages: 0\nChannel: Telegram账号 1 (轮询中)\nSession ID: session-35d0eb50-761a-43d1-838c-76f129ca93b4\n\nRecent messages: /history\nModel settings: /model\nSwitch session: /sessions"
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 32,
+      "chat": {
+        "id": 123
+      },
+      "text": "Commands are disabled in this chat. You can still chat normally."
+    },
+    {
+      "method": "sendMessage",
+      "message_id": 34,
+      "chat": {
+        "id": 123
+      },
+      "text": "E2E 助手已收到消息并完成回复。"
+    }
+  ],
+  "calls": [
+    {
+      "kind": "model",
+      "messages": 4,
+      "stream": true
+    },
+    {
+      "kind": "model",
+      "messages": 2,
+      "stream": true
+    },
+    {
+      "kind": "model",
+      "messages": 6,
+      "stream": true
+    },
+    {
+      "kind": "model",
+      "messages": 8,
+      "stream": true
+    }
+  ]
+}

@@ -188,6 +188,22 @@ test('企业微信侧边栏小图标移除白色应用底板并放大有效标�
   assert.match(client, /h\(BrandMark, \{ id, compact: small \}\)/)
 })
 
+test('账号弹窗挂到 body，保留主题和关闭事件', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const source = client.slice(client.indexOf('    function AccountModalLayer('), client.indexOf('    function BindModal('))
+  const body = {}, child = {}, close = () => {}
+  const render = new Function('ReactDOM', 'h', 'document', source + '\nreturn AccountModalLayer')(
+    { createPortal: (node, target) => ({ node, target }) },
+    (type, props, children) => ({ type, props, children }), { body },
+  )
+  const result = render({ children: child, onClick: close })
+  assert.equal(result.target, body)
+  assert.equal(result.node.children, child)
+  assert.equal(result.node.props.onClick, close)
+  assert.equal(result.node.props.className, 'ima-page ima-mask')
+  assert.doesNotMatch(client, /h\("div", \{ className: "ima-mask"/)
+})
+
 test('账号通过设置按钮打开弹窗，不再占用列表侧栏', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(client, /const ACCOUNT_SELECTION_KEY = "dsh-im-connect\.settings\.selected-account"/)
@@ -198,7 +214,7 @@ test('账号通过设置按钮打开弹窗，不再占用列表侧栏', () => {
   assert.match(client, /settings\.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。"/)
   assert.match(client, /settings\.noAccountsTitle": "还没有接入账号"/)
   assert.match(client, /settings\.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。"/)
-  assert.match(client, /selectedAccount && h\("div", \{ className: "ima-mask"/)
+  assert.match(client, /selectedAccount && h\(AccountModalLayer,/)
   assert.match(client, /if \(action === "remove" && selected === id\) selectAccount\(removalFallback\)/)
 })
 

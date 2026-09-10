@@ -26,7 +26,8 @@ interface AgentLike {
   id?: string
   session?: {
     id?: string
-    events?: Array<{ type?: string; data?: Record<string, unknown> }>
+    snapshotEvents?: () => readonly { type?: string; data?: Record<string, unknown> }[]
+    events?: readonly { type?: string; data?: Record<string, unknown> }[]
   }
 }
 
@@ -697,9 +698,11 @@ export class ImEngine {
     const callId = req.callId?.trim()
     if (req.agent && !callId) return undefined
     if (callId) {
-      const event = [...(req.agent?.session?.events ?? [])].reverse().find((item) => {
+      const session = req.agent?.session
+      const events = session?.snapshotEvents?.() ?? session?.events ?? []
+      const event = events.findLast((item) => {
         if (item.type === 'tool/call') return item.data?.callId === callId
-        if (item.type === 'tool/code-dispatch-start') return item.data?.subCallId === callId
+        if (item.type === 'tool/code-dispatch-start' || item.type === 'tool/ptc-dispatch-start') return item.data?.subCallId === callId
         return false
       })
       if (!event) return undefined

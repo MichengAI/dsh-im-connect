@@ -430,6 +430,11 @@ window.__ModuleLoader__.load({
     };
     let channelSkin = "native";
 
+    function AccountModalLayer({ children, ...events }) {
+      // 离开设置侧栏的层叠上下文，同时保留账号表单使用的主题变量。
+      return ReactDOM.createPortal(h("div", { ...events, className: "ima-page ima-mask" }, children), document.body);
+    }
+
     function BindModal({ ch, onClose, onConnected, catalog, permissions, agentPresets, workspaces, defaults, createWorkspace, pickDirectory, modelT, permissionT, t = fallbackT }) {
       const hasQr = ch.kind === "qr" || ch.kind === "qr-or-credentials";
       const hasManual = ch.kind === "credentials" || ch.kind === "qr-or-credentials";
@@ -554,7 +559,7 @@ window.__ModuleLoader__.load({
       const src = qrStarted ? qrSrc(pairing) : "";
       const remain = qrStarted && pairing && pairing.remainingSeconds;
 
-      return h("div", { className: "ima-mask", role: "presentation", onMouseDown: (event) => event.stopPropagation(), onClick: (event) => { event.stopPropagation(); close(); }, onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } } },
+      return h(AccountModalLayer, { role: "presentation", onMouseDown: (event) => event.stopPropagation(), onClick: (event) => { event.stopPropagation(); close(); }, onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } } },
         h("div", { className: "ima-modal ima-account-modal", onClick: (e) => e.stopPropagation() },
           h("div", { className: "ima-modal-h" },
             h("h2", null, t("bind.title", { channel: channelLabel(ch, t) })),
@@ -1226,7 +1231,7 @@ window.__ModuleLoader__.load({
                 }),
               ),
             ),
-        selectedAccount && h("div", { className: "ima-mask", onClick: () => setSettingsAccount(null), onKeyDown: e => { if (e.key === "Escape") { e.stopPropagation(); setSettingsAccount(null); } } },
+        selectedAccount && h(AccountModalLayer, { onClick: () => setSettingsAccount(null), onKeyDown: e => { if (e.key === "Escape") { e.stopPropagation(); setSettingsAccount(null); } } },
           h("div", { className: "ima-modal ima-account-modal", role: "dialog", "aria-modal": true, "aria-label": accountLabel(selectedAccount, t), onClick: e => e.stopPropagation() },
             h("div", { className: "ima-modal-h" }, h("h2", null, t("action.settings")), h("button", { type: "button", className: "ima-x", "aria-label": t("bind.close"), autoFocus: true, onClick: () => setSettingsAccount(null) }, "×")),
             h(AccountInspector, {

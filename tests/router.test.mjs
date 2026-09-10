@@ -7,6 +7,53 @@ import { join } from 'node:path'
 import { SessionRouter } from '../lib/engine/router.js'
 import { SessionMapStore } from '../lib/engine/session-store.js'
 
+test('新版 setup 使用显式 Agent，创建和恢复不访问未注入属性', async t => {
+  const f = makeRouter(t)
+  const guarded = Object.defineProperty({}, 'agent', { get() { throw new Error('cannot get property "agent" without inject') } })
+  f.ctx.agents.create = async opts => {
+    const handle = createHandle(opts.sessionId)
+    await opts.setup(guarded, handle.agent)
+    return handle
+  }
+  const first = await f.router.getOrCreate('telegram', 'dm', 'new-host', 'test')
+  assert.equal(f.permissionSelections.length, 1)
+  await f.router.disposeChannel('telegram')
+  f.ctx.agents.resume = async opts => {
+    const handle = createHandle(opts.resumeSessionId)
+    handle.agent.session.append('permission/preset', { preset: 'read-only' })
+    await opts.setup(guarded, handle.agent)
+    return handle
+  }
+  assert.equal((await f.router.getOrCreate('telegram', 'dm', 'new-host', 'test')).sessionId, first.sessionId)
+  assert.equal(f.permissionSelections.length, 1)
+})
+
+for (const shape of ['legacy', 'stat', 'invalid']) {
+  test(`持久化列表 ${shape} 不能误删现存索引`, async t => {
+    const f = makeRouter(t)
+    const item = await f.router.getOrCreate('telegram', 'dm', 'stored', 'test')
+    await f.router.disposeChannel('telegram')
+    const header = { id: item.sessionId, cwd: 'D:/test', createdAt: 1 }
+    const get = f.ctx.get
+    f.ctx.get = name => name === 'sessionPersistence' ? { list: async () => [shape === 'legacy' ? header : shape === 'stat' ? { header, eventCount: 1 } : {}] } : get(name)
+    assert.equal(await f.router.pruneMissingSessions(), 0)
+    assert.equal(await f.router.cleanupMissing(item.sessionId), false)
+    assert.equal(await f.router.onHostDisposed(item.sessionId), false)
+    assert.equal(f.store.list().length, 1)
+  })
+}
+
+test('新版持久化列表恢复历史头信息且幂等', async t => {
+  const f = makeRouter(t)
+  const header = { id: 'im:wecom:dm:1724000000000:recovered', cwd: 'D:/recovered', createdAt: 1000 }
+  f.ctx.get = name => name === 'sessionPersistence' ? { list: async () => [{ header, eventCount: 3 }] } : undefined
+  await f.router.attachMappedSessions()
+  await f.router.attachMappedSessions()
+  assert.equal(f.store.list().length, 1)
+  assert.equal(f.store.list()[0].cwd, header.cwd)
+  assert.equal(f.store.list()[0].sessionId, header.id)
+})
+
 for (const mode of ['missing', 'present', 'failed', 'unavailable']) {
   test(`归档失败清理仅接受可靠缺失证据：${mode}`, async t => {
     const { router, store, archivedIds } = makeRouter(t)
