@@ -1,5 +1,5 @@
-import type { ChannelAdapter, ImMessage } from "./types.js";
-import type { SessionRouter } from "./router.js";
+import type { ChannelAdapter, ImMessage } from './types.js';
+import type { SessionRouter } from './router.js';
 export interface CommandHost {
     get(name: string): unknown;
 }

@@ -13,7 +13,7 @@ export declare const commandEnglish: {
     readonly 任务控制: "Task controls";
     readonly "/status \u2014 \u5F53\u524D\u72B6\u6001\uFF1B/stop \u2014 \u8BF7\u6C42\u505C\u6B62\uFF0C\u4FDD\u7559\u961F\u5217": "/status — Current status; /stop — Request a stop, keeping queued messages";
     readonly "/steer \u8865\u5145\u8981\u6C42 \u2014 \u63D0\u4EA4\u8865\u5145\u6307\u4EE4\uFF1B/queue \u2014 \u67E5\u770B\u961F\u5217\u4E0E\u64CD\u4F5C\u65B9\u6CD5": "/steer instructions — Submit additional instructions; /queue — View and manage queued messages";
-    readonly "\u4F8B\u5982\uFF1A\u5148\u53D1 /models\uFF0C\u518D\u53D1 /model \u5E8F\u53F7\u3002": "Example: send /models, then /model number.";
+    readonly "\u5207\u6362\u6A21\u578B\uFF1A\u5148\u53D1 /models\uFF0C\u518D\u53D1 /model \u5E8F\u53F7\u3002": "Switch models: send /models, then /model number.";
     readonly "\u547D\u4EE4\u5355\u72EC\u53D1\u9001\u4E3A\u6587\u5B57\uFF1B\u56FE\u7247\u8BF4\u660E\u6309\u666E\u901A\u6D88\u606F\u5904\u7406\u3002": "Send commands as standalone text. Image captions are treated as ordinary messages.";
     readonly "\u5F53\u524D Host \u672A\u63D0\u4F9B {0}\uFF0C\u8BF7\u5347\u7EA7 DSH\u3002": "Your DSH installation does not provide {0}. Update DSH on your computer.";
     readonly "\u5F53\u524D Host \u4E0D\u652F\u6301 {0}\u3002": "Your DSH installation does not support {0}.";
@@ -35,7 +35,6 @@ export declare const commandEnglish: {
     readonly "\n\u6269\u5C55\u547D\u4EE4\u6682\u65F6\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u4EE5\u4E0A\u5185\u7F6E\u5E2E\u52A9\u4ECD\u53EF\u4F7F\u7528\uFF1B\u7A0D\u540E\u91CD\u8BD5 /help\u3002": "\nExtension commands are temporarily unavailable. Built-in help above still applies; retry /help later.";
     readonly 机器人: "Bot";
     readonly "\n\n\u6269\u5C55\u547D\u4EE4\uFF1A\n": "\n\nExtension commands:\n";
-    readonly 已开启新的频道会话: "New session started";
     readonly "\u65E7\u4F1A\u8BDD\u5DF2\u4FDD\u7559\uFF0C\u76F4\u63A5\u53D1\u9001\u6D88\u606F\u5373\u53EF\u5F00\u59CB\u3002": "Previous sessions are preserved. Send a message to begin.";
     readonly "\u67E5\u770B\u65E7\u4F1A\u8BDD\uFF1A/sessions": "Previous sessions: /sessions";
     readonly "\u67E5\u770B\u5F53\u524D\u914D\u7F6E\uFF1A/status": "Current configuration: /status";
