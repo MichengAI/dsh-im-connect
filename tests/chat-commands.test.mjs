@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ChatCommands } from '../lib/engine/chat-commands.js'
 
-function fixture() {
+function fixture(options = {}) {
   const calls = [], agent = { session: { id: 's1' } }
   let current = { sessionId: 's1' }
   const rows = [{ sessionId: 's1', cwd: 'D:\\one', running: false }, { sessionId: 's2', cwd: 'D:\\two', running: false }]
@@ -37,10 +37,63 @@ function fixture() {
     async bind(...args) { calls.push(['bind', ...args]); current = { sessionId: args[3] } },
     rename(...args) { calls.push(['rename', ...args]) },
   }
-  const runner = new ChatCommands({ get: (name) => services[name] }, router, () => false)
-  const run = (text, extra = {}) => runner.execute({ id: 'bot', label: '机器人', status: () => '在线' }, { chatId: 'chat', userId: 'u', kind: 'dm', text, ...extra }, new AbortController().signal)
+  const runner = new ChatCommands({ get: (name) => services[name] }, router, () => false, undefined, options.showChoices)
+  const run = (text, extra = {}) => runner.execute({ id: 'bot', label: '机器人', status: () => '在线', ...options.channel }, { chatId: 'chat', userId: 'u', kind: 'dm', text, ...extra }, new AbortController().signal)
   return { calls, run, rows, services, runner, router }
 }
+
+test('企业微信主菜单按容量分页，每页可继续或返回且不漏操作', async () => {
+  const shown = []
+  const f = fixture({ channel: { choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (_, __, text, choices) => { shown.push({ text, choices }); return '' } })
+  await f.run('/menu')
+  assert.match(shown[0].text, /1\/3/)
+  assert.equal(shown[0].choices.at(-1).value, '/menu 2')
+  await f.run('/menu 2')
+  await f.run('/menu 3')
+  assert.ok(shown.every(page => page.choices.length <= 6))
+  assert.equal(shown[2].choices.at(-1).value, '/menu')
+  assert.ok(shown.flatMap(page => page.choices).some(choice => choice.value === '/export'))
+  await f.run('/menu sessions')
+  assert.match(shown[3].text, /选择会话/)
+  assert.equal(shown[3].choices.at(-1).value, '/menu')
+})
+
+test('模型回复提供可点击导航，正文保留且不启用数字快捷操作', async () => {
+  let shown
+  const f = fixture({ channel: { sendChoices() {} }, showChoices: async (...args) => { shown = args; return '' } })
+  assert.equal(await f.run('/model'), '')
+  assert.match(shown[2], /当前模型/)
+  assert.deepEqual(shown[3].map(choice => choice.value), ['/menu models', '/reasoning', '/menu'])
+  assert.equal(shown[4], 's1')
+  assert.equal(shown[5], false)
+})
+
+test('文字渠道与卡片失败保留命令结果和返回入口', async () => {
+  const f = fixture()
+  assert.match(await f.run('/model'), /返回菜单 — \/menu/)
+  const native = fixture({ channel: { sendChoices() {} }, showChoices: async () => { throw new Error('unavailable') } })
+  const result = await native.run('/model p/m')
+  assert.match(result, /已切换模型/)
+  assert.match(result, /选择模型 — \/menu models/)
+  assert.equal(native.calls.filter(call => call[0] === 'model').length, 1)
+})
+
+test('切换会话后的导航绑定新会话，避免按钮刚生成就失效', async () => {
+  let shown
+  const f = fixture({ channel: { sendChoices() {} }, showChoices: async (...args) => { shown = args; return '' } })
+  await f.run('/session s2')
+  assert.equal(shown[4], 's2')
+  assert.equal(shown[5], false)
+})
+
+test('英文命令导航完整翻译并保留可发送命令', async () => {
+  const f = fixture()
+  f.services.settings = { get: () => ({ preference: 'en' }) }
+  const result = await f.run('/model')
+  assert.match(result, /Next steps:/)
+  assert.match(result, /Adjust reasoning — \/reasoning/)
+  assert.match(result, /Back to menu — \/menu/)
+})
 
 test('Chat 注册命令动态发现、原样执行并返回宿主结果', async () => {
   const f = fixture()

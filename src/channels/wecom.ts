@@ -311,6 +311,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       if (!broker) throw new Error('wecom: 尚未连接')
       await broker.send(chatId, text)
     },
+    choiceLimits: { maxButtons: 6, maxTextLength: 500 },
     async sendChoices(message, text, buttons) {
       if (!client || buttons.length > 6 || text.length > 500) throw new Error('use-text-menu')
       await client.sendMessage(message.chatId, { msgtype: 'template_card', template_card: {

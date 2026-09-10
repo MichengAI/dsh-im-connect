@@ -1,5 +1,10 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly 调整推理: "Adjust reasoning";
+    readonly 查看队列: "View queue";
+    readonly "\u63A5\u4E0B\u6765\u53EF\u4EE5\uFF1A": "Next steps:";
+    readonly "\u6682\u65E0\u53EF\u9009\u9879\uFF0C\u53EF\u8FD4\u56DE\u83DC\u5355\u9009\u62E9\u5176\u4ED6\u64CD\u4F5C\u3002": "No options are available. Return to the menu for other actions.";
+    readonly "\u70B9\u51FB\u6309\u94AE\u6216\u53D1\u9001\u5BF9\u5E94\u547D\u4EE4\uFF1B\u6309\u94AE 15 \u5206\u949F\u5185\u6709\u6548\uFF0C\u666E\u901A\u6587\u5B57\u7EE7\u7EED\u804A\u5929\u3002": "Click a button or send its command. Buttons are valid for 15 minutes; ordinary text continues the conversation.";
     readonly "\u5F53\u524D DSH \u4E0D\u652F\u6301 Chat \u6587\u4EF6\u8F93\u5165\uFF0C\u8BF7\u5347\u7EA7\u5230 0.1.5-rc.1 \u6216\u66F4\u65B0\u7684\u517C\u5BB9\u7248\u672C\u540E\u91CD\u65B0\u53D1\u9001\u3002": "This DSH version does not support Chat file input. Upgrade to 0.1.5-rc.1 or a newer supported version and resend.";
     readonly "\u4E00\u6B21\u6700\u591A\u53D1\u9001 4 \u4E2A\u6587\u4EF6\uFF0C\u7D2F\u8BA1\u4E0D\u8D85\u8FC7 20 MiB\u3002": "Send up to 4 files at a time, totaling no more than 20 MiB.";
     readonly "\u6587\u4EF6\u8F93\u5165\u5931\u8D25\uFF0C\u6574\u6761\u6D88\u606F\u672A\u63D0\u4EA4\u3002\u8BF7\u68C0\u67E5\u6587\u4EF6\u5927\u5C0F\u548C\u683C\u5F0F\u540E\u91CD\u65B0\u53D1\u9001\uFF0C\u6216\u5728\u7F51\u9875 Chat \u4E0A\u4F20\u3002": "File input failed; the message was not submitted. Check the size and format and resend, or upload in web Chat.";

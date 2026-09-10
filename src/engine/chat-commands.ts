@@ -5,7 +5,7 @@ import { replyText, withReplyLocale } from './command-locale.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import type { ChannelAdapter, ImMessage } from './types.js'
-import { extensionHelp, extensionReply, oneLine, related } from './command-replies.js'
+import { commandNavigation, extensionHelp, extensionReply, oneLine, related } from './command-replies.js'
 import type { SessionRouter } from './router.js'
 
 const modelDefaultHint = () => replyText('与 Chat 一致，此操作也会尝试保存后续 Chat 新会话的默认模型选择；已有其他会话不会主动修改。')
@@ -43,7 +43,7 @@ export class ChatCommands {
   constructor(private readonly host: CommandHost, private readonly router: SessionRouter,
     private readonly pending: (sessionId: string) => boolean,
     private readonly onSession: (sessionId: string, msg: ImMessage) => void = () => { },
-    private readonly showChoices?: (channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string) => Promise<string>) { }
+    private readonly showChoices?: (channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, allowNumber?: boolean) => Promise<string>) { }
 
   clear(): void { this.choices.clear() }
 
@@ -102,7 +102,21 @@ export class ChatCommands {
 
   execute(channel: ChannelAdapter, msg: ImMessage, signal: AbortSignal): Promise<string> {
     return withReplyLocale(this.host, () => this.lifetime.run(signal, async () => {
-      try { return await this.run(channel, msg, signal) }
+      try {
+        const text = await this.run(channel, msg, signal)
+        if (!text) return text
+        const command = /^\/([a-z][a-z0-9_-]*)/i.exec(msg.text.trim())?.[1]?.toLowerCase() ?? ''
+        const current = this.router.lookup(channel.id, msg.kind ?? 'dm', msg.chatId)
+        const choices = commandNavigation(command, !!current)
+        if (!choices.length) return text
+        const fallback = text + related(replyText('接下来可以：'), ...choices.map(choice => `${choice.label} — ${choice.value}`))
+        // 导航发送失败不能把已完成的命令改报失败；新会话的按钮绑定切换后的会话。
+        if (channel.sendChoices && this.showChoices && !signal.aborted) {
+          try { return await this.showChoices(channel, msg, text, choices, current?.sessionId, false) }
+          catch { return fallback }
+        }
+        return fallback
+      }
       catch (error) {
         if ((error as { code?: string })?.code === 'im/session-in-use') throw new Error(replyText('该会话已关联其他聊天，不能重复接续。请用 /sessions 选择其他会话，或 /new 新建。'))
         throw error
@@ -153,7 +167,9 @@ export class ChatCommands {
     const requireCurrent = () => { if (!current) throw new Error(replyText('当前没有会话，请先发送消息或 /new。')); return current.sessionId }
     if (input && ['help', 'new', 'clear', 'workspaces', 'workspacelist', 'models', 'status', 'current', 'stop', 'fork', 'history', 'reasonings', 'reasoninglist', 'export'].includes(command)) throw new Error(replyText('/{0} 暂不支持参数。正确用法：/{1}', command, command))
     if (command === 'menu' || command === 'm') {
-      const [section = '', pageText = '1', ...extra] = input.split(/\s+/)
+      const parts = input.split(/\s+/)
+      const rootPage = /^\d+$/.test(parts[0] ?? '')
+      const [section = '', pageText = '1', ...extra] = rootPage ? ['', ...parts] : parts
       const page = Number(pageText)
       if (extra.length || !['', 'sessions', 'workspaces', 'models'].includes(section) || !Number.isSafeInteger(page) || page < 1) throw new Error(replyText('用法：/menu [sessions|workspaces|models] [页码]'))
       let choices: Choice[] = []
@@ -179,14 +195,21 @@ export class ChatCommands {
           { label: replyText('帮助'), value: '/help' },
         ]
       }
-      if (section) {
-        const pages = Math.max(1, Math.ceil(choices.length / 8))
+      {
+        // 为上一页、下一页和返回入口预留容量，主菜单也必须分页。
+        const pageSize = channel.choiceLimits ? Math.max(1, channel.choiceLimits.maxButtons - 3) : 8
+        const pages = Math.max(1, Math.ceil(choices.length / pageSize))
         if (page > pages) throw new Error(replyText('没有第 {0} 页，共 {1} 页。', page, pages))
+        const heading = section === 'sessions' ? replyText('选择会话') : section === 'workspaces' ? replyText('选择工作区') : section === 'models' ? replyText('选择模型') : replyText('助手操作菜单')
+        // 企业微信正文空间有限，菜单展示导航，配置详情通过 /status 查询。
+        text = channel.choiceLimits || section ? heading : text
         text += ` · ${page}/${pages}`
-        choices = choices.slice((page - 1) * 8, page * 8)
-        if (page > 1) choices.push({ label: replyText('上一页'), value: `/menu ${section} ${page - 1}` })
-        if (page < pages) choices.push({ label: replyText('下一页'), value: `/menu ${section} ${page + 1}` })
-        choices.push({ label: replyText('返回菜单'), value: '/menu' })
+        if (!choices.length) text += '\n' + replyText('暂无可选项，可返回菜单选择其他操作。')
+        choices = choices.slice((page - 1) * pageSize, page * pageSize)
+        const pageCommand = section ? `/menu ${section}` : '/menu'
+        if (page > 1) choices.push({ label: replyText('上一页'), value: `${pageCommand} ${page - 1}` })
+        if (page < pages) choices.push({ label: replyText('下一页'), value: `${pageCommand} ${page + 1}` })
+        if (section || page > 1) choices.push({ label: replyText('返回菜单'), value: '/menu' })
       }
       signal.throwIfAborted()
       if (!this.showChoices) return text + '\n' + choices.map(choice => `${choice.label}：${choice.value}`).join('\n')
