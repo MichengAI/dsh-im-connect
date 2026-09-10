@@ -30,6 +30,7 @@ jobs:
         run: >-
           npm install --prefix "$RUNNER_TEMP/dsh-image-contract" --no-audit --no-fund
           @deepseek-ai/dsh-api-session-controller@0.1.2-rc.1
+          @deepseek-ai/dsh-commands@0.1.2-rc.1
           @deepseek-ai/dsh-attachment-local@0.1.2-rc.1
           @deepseek-ai/dsh-client-connection@0.1.2-rc.1
 
