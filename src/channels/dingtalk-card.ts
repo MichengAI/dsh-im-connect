@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto'
+import { ChoiceSendError, choiceSendError } from '../engine/choice-delivery.js'
+import type { ChoiceReceipt } from '../engine/types.js'
 import type { ReplyStream } from '../engine/types.js'
 import { timeoutSignal } from '../engine/abort.js'
 
 const API = 'https://api.dingtalk.com/'
 const TEMPLATE_ID = '02fcf2f4-5e02-4a85-b672-46d1f715543e.schema'
+// 官方 Python SDK CarouselCardInstance 的请求型按钮模板，字段契约见迭代文档。
+const CHOICE_TEMPLATE_ID = '382e4302-551d-4880-bf29-a30acfab2e71.schema'
 const UPDATE_INTERVAL_MS = 500
 
 export type CardTarget =
@@ -67,6 +71,33 @@ export class DingtalkCardClient {
     private readonly clientSecret: string,
     private readonly log: (line: string) => void = () => undefined,
   ) {}
+
+  async createChoices(id: string, target: CardTarget, text: string, buttons: Array<{ label: string; token: string }>, signal?: AbortSignal): Promise<ChoiceReceipt> {
+    const data = (status?: string) => ({ cardParamMap: {
+      flowStatus: '3', staticMsgContent: normalizeDingtalkCardMarkdown(status ? `${text}\n\n${status}` : text),
+      config: JSON.stringify({ autoLayout: true, enableForward: false }),
+      sys_full_json_obj: JSON.stringify({ order: ['staticMsgContent', 'msgButtons'], msgButtons: status ? [] : buttons.map(button => ({ text: button.label, id: button.token, color: 'blue', request: true })) }),
+    } })
+    let headers: Record<string, string>
+    try {
+      headers = { 'x-acs-dingtalk-access-token': await this.accessToken() }
+      signal?.throwIfAborted()
+      await this.request('v1.0/card/instances', { outTrackId: id, cardTemplateId: CHOICE_TEMPLATE_ID,
+        cardData: data(), callbackType: 'STREAM',
+        imGroupOpenSpaceModel: { supportForward: false }, imRobotOpenSpaceModel: { supportForward: false },
+      }, headers, 'POST', signal)
+    } catch (error) {
+      // 尚未调用投递接口，创建结果未知也不会在用户聊天中产生副本。
+      const failure = choiceSendError(error)
+      throw new ChoiceSendError(failure.reason === 'permission-denied' ? failure.reason : 'rejected')
+    }
+    try { await this.request('v1.0/card/instances/deliver', deliverBody(id, target, this.clientId), headers, 'POST', signal) }
+    catch (error) { throw choiceSendError(error) }
+    return { close: async status => {
+      await this.request('v1.0/card/instances', { outTrackId: id, cardData: data(status) },
+        { 'x-acs-dingtalk-access-token': await this.accessToken() }, 'PUT', signal)
+    } }
+  }
 
   async create(target: CardTarget, initialText: string): Promise<string> {
     const token = await this.accessToken()
@@ -136,16 +167,16 @@ export class DingtalkCardClient {
     return this.token
   }
 
-  private async request(path: string, body: unknown, headers: Record<string, string>, method = 'POST'): Promise<void> {
+  private async request(path: string, body: unknown, headers: Record<string, string>, method = 'POST', signal?: AbortSignal): Promise<void> {
     const res = await fetch(new URL(path, API), {
       method,
       headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),
-      signal: timeoutSignal(30_000),
+      signal: timeoutSignal(30_000, signal),
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(`钉钉 ${path} HTTP ${res.status} ${text.slice(0, 200)}`)
+      throw Object.assign(new Error(`钉钉 ${path} HTTP ${res.status} ${text.slice(0, 200)}`), { status: res.status })
     }
   }
 }

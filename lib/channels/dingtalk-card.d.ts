@@ -1,3 +1,4 @@
+import type { ChoiceReceipt } from '../engine/types.js';
 import type { ReplyStream } from '../engine/types.js';
 export type CardTarget = {
     type: 'user';
@@ -14,6 +15,10 @@ export declare class DingtalkCardClient {
     private token;
     private tokenExpiresAt;
     constructor(clientId: string, clientSecret: string, log?: (line: string) => void);
+    createChoices(id: string, target: CardTarget, text: string, buttons: Array<{
+        label: string;
+        token: string;
+    }>, signal?: AbortSignal): Promise<ChoiceReceipt>;
     create(target: CardTarget, initialText: string): Promise<string>;
     update(cardInstanceId: string, text: string): Promise<void>;
     finish(cardInstanceId: string, text: string): Promise<void>;

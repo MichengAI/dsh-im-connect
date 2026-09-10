@@ -1,4 +1,6 @@
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
+import { randomUUID } from 'node:crypto'
+import { ChoiceSendError } from '../engine/choice-delivery.js'
 import { fileForm, fileRequest } from './file-send.js'
 import { DingtalkCardClient, openDingtalkCardStream, type CardTarget } from './dingtalk-card.js'
 import { validateAdditionalImageHosts } from './image-host-policy.js'
@@ -38,6 +40,18 @@ export interface DingtalkConfig {
   clientId?: string
   clientSecret?: string
   additionalImageHosts?: readonly string[]
+}
+
+/** 官方 Stream 卡片事件的操作者与 actionIds；不从按钮值读取聊天或命令。 */
+export function parseDingtalkCardAction(raw: string): { cardId: string; userId: string; token: string } | undefined {
+  try {
+    const data = JSON.parse(raw)
+    if (data.type !== 'actionCallback' || (data.userIdType !== undefined && data.userIdType !== 1)) return
+    const content = typeof data.content === 'string' ? JSON.parse(data.content) : data.content
+    const ids = content?.cardPrivateData?.actionIds
+    if (typeof data.outTrackId !== 'string' || typeof data.userId !== 'string' || !data.userId || !Array.isArray(ids) || ids.length !== 1 || typeof ids[0] !== 'string') return
+    return { cardId: data.outTrackId, userId: data.userId, token: ids[0] }
+  } catch { return }
 }
 
 export interface DingtalkRobotPayload {
@@ -80,7 +94,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
   const additionalImageHosts = validateAdditionalImageHosts(config.additionalImageHosts)
 
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
-  let client: { connect(): Promise<void>; disconnect(): void; registerCallbackListener(topic: string, cb: (res: { data: string }) => unknown): void } | undefined
+  let client: { connect(): Promise<void>; disconnect(): void; socketCallBackResponse?(id: string, data: unknown): void; registerCallbackListener(topic: string, cb: (res: { data: string; headers?: { messageId?: string } }) => unknown): void } | undefined
   let statusText = '未连接'
   let generation = 0
   let lifecycle = new AbortController()
@@ -90,6 +104,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
   const receiving = new Map<string, Promise<void>>()
   const webhooks = new Map<string, string>()
   const targets = new Map<string, CardTarget>()
+  const choiceTargets = new Map<string, { message: ImMessage; tokens: Set<string>; expires: number }>()
   const cards = new DingtalkCardClient(clientId, clientSecret, log)
   const remember = <T>(map: Map<string, T>, key: string, value: T) => {
     map.delete(key)
@@ -104,6 +119,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
     id: 'dingtalk',
     label: '钉钉',
     maxMessageLength: 4000,
+    choiceLimits: { maxButtons: 6, maxTextLength: 3000 },
     async start() {
       const startedGeneration = ++generation
       lifecycle.abort()
@@ -120,10 +136,25 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
         const sdk = await import('dingtalk-stream') as {
           DWClient: new (opts: Record<string, unknown>) => NonNullable<typeof client>
           TOPIC_ROBOT: string
+          TOPIC_CARD: string
         }
         if (generation !== startedGeneration) return
         const startedClient = new sdk.DWClient({ clientId, clientSecret, autoReconnect: true })
         client = startedClient
+        client.registerCallbackListener(sdk.TOPIC_CARD, (res) => {
+          if (res.headers?.messageId) startedClient.socketCallBackResponse?.(res.headers.messageId, {})
+          if (generation !== startedGeneration) return
+          const action = parseDingtalkCardAction(res.data)
+          const entry = action && choiceTargets.get(action.cardId)
+          if (!action || !entry || entry.expires <= Date.now() || entry.message.userId !== action.userId || !entry.tokens.has(action.token)) return
+          const message = { ...entry.message, text: '', media: undefined, actionToken: action.token,
+            messageId: res.headers?.messageId ? `card:${res.headers.messageId}` : undefined }
+          const work = (receiving.get(message.chatId) ?? Promise.resolve()).then(async () => {
+            if (generation === startedGeneration) await handler?.(message)
+          }).catch(() => log('[dingtalk] 卡片操作失败；未自动重试'))
+          receiving.set(message.chatId, work)
+          void work.finally(() => { if (receiving.get(message.chatId) === work) receiving.delete(message.chatId) })
+        })
         client.registerCallbackListener(sdk.TOPIC_ROBOT, (res) => {
           let payload: DingtalkRobotPayload
           try { payload = JSON.parse(res.data) as typeof payload } catch { return }
@@ -194,7 +225,8 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
       client?.disconnect()
       client = undefined
       webhooks.clear()
-      targets.clear()
+        targets.clear()
+        choiceTargets.clear()
       statusText = '已停止'
     },
     async addStatusReaction(message, _state, label, signal) {
@@ -217,6 +249,25 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
         textEmotion: { emotionId: '2659900', emotionName: reaction, text: reaction, backgroundId: 'im_bg_1' },
       }, signal, { 'x-acs-dingtalk-access-token': token })
       if (result.success === false) throw new Error('reaction-rejected')
+    },
+    async sendChoices(message, text, buttons) {
+      const target = targets.get(message.chatId)
+      if (!client || !target || !message.userId || buttons.length > 6 || text.length > 3000) throw new ChoiceSendError('rejected')
+      const id = `imc_menu_${randomUUID()}`
+      const currentGeneration = generation
+      for (const [key, entry] of choiceTargets) if (entry.expires <= Date.now()) choiceTargets.delete(key)
+      if (choiceTargets.size >= 512) choiceTargets.delete(choiceTargets.keys().next().value!)
+      choiceTargets.set(id, { message: { chatId: message.chatId, userId: message.userId, kind: message.kind, addressed: true, text: '' }, tokens: new Set(buttons.map(button => button.token)), expires: Date.now() + 15 * 60_000 })
+      try {
+        const receipt = await cards.createChoices(id, target, text, buttons, lifecycle.signal)
+        return { close: async status => {
+          choiceTargets.delete(id)
+          if (generation === currentGeneration) await receipt.close(status)
+        } }
+      } catch (error) {
+        if (!(error instanceof ChoiceSendError) || error.reason !== 'delivery-unknown') choiceTargets.delete(id)
+        throw error
+      }
     },
     async sendFile(chatId, file, signal) {
       const target = targets.get(chatId)
