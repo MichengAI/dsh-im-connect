@@ -9,7 +9,7 @@ export declare class ChoiceStore {
     private scopes;
     private key;
     clear(channel?: string): void;
-    show(channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, valid?: () => boolean): Promise<string>;
+    show(channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, valid?: () => boolean, hint?: string): Promise<string>;
     resolve(channel: string, msg: ImMessage, session?: string, allowNumber?: boolean): string | undefined;
 }
 //# sourceMappingURL=choices.d.ts.map

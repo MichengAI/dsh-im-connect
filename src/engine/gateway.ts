@@ -1,4 +1,4 @@
-import { ChoiceStore } from './choices.js'
+import { ChoiceStore, type Choice } from './choices.js'
 import { MessageProgress, ProgressTracker } from './message-progress.js'
 import { replyText, withReplyLocale } from './command-locale.js'
 import { FileDelivery, type DeliverySession } from './file-delivery.js'
@@ -79,6 +79,7 @@ export class ImEngine {
   private readonly wrappedUserQuestionServices = new WeakSet<object>()
   private legacyServiceTimer?: NodeJS.Timeout
   private disposed = false
+  private readonly questionSelections = new Map<string, Set<number>>()
   private readonly choices = new ChoiceStore()
   private readonly progress = new ProgressTracker()
   private readonly mergedMessages = new Map<string, ImMessage[]>()
@@ -270,6 +271,7 @@ export class ImEngine {
   private cancelSessionInteractions(sessionId: string, reason?: unknown): void {
     this.progress.cancel(undefined, sessionId)
     this.broker.cancel(sessionId)
+    this.questionSelections.delete(sessionId)
     this.questions.cancel(sessionId, reason)
     this.sessionActors.delete(sessionId)
     this.questionActors.delete(sessionId)
@@ -317,6 +319,16 @@ export class ImEngine {
         await this.deliver(channel, msg.chatId, withReplyLocale(this.ctx, () => replyText('选项已失效或不属于当前操作，请重新打开 /menu。')))
         return
       }
+      if (selected?.startsWith('#question:') && binding) {
+        const current = this.questions.current(binding.sessionId)
+        if (!current) return
+        const index = Number(selected.slice('#question:'.length))
+        const values = this.questionSelections.get(binding.sessionId) ?? new Set<number>()
+        if (values.has(index)) values.delete(index); else values.add(index)
+        this.questionSelections.set(binding.sessionId, values)
+        await this.deliverQuestionInteraction(binding.sessionId, channel, msg.chatId, this.formatQuestion(current.question, current.index, current.total, { requiresMention: kind === 'group' }), this.questions.signal(binding.sessionId))
+        return
+      }
       if (selected !== undefined) { text = selected; msg = { ...msg, text, actionToken: undefined } }
       if (text.startsWith('/') && !msg.media?.length) {
         if (!canExecuteCommand(this.resolveCommandPermissions(channelId), kind, msg.userId)) {
@@ -352,13 +364,14 @@ export class ImEngine {
         }
         const result = this.questions.answer(binding.sessionId, text)
         if (result.handled) {
+          this.questionSelections.delete(binding.sessionId)
           if (result.waitingPresentation) {
             await this.deliver(channel, msg.chatId, '问题详情仍在发送，请稍后再回答。')
             return
           }
           if (result.next) {
             const signal = this.questions.signal(binding.sessionId)
-            const delivery = await this.deliverQuestionInteraction(binding.sessionId, channel, msg.chatId, formatUserQuestion(
+            const delivery = await this.deliverQuestionInteraction(binding.sessionId, channel, msg.chatId, this.formatQuestion(
               result.next.question,
               result.next.index,
               result.next.total,
@@ -499,7 +512,7 @@ export class ImEngine {
       return true
     }
     const ok = this.broker.answer(binding.sessionId, allow)
-    if (ok) await this.channels.get(channelId)?.send(msg.chatId, allow ? '已批准。' : '已拒绝。')
+    if (ok) await this.channels.get(channelId)?.send(msg.chatId, withReplyLocale(this.ctx, () => allow ? replyText('已批准。') : replyText('已拒绝。')))
     return ok
   }
 
@@ -530,14 +543,19 @@ export class ImEngine {
         await this.deliver(channel, binding.chatId, '当前用户可以私聊，但工具调用审批仅限已批准用户；请在网页端处理。')
         return DELEGATE_INTERACTION
       }
-      const prompt = this.approvalPrompt(req)
+      const prompt = withReplyLocale(this.ctx, () => this.approvalPrompt(req))
       if (!prompt) {
         await this.deliver(channel, binding.chatId, '该操作需要审批，但无法在 IM 中完整展示；请在网页端处理。')
         return DELEGATE_INTERACTION
       }
       const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
       if (!wait) return DELEGATE_INTERACTION
-      const delivery = await this.deliverInteraction(channel, binding.chatId, prompt, req.signal)
+      const ticket = this.broker.token(sessionId)
+      const delivery = await this.deliverInteraction(channel, binding.chatId, prompt, req.signal, {
+        sessionId, message: { chatId: binding.chatId, userId: actor, kind: 'dm', text: '' },
+        choices: withReplyLocale(this.ctx, () => [{ label: replyText('批准一次'), value: 'allow' }, { label: replyText('拒绝'), value: 'reject' }]),
+        valid: () => this.broker.token(sessionId) === ticket && this.broker.isReady(sessionId),
+      })
       if (delivery.status === 'aborted' || req.signal?.aborted) {
         this.broker.cancel(sessionId)
         if (delivery.deliveredAny) await this.announceInteractionCancelled(channel, binding.chatId, '审批')
@@ -595,7 +613,7 @@ export class ImEngine {
       if (actor) this.questionActors.set(sessionId, actor)
       const resume = this.progress.waiting(sessionId, true)
       try {
-        const delivery = await this.deliverQuestionInteraction(sessionId, channel, binding.chatId, formatUserQuestion(
+        const delivery = await this.deliverQuestionInteraction(sessionId, channel, binding.chatId, this.formatQuestion(
           typedQuestions[0]!,
           0,
           typedQuestions.length,
@@ -620,6 +638,7 @@ export class ImEngine {
         throw error
       } finally {
         resume()
+        this.questionSelections.delete(sessionId)
         this.questionActors.delete(sessionId)
         this.questionPromptDelivered.delete(sessionId)
       }
@@ -742,9 +761,9 @@ export class ImEngine {
     const toolName = req.toolName?.trim() || (req.session ? '工具操作' : '')
     if (!toolName) return undefined
     const lines = [
-      'DeepSeek Harness 需要你的审批：',
+      replyText('DeepSeek Harness 需要你的审批：'),
       '',
-      `工具：${toolName}`,
+      replyText('工具：{0}', toolName),
     ]
     const callId = req.callId?.trim()
     if (req.agent && !callId) return undefined
@@ -767,11 +786,11 @@ export class ImEngine {
         return undefined
       }
       if (!rendered.trim() || rendered.length > 6_000) return undefined
-      lines.push('操作参数：', rendered)
+      lines.push(replyText('操作参数：'), rendered)
     }
     const reason = req.reason?.trim()
-    if (reason) lines.push(`原因：${reason}`)
-    lines.push('', '请精准回复「批准」或「拒绝」（也支持：同意 / 不同意 / yes / allow / no / reject）。')
+    if (reason) lines.push(replyText('原因：{0}', reason))
+    lines.push('', replyText('请精准回复「批准」或「拒绝」（也支持：同意 / 不同意 / yes / allow / no / reject）。'))
     return lines.join('\n')
   }
 
@@ -893,6 +912,8 @@ export class ImEngine {
     return deliveredAny
   }
 
+  private formatQuestion(...args: Parameters<typeof formatUserQuestion>): string { return withReplyLocale(this.ctx, () => formatUserQuestion(...args)) }
+
   private deliverQuestionInteraction(
     sessionId: string,
     channel: ChannelAdapter,
@@ -901,7 +922,19 @@ export class ImEngine {
     signal?: AbortSignal,
   ): Promise<InteractionDeliveryResult> {
     let tracked: Promise<InteractionDeliveryResult>
-    tracked = this.deliverInteraction(channel, chatId, text, signal).then((result) => {
+    const current = this.questions.current(sessionId)
+    const binding = this.router.bindingForSession(sessionId)
+    const actor = this.questionActors.get(sessionId) ?? this.sessionActors.get(sessionId) ?? (binding?.kind === 'dm' ? chatId : undefined)
+    const selected = this.questionSelections.get(sessionId) ?? new Set<number>()
+    const choices: Choice[] = current?.question.options?.map((option, index) => ({
+      label: (current.question.multiSelect && selected.has(index) ? '✓ ' : '') + option.label,
+      value: current.question.multiSelect ? `#question:${index}` : String(index + 1),
+    })) ?? []
+    if (current?.question.multiSelect && selected.size) choices.push({ label: withReplyLocale(this.ctx, () => replyText('提交所选')), value: [...selected].map(index => index + 1).join(',') })
+    tracked = this.deliverInteraction(channel, chatId, text, signal, current && actor && choices.length ? {
+      sessionId, message: { chatId, userId: actor, kind: binding?.kind ?? 'dm', text: '' }, choices,
+      valid: () => this.questions.isReady(sessionId) && this.questions.current(sessionId)?.question === current.question,
+    } : undefined).then((result) => {
       if (result.deliveredAny) this.questionPromptDelivered.add(sessionId)
       return result
     }).finally(() => {
@@ -921,8 +954,14 @@ export class ImEngine {
     chatId: string,
     text: string,
     signal?: AbortSignal,
+    interactive?: { sessionId: string; message: ImMessage; choices: Choice[]; valid: () => boolean },
   ): Promise<InteractionDeliveryResult> {
     let deliveredAny = false
+    if (channel.sendChoices && interactive && text.length < channel.maxMessageLength - 512 && !signal?.aborted) {
+      const result = await withReplyLocale(this.ctx, () => this.choices.show(channel, interactive.message, text, interactive.choices,
+        interactive.sessionId, interactive.valid, replyText('点击按钮或按提示回复文字。')))
+      if (!result) return { status: signal?.aborted ? 'aborted' : 'delivered', deliveredAny: true }
+    }
     for (const chunk of splitText(text, channel.maxMessageLength)) {
       if (signal?.aborted) return { status: 'aborted', deliveredAny }
       try {

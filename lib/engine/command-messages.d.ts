@@ -1,5 +1,22 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "\u5DF2\u62D2\u7EDD\u3002": "Rejected.";
+    readonly "\u5DF2\u6279\u51C6\u3002": "Approved.";
+    readonly "\u8BF7\u7CBE\u51C6\u56DE\u590D\u300C\u6279\u51C6\u300D\u6216\u300C\u62D2\u7EDD\u300D\uFF08\u4E5F\u652F\u6301\uFF1A\u540C\u610F / \u4E0D\u540C\u610F / yes / allow / no / reject\uFF09\u3002": "Reply with allow or reject (yes/no also work).";
+    readonly "\u539F\u56E0\uFF1A{0}": "Reason: {0}";
+    readonly "\u64CD\u4F5C\u53C2\u6570\uFF1A": "Arguments:";
+    readonly "\u5DE5\u5177\uFF1A{0}": "Tool: {0}";
+    readonly "DeepSeek Harness \u9700\u8981\u4F60\u7684\u5BA1\u6279\uFF1A": "DeepSeek Harness needs your approval:";
+    readonly "\u8BF7\u8F93\u5165\u4F60\u7684\u56DE\u7B54\u3002": "Enter your answer.";
+    readonly "\u8BF7\u56DE\u590D\u9009\u9879\u5E8F\u53F7\u6216\u6587\u5B57\uFF1B\u591A\u9009\u7528\u9017\u53F7\u5206\u9694\uFF0C\u4E5F\u53EF\u8865\u5145\u5176\u4ED6\u5185\u5BB9\u3002": "Reply with option numbers or text. Separate multiple choices with commas; you can also add other details.";
+    readonly "\u8BF7\u56DE\u590D\u4E00\u4E2A\u9009\u9879\u5E8F\u53F7\u6216\u6587\u5B57\uFF0C\u4E5F\u53EF\u76F4\u63A5\u8F93\u5165\u5176\u4ED6\u7B54\u6848\u3002": "Reply with one option number or label, or enter your own answer.";
+    readonly "\u8BF7\u76F4\u63A5\u56DE\u590D\u4F60\u7684\u7B54\u6848\u3002": "Reply with your answer.";
+    readonly "\u7FA4\u804A\u4E2D\u8BF7 @\u673A\u5668\u4EBA \u540E\u53D1\u9001\u7B54\u6848\u3002": "Mention the bot when answering in a group.";
+    readonly "DeepSeek Harness \u9700\u8981\u4F60\u8865\u5145\u4FE1\u606F{0}\uFF1A": "DeepSeek Harness needs your input{0}:";
+    readonly 批准一次: "Allow once";
+    readonly 拒绝: "Reject";
+    readonly 提交所选: "Submit selection";
+    readonly '\u70B9\u51FB\u6309\u94AE\u6216\u6309\u63D0\u793A\u56DE\u590D\u6587\u5B57\u3002': "Click a button or reply in text as instructed.";
     readonly "/menu \u6216 /m \u2014 \u6253\u5F00\u64CD\u4F5C\u83DC\u5355": "/menu or /m — Open the action menu";
     readonly 返回菜单: "Back to menu";
     readonly 下一页: "Next page";

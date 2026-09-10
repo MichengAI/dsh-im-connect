@@ -47,6 +47,7 @@ export declare class QuestionBroker {
     } | undefined;
     signal(key: string): AbortSignal | undefined;
     begin(key: string, questions: UserQuestionItem[], signal?: AbortSignal): Promise<UserQuestionAnswer> | undefined;
+    isReady(key: string): boolean;
     activate(key: string): boolean;
     answer(key: string, text: string): QuestionReplyResult;
     cancel(key: string, reason?: unknown): boolean;

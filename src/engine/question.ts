@@ -1,3 +1,4 @@
+import { replyText } from './command-locale.js'
 export interface UserQuestionOption {
   label: string
   description?: string
@@ -79,9 +80,9 @@ export function formatUserQuestion(
   options: { requiresMention?: boolean } = {},
 ): string {
   const progress = total > 1 ? `（${index + 1}/${total}）` : ''
-  const lines = [`DeepSeek Harness 需要你补充信息${progress}：`]
+  const lines = [replyText('DeepSeek Harness 需要你补充信息{0}：', progress)]
   const header = nonEmptyText(question.header)
-  const prompt = nonEmptyText(question.question) ?? '请输入你的回答。'
+  const prompt = nonEmptyText(question.question) ?? replyText('请输入你的回答。')
   const detail = nonEmptyText(question.detail)
   if (header) lines.push('', header)
   lines.push('', prompt)
@@ -95,12 +96,12 @@ export function formatUserQuestion(
       lines.push(`${choiceIndex + 1}. ${choice.label}${description ? ` — ${description}` : ''}`)
     })
     lines.push('', question.multiSelect === true
-      ? '请回复选项序号或文字；多选用逗号分隔，也可补充其他内容。'
-      : '请回复一个选项序号或文字，也可直接输入其他答案。')
+      ? replyText('请回复选项序号或文字；多选用逗号分隔，也可补充其他内容。')
+      : replyText('请回复一个选项序号或文字，也可直接输入其他答案。'))
   } else {
-    lines.push('', '请直接回复你的答案。')
+    lines.push('', replyText('请直接回复你的答案。'))
   }
-  if (options.requiresMention) lines.push('', '群聊中请 @机器人 后发送答案。')
+  if (options.requiresMention) lines.push('', replyText('群聊中请 @机器人 后发送答案。'))
   return lines.join('\n')
 }
 
@@ -180,6 +181,8 @@ export class QuestionBroker {
       this.pending.set(key, pending)
     })
   }
+
+  isReady(key: string): boolean { return this.pending.get(key)?.accepting === true }
 
   activate(key: string): boolean {
     const pending = this.pending.get(key)

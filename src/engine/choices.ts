@@ -12,7 +12,7 @@ export class ChoiceStore {
   clear(channel?: string): void {
     for (const [token, entry] of this.entries) if (!channel || JSON.parse(entry.key)[0] === channel) { this.entries.delete(token); this.scopes.delete(entry.key) }
   }
-  async show(channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, valid: () => boolean = () => true): Promise<string> {
+  async show(channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, valid: () => boolean = () => true, hint = replyText('点击选项或回复序号；15 分钟内有效，普通文字退出菜单。')): Promise<string> {
     const key = this.key(channel.id, msg)
     const previous = this.scopes.get(key)
     if (previous) this.entries.delete(previous)
@@ -21,7 +21,6 @@ export class ChoiceStore {
     const token = randomUUID()
     this.entries.set(token, { key, session, expires: Date.now() + 15 * 60_000, choices, valid })
     this.scopes.set(key, token)
-    const hint = replyText('点击选项或回复序号；15 分钟内有效，普通文字退出菜单。')
     const body = text + '\n\n' + choices.map((choice, i) => `${i + 1}. ${choice.label}`).join('\n') + '\n\n' + hint
     if (channel.sendChoices) {
       try { await channel.sendChoices(msg, body, choices.map((choice, i) => ({ label: choice.label, token: `${token}:${i}` }))); return '' }

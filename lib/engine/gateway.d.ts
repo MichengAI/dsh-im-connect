@@ -30,6 +30,7 @@ export declare class ImEngine {
     private readonly wrappedUserQuestionServices;
     private legacyServiceTimer?;
     private disposed;
+    private readonly questionSelections;
     private readonly choices;
     private readonly progress;
     private readonly mergedMessages;
@@ -85,6 +86,7 @@ export declare class ImEngine {
     private processSessionEvent;
     /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
     private deliver;
+    private formatQuestion;
     private deliverQuestionInteraction;
     private announceInteractionCancelled;
     /** 交互提示必须完整送达；任一分片失败或取消就不能继续在 IM 中收集决定。 */

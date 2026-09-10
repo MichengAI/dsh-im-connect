@@ -305,7 +305,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       await broker.send(chatId, text)
     },
     async sendChoices(message, text, buttons) {
-      if (!client || buttons.length > 6) throw new Error('use-text-menu')
+      if (!client || buttons.length > 6 || text.length > 500) throw new Error('use-text-menu')
       await client.sendMessage(message.chatId, { msgtype: 'template_card', template_card: {
         card_type: 'button_interaction', task_id: buttons[0]?.token.split(':')[0],
         main_title: { title: text.split('\n')[0]?.slice(0, 36) }, sub_title_text: text.slice(0, 500),

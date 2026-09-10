@@ -1,5 +1,23 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
+  "已拒绝。": "Rejected.",
+  "已批准。": "Approved.",
+  "请精准回复「批准」或「拒绝」（也支持：同意 / 不同意 / yes / allow / no / reject）。": "Reply with allow or reject (yes/no also work).",
+  "原因：{0}": "Reason: {0}",
+  "操作参数：": "Arguments:",
+  "工具：{0}": "Tool: {0}",
+  "DeepSeek Harness 需要你的审批：": "DeepSeek Harness needs your approval:",
+  "请输入你的回答。": "Enter your answer.",
+  "请回复选项序号或文字；多选用逗号分隔，也可补充其他内容。": "Reply with option numbers or text. Separate multiple choices with commas; you can also add other details.",
+  "请回复一个选项序号或文字，也可直接输入其他答案。": "Reply with one option number or label, or enter your own answer.",
+  "请直接回复你的答案。": "Reply with your answer.",
+  "群聊中请 @机器人 后发送答案。": "Mention the bot when answering in a group.",
+  "DeepSeek Harness 需要你补充信息{0}：": "DeepSeek Harness needs your input{0}:",
+
+  '批准一次': 'Allow once',
+  '拒绝': 'Reject',
+  '提交所选': 'Submit selection',
+  '点击按钮或按提示回复文字。': 'Click a button or reply in text as instructed.',
   "/menu 或 /m — 打开操作菜单": "/menu or /m \u2014 Open the action menu",
   "返回菜单": "Back to menu",
   "下一页": "Next page",

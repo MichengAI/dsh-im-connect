@@ -3,6 +3,7 @@ export declare class ApprovalBroker {
     private readonly pending;
     get size(): number;
     wait(key: string, timeoutMs?: number, signal?: AbortSignal): Promise<ApprovalVerdict> | undefined;
+    token(key: string): unknown;
     has(key: string): boolean;
     activate(key: string): boolean;
     isReady(key: string): boolean;

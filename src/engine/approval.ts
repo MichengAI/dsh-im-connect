@@ -41,6 +41,8 @@ export class ApprovalBroker {
     })
   }
 
+  token(key: string): unknown { return this.pending.get(key) }
+
   has(key: string): boolean {
     return this.pending.has(key)
   }
