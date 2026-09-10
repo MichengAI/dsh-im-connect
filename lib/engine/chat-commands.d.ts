@@ -3,7 +3,7 @@ import type { SessionRouter } from './router.js';
 export interface CommandHost {
     get(name: string): unknown;
 }
-export declare const CHAT_CONTROL_HELP: string;
+export declare const chatControlHelp: () => string;
 export declare class ChatCommands {
     private readonly host;
     private readonly router;
@@ -22,6 +22,8 @@ export declare class ChatCommands {
     private resolve;
     private idle;
     execute(channel: ChannelAdapter, msg: ImMessage, signal: AbortSignal): Promise<string>;
+    private localDetails;
     private run;
 }
+export declare const CHAT_CONTROL_HELP: string;
 //# sourceMappingURL=chat-commands.d.ts.map

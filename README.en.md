@@ -199,6 +199,8 @@ Command notes: `/export` currently requires web Chat; IM does not return a ZIP f
 
 Send commands as separate text messages; image captions remain ordinary input. `/help` discovers registered Chat commands for the current session and uses the same Host handlers. List numbers are stored per user for 15 minutes. Finish running tasks and pending interactions before switching. Queue edits use `/queue remove|steer|edit <message ID> [new text]`. Restore archived sessions in Chat before selecting them.
 
+Command replies support Chinese and English and follow the language explicitly saved in web settings. When no preference is set or the language service is unavailable, replies default to Chinese. Replies include related commands and usage examples; dynamic names, paths, user content, and Host extension results remain unchanged.
+
 Command permission does not grant DM admission or replace tool approval. Enabled users can inspect and resume ordinary Chat sessions and execute registered Host commands. Each account has independent DM/group switches without user IDs; legacy configurations default to enabled for compatibility.
 
 | Item | Current behavior |

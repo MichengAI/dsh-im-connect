@@ -214,3 +214,106 @@ test('stop 附加目标查询失败仍报告已请求停止', async () => {
   f.services.goals = { get() { throw new Error('状态不可用') } }
   assert.match(await f.run('/stop'), /已请求停止/)
 })
+
+test('查询和列表提供关联操作，分页与空状态可继续操作', async () => {
+  const f = fixture()
+  assert.match(await f.run('/model'), /选择其他模型：\/models/)
+  assert.match(await f.run('/reasoning'), /恢复默认：\/reasoning --default/)
+  assert.match(await f.run('/sessions'), /第 1\/1 页/)
+  assert.match(await f.run('/sessions 9'), /共 1 页/)
+  assert.match(await f.run('/workspaces'), /\/workspace 1/)
+  f.rows.length = 0
+  assert.match(await f.run('/sessions'), /暂无.*会话/)
+})
+
+test('扩展列表故障不破坏内置帮助；不支持的参数在动作前拒绝', async () => {
+  const f = fixture()
+  f.services.commands.list = () => { throw new Error('服务暂时不可用') }
+  assert.match(await f.run('/help'), /会话与工作区/)
+  assert.match(await f.run('/help'), /扩展命令暂时无法读取/)
+  await assert.rejects(f.run('/history 5'), /不支持参数/)
+  await assert.rejects(f.run('/new ignored'), /不支持参数/)
+  assert.equal(f.calls.some(c => c[0] === 'rotate'), false)
+})
+
+test('队列修改回显操作，状态查不到不能误报空闲', async () => {
+  const f = fixture()
+  assert.match(await f.run('/queue edit q1 新内容'), /已修改.*q1[\s\S]*新内容/)
+  f.rows.length = 0
+  assert.match(await f.run('/status'), /状态：暂时无法读取/)
+})
+
+test('命令回复使用宿主语言偏好，切换即时生效且用户内容不翻译', async () => {
+  const f = fixture()
+  let preference = 'en-US'
+  f.services.settings = { get(ns) { assert.equal(ns, 'locale'); return { preference } } }
+  assert.match(await f.run('/help'), /Sessions and workspaces/)
+  assert.match(await f.run('/model'), /Current model:.*\nModel ID: p\/m/)
+  assert.match(await f.run('/models'), /\[current\]/)
+  assert.match(await f.run('/reasoning'), /Reasoning|reasoning/)
+  assert.match(await f.run('/workspace'), /Workspaces/)
+  assert.match(await f.run('/sessions'), /Sessions · Page/)
+  assert.match(await f.run('/queue'), /Queued messages/)
+  assert.match(await f.run('/export'), /web Chat/)
+  assert.match(await f.run('/stop'), /Stop requested/)
+  assert.match(await f.run('/steer 中文要求 {0} /model'), /中文要求 \{0\} \/model/)
+  await assert.rejects(f.run('/new extra'), /does not accept arguments/)
+  assert.equal(await f.run('/custom'), '宿主结果')
+  preference = 'zh-CN'
+  assert.match(await f.run('/help'), /会话与工作区/)
+  preference = 'fr'
+  assert.match(await f.run('/model'), /当前模型/)
+  f.services.settings.get = () => { throw new Error('settings unavailable') }
+  assert.match(await f.run('/model'), /当前模型/)
+})
+
+test('不同语言的并发命令不串语言，空历史不显示孤立角色名', async () => {
+  const english = fixture(), chinese = fixture()
+  english.services.settings = { get: () => ({ preference: 'en' }) }
+  let release
+  english.services.sessionController.follow = async function* () {
+    await new Promise(resolve => { release = resolve })
+    yield { records: [{ type: 'event', event: { type: 'assistant/message', data: { content: [{ type: 'image' }] } } }] }
+  }
+  const pending = english.run('/history')
+  while (!release) await new Promise(resolve => setImmediate(resolve))
+  assert.match(await chinese.run('/history'), /最近文字记录/)
+  release()
+  const result = await pending
+  assert.match(result, /No displayable text/)
+  assert.doesNotMatch(result, /Assistant：/)
+})
+
+test('扩展回复保留错误和反馈披露，目标指引依据结构化状态', async () => {
+  const f = fixture()
+  f.services.commands.execute = async () => ({ result: { kind: 'success', text: 'Shared with maintainer.\n完整反馈披露' } })
+  assert.match(await f.run('/feedback hello'), /Shared with maintainer\.\n完整反馈披露/)
+  f.services.commands.execute = async () => ({ result: { kind: 'error', text: '  exact error: invalid path\n' } })
+  assert.match(await f.run('/compact'), /未能完成\n  exact error: invalid path\n/)
+  assert.equal(await f.run('/custom'), '  exact error: invalid path\n')
+  f.services.commands.execute = async () => ({ result: { kind: 'success' } })
+  assert.match(await f.run('/plan'), /未提供结果说明/)
+  f.services.goals = { get: () => ({ phase: 'active', activation: 'armed' }) }
+  assert.match(await f.run('/goal'), /暂停目标：\/goal pause/)
+  f.services.goals.get = () => ({ phase: 'paused', activation: 'disarmed' })
+  assert.match(await f.run('/goal'), /恢复目标：\/goal resume/)
+  f.services.goals.get = () => undefined
+  assert.doesNotMatch(await f.run('/goal'), /清除目标|恢复目标|暂停目标/)
+})
+
+test('状态使用真实投影；可选数据失败保留可读取字段', async () => {
+  const f = fixture()
+  f.services.sessionController.follow = async function* () {
+    yield { records: [], projections: { values: { agentPreset: 'research', permissions: { currentValue: 'custom', options: [{ value: 'custom', name: 'Custom' }] }, goal: { goal: { phase: 'paused' } } } } }
+  }
+  const status = await f.run('/status')
+  assert.match(status, /Agent 预设：research/)
+  assert.match(status, /权限：Custom/)
+  assert.match(status, /目标：已暂停/)
+  assert.match(status, /排队消息：1 条/)
+  f.services.sessionController.follow = async function* () { throw new Error('snapshot failed') }
+  f.services.sessionController.control = async function* () { throw new Error('queue failed') }
+  assert.match(await f.run('/status'), /模型：暂时无法读取/)
+  assert.match(await f.run('/models'), /可用模型/)
+  assert.match(await f.run('/new'), /已开启新的频道会话/)
+})

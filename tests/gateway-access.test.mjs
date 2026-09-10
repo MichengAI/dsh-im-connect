@@ -45,7 +45,7 @@ test('等待中的 Chat 命令可被 stop 取消，不阻塞后续命令', async
     send('/long-task', 'long')
     await waitFor(() => started)
     send('/stop', 'stop')
-    await waitFor(() => cancelled && sent.some(item => item.text === '命令已取消。'))
+    await waitFor(() => cancelled && sent.some(item => item.text.startsWith('命令已取消。') && item.text.includes('/status')))
     send('/help', 'help-after-stop')
     await waitFor(() => sent.some(item => item.text.includes('IM 助理已连接')))
   } finally { engine.dispose() }
