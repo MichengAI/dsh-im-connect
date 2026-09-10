@@ -107,6 +107,8 @@ WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram can return files produce
 
 ## Action menu
 
+On channels with native buttons, `/sessions`, `/workspaces` and `/models` open a selector directly. After paging, numbered replies and `/session N`, `/workspace N` or `/model N` refer to the current selection page. Text channels keep their original list numbering.
+
 Send `/menu` or `/m` to select sessions, workspaces and models, or start, stop, export and inspect a session. Lists support pagination. Click a button or reply with the current menu number; ordinary text exits the menu.
 
 Menus include previous, next and back actions. WeCom menus paginate to fit card limits, including the main menu (`/menu 2`). Open a selector directly with `/menu sessions`, `/menu workspaces` or `/menu models`.

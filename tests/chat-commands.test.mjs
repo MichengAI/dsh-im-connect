@@ -58,6 +58,28 @@ test('企业微信主菜单按容量分页，每页可继续或返回且不漏�
   assert.equal(shown[3].choices.at(-1).value, '/menu')
 })
 
+test('原生列表直接选择，序号映射当前页；文字渠道保持原列表', async () => {
+  const shown = []
+  const f = fixture({ channel: { sendChoices() {}, choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (...args) => { shown.push(args); return '' } })
+  await f.run('/sessions')
+  assert.equal(shown[0][3][0].value, '/session s2')
+  await f.run('/session 1')
+  assert.equal(f.calls.find(call => call[0] === 'bind')[4], 's2')
+  await f.run('/workspaces')
+  assert.equal(shown.at(-1)[3][0].value, '/workspace D:\\one')
+  await f.run('/models')
+  assert.equal(shown.at(-1)[3][0].value, '/model p/m')
+  assert.match(await fixture().run('/sessions'), /会话列表/)
+})
+
+test('直接列表降级保留选择动作，不被通用导航替换', async () => {
+  const calls = []
+  const f = fixture({ channel: { sendChoices() {} }, showChoices: async (_, __, ___, choices) => { calls.push(choices); return 'fallback menu' } })
+  assert.equal(await f.run('/sessions'), 'fallback menu')
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][0].value, '/session s2')
+})
+
 test('模型回复提供可点击导航，正文保留且不启用数字快捷操作', async () => {
   let shown
   const f = fixture({ channel: { sendChoices() {} }, showChoices: async (...args) => { shown = args; return '' } })

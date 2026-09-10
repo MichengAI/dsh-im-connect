@@ -103,6 +103,16 @@ export class ChatCommands {
   execute(channel: ChannelAdapter, msg: ImMessage, signal: AbortSignal): Promise<string> {
     return withReplyLocale(this.host, () => this.lifetime.run(signal, async () => {
       try {
+        // 原生渠道直接展示选择页，文字渠道沿用原列表及序号契约。
+        const list = /^\/(sessions|sessionlist|workspaces|workspacelist|models)(?:\s+(\d+))?\s*$/i.exec(msg.text.trim())
+        if (list && channel.sendChoices && this.showChoices && !msg.media?.length) {
+          const name = list[1]!.toLowerCase()
+          const section = name === 'sessionlist' ? 'sessions' : name === 'workspacelist' ? 'workspaces' : name
+          // 尚无会话时 /models 仍可浏览目录，不把查询变成必须创建会话的操作。
+          if (section !== 'models' || this.router.lookup(channel.id, msg.kind ?? 'dm', msg.chatId)) {
+            msg = { ...msg, text: `/menu ${section} ${list[2] || '1'}` }
+          }
+        }
         const text = await this.run(channel, msg, signal)
         if (!text) return text
         const command = /^\/([a-z][a-z0-9_-]*)/i.exec(msg.text.trim())?.[1]?.toLowerCase() ?? ''
@@ -180,7 +190,7 @@ export class ChatCommands {
         choices = rows.filter(row => !row.origin && !row.running && row.sessionId !== current?.sessionId && !workspaces.archivedSessionIds.includes(row.sessionId)
           && !this.router.isBoundElsewhere?.(row.sessionId, channel.id, kind, msg.chatId)).map(row => ({ label: oneLine(row.projections?.values?.title || row.sessionId), value: `/session ${row.sessionId}` }))
       } else if (section === 'workspaces') {
-        choices = (await this.workspaces(signal)).items.map(item => ({ label: oneLine(item.title || item.path), value: `/workspace ${item.path}` }))
+        choices = (await this.workspaces(signal)).items.map(item => ({ label: oneLine(item.title ? `${item.title} · ${item.path}` : item.path), value: `/workspace ${item.path}` }))
       } else if (section === 'models') {
         requireCurrent()
         const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
@@ -206,6 +216,7 @@ export class ChatCommands {
         text += ` · ${page}/${pages}`
         if (!choices.length) text += '\n' + replyText('暂无可选项，可返回菜单选择其他操作。')
         choices = choices.slice((page - 1) * pageSize, page * pageSize)
+        if (section) this.remember(`${scope}:${section}`, choices.map(choice => choice.value.slice(choice.value.indexOf(' ') + 1)))
         const pageCommand = section ? `/menu ${section}` : '/menu'
         if (page > 1) choices.push({ label: replyText('上一页'), value: `${pageCommand} ${page - 1}` })
         if (page < pages) choices.push({ label: replyText('下一页'), value: `${pageCommand} ${page + 1}` })
