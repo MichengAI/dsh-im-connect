@@ -130,7 +130,7 @@ For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/Mi
 ## Prerequisites
 
 - A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
-- The current source supports DSH `0.1.2-rc.1` and `0.1.5-rc.1`; the latter is recommended and pinned for development. DSH `0.1.0-rc.8` and `0.1.1-rc.2` lack the authentication and session-control interfaces this plugin requires; upgrade DSH first.
+- The current source supports DSH `0.1.2-rc.1`, `0.1.5-rc.1`, and `0.1.5-rc.2`; the latter is recommended and pinned for development. DSH `0.1.0-rc.8` and `0.1.1-rc.2` lack the authentication and session-control interfaces this plugin requires; upgrade DSH first.
 - Examples use the `web` profile; replace it with the target profile.
 - Source installation and development require Node.js 22+. npm installation does not require running `npm install` in an arbitrary directory.
 - After install, restart `dsh web` and hard-refresh the browser before opening **Settings → IM Assistant**.

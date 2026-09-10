@@ -21,10 +21,10 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
   ]
   const developmentPackages = dshPackages.filter((packageName) => packageName !== '@deepseek-ai/dsh-client-runtime')
   for (const packageName of dshPackages) {
-    assert.equal(manifest.peerDependencies[packageName], '0.1.2-rc.1 || 0.1.5-rc.1')
+    assert.equal(manifest.peerDependencies[packageName], '0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2')
   }
   for (const packageName of developmentPackages) {
-    assert.equal(manifest.devDependencies[packageName], '0.1.5-rc.1')
+    assert.equal(manifest.devDependencies[packageName], '0.1.5-rc.2')
   }
   assert.equal(manifest.peerDependenciesMeta['@deepseek-ai/dsh-client-runtime'].optional, true)
 })

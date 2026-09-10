@@ -4,6 +4,11 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.43 - 2026-09-11
+
+- Add support for DSH 0.1.5-rc.2 while retaining compatibility with 0.1.2-rc.1 and 0.1.5-rc.1.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.42 - 2026-09-10
 
 - Support DSH 0.1.2-rc.1 and 0.1.5-rc.1. Fix session creation, workspace switching, and session restoration on the newer DSH version.
