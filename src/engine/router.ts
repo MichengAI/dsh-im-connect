@@ -20,7 +20,7 @@ export interface ChatBinding {
 }
 
 type WorkspaceLookup = {
-  list(): Array<{ path: string; attachSession(sessionId: string): Promise<void> }>
+  list(): Array<{ path: string; sessionIds?: readonly string[]; attachSession(sessionId: string): Promise<void> }>
   archivedSessionIds?: readonly string[]
 }
 
@@ -100,11 +100,11 @@ export class SessionRouter {
     ])]
   }
 
-  async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { rebuildMissing?: boolean }): Promise<ChatBinding> {
-    return this.channelOperations.run(channelId, () => this.getOrCreateNow(channelId, kind, chatId, title, options))
+  async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
+    return this.channelOperations.run(channelId, () => this.getOrCreateNow(channelId, kind, chatId, title))
   }
 
-  private async getOrCreateNow(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { rebuildMissing?: boolean }): Promise<ChatBinding> {
+  private async getOrCreateNow(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const live = this.live.get(key)
     if (live?.handle) {
@@ -125,13 +125,9 @@ export class SessionRouter {
         this.live.set(key, resumed)
         return resumed
       }
-      if (options?.rebuildMissing) {
-        try {
-          return await this.create(channelId, kind, chatId, title, saved.sessionId)
-        } catch (error) {
-          if (!isIdCollision(error)) throw error
-          this.log(`[router] 原 id 与磁盘日志冲突，改新建 ${saved.sessionId}`)
-        }
+      const known = await this.knownSessionIds()
+      if (known === undefined || known.has(saved.sessionId)) {
+        throw new Error('当前会话暂时无法恢复，已保留原绑定，请稍后重试。')
       }
       this.log(`[router] 无法恢复会话，轮换 ${saved.sessionId}`)
       return this.rotateNow(channelId, kind, chatId, title)
@@ -139,24 +135,59 @@ export class SessionRouter {
     return this.create(channelId, kind, chatId, title)
   }
 
-  async rotate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
-    return this.channelOperations.run(channelId, () => this.rotateNow(channelId, kind, chatId, title))
+  async rotate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { cwd?: string; signal?: AbortSignal }): Promise<ChatBinding> {
+    return this.channelOperations.run(channelId, () => this.rotateNow(channelId, kind, chatId, title, options))
   }
 
-  private async rotateNow(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
+  private async rotateNow(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { cwd?: string; signal?: AbortSignal }): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const old = this.live.get(key)
+    const record = this.store.get(key)
+    const cwd = options?.cwd || (record ? await this.sessionWorkspace(record) : undefined)
+    options?.signal?.throwIfAborted()
+    // 新会话准备成功后才替换当前映射，失败时旧句柄仍可继续使用。
+    const next = await this.create(channelId, kind, chatId, title, cwd, options?.signal)
     if (old?.handle) {
       this.reloadDisposed.add(old.sessionId)
       await this.disposeHandle(old)
     }
-    this.live.delete(key)
-    this.store.retain(key)
-    return this.create(channelId, kind, chatId, title)
+    return next
+  }
+
+  private async sessionWorkspace(record: SessionRecord): Promise<string | undefined> {
+    if (record.cwd) return record.cwd
+    const registry = this.ctx.get?.('workspaceRegistry') as WorkspaceLookup | undefined
+    const workspace = registry?.list?.().find(item => item.sessionIds?.includes(record.sessionId))
+    if (workspace) return workspace.path
+    const controller = this.ctx.get?.('sessionController') as unknown as { list(request: object): Promise<{ items: Array<{ sessionId: string; cwd?: string }> }> } | undefined
+    if (controller?.list) {
+      const row = (await controller.list({})).items.find(item => item.sessionId === record.sessionId)
+      if (row?.cwd) return row.cwd
+    }
+    if (record.adopted) throw new Error('无法确定当前会话工作区，请使用 /workspace 重新选择。')
+    return undefined
   }
 
   rename(sessionId: string, title: string): boolean {
     return this.setTitle(sessionId, title, 'user')
+  }
+
+  isAdopted(sessionId: string): boolean { return this.store.list().some(record => record.sessionId === sessionId && record.adopted) }
+
+  /** 显式换绑保留旧历史与运行句柄，不改变 Host 会话的归属或默认配置。 */
+  async bind(channelId: string, kind: ChatKind, chatId: string, sessionId: string, title: string, agent: unknown, cwd?: string): Promise<void> {
+    await this.channelOperations.run(channelId, async () => {
+      const key = sessionKeyOf(channelId, kind, chatId)
+      const other = this.store.list().find(item => item.sessionId === sessionId && sessionKeyOf(item.channel, item.kind, item.chatId) !== key)
+      if (other) throw new Error('该会话已关联其他聊天，不能重复绑定。')
+      const old = this.live.get(key)
+      const previous = this.store.list().find(item => item.sessionId === sessionId)
+      this.store.upsert(key, { ...previous, channel: channelId, kind, chatId, sessionId, title: previous?.titleSource === 'user' ? previous.title : title, ...(cwd ? { cwd } : {}), adopted: true, updatedAt: new Date().toISOString() })
+      if (old && old.sessionId !== sessionId) this.historical.set(old.sessionId, old)
+      const binding = this.historical.get(sessionId) ?? { key, channelId, kind, chatId, sessionId, handle: { agent, dispose: async () => {} } }
+      this.historical.delete(sessionId)
+      this.live.set(key, binding)
+    })
   }
 
   setTitle(sessionId: string, title: string, source: 'message' | 'host' | 'user'): boolean {
@@ -336,20 +367,36 @@ export class SessionRouter {
     return this.channelOperations.run(rec.channel, () => this.removeFromChannel(sessionId))
   }
 
+  /** 归档失败后，仅在可靠确认日志缺失时清理残留索引。 */
+  async cleanupMissing(sessionId: string): Promise<boolean> {
+    const rec = this.store.list().find(item => item.sessionId === sessionId)
+    if (!rec) return true
+    return this.channelOperations.run(rec.channel, async () => {
+      const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { id: string }[]> } | undefined
+      if (!persistence?.list) return false
+      try {
+        if ((await persistence.list()).some(item => item.id === sessionId)) return false
+      } catch { return false }
+      return this.removeFromChannel(sessionId, false)
+    })
+  }
+
   private samePath(left: string, right: string): boolean {
     return sameWorkspacePath(left, right)
   }
 
-  private async create(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, preferredSessionId?: string): Promise<ChatBinding> {
+  private async create(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, cwd?: string, signal?: AbortSignal): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
-    const sessionId = preferredSessionId || createImSessionId(channelId, kind, chatId)
-    let handle: Awaited<ReturnType<SessionRouter['createHandle']>>
+    const sessionId = createImSessionId(channelId, kind, chatId)
+    const config = { ...this.resolveConfig(channelId), ...(cwd ? { cwd } : {}) }
+    const handle = await this.createHandle(sessionId, channelId, config)
     try {
-      handle = await this.createHandle(sessionId, channelId)
+      signal?.throwIfAborted()
+      await this.attachWorkspace(sessionId, channelId, config.cwd, true)
+      signal?.throwIfAborted()
     } catch (error) {
-      if (!preferredSessionId || !isIdCollision(error)) throw error
-      this.log(`[router] 创建冲突，改用新 id ${sessionId}`)
-      return this.create(channelId, kind, chatId, title)
+      await this.disposeHandle({ key, channelId, kind, chatId, sessionId, handle })
+      throw error
     }
     const record: SessionRecord = {
       sessionId,
@@ -358,17 +405,31 @@ export class SessionRouter {
       chatId,
       title,
       titleSource: 'pending',
+      agentPreset: config.agentPreset || 'standard',
+      cwd: config.cwd || process.cwd(),
       updatedAt: new Date().toISOString(),
     }
-    this.store.upsert(key, record)
+    try {
+      this.store.upsert(key, record)
+    } catch (error) {
+      await this.disposeHandle({ key, channelId, kind, chatId, sessionId, handle })
+      throw error
+    }
     const binding: ChatBinding = { key, channelId, kind, chatId, sessionId, handle }
     this.live.set(key, binding)
-    await this.attachWorkspace(sessionId, channelId)
     this.log(`[router] 新建 IM 会话 ${sessionId}`)
     return binding
   }
 
   private async resume(record: SessionRecord): Promise<ChatBinding | undefined> {
+    if (record.adopted) {
+      const controller = this.ctx.get?.('sessionController') as unknown as { resolveAgent(id: string): Promise<{ agent?: unknown }> } | undefined
+      if (!controller?.resolveAgent) return undefined
+      const result = await controller.resolveAgent(record.sessionId)
+      if (!result.agent) return undefined
+      return { key: sessionKeyOf(record.channel, record.kind, record.chatId), channelId: record.channel, kind: record.kind, chatId: record.chatId,
+        sessionId: record.sessionId, handle: { agent: result.agent, dispose: async () => {} } }
+    }
     const liveAgent = this.ctx.agents?.get?.(record.sessionId)
     if (liveAgent) {
       this.syncStoredTitle(record.sessionId, liveAgent)
@@ -379,7 +440,7 @@ export class SessionRouter {
         chatId: record.chatId,
         sessionId: record.sessionId,
       }
-      await this.attachWorkspace(record.sessionId, record.channel)
+      await this.attachWorkspace(record.sessionId, record.channel, record.cwd)
       return binding
     }
     if (!this.ctx.agents?.resume) return undefined
@@ -390,10 +451,10 @@ export class SessionRouter {
           ...this.resolveAgentOptions(record.channel),
           ...(this.resolveConfig(record.channel).reasoningEffort ? { reasoningEffort: this.resolveConfig(record.channel).reasoningEffort } : {}),
         },
-        setup: this.presetSetup(record.channel),
+        setup: this.presetSetup(record.channel, record.agentPreset),
       })
       this.syncStoredTitle(record.sessionId, handle.agent)
-      await this.attachWorkspace(record.sessionId, record.channel)
+      await this.attachWorkspace(record.sessionId, record.channel, record.cwd)
       return {
         key: sessionKeyOf(record.channel, record.kind, record.chatId),
         channelId: record.channel,
@@ -408,13 +469,12 @@ export class SessionRouter {
     }
   }
 
-  private async createHandle(sessionId: string, channelId: string) {
+  private async createHandle(sessionId: string, channelId: string, config: EngineConfig = this.resolveConfig(channelId)) {
     const agents = this.ctx.agents
     if (!agents?.create) throw new Error('当前 Host 没有 agents 服务，无法创建 IM 会话')
     // IM 保持普通会话（不设置 subagent origin）；Chat prompt 会拒绝子代理所有权。
     // IM 与任务的区分靠 sessionId 的 im: 前缀。
     // 必须带上当前默认模型，否则 deployment:persona 的 {{model}} 组装会失败。
-    const config = this.resolveConfig(channelId)
     const agentOptions = this.resolveAgentOptions(channelId)
     this.log(`[router] ${channelId} 使用模型 ${agentOptions.provider}/${agentOptions.model}${config.reasoningEffort ? ` ${config.reasoningEffort}` : ''}`)
     const create = () => agents.create({
@@ -454,8 +514,8 @@ export class SessionRouter {
     await this.recoverHistory()
     await this.pruneMissingSessions()
     for (const record of this.store.list()) {
-      if (this.isArchived(record.sessionId)) continue
-      await this.attachWorkspace(record.sessionId, record.channel)
+      if (record.adopted || this.isArchived(record.sessionId)) continue
+      await this.attachWorkspace(record.sessionId, record.channel, record.cwd)
     }
     this.log(`[boot] attachMappedSessions ${Date.now() - started}ms`)
   }
@@ -469,14 +529,14 @@ export class SessionRouter {
 
   private async recoverHistory(): Promise<void> {
     try {
-      const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { id: string; createdAt?: number }[]> } | undefined
+      const persistence = this.ctx.get?.('sessionPersistence') as { list?: () => Promise<readonly { id: string; createdAt?: number; cwd?: string }[]> } | undefined
       if (!persistence?.list) return
       for (const header of await persistence.list()) {
         const parsed = parseImSessionId(header.id)
         if (!parsed) continue
         this.store.saveHistory({
           sessionId: header.id, ...parsed,
-          title: parsed.chatId,
+          title: parsed.chatId, ...(header.cwd ? { cwd: header.cwd } : {}),
           updatedAt: new Date(Number.isFinite(header.createdAt) ? header.createdAt! : 0).toISOString(),
         })
       }
@@ -495,7 +555,7 @@ export class SessionRouter {
     }
   }
 
-  private async attachWorkspace(sessionId: string, channelId: string): Promise<void> {
+  private async attachWorkspace(sessionId: string, channelId: string, cwd?: string, strict = false): Promise<void> {
     let workspaces: Array<{ path: string; attachSession(sessionId: string): Promise<void> }> = []
     try {
       workspaces = this.ctx.get?.('workspaceRegistry')?.list?.() ?? []
@@ -506,14 +566,14 @@ export class SessionRouter {
       this.log(`[router] 当前没有工作区，网页点不开会话 ${sessionId}`)
       return
     }
-    const preferred = this.resolveConfig(channelId).cwd || process.cwd()
+    const preferred = cwd || this.resolveConfig(channelId).cwd || process.cwd()
     const ordered = [...workspaces].sort((left, right) => {
       const leftHit = this.samePath(left.path, preferred) ? 0 : 1
       const rightHit = this.samePath(right.path, preferred) ? 0 : 1
       return leftHit - rightHit
     })
     let lastError = ''
-    for (const workspace of ordered) {
+    for (const workspace of ordered.filter(item => !cwd || this.samePath(item.path, preferred))) {
       try {
         await workspace.attachSession(sessionId)
         this.log(`[router] 已把 ${sessionId} 挂到工作区 ${workspace.path}`)
@@ -522,6 +582,7 @@ export class SessionRouter {
         lastError = error instanceof Error ? error.message : String(error)
       }
     }
+    if (strict) throw new Error(`挂载会话失败 ${sessionId}: ${lastError || '目标工作区不可用'}`)
     this.log(`[router] 挂载会话失败 ${sessionId}: ${lastError}`)
   }
 
@@ -534,10 +595,10 @@ export class SessionRouter {
     })
   }
 
-  private presetSetup(channelId: string) {
+  private presetSetup(channelId: string, savedPreset?: string) {
     const ctx = this.ctx
     const config = this.resolveConfig(channelId)
-    const preset = config.agentPreset || 'standard'
+    const preset = savedPreset || config.agentPreset || 'standard'
     const permission = config.permissionPreset
     return async (agentCtx: unknown) => {
       if (ctx.agentPresets?.mount) await ctx.agentPresets.mount(agentCtx, preset)
@@ -557,10 +618,4 @@ export class SessionRouter {
       }
     }
   }
-}
-
-
-function isIdCollision(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('id collision') || message.includes('already has a persisted log')
 }

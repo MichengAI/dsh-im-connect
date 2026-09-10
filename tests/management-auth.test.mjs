@@ -186,7 +186,7 @@ test('卸载插件移除管理入口且不删除宿主 API', { skip: !hostRoot }
 function browserApi(fetch) {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   const base = client.match(/const API_BASE = [^;]+;/)[0]
-  const start = client.indexOf('const api = (path, opts) => {')
+  const start = client.indexOf('let channelSessionIds = new Set();')
   const end = client.indexOf('const storedAccountSelection', start)
   return runInNewContext(`${base}
 ${client.slice(start, end)}

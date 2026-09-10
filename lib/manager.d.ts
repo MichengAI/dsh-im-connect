@@ -1,3 +1,4 @@
+import { type CommandPermissions } from './engine/command-permissions.js';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ChannelId } from './engine/session-id.js';
 import { type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js';
@@ -21,8 +22,10 @@ export interface ChannelState {
     lastError?: string;
     config?: Record<string, string>;
     assistant?: AssistantModel;
+    agentPreset?: string;
     cwd?: string;
     permission?: PermissionPreset;
+    commandPermissions?: CommandPermissions;
     privateAccess?: 'approved' | 'all';
     lastCheckedAt?: string;
 }
@@ -37,8 +40,10 @@ export interface AccountView {
     configuredKeys: string[];
     status: string;
     assistant: AssistantModel;
+    agentPreset: string;
     cwd: string;
     permission: PermissionPreset;
+    commandPermissions: CommandPermissions;
     privateAccess: 'approved' | 'all';
     lastCheckedAt?: string;
 }
@@ -164,6 +169,8 @@ export declare class ChannelManager {
     private resolveAccountId;
     private platformOf;
     private accountStateDir;
+    /** 与 Chat 使用同一预设名册，不向客户端暴露预设文件路径。 */
+    private agentPresetOptions;
     private accountEngineConfig;
     pendingRequests(): Array<PendingRequest & {
         channelId: string;

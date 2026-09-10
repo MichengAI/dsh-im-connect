@@ -6,6 +6,11 @@ export type ChannelId = 'dingtalk' | 'feishu' | 'lark' | 'weixin' | 'wecom' | 'q
 export type ChannelInstanceId = string;
 export type ChatKind = 'dm' | 'group';
 export interface SessionRecord {
+    /** 已通过 Host 接入的会话；恢复时不能套用机器人默认配置。 */
+    adopted?: boolean;
+    agentPreset?: string;
+    /** 创建或接续时的工作区，轮换不跟随账号默认值漂移。 */
+    cwd?: string;
     sessionId: string;
     channel: ChannelInstanceId;
     kind: ChatKind;

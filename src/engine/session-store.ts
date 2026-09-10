@@ -21,13 +21,16 @@ export class SessionMapStore {
   }
 
   upsert(key: string, record: SessionRecord): void {
+    const before = { ...this.records }
     const old = this.records[key]
     if (old && old.sessionId !== record.sessionId) {
       this.backupBeforeHistory()
       this.records[`history:${old.sessionId}`] = old
     }
     this.records[key] = record
-    this.flush()
+    if (key !== `history:${record.sessionId}`) delete this.records[`history:${record.sessionId}`]
+    try { this.flush() }
+    catch (error) { this.records = before; throw error }
   }
 
   retain(key: string): void {

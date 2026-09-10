@@ -1,3 +1,5 @@
+import { ChatCommands } from './chat-commands.js'
+import { canExecuteCommand, normalizeCommandPermissions, type CommandPermissions } from './command-permissions.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { ImageInputError, imageInputFailure, imagePromptPart } from './image-input.js'
 import { ApprovalBroker } from './approval.js'
@@ -6,7 +8,7 @@ import { SessionRouter } from './router.js'
 import { initialSessionTitle, readSessionTitle } from './session-title.js'
 import { SeenStore } from './seen-store.js'
 import { SessionMapStore } from './session-store.js'
-import { isImSessionId, type ChatKind } from './session-id.js'
+import { type ChatKind } from './session-id.js'
 import { canAnswerToolApproval, decideAccess } from './access.js'
 import { splitText } from './split.js'
 import { ReplyStreamHub, isAssistantTextDelta } from './reply-stream.js'
@@ -82,6 +84,8 @@ export class ImEngine {
   private readonly wrappedUserQuestionServices = new WeakSet<object>()
   private legacyServiceTimer?: NodeJS.Timeout
   private disposed = false
+  private readonly chatCommands: ChatCommands
+  private readonly commandScopes = new Map<string, AbortController>()
   private readonly inputScopes = new Map<string, AbortController>()
 
   constructor(
@@ -93,9 +97,11 @@ export class ImEngine {
     private readonly onUnauthorized?: (channelId: string, msg: ImMessage) => string,
     private readonly resolveConfig: (channelId: string) => EngineConfig = () => config,
     private readonly resolvePrivateAccess: (channelId: string) => 'approved' | 'all' = () => 'approved',
+    private readonly resolveCommandPermissions: (channelId: string) => CommandPermissions = () => normalizeCommandPermissions(undefined),
   ) {
     // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
     this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig)
+    this.chatCommands = new ChatCommands(ctx as unknown as { get(name: string): unknown }, this.router, id => this.questions.has(id) || this.broker.has(id), (id, msg) => { if (msg.userId) this.sessionActors.set(id, msg.userId) })
     this.merger = new SessionMerger((config.mergeTimeoutSecs || 5) * 1000, (key, text) => {
       const sep = key.indexOf(':')
       const channelId = key.slice(0, sep)
@@ -147,6 +153,12 @@ export class ImEngine {
 
   async removeSession(sessionId: string): Promise<boolean> {
     return this.router.remove(sessionId)
+  }
+
+  async cleanupMissingSession(sessionId: string): Promise<boolean> {
+    const removed = await this.router.cleanupMissing(sessionId)
+    if (removed) this.cancelSessionInteractions(sessionId)
+    return removed
   }
 
   async ensureSession(sessionId: string): Promise<boolean> {
@@ -213,6 +225,9 @@ export class ImEngine {
 
   dispose(): void {
     this.disposed = true
+    this.chatCommands.clear()
+    for (const scope of this.commandScopes.values()) scope.abort()
+    this.commandScopes.clear()
     for (const channelId of this.inputScopes.keys()) this.cancelInputs(channelId)
     if (this.legacyServiceTimer) clearTimeout(this.legacyServiceTimer)
     for (const off of this.disposeEvents) off()
@@ -224,6 +239,12 @@ export class ImEngine {
 
   private enqueue(channelId: string, msg: ImMessage): void {
     const key = `${channelId}:${msg.chatId}`
+    // 宿主命令可能等待交互；停止和审批回答不能排在该命令后面造成死锁。
+    const binding = this.router.lookup(channelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
+    if (this.commandScopes.has(key) && (/^\/stop(?:\s|$)/i.test(msg.text.trim()) || (binding && (this.questions.has(binding.sessionId) || this.broker.has(binding.sessionId)) && !msg.text.trim().startsWith('/')))) {
+      void this.handleInbound(channelId, msg)
+      return
+    }
     const prev = this.queues.get(key) ?? Promise.resolve()
     const current = prev.catch(() => undefined).then(() => this.handleInbound(channelId, msg))
     this.queues.set(key, current)
@@ -282,7 +303,17 @@ export class ImEngine {
       const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
       const binding = this.router.lookup(channelId, kind, msg.chatId)
       if (text.startsWith('/') && !msg.media?.length) {
+        if (!canExecuteCommand(this.resolveCommandPermissions(channelId), kind, msg.userId)) {
+          await this.deliver(channel, msg.chatId, '当前用户未开启命令权限，可以继续正常对话。')
+          return
+        }
         const command = text.split(/\s+/, 1)[0]?.toLowerCase()
+        const mergeKey = `${channelId}:${kind}:${msg.chatId}`
+        if (command === '/stop') this.merger.cancel(mergeKey)
+        else if (this.merger.has(mergeKey)) {
+          await this.deliver(channel, msg.chatId, '上一条消息正在合并，请等待提交后再执行命令。')
+          return
+        }
         if ((command === '/new' || command === '/clear')
           && binding
           && (this.questions.has(binding.sessionId) || this.broker.has(binding.sessionId))) {
@@ -364,23 +395,18 @@ export class ImEngine {
   }
 
   private async handleCommand(channel: ChannelAdapter, msg: ImMessage): Promise<string | undefined> {
-    const [raw] = msg.text.trim().split(/\s+/)
-    const cmd = raw?.toLowerCase()
-    const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
-    if (cmd === '/help') return HELP
-    if (cmd === '/status') {
-      const entry = this.router.get(channel.id, kind, msg.chatId)
-      return [
-        `渠道：${channel.label}（${channel.status()}）`,
-        entry ? `频道会话：${entry.sessionId}` : '频道会话：（尚未创建）',
-        '此会话独立于网页「任务」列表。',
-      ].join('\n')
+    const key = `${channel.id}:${msg.chatId}`
+    if (/^\/stop(?:\s|$)/i.test(msg.text.trim())) this.commandScopes.get(key)?.abort()
+    const scope = new AbortController()
+    this.commandScopes.set(key, scope)
+    try {
+      return await this.chatCommands.execute(channel, msg, scope.signal)
+    } catch (error) {
+      this.log(`[${channel.id}] 命令失败: ${error instanceof Error ? error.message : String(error)}`)
+      return scope.signal.aborted ? '命令已取消。' : `命令执行失败：${error instanceof Error ? error.message : '请查看本机日志。'}`
+    } finally {
+      if (this.commandScopes.get(key) === scope) this.commandScopes.delete(key)
     }
-    if (cmd === '/new' || cmd === '/clear') {
-      const entry = await this.router.rotate(channel.id, kind, msg.chatId, msg.username ?? msg.chatId)
-      return `已开启新的频道会话：${entry.sessionId}`
-    }
-    return `未知命令 ${cmd}。发送 /help 查看帮助。`
   }
 
   private async inject(channel: ChannelAdapter, msg: ImMessage): Promise<void> {
@@ -425,6 +451,7 @@ export class ImEngine {
   }
 
   private cancelInputs(channelId: string): void {
+    for (const [key, scope] of this.commandScopes) if (key.startsWith(channelId + ':')) scope.abort()
     this.inputScopes.get(channelId)?.abort()
     this.inputScopes.delete(channelId)
   }
@@ -446,7 +473,7 @@ export class ImEngine {
     const currentContract = req.agent !== undefined
     const rawSessionId = req.agent?.session?.id ?? req.agent?.id ?? req.session?.id
     const sessionId = rawSessionId ? String(rawSessionId) : ''
-    if (!sessionId || !isImSessionId(sessionId)) return next()
+    if (!sessionId || !this.router.bindingForSession(sessionId)) return next()
     if (req.signal?.aborted) return currentContract ? 'cancelled' : next()
     const result = await this.runInteraction(sessionId, async () => {
       if (this.disposed || req.signal?.aborted) return currentContract ? 'cancelled' : DELEGATE_INTERACTION
@@ -498,7 +525,7 @@ export class ImEngine {
   ): Promise<UserQuestionAnswer> {
     const rawSessionId = req.agent?.session?.id ?? req.agent?.id
     const sessionId = rawSessionId ? String(rawSessionId) : ''
-    if (!sessionId || !isImSessionId(sessionId)) return next()
+    if (!sessionId || !this.router.bindingForSession(sessionId)) return next()
     const questions = req.questions
     if (!Array.isArray(questions)
       || questions.length === 0
@@ -708,7 +735,7 @@ export class ImEngine {
     event: { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } },
   ): Promise<void> {
     const sessionId = session.id ? String(session.id) : ''
-    if (!isImSessionId(sessionId)) return
+    if (!this.router.bindingForSession(sessionId)) return
     if (event.type === 'session/title') {
       const title = readSessionTitle(event.data)
       if (title) this.router.setTitle(sessionId, title.title, title.source)

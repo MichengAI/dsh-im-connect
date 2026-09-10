@@ -34,7 +34,9 @@ test('注册表已有频道页签时不再渲染硬编码的重复页签', () =>
 })
 
 test('频道注册表页签随 Host 语言刷新且切换宿主时清理旧订阅', () => {
-  assert.match(client, /const refreshInsertedTab = \(\) => \{[\s\S]*label: t\("rail\.channels"\)[\s\S]*\};\s*refreshInsertedTab\(\);\s*stopInsertedTabLocale = subscribeLocale\(refreshInsertedTab\)/)
+  assert.match(client, /const refreshInsertedTab = \(\) => \{[\s\S]*label: t\("rail\.channels"\)[\s\S]*\};\s*refreshInsertedTab\(\);\s*const stopLocale = subscribeLocale\(refreshInsertedTab\)/)
+  assert.match(client, /const stopMembership = subscribeChannelMembership\(refreshInsertedTab\)/)
+  assert.match(client, /stopInsertedTabLocale = \(\) => \{ stopLocale\(\); stopMembership\(\); \}/)
   assert.match(client, /const clearInsertedTab = \(\) => \{\s*stopInsertedTabLocale\(\);[\s\S]*removeInsertedTab\(\);[\s\S]*insertedTabRegistry = null/)
   assert.match(client, /insertedTabRegistry && insertedTabRegistry !== registry\) clearInsertedTab\(\)/)
   assert.match(client, /const unwrap = \(\) => \{\s*clearInsertedTab\(\)/)

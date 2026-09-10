@@ -1,3 +1,4 @@
+import { normalizeCommandPermissions, type CommandPermissions } from './engine/command-permissions.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -113,8 +114,10 @@ export interface ChannelState {
   lastError?: string
   config?: Record<string, string>
   assistant?: AssistantModel
+  agentPreset?: string
   cwd?: string
   permission?: PermissionPreset
+  commandPermissions?: CommandPermissions
   privateAccess?: 'approved' | 'all'
   lastCheckedAt?: string
 }
@@ -130,8 +133,10 @@ export interface AccountView {
   configuredKeys: string[]
   status: string
   assistant: AssistantModel
+  agentPreset: string
   cwd: string
   permission: PermissionPreset
+  commandPermissions: CommandPermissions
   privateAccess: 'approved' | 'all'
   lastCheckedAt?: string
 }
@@ -165,6 +170,7 @@ interface Persisted {
   allowlist: Record<string, string[]>
   pending: Record<string, PendingRequest[]>
   assistant?: AssistantModel
+  agentPreset?: string
   cwd?: string
   permission?: PermissionPreset
 }
@@ -218,16 +224,16 @@ export class ChannelManager {
     this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log, (accountId, msg) => {
       this.requestAuthorization(accountId, msg)
       return '未授权：请管理员在设置 → IM助理 中批准你的访问。'
-    }, (accountId) => this.accountEngineConfig(accountId), (accountId) => this.store.channels[accountId]?.privateAccess === 'all' ? 'all' : 'approved')
+    }, (accountId) => this.accountEngineConfig(accountId), (accountId) => this.store.channels[accountId]?.privateAccess === 'all' ? 'all' : 'approved', (accountId) => normalizeCommandPermissions(this.store.channels[accountId]?.commandPermissions))
     for (const [channelId, users] of Object.entries(this.store.allowlist)) {
       for (const userId of users) this.engine.addAllowed(channelId, userId)
     }
     this.pairing = new PairingHub({
       log: options.log,
       onSuccess: async (id, creds) => {
-        const settings: Record<string, string> = {}
+        const settings: Record<string, unknown> = {}
         for (const key of Object.keys(creds).filter((key) => key.startsWith('__setting_'))) {
-          settings[key.slice('__setting_'.length)] = creds[key]!
+          settings[key.slice('__setting_'.length)] = key === '__setting_commandPermissions' ? JSON.parse(creds[key]!) : creds[key]!
           delete creds[key]
         }
         const result = await this.connect(id, creds, settings)
@@ -285,6 +291,8 @@ export class ChannelManager {
       assistant: normalizeAssistantModel(state.assistant ?? {}) ?? this.currentAssistant()!,
       cwd: normalizeWorkspacePath(state.cwd) ?? this.currentWorkspace(),
       permission: normalizePermission(state.permission, this.permissionPresets().names) ?? this.currentPermission(),
+      agentPreset: state.agentPreset || this.engineConfig.agentPreset || 'standard',
+      commandPermissions: normalizeCommandPermissions(state.commandPermissions),
       privateAccess: state.privateAccess === 'all' ? 'all' : 'approved',
       lastCheckedAt: state.lastCheckedAt,
     }
@@ -330,7 +338,7 @@ export class ChannelManager {
         return { ok: false, error: '图片扩展主机配置无效：请填写精确域名，不要包含通配符、URL、端口或 IP 地址。' }
       }
     }
-    const normalized = this.normalizeAccountSettings(id, settings, prev)
+    const normalized = await this.normalizeAccountSettings(id, settings, prev)
     if (!normalized.ok) return normalized
     if (id === 'weixin' && incoming.botToken) {
       await this.vault.set(credentialRef(accountId, 'botToken'), incoming.botToken)
@@ -350,6 +358,8 @@ export class ChannelManager {
       assistant: normalized.settings.assistant,
       cwd: normalized.settings.cwd,
       permission: normalized.settings.permission,
+      agentPreset: normalized.settings.agentPreset,
+      commandPermissions: normalized.settings.commandPermissions,
       privateAccess: normalized.settings.privateAccess,
       enabled: true,
       receiveEnabled: true,
@@ -492,6 +502,8 @@ export class ChannelManager {
               cwd: this.currentWorkspace(),
               permission: this.currentPermission(),
               permissions: this.permissionOptions(),
+              agentPresets: await this.agentPresetOptions(),
+              agentPreset: this.engineConfig.agentPreset || 'standard',
               providers: await this.listModelCatalog(),
             })
             return
@@ -520,6 +532,11 @@ export class ChannelManager {
           if (action === 'remove') {
             const ok = await this.engine.removeSession(sessionId)
             send(ok ? 200 : 404, ok ? { ok: true, groups: this.channelSessions() } : { ok: false, error: '会话不存在' })
+            return
+          }
+          if (action === 'cleanup-missing') {
+            const ok = await this.engine.cleanupMissingSession(sessionId)
+            send(200, { ok, groups: this.channelSessions() })
             return
           }
           if (action === 'ensure') {
@@ -712,17 +729,26 @@ export class ChannelManager {
       const state = this.store.channels[accountId]
       if (!state) return { ok: false, error: '账号不存在' }
       const platform = this.platformOf(accountId, state)
-      const normalized = this.normalizeAccountSettings(platform, input, state)
+      const normalized = await this.normalizeAccountSettings(platform, input, state)
       if (!normalized.ok) return normalized
       const previousCwd = normalizeWorkspacePath(state.cwd) ?? this.currentWorkspace()
-      const resetSessions = !sameWorkspacePath(previousCwd, normalized.settings.cwd)
+      const previousPreset = state.agentPreset || this.engineConfig.agentPreset || 'standard'
+      const presetChanged = previousPreset !== normalized.settings.agentPreset
+      if (presetChanged) {
+        for (const record of this.sessions.list().filter(item => item.channel === accountId && !item.adopted && !item.agentPreset)) {
+          this.sessions.updateSession({ ...record, agentPreset: previousPreset })
+        }
+      }
+      const resetSessions = presetChanged || !sameWorkspacePath(previousCwd, normalized.settings.cwd)
       const reloadSessions = resetSessions
         || !sameAssistantModel(state.assistant, normalized.settings.assistant)
         || state.permission !== normalized.settings.permission
       state.name = normalized.settings.name
       state.assistant = normalized.settings.assistant
       state.cwd = normalized.settings.cwd
+      state.agentPreset = normalized.settings.agentPreset
       state.permission = normalized.settings.permission
+      state.commandPermissions = normalized.settings.commandPermissions
       state.privateAccess = normalized.settings.privateAccess
       this.flush()
       if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
@@ -1055,7 +1081,14 @@ export class ChannelManager {
     if (changed) this.flush()
   }
 
-  private normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): { ok: true; settings: { name: string; assistant: AssistantModel; cwd: string; permission: PermissionPreset; privateAccess: 'approved' | 'all' } } | { ok: false; error: string } {
+  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all' } } | { ok: false; error: string }> {
+    const agentPreset = input.agentPreset ?? previous.agentPreset ?? this.engineConfig.agentPreset ?? 'standard'
+    if (typeof agentPreset !== 'string' || !agentPreset.trim()) return { ok: false, error: '请选择 Agent 预设' }
+    if (input.agentPreset !== undefined) {
+      const options = await this.agentPresetOptions()
+      const selected = options.find(item => item.id === agentPreset)
+      if (!selected || selected.broken) return { ok: false, error: 'Agent 预设不存在或不可用' }
+    }
     const fallback = this.currentAssistant()
     const assistant = normalizeAssistantModel({
       provider: input.provider ?? previous.assistant?.provider ?? fallback?.provider,
@@ -1068,9 +1101,12 @@ export class ChannelManager {
     const permission = normalizePermission(input.permission ?? previous.permission ?? this.currentPermission(), this.permissionPresets().names)
     if (!permission) return { ok: false, error: '请选择权限' }
     const privateAccess = input.privateAccess === 'all' || (input.privateAccess === undefined && previous.privateAccess === 'all') ? 'all' : 'approved'
+    let commandPermissions: CommandPermissions
+    try { commandPermissions = normalizeCommandPermissions(input.commandPermissions === undefined ? previous.commandPermissions : input.commandPermissions) }
+    catch { return { ok: false, error: '命令权限配置无效' } }
     const count = Object.entries(this.store.channels).filter(([id, state]) => this.platformOf(id, state) === platform).length
     const name = String(input.name ?? previous.name ?? '').trim() || `${CHANNEL_META[platform].label}账号 ${count + 1}`
-    return { ok: true, settings: { name, assistant, cwd, permission, privateAccess } }
+    return { ok: true, settings: { name, assistant, agentPreset, cwd, permission, privateAccess, commandPermissions } }
   }
 
   private accountIdFor(platform: ChannelId, config: Record<string, string>): string {
@@ -1105,12 +1141,20 @@ export class ChannelManager {
     return accountId === platform ? join(this.stateDir, platform) : join(this.stateDir, 'accounts', accountId)
   }
 
+  /** 与 Chat 使用同一预设名册，不向客户端暴露预设文件路径。 */
+  private async agentPresetOptions(): Promise<Array<{ id: string; name?: string; description?: string; broken?: string }>> {
+    const presets = this.ctx.get?.('agentPresets') as { remoteExportList?: () => Promise<{ presets: Array<{ id: string; name?: string; description?: string; broken?: string }> }> } | undefined
+    if (presets?.remoteExportList) return (await presets.remoteExportList()).presets.map(({ id, name, description, broken }) => ({ id, name, description, broken }))
+    return [{ id: this.engineConfig.agentPreset || 'standard' }]
+  }
+
   private accountEngineConfig(accountId: string): EngineConfig {
     const state = this.store.channels[accountId]
     if (!state) return this.engineConfig
     const assistant = normalizeAssistantModel(state.assistant ?? {})
     return {
       ...this.engineConfig,
+      agentPreset: state.agentPreset || this.engineConfig.agentPreset,
       cwd: normalizeWorkspacePath(state.cwd) ?? this.engineConfig.cwd,
       provider: assistant?.provider ?? this.engineConfig.provider,
       model: assistant?.model ?? this.engineConfig.model,
@@ -1173,7 +1217,8 @@ export class ChannelManager {
 function pairingSettings(input?: Record<string, unknown>): Record<string, string> {
   if (!input) return {}
   const out: Record<string, string> = {}
-  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess']) {
+  if (input.commandPermissions !== undefined) out.__setting_commandPermissions = JSON.stringify(normalizeCommandPermissions(input.commandPermissions))
+  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess', 'agentPreset']) {
     const value = input[key]
     if (value !== undefined && value !== null) out[`__setting_${key}`] = String(value)
   }

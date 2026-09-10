@@ -6,6 +6,39 @@ import { join } from 'node:path'
 import { SessionRouter } from '../lib/engine/router.js'
 import { SessionMapStore } from '../lib/engine/session-store.js'
 
+for (const mode of ['missing', 'present', 'failed', 'unavailable']) {
+  test(`归档失败清理仅接受可靠缺失证据：${mode}`, async t => {
+    const { router, store, archivedIds } = makeRouter(t)
+    const old = await router.getOrCreate('wecom', 'dm', 'orphan', 'old')
+    const current = await router.rotate('wecom', 'dm', 'orphan', 'new')
+    archivedIds.push(old.sessionId)
+    const get = router.ctx.get.bind(router.ctx)
+    router.ctx.get = name => name === 'sessionPersistence'
+      ? mode === 'unavailable' ? undefined : { list: async () => {
+        if (mode === 'failed') throw new Error('storage unavailable')
+        return mode === 'present' ? [{ id: old.sessionId }] : []
+      } }
+      : get(name)
+    assert.equal(await router.cleanupMissing(old.sessionId), mode === 'missing')
+    assert.equal(store.list().some(item => item.sessionId === old.sessionId), mode !== 'missing')
+    assert.equal(router.lookup('wecom', 'dm', 'orphan').sessionId, current.sessionId)
+  })
+}
+
+test('新会话挂载账号 Agent 预设，恢复旧会话保持原预设', async t => {
+  let agentPreset = 'research'
+  const { router, store, createdOptions } = makeRouter(t, { resolveConfig: () => ({ provider: 'p', model: 'm', agentPreset, mergeTimeoutSecs: 1 }) })
+  const mounted = []
+  router.ctx.agentPresets = { mount: async (_ctx, id) => mounted.push(id) }
+  await router.getOrCreate('telegram', 'dm', 'u', 'test')
+  assert.equal(createdOptions[0].meta.agentPreset, 'research')
+  assert.equal(store.list()[0].agentPreset, 'research')
+  await router.disposeChannel('telegram')
+  agentPreset = 'standard'
+  await router.getOrCreate('telegram', 'dm', 'u', 'test')
+  assert.deepEqual(mounted, ['research', 'research'])
+})
+
 test('real Chat selection owns assembly and request after account initialization', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT }, async t => {
   const { Context } = await import('@deepseek-ai/cordis')
   const { pathToFileURL } = await import('node:url')
@@ -208,7 +241,52 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
     mergeTimeoutSecs: 5,
     permissionPreset: 'danger-full-access',
   }, () => undefined, resolveConfig, { disposeTimeoutMs })
-  return { router, store, created, createdOptions, archivedIds, permissionSelections }
+  return { router, store, created, createdOptions, archivedIds, permissionSelections, ctx }
+}
+
+test('轮换创建失败保留原绑定和句柄，重试成功才切换', async t => {
+  const f = makeRouter(t)
+  const first = await f.router.getOrCreate('wecom', 'dm', 'atomic', '旧会话')
+  let disposed = false
+  first.handle.dispose = async () => { disposed = true }
+  const create = f.ctx.agents.create
+  f.ctx.agents.create = async () => { throw new Error('预设加载失败') }
+  await assert.rejects(f.router.rotate('wecom', 'dm', 'atomic', '新会话'), /预设加载失败/)
+  assert.equal(f.router.lookup('wecom', 'dm', 'atomic').sessionId, first.sessionId)
+  assert.equal(f.store.get('wecom:dm:atomic').sessionId, first.sessionId)
+  assert.equal(disposed, false)
+  f.ctx.agents.create = create
+  const next = await f.router.rotate('wecom', 'dm', 'atomic', '新会话')
+  assert.notEqual(next.sessionId, first.sessionId)
+  assert.ok(f.store.list().some(row => row.sessionId === first.sessionId))
+})
+
+test('指定工作区的新建、new、归档轮换都保留目录和账号配置', async t => {
+  const f = makeRouter(t)
+  const first = await f.router.rotate('wecom', 'dm', 'cwd', '新会话', { cwd: 'D:/chosen' })
+  const next = await f.router.rotate('wecom', 'dm', 'cwd', '新会话')
+  f.archivedIds.push(next.sessionId)
+  await f.router.getOrCreate('wecom', 'dm', 'cwd', '继续')
+  assert.equal(f.createdOptions.length, 3)
+  for (const opts of f.createdOptions) {
+    assert.equal(opts.meta.cwd, 'D:/chosen')
+    assert.equal(opts.meta.agentPreset, 'standard')
+    assert.equal(opts.agentOptions.model, 'deepseek-chat')
+  }
+  assert.equal(f.permissionSelections.length, 3)
+  assert.equal(f.store.list().find(row => row.sessionId === first.sessionId).cwd, 'D:/chosen')
+})
+
+for (const mode of ['unavailable', 'failed', 'present']) {
+  test(`恢复失败但日志状态 ${mode} 时不轮换`, async t => {
+    const f = makeRouter(t, { resumeFails: new Set(['old']) })
+    f.store.upsert('wecom:dm:resume', { sessionId: 'old', channel: 'wecom', kind: 'dm', chatId: 'resume', title: '旧', updatedAt: '' })
+    const get = f.ctx.get
+    f.ctx.get = name => name === 'sessionPersistence' ? (mode === 'unavailable' ? undefined : { async list() { if (mode === 'failed') throw new Error('磁盘忙'); return [{ id: 'old' }] } }) : get(name)
+    await assert.rejects(f.router.getOrCreate('wecom', 'dm', 'resume', '继续'), /恢复/)
+    assert.equal(f.store.get('wecom:dm:resume').sessionId, 'old')
+    assert.deepEqual(f.created, [])
+  })
 }
 
 test('新会话把账号模型写为会话选择，首次图片不能退回宿主默认模型；恢复不覆盖选择', async t => {
@@ -340,7 +418,9 @@ test('归档后再发消息必须新建会话', async (t) => {
 })
 
 test('入站恢复失败时轮换新会话，不按原 id 重建', async (t) => {
-  const { router, store, created } = makeRouter(t, { resumeFails: new Set(['im:wecom:dm:woOoKtPAAAvBcwwV96r5UweRxau8h0zw']) })
+  const { router, store, created, ctx } = makeRouter(t, { resumeFails: new Set(['im:wecom:dm:woOoKtPAAAvBcwwV96r5UweRxau8h0zw']) })
+  const get = ctx.get
+  ctx.get = name => name === 'sessionPersistence' ? { async list() { return [] } } : get(name)
   store.upsert('wecom:dm:user-1', {
     sessionId: 'im:wecom:dm:woOoKtPAAAvBcwwV96r5UweRxau8h0zw',
     channel: 'wecom',
@@ -490,4 +570,60 @@ test('确认日志已删除时清除历史索引，即使宿主仍残留归档�
   router.ctx.get = name => name === 'sessionPersistence' ? { async list() { return [{ id: current.sessionId }] } } : originalGet(name)
   assert.equal(await router.onHostDisposed(old.sessionId), true)
   assert.deepEqual(store.list().map(item => item.sessionId), [current.sessionId])
+})
+
+
+test('显式接续会话保留历史，重启恢复不改工作区和默认模型', async t => {
+  const { router, store } = makeRouter(t)
+  const old = await router.getOrCreate('wecom', 'dm', 'adopt', 'old')
+  const hostAgent = { session: { id: 'web-session' }, followup() {} }
+  await router.bind('wecom', 'dm', 'adopt', 'web-session', '网页任务', hostAgent)
+  assert.equal(router.lookup('wecom', 'dm', 'adopt').sessionId, 'web-session')
+  assert.ok(store.list().some(item => item.sessionId === old.sessionId))
+  await router.disposeChannel('wecom')
+  const originalGet = router.ctx.get?.bind(router.ctx)
+  router.ctx.get = name => name === 'sessionController' ? { resolveAgent: async id => { assert.equal(id, 'web-session'); return { agent: hostAgent } } } : originalGet?.(name)
+  router.ctx.agents.resume = async () => { throw new Error('不能用机器人配置恢复已接续会话') }
+  assert.equal((await router.getOrCreate('wecom', 'dm', 'adopt', 'ignored')).handle.agent, hostAgent)
+  await assert.rejects(router.bind('wecom', 'dm', 'other', 'web-session', 'other', hostAgent), /其他聊天/)
+})
+
+for (const archived of [false, true]) {
+  test(`接续普通会话后${archived ? '归档续聊' : 'new'}保留工作区，使用账号配置`, async t => {
+    const f = makeRouter(t)
+    await f.router.bind('wecom', 'dm', 'adopt-cwd', 'session-chat', '旧', {}, 'D:/chosen')
+    if (archived) f.archivedIds.push('session-chat')
+    const next = archived
+      ? await f.router.getOrCreate('wecom', 'dm', 'adopt-cwd', '继续')
+      : await f.router.rotate('wecom', 'dm', 'adopt-cwd', '新')
+    assert.match(next.sessionId, /^im:/)
+    assert.equal(f.createdOptions[0].meta.cwd, 'D:/chosen')
+    assert.equal(f.createdOptions[0].agentOptions.model, 'deepseek-chat')
+    assert.equal(f.permissionSelections[0].permission, 'danger-full-access')
+  })
+}
+
+test('工作区挂载失败或创建中取消不替换当前绑定', async t => {
+  const f = makeRouter(t)
+  const old = await f.router.getOrCreate('wecom', 'dm', 'attach', '旧')
+  const get = f.ctx.get
+  f.ctx.get = name => name === 'workspaceRegistry' ? { list: () => [{ path: 'D:/chosen', async attachSession() { throw new Error('挂载失败') } }] } : get(name)
+  await assert.rejects(f.router.rotate('wecom', 'dm', 'attach', '新', { cwd: 'D:/chosen' }), /挂载失败/)
+  assert.equal(f.router.lookup('wecom', 'dm', 'attach').sessionId, old.sessionId)
+  f.ctx.get = get
+  const scope = new AbortController(), create = f.ctx.agents.create
+  f.ctx.agents.create = async opts => { const result = await create(opts); scope.abort(); return result }
+  await assert.rejects(f.router.rotate('wecom', 'dm', 'attach', '新', { signal: scope.signal }), { name: 'AbortError' })
+  assert.equal(f.store.get('wecom:dm:attach').sessionId, old.sessionId)
+})
+
+test('索引写入失败保留原磁盘映射与内存绑定', async t => {
+  const f = makeRouter(t)
+  const old = await f.router.getOrCreate('wecom', 'dm', 'write', '旧')
+  const flush = f.store.flush
+  f.store.flush = () => { throw new Error('磁盘只读') }
+  await assert.rejects(f.router.rotate('wecom', 'dm', 'write', '新'), /磁盘只读/)
+  assert.equal(f.store.get('wecom:dm:write').sessionId, old.sessionId)
+  assert.equal(f.router.lookup('wecom', 'dm', 'write').sessionId, old.sessionId)
+  f.store.flush = flush
 })

@@ -15,6 +15,8 @@ export declare class SessionMerger {
     constructor(mergeTimeoutMs: number, onFlush: (key: string, text: string) => void);
     ingest(key: string, raw: string): MergeResult;
     dispose(): void;
+    has(key: string): boolean;
+    cancel(key: string): void;
     private setBuffer;
     private clear;
 }

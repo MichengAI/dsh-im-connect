@@ -9,6 +9,68 @@ import { SeenStore } from '../lib/engine/seen-store.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+test('workspace 接续的普通 Host ID 会话回传回复、标题及审批，未绑定会话不回传', async t => {
+  const { engine, sent, handlers, store, inbound } = makeEngine(t)
+  engine.addAllowed('telegram', 'user-1')
+  const id = 'session-workspace-adopted'
+  try {
+    await engine.router.bind('telegram', 'dm', 'user-1', id, 'workspace', {})
+    await handlers['session/event']({ id }, { type: 'session/title', data: { title: '新工作区', source: { kind: 'provider' } } })
+    await handlers['session/event']({ id }, { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '工作区回复' }] } } })
+    await waitFor(() => sent.some(item => item.text === '工作区回复'))
+    assert.equal(store.list().find(item => item.sessionId === id).title, '新工作区')
+    const count = sent.length
+    await handlers['session/event']({ id: 'unbound-web' }, { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '不可回传' }] } } })
+    assert.equal(sent.length, count)
+    const approval = handlers['approval/request']({ session: { id }, toolName: 'read_file' }, async () => 'fallback')
+    await waitFor(() => engine.broker.has(id))
+    inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '批准', messageId: 'adopted-approval' })
+    assert.deepEqual(await approval, { behavior: 'allow' })
+  } finally { engine.dispose() }
+})
+
+test('等待中的 Chat 命令可被 stop 取消，不阻塞后续命令', async t => {
+  let started = false, cancelled = false
+  const services = {
+    sessionController: { resolveAgent: async () => ({ agent: {} }), cancel: async () => { cancelled = true } },
+    commands: { execute: async (_agent, _line, _images, signal) => {
+      started = true
+      await new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
+    }, list: () => [] },
+  }
+  const { engine, inbound, sent } = makeEngine(t, undefined, undefined, services)
+  engine.addAllowed('telegram', 'user-1')
+  const send = (text, messageId) => inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text, messageId })
+  try {
+    send('/long-task', 'long')
+    await waitFor(() => started)
+    send('/stop', 'stop')
+    await waitFor(() => cancelled && sent.some(item => item.text === '命令已取消。'))
+    send('/help', 'help-after-stop')
+    await waitFor(() => sent.some(item => item.text.includes('IM 助理已连接')))
+  } finally { engine.dispose() }
+})
+
+test('Chat 命令等待审批时，回答可越过命令队列', async t => {
+  let setup
+  const services = {
+    sessionController: { resolveAgent: async () => ({ agent: {} }) },
+    commands: { execute: async () => {
+      const answer = await setup.handlers['approval/request']({ session: { id: setup.dmSessionId }, toolName: 'read_file', reason: 'test' }, () => Promise.resolve('fallback'))
+      assert.deepEqual(answer, { behavior: 'allow' })
+      return { result: { kind: 'success', text: '审批命令完成' } }
+    } },
+  }
+  setup = makeEngine(t, undefined, undefined, services)
+  setup.engine.addAllowed('telegram', 'user-1')
+  try {
+    setup.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/approval-task', messageId: 'command-approval' })
+    await waitFor(() => setup.engine.broker.has(setup.dmSessionId))
+    setup.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '批准', messageId: 'command-answer' })
+    await waitFor(() => setup.sent.some(item => item.text === '审批命令完成'))
+  } finally { setup.engine.dispose() }
+})
+
 async function waitFor(check, timeoutMs = 2000) {
   const start = Date.now()
   while (!check()) {
@@ -55,7 +117,7 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}, options = {}) {
     agentPreset: 'standard',
     mergeTimeoutSecs: 1,
     permissionPreset: 'danger-full-access',
-  }, () => undefined, onUnauthorized, undefined, options.resolvePrivateAccess)
+  }, () => undefined, onUnauthorized, undefined, options.resolvePrivateAccess, options.resolveCommandPermissions)
   const sent = []
   let inbound
   engine.register({
@@ -72,7 +134,7 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}, options = {}) {
     status() { return '轮询中' },
     ...(options.authorizes ? { authorizes: options.authorizes } : {}),
   })
-  return { engine, inbound, sent, handlers, dmSessionId, groupSessionId, store }
+  return { engine, inbound, sent, handlers, dmSessionId, groupSessionId, store, ctx }
 }
 
 test('宿主标题事件同步到频道索引，手动标题不被自动事件覆盖', async t => {
@@ -779,4 +841,63 @@ test('删除渠道授权后旧用户立即失去私聊访问权', async (t) => {
   } finally {
     engine.dispose()
   }
+})
+
+
+test('命令关闭不影响准入、普通消息和白名单工具审批', async t => {
+  const policy = { dm: { enabled: false, users: [] }, group: { enabled: true, users: [] } }
+  const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t, undefined, undefined, {}, { resolveCommandPermissions: () => policy })
+  engine.addAllowed('telegram', 'user-1')
+  try {
+    inbound({ chatId: 'user-1', userId: 'stranger', kind: 'dm', text: '/help', messageId: 'policy-deny-access' })
+    await waitFor(() => sent.some(item => item.text.includes('未授权')))
+    inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/help', messageId: 'policy-deny-command' })
+    await waitFor(() => sent.some(item => item.text.includes('未开启命令权限')))
+    const before = sent.length
+    inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '正常消息!!', messageId: 'policy-chat' })
+    await sleep(50)
+    assert.equal(sent.length, before, '普通消息不应被命令权限拦截')
+    policy.dm.enabled = true
+    inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/help', messageId: 'policy-override' })
+    await waitFor(() => sent.some(item => item.text.includes('IM 助理已连接')))
+    policy.dm.enabled = false
+    const request = handlers['approval/request']({ session: { id: dmSessionId }, toolName: 'read_file', reason: 'test' }, () => Promise.resolve('fallback'))
+    await waitFor(() => engine.broker.has(dmSessionId))
+    inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '批准', messageId: 'policy-approval' })
+    assert.deepEqual(await request, { behavior: 'allow' })
+  } finally { engine.dispose() }
+})
+
+test('workspace → 普通消息回传 → new → 再回传使用同一创建和绑定链路', async t => {
+  const services = {
+    workspaceController: { async *follow() { yield { value: { items: [{ workspaceId: 'chosen', path: 'D:/chosen', sessionIds: [] }], archivedSessionIds: [] } } } },
+    workspaceRegistry: { list: () => [{ path: 'D:/chosen', async attachSession() {} }] },
+    sessionController: { async list() { return { items: [] } } },
+  }
+  const f = makeEngine(t, undefined, undefined, services)
+  const created = []
+  f.ctx.permissionPresets = { set() {} }
+  f.ctx.agents.create = async opts => {
+    created.push(opts)
+    return { agent: { session: { append() {} }, followup() {
+      void f.handlers['session/event']({ id: opts.sessionId }, { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '新会话回传 ' + opts.sessionId }] } } })
+    } }, async dispose() {} }
+  }
+  f.engine.addAllowed('telegram', 'user-1')
+  let seq = 0
+  const send = text => f.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text, messageId: 'unified-' + seq++ })
+  try {
+    send('/workspace chosen')
+    await waitFor(() => f.sent.some(item => item.text.includes('新建并切换')))
+    send('你好')
+    await waitFor(() => f.sent.filter(item => item.text.startsWith('新会话回传')).length === 1)
+    send('/new')
+    await waitFor(() => f.sent.some(item => item.text.includes('已开启新的频道会话')))
+    send('继续')
+    await waitFor(() => f.sent.filter(item => item.text.startsWith('新会话回传')).length === 2)
+    assert.equal(created.length, 2)
+    assert.notEqual(created[0].sessionId, created[1].sessionId)
+    assert.ok(created.every(opts => opts.meta.cwd === 'D:/chosen' && opts.agentOptions.model === 'm'))
+    assert.ok(f.store.list().some(row => row.sessionId === created[0].sessionId))
+  } finally { f.engine.dispose() }
 })

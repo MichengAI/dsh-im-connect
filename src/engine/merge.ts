@@ -41,6 +41,10 @@ export class SessionMerger {
     for (const key of [...this.buffers.keys()]) this.clear(key)
   }
 
+  has(key: string): boolean { return this.buffers.has(key) }
+
+  cancel(key: string): void { this.clear(key) }
+
   private setBuffer(key: string, text: string): void {
     this.clear(key)
     const timer = setTimeout(() => {

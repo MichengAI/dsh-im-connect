@@ -87,7 +87,7 @@ The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram.
 
 ## Screenshots
 
-Add accounts under each channel in **Settings → IM Assistant**. Expand a channel, select an account, and configure its workspace, model, permission, private access, and receive state independently on the right:
+Add accounts under each channel in **Settings → IM Assistant**. Expand a channel, select an account, and configure its workspace, model, permission, private access, and receive state independently in its settings dialog:
 
 ![IM Assistant settings](assets/screenshots/settings-channels.png)
 
@@ -172,20 +172,32 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 | Goal | Action | Notes |
 | --- | --- | --- |
 | Add an account | Select **Add account** under a channel, choose the account settings, then scan or enter credentials | The same channel can contain multiple accounts; Feishu / Lark / WeChat are QR-only, while Telegram needs a Bot Token |
-| Change account settings | Expand the channel, select an account, then edit its workspace, model, reasoning effort, permission, or private-access mode on the right | Changes affect only that account and apply to its subsequent sessions immediately |
-| Pause receiving | Select the account and turn off **Receive messages** on the right | Credentials and settings stay; only new inbound messages for that account pause |
+| Change account settings | Expand the channel, select an account, then edit its workspace, model, reasoning effort, permission, or private-access mode in its settings dialog | Changes affect only that account and apply to its subsequent sessions immediately |
+| Pause receiving | Turn off **Receive messages** on the account row | Credentials and settings stay; only new inbound messages for that account pause |
 | Send work from IM | WeChat / Feishu / Lark / QQ QR scanners can DM immediately; DingTalk / WeCom scanners and other users need approval. Groups only need a mention | Each chat has its own channel session |
 | Split input | End with `..` to continue, `!!` to flush now | Default merge window is about 5 seconds |
 | Start a new session | Send `/new` or `/clear` | Creates and switches the current IM session; previous sessions stay in the Channels list without affecting web tasks |
-| Status / help | Send `/status` or `/help` | Scoped to the current channel session |
+| Status / help | Send `/status` or `/help` | Current session and dynamically discovered Chat commands |
+| Agent preset | Choose **Agent preset** when adding or editing an account | Uses the Chat roster; changes apply to new sessions while previous sessions keep their preset |
+| Command permissions | Open Settings on the account row and toggle DM/group commands | Admission is checked first; disabling commands keeps conversation and approval/question replies available |
+| Sessions / workspaces | `/sessions`, `/session <number or ID>`; `/workspaces`, `/workspace <number or ID>` | Resume ordinary Chat sessions; workspace selection creates a session without changing account defaults |
+| Task controls | `/stop`, `/steer <text>`, `/queue` | Stop, provide instructions, or inspect the queue; stopping preserves Host queued messages |
+| Model / reasoning | `/models`, `/model <number or provider/model>`, `/reasoning [effort or --default]` | Changes the current session's model and reasoning effort |
+| Session management | `/history`, `/rename <title>`, `/fork` | Recent text history, rename, or fork and switch |
 | Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
 | Answer an interactive question | Reply with an option number or text; separate multiple choices with commas, or enter a custom answer | Multiple questions arrive in order; only the initiating user can answer in a group |
 | Approve a tool | Reply `Approve` / `Deny` or `批准` / `拒绝` in a DM | Also accepts `yes` / `no` / `allow` / `reject`; group replies cannot grant |
 | Review on the web | Open the workspace **Channels** tab | IM sessions never appear under **Tasks** |
 
+After `/workspace`, `/new` and continuing after archiving the current session keep the selected workspace and use the account model, Agent preset, and permission preset. `/session` and `/fork` preserve the original session configuration.
+
 DingTalk replies prefer official AI Card streaming and fall back to plain text. Do not enable Webhook on the same Telegram bot.
 
 ## Permissions and safety limits
+
+Send commands as separate text messages; image captions remain ordinary input. `/help` discovers registered Chat commands for the current session and uses the same Host handlers. List numbers are stored per user for 15 minutes. Finish running tasks and pending interactions before switching. Queue edits use `/queue remove|steer|edit <message ID> [new text]`. Restore archived sessions in Chat before selecting them.
+
+Command permission does not grant DM admission or replace tool approval. Enabled users can inspect and resume ordinary Chat sessions and execute registered Host commands. Each account has independent DM/group switches without user IDs; legacy configurations default to enabled for compatibility.
 
 | Item | Current behavior |
 | --- | --- |

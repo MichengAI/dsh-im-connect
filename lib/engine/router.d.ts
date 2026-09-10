@@ -16,6 +16,7 @@ export interface ChatBinding {
 type WorkspaceLookup = {
     list(): Array<{
         path: string;
+        sessionIds?: readonly string[];
         attachSession(sessionId: string): Promise<void>;
     }>;
     archivedSessionIds?: readonly string[];
@@ -87,13 +88,18 @@ export declare class SessionRouter {
     lookup(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined;
     bindingForSession(sessionId: string): ChatBinding | undefined;
     sessionIdsForChannel(channelId: ChannelInstanceId): string[];
-    getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: {
-        rebuildMissing?: boolean;
-    }): Promise<ChatBinding>;
+    getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding>;
     private getOrCreateNow;
-    rotate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding>;
+    rotate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: {
+        cwd?: string;
+        signal?: AbortSignal;
+    }): Promise<ChatBinding>;
     private rotateNow;
+    private sessionWorkspace;
     rename(sessionId: string, title: string): boolean;
+    isAdopted(sessionId: string): boolean;
+    /** 显式换绑保留旧历史与运行句柄，不改变 Host 会话的归属或默认配置。 */
+    bind(channelId: string, kind: ChatKind, chatId: string, sessionId: string, title: string, agent: unknown, cwd?: string): Promise<void>;
     setTitle(sessionId: string, title: string, source: 'message' | 'host' | 'user'): boolean;
     pruneMissingSessions(): Promise<number>;
     private knownSessionIds;
@@ -108,6 +114,8 @@ export declare class SessionRouter {
     private disposeHandle;
     private removeFromChannel;
     remove(sessionId: string): Promise<boolean>;
+    /** 归档失败后，仅在可靠确认日志缺失时清理残留索引。 */
+    cleanupMissing(sessionId: string): Promise<boolean>;
     private samePath;
     private create;
     private resume;

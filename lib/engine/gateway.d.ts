@@ -1,3 +1,4 @@
+import { type CommandPermissions } from './command-permissions.js';
 import type { Context } from '@deepseek-ai/cordis';
 import { SeenStore } from './seen-store.js';
 import { SessionMapStore } from './session-store.js';
@@ -11,6 +12,7 @@ export declare class ImEngine {
     private readonly onUnauthorized?;
     private readonly resolveConfig;
     private readonly resolvePrivateAccess;
+    private readonly resolveCommandPermissions;
     private readonly channels;
     private readonly router;
     private readonly broker;
@@ -28,10 +30,13 @@ export declare class ImEngine {
     private readonly wrappedUserQuestionServices;
     private legacyServiceTimer?;
     private disposed;
+    private readonly chatCommands;
+    private readonly commandScopes;
     private readonly inputScopes;
-    constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all');
+    constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all', resolveCommandPermissions?: (channelId: string) => CommandPermissions);
     renameSession(sessionId: string, title: string): boolean;
     removeSession(sessionId: string): Promise<boolean>;
+    cleanupMissingSession(sessionId: string): Promise<boolean>;
     ensureSession(sessionId: string): Promise<boolean>;
     setModel(provider: string, model: string, reasoningEffort?: string): void;
     setCwd(cwd: string): void;

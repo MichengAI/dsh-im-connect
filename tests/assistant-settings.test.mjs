@@ -51,6 +51,23 @@ function makeManager(t, ctx = {}) {
   return manager
 }
 
+test('账号 Agent 预设复用 Host 名册，验证后保存并保留旧会话预设', async t => {
+  const manager = makeManager(t, { get: name => name === 'agentPresets' ? { remoteExportList: async () => ({ presets: [{ id: 'standard' }, { id: 'research', name: '研究' }, { id: 'broken', broken: 'missing plugin' }] }) } : undefined })
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'preset-test' }, { agentPreset: 'standard' })
+  assert.equal(created.ok, true)
+  manager.sessions.upsert('old-key', { sessionId: 'old-session', channel: created.accountId, kind: 'dm', chatId: 'u', title: '旧会话', updatedAt: new Date().toISOString() })
+  const reloads = []
+  manager.engine.reloadChannel = async (id, options) => reloads.push({ id, options })
+  const result = await manager.updateAccount(created.accountId, { agentPreset: 'research' })
+  assert.equal(result.account.agentPreset, 'research')
+  assert.equal(manager.accountEngineConfig(created.accountId).agentPreset, 'research')
+  assert.equal(manager.sessions.list()[0].agentPreset, 'standard')
+  assert.equal(reloads[0].options.resetSessions, true)
+  for (const agentPreset of ['unknown', 'broken', 42]) assert.equal((await manager.updateAccount(created.accountId, { agentPreset })).ok, false)
+  assert.equal(manager.accountEngineConfig(created.accountId).agentPreset, 'research')
+})
+
 test('助手模型必须同时有提供商和模型 id', () => {
   assert.equal(normalizeAssistantModel({ provider: ' deepseek ', model: ' ' }), undefined)
   assert.deepEqual(
@@ -143,27 +160,17 @@ test('渠道展开状态不叠加 hover，空渠道不可展开', () => {
   assert.match(client, /canExpand && h\(IconChevron\)/)
 })
 
-test('渠道列表、账号卡片和连接状态还原目标视觉层级', () => {
+test('渠道分组只显示账号数量，账号子行保留状态和独立操作', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  assert.match(client, /\.ima-account-shell\{[^}]*background:transparent/)
-  assert.match(client, /\.ima-platforms\{[^}]*background:transparent/)
-  assert.doesNotMatch(client, /\.ima-account-shell\{[^}]*background:var\(--dsw-alias-bg-layer-1/)
-  assert.doesNotMatch(client, /\.ima-platforms\{[^}]*background:var\(--dsw-alias-bg-base/)
-  assert.match(client, /\.ima-platforms\{padding:0;border-right:1px solid var\(--ima-line\)/)
-  assert.match(client, /\.ima-platform\{border:0;border-bottom:1px solid var\(--ima-line\);border-radius:0/)
-  assert.match(client, /\.ima-platform-head\{[^}]*padding:10px 18px[^}]*border-radius:0/)
-  assert.match(client, /\.ima-account-list\{[^}]*padding:0 14px 14px\}/)
-  assert.match(client, /\.ima-account-row\{[^}]*min-height:72px[^}]*border:1px solid var\(--ima-line\)/)
-  assert.match(client, /\.ima-account-row \.ima-logo,\.ima-account-row \.ima-logo svg\{width:38px;height:38px\}/)
-  assert.match(client, /const channelStatus = ch\.total === 0/)
-  assert.match(client, /tone: "online"/)
-  assert.match(client, /tone: "offline"/)
-  assert.match(client, /tone: "partial"/)
-  assert.match(client, /h\(Logo, \{ id: ch\.id \}\),[\s\S]*className: busy\[account\.id\][\s\S]*h\(IconChevron\)/)
-  assert.match(client, /\.ima-platform-count\.online\{color:var\(--ima-ok\)\}/)
-  assert.match(client, /\.ima-platform-count\.offline,\.ima-platform-count\.partial\{color:var\(--ima-warning\)\}/)
-  assert.match(client, /\.ima-account-state\.online\{color:var\(--ima-ok\)\}/)
-  assert.match(client, /\.ima-account-state\.offline\{color:var\(--ima-warning\)\}/)
+  const start = client.indexOf('...(ch.accounts || []).map((account)')
+  const end = client.indexOf('selectedAccount &&', start)
+  const rows = client.slice(start, end)
+  assert.ok(start > 0 && end > start)
+  assert.doesNotMatch(rows, /h\(Logo|className: "ima-account-id"/)
+  assert.match(rows, /role: "switch"/)
+  assert.match(rows, /setSettingsAccount\(account.id\)/)
+  assert.match(rows, /account.statusOnline/)
+  assert.match(client, /t\("account.count", \{ count: ch.total \}\)/)
 })
 
 test('账号详情操作按钮允许换行，保持标签可读', () => {
@@ -180,7 +187,7 @@ test('企业微信侧边栏小图标移除白色应用底板并放大有效标�
   assert.match(client, /h\(BrandMark, \{ id, compact: small \}\)/)
 })
 
-test('账号详情未选中时显示分层空状态并记住有效选择', () => {
+test('账号通过设置按钮打开弹窗，不再占用列表侧栏', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(client, /const ACCOUNT_SELECTION_KEY = "dsh-im-connect\.settings\.selected-account"/)
   assert.match(client, /useState\(storedAccountSelection\)/)
@@ -190,7 +197,7 @@ test('账号详情未选中时显示分层空状态并记住有效选择', () =>
   assert.match(client, /settings\.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。"/)
   assert.match(client, /settings\.noAccountsTitle": "还没有接入账号"/)
   assert.match(client, /settings\.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。"/)
-  assert.match(client, /allAccounts\.length \? t\("settings\.selectAccountTitle"\) : t\("settings\.noAccountsTitle"\)/)
+  assert.match(client, /selectedAccount && h\("div", \{ className: "ima-mask"/)
   assert.match(client, /if \(action === "remove" && selected === id\) selectAccount\(removalFallback\)/)
 })
 
@@ -498,4 +505,21 @@ test('重复凭据复用账号，Telegram 更换 token 会明确标记新身份'
   assert.equal(accounts.find((account) => account.id === custom.accountId).nameOrdinal, undefined)
   assert.equal(manager.approve('telegram', 'ambiguous-user'), false)
   assert.equal(manager.approve(first.accountId, 'approved-user'), true)
+})
+
+
+test('账号命令权限整组校验保存，失败不改变原有准入与权限', async t => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'command-policy-test' }, { privateAccess: 'approved' })
+  const commandPermissions = { dm: { enabled: false, users: [{ userId: 'owner', enabled: true }] }, group: { enabled: true, users: [] } }
+  const saved = await manager.updateAccount(created.accountId, { commandPermissions })
+  assert.equal(saved.ok, true)
+  assert.deepEqual(saved.account.commandPermissions, commandPermissions)
+  assert.equal(saved.account.privateAccess, 'approved')
+  const failed = await manager.updateAccount(created.accountId, { privateAccess: 'all', commandPermissions: null })
+  assert.equal(failed.ok, false)
+  const preserved = await manager.updateAccount(created.accountId, { name: 'renamed' })
+  assert.deepEqual(preserved.account.commandPermissions, commandPermissions)
+  assert.equal(preserved.account.privateAccess, 'approved')
 })
