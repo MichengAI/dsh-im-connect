@@ -68,3 +68,12 @@ test('Telegram 使用固定 emoji 并在取消时清除回应，保留原消息 
   assert.equal(await channel.addStatusReaction(message, 'cancelled', 'ignored', signal()), undefined)
   assert.equal(channel.typingIntervalMs, 5000)
 })
+
+test('Telegram 菜单发送原生按钮，回调仅携带不透明 token', async t => {
+  t.after(() => mock.restoreAll())
+  let body
+  mock.method(globalThis, 'fetch', async (_, init) => { body = JSON.parse(init.body); return Response.json({ ok: true }) })
+  const channel = createTelegramChannel({ token: 'test' }, () => {})
+  await channel.sendChoices({ chatId: 'chat' }, 'Menu', [{ label: 'New', token: 'opaque:0' }])
+  assert.deepEqual(body.reply_markup.inline_keyboard, [[{ text: 'New', callback_data: 'opaque:0' }]])
+})

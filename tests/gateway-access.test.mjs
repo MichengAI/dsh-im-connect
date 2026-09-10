@@ -1040,3 +1040,14 @@ test('export 先检查私聊准入与命令权限，放行后只导出当前绑�
   await waitFor(() => f.sent.some(item => item.text.includes('ZIP 文件已发送')))
   assert.equal(requests, 1); assert.equal(files.length, 1); assert.equal(files[0].chatId, 'user-1')
 })
+
+test('菜单序号执行仍复用命令权限，旧菜单不能重复执行', async t => {
+  const policy = { dm: { enabled: true, users: [] }, group: { enabled: true, users: [] } }
+  const f = makeEngine(t, undefined, undefined, {}, { resolveCommandPermissions: () => policy })
+  t.after(() => f.engine.dispose()); f.engine.addAllowed('telegram', 'user-1')
+  const send = (text, id) => f.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text, messageId: id })
+  await send('/menu', 'open-menu'); await waitFor(() => f.sent.some(item => item.text.includes('助手操作菜单')))
+  policy.dm.enabled = false
+  await send('1', 'choose-menu'); await waitFor(() => f.sent.some(item => item.text.includes('未开启命令权限')))
+  assert.equal(f.store.get('telegram:dm:user-1').sessionId, f.dmSessionId)
+})

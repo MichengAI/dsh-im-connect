@@ -95,6 +95,12 @@ WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram can return files produce
 - A failed transfer produces a message naming the file and does not stop the remaining files. Switching away from the session or stopping the account prevents pending delivery from continuing to a different target.
 - Send `/export` as a standalone command to receive the current linked session’s Chat ZIP logs in this chat, without child sessions. The ZIP limit is 32 MiB; channel limits also apply. If the file is too large or cannot be sent, use `/export` in web Chat. Paths and other session IDs are not accepted.
 
+## Action menu
+
+Send `/menu` or `/m` to select sessions, workspaces and models, or start, stop, export and inspect a session. Lists support pagination. Click a button or reply with the current menu number; ordinary text exits the menu.
+
+Telegram and Feishu/Lark use native buttons. WeCom uses cards when the button count fits platform limits. Other cases, DingTalk, QQ and Weixin use numbered text. Failed native sends fall back to text. Menus are scoped to the account, chat, operator and session, expire after 15 minutes or restart, and recheck permissions on selection. Used buttons cannot execute again.
+
 ## Message progress
 
 Regular chat messages follow the actual task state. Commands continue to use text replies.

@@ -1,5 +1,21 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "/menu \u6216 /m \u2014 \u6253\u5F00\u64CD\u4F5C\u83DC\u5355": "/menu or /m — Open the action menu";
+    readonly 返回菜单: "Back to menu";
+    readonly 下一页: "Next page";
+    readonly 上一页: "Previous page";
+    readonly 帮助: "Help";
+    readonly 查看状态: "View status";
+    readonly 导出会话: "Export session";
+    readonly 停止任务: "Stop task";
+    readonly 选择模型: "Select model";
+    readonly 选择工作区: "Select workspace";
+    readonly 选择会话: "Select session";
+    readonly 新会话: "New session";
+    readonly 助手操作菜单: "Assistant menu";
+    readonly "\u7528\u6CD5\uFF1A/menu [sessions|workspaces|models] [\u9875\u7801]": "Usage: /menu [sessions|workspaces|models] [page]";
+    readonly "\u9009\u9879\u5DF2\u5931\u6548\u6216\u4E0D\u5C5E\u4E8E\u5F53\u524D\u64CD\u4F5C\uFF0C\u8BF7\u91CD\u65B0\u6253\u5F00 /menu\u3002": "This option has expired or belongs to another action. Open /menu again.";
+    readonly "\u70B9\u51FB\u9009\u9879\u6216\u56DE\u590D\u5E8F\u53F7\uFF1B15 \u5206\u949F\u5185\u6709\u6548\uFF0C\u666E\u901A\u6587\u5B57\u9000\u51FA\u83DC\u5355\u3002": "Choose an option or reply with its number. Valid for 15 minutes; ordinary text exits the menu.";
     readonly '\u4F1A\u8BDD ZIP \u8D85\u8FC7 32 MiB\uFF0C\u672A\u53D1\u9001\u3002\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6267\u884C /export \u4E0B\u8F7D\u3002': "The session ZIP exceeds 32 MiB and was not sent. Run /export in web Chat to download it.";
     readonly '\u4F1A\u8BDD\u5DF2\u5BFC\u51FA\uFF0CZIP \u6587\u4EF6\u5DF2\u53D1\u9001\u3002': "Session exported. The ZIP file has been sent.";
     readonly '\u4F1A\u8BDD\u672A\u80FD\u5BFC\u51FA\u6216\u53D1\u9001\u3002\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6253\u5F00\u8FD9\u6761\u4F1A\u8BDD\uFF0C\u6267\u884C /export \u4E0B\u8F7D ZIP\u3002': "Could not export or send the session. Open this session in web Chat and run /export to download the ZIP.";

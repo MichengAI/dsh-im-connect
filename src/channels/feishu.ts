@@ -145,6 +145,14 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       const botOpenId = identity.bot?.open_id?.trim() ?? ''
       if (!botOpenId) throw new Error(`${id}: 无法获取机器人 open_id`)
       const dispatcher = new sdk.EventDispatcher({}).register({
+        'card.action.trigger': async (data: { operator?: { open_id?: string }; action?: { value?: { token?: string; group?: boolean } }; context?: { open_chat_id?: string }; event_id?: string }) => {
+          const token = data.action?.value?.token
+          const chatId = data.context?.open_chat_id
+          if (current() && token && chatId && data.operator?.open_id) void Promise.resolve(handler?.({ chatId, userId: data.operator.open_id,
+            text: '', actionToken: token, kind: data.action?.value?.group ? 'group' : 'dm', addressed: true,
+          })).catch(() => log(`[${id}] 按钮操作失败`))
+          return {}
+        },
         'im.message.receive_v1': async (data: {
           sender?: { sender_id?: { open_id?: string } }
           message?: { message_id?: string; chat_id?: string; chat_type?: string; message_type?: string; content?: string; mentions?: FeishuMention[] }
@@ -201,6 +209,16 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         params: { receive_id_type: 'chat_id' },
         data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text }) },
       })
+    },
+    async sendChoices(message, text, buttons) {
+      if (!client) throw new Error('channel-unavailable')
+      await client.im.message.create({ params: { receive_id_type: 'chat_id' }, data: {
+        receive_id: message.chatId, msg_type: 'interactive', content: JSON.stringify({ config: { wide_screen_mode: true }, elements: [
+          { tag: 'markdown', content: text },
+          ...buttons.map(button => ({ tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: button.label.slice(0, 60) },
+            type: 'default', value: { token: button.token, group: message.kind === 'group' } }] })),
+        ] }),
+      } })
     },
     async addStatusReaction(message, state, _label, signal) {
       if (!client || !message.messageId || state === 'cancelled') return

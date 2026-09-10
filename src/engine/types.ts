@@ -16,6 +16,7 @@ export interface ImMessage {
   kind?: 'dm' | 'group'
   addressed?: boolean
   messageId?: string
+  actionToken?: string
   context?: Record<string, unknown>
   media?: ImMedia[]
 }
@@ -35,6 +36,7 @@ export interface ChannelAdapter {
   stop(): void | Promise<void>
   send(chatId: string, text: string): Promise<void>
   /** 发送宿主已允许读取的完整文件；失败必须抛错，取消后不继续提交消息。 */
+  sendChoices?(message: ImMessage, text: string, buttons: Array<{ label: string; token: string }>): Promise<void>
   sendFile?(chatId: string, file: { name: string; data: Uint8Array }, signal?: AbortSignal): Promise<void>
   setMessageHandler(handler: (msg: ImMessage) => void | Promise<void>): void
   status(): string

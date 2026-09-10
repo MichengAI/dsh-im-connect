@@ -1,3 +1,4 @@
+import type { Choice } from './choices.js'
 import { exportSession } from './session-export.js'
 import { replyText, withReplyLocale } from './command-locale.js'
 /** IM 对 Chat 的薄适配：控制操作走 Host Controller，斜杠命令走同一注册表。 */
@@ -20,6 +21,7 @@ interface Descriptor { name: string; description: string }
 export interface CommandHost { get(name: string): unknown }
 export const chatControlHelp = () => [
   replyText('IM 助理已连接 DeepSeek Harness。直接发送文字即可开始任务。'), replyText('例如：帮我整理今天的待办。'), '',
+  replyText('/menu 或 /m — 打开操作菜单'),
   replyText('会话与工作区'),
   replyText('/new — 新开会话（也可用 /clear）；旧会话保留在频道列表'),
   replyText('/sessions [页码] — 列出会话；/session 序号或ID — 切换会话'),
@@ -40,7 +42,8 @@ export class ChatCommands {
   private readonly choices = new Map<string, { values: string[]; time: number }>()
   constructor(private readonly host: CommandHost, private readonly router: SessionRouter,
     private readonly pending: (sessionId: string) => boolean,
-    private readonly onSession: (sessionId: string, msg: ImMessage) => void = () => { }) { }
+    private readonly onSession: (sessionId: string, msg: ImMessage) => void = () => { },
+    private readonly showChoices?: (channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string) => Promise<string>) { }
 
   clear(): void { this.choices.clear() }
 
@@ -149,6 +152,46 @@ export class ChatCommands {
     const current = this.router.lookup(channel.id, kind, msg.chatId)
     const requireCurrent = () => { if (!current) throw new Error(replyText('当前没有会话，请先发送消息或 /new。')); return current.sessionId }
     if (input && ['help', 'new', 'clear', 'workspaces', 'workspacelist', 'models', 'status', 'current', 'stop', 'fork', 'history', 'reasonings', 'reasoninglist', 'export'].includes(command)) throw new Error(replyText('/{0} 暂不支持参数。正确用法：/{1}', command, command))
+    if (command === 'menu' || command === 'm') {
+      const [section = '', pageText = '1', ...extra] = input.split(/\s+/)
+      const page = Number(pageText)
+      if (extra.length || !['', 'sessions', 'workspaces', 'models'].includes(section) || !Number.isSafeInteger(page) || page < 1) throw new Error(replyText('用法：/menu [sessions|workspaces|models] [页码]'))
+      let choices: Choice[] = []
+      let text = replyText('助手操作菜单')
+      if (section === 'sessions') {
+        const rows = (await this.call<{ items: Row[] }>('sessionController', 'list', {}, signal)).items
+        const workspaces = await this.workspaces(signal)
+        choices = rows.filter(row => !row.origin && !row.running && row.sessionId !== current?.sessionId && !workspaces.archivedSessionIds.includes(row.sessionId)
+          && !this.router.isBoundElsewhere?.(row.sessionId, channel.id, kind, msg.chatId)).map(row => ({ label: oneLine(row.projections?.values?.title || row.sessionId), value: `/session ${row.sessionId}` }))
+      } else if (section === 'workspaces') {
+        choices = (await this.workspaces(signal)).items.map(item => ({ label: oneLine(item.title || item.path), value: `/workspace ${item.path}` }))
+      } else if (section === 'models') {
+        requireCurrent()
+        const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
+        choices = catalog.groups.flatMap(group => group.models.map(model => ({ label: oneLine(`${model.name} (${group.id})`), value: `/model ${group.id}/${model.id}` })))
+      } else {
+        if (current) text += '\n' + await this.newDetails(current, signal)
+        choices = [
+          { label: replyText('新会话'), value: '/new' }, { label: replyText('选择会话'), value: '/menu sessions' },
+          { label: replyText('选择工作区'), value: '/menu workspaces' },
+          ...(current ? [{ label: replyText('选择模型'), value: '/menu models' }, { label: replyText('停止任务'), value: '/stop' },
+            { label: replyText('导出会话'), value: '/export' }, { label: replyText('查看状态'), value: '/status' }] : []),
+          { label: replyText('帮助'), value: '/help' },
+        ]
+      }
+      if (section) {
+        const pages = Math.max(1, Math.ceil(choices.length / 8))
+        if (page > pages) throw new Error(replyText('没有第 {0} 页，共 {1} 页。', page, pages))
+        text += ` · ${page}/${pages}`
+        choices = choices.slice((page - 1) * 8, page * 8)
+        if (page > 1) choices.push({ label: replyText('上一页'), value: `/menu ${section} ${page - 1}` })
+        if (page < pages) choices.push({ label: replyText('下一页'), value: `/menu ${section} ${page + 1}` })
+        choices.push({ label: replyText('返回菜单'), value: '/menu' })
+      }
+      signal.throwIfAborted()
+      if (!this.showChoices) return text + '\n' + choices.map(choice => `${choice.label}：${choice.value}`).join('\n')
+      return this.showChoices(channel, msg, text, choices, current?.sessionId)
+    }
     if (command === 'export') {
       const sessionId = requireCurrent()
       return await exportSession(this.host, channel, msg.chatId, sessionId, signal,

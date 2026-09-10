@@ -11,6 +11,7 @@ export interface TelegramConfig {
 
 interface TgUpdate {
   update_id: number
+  callback_query?: { id: string; data?: string; from: { id: number }; message?: { message_id: number; chat: { id: number; type: string } } }
   message?: {
     message_id: number
     chat: { id: number; type: string }
@@ -114,7 +115,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         const updates = await api<TgUpdate[]>('getUpdates', {
           offset,
           timeout: 25,
-          allowed_updates: ['message'],
+          allowed_updates: ['message', 'callback_query'],
         }, 35_000)
         lastError = ''
         for (const update of updates) {
@@ -122,6 +123,13 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           // Telegram offset 是 at-most-once 取舍：先确认游标可避免崩溃重启后重复驱动 agent，代价是极端情况下丢一条未完成消息。
           offset = update.update_id + 1
           if (persist) cursorFile.write({ offset })
+          if (update.callback_query) {
+            const callback = update.callback_query
+            await api('answerCallbackQuery', { callback_query_id: callback.id }).catch(() => log('[telegram] 按钮回执失败'))
+            if (callback.data && callback.message) await handler?.({ chatId: String(callback.message.chat.id), userId: String(callback.from.id),
+              kind: callback.message.chat.type === 'private' ? 'dm' : 'group', addressed: true, text: '', actionToken: callback.data, messageId: `callback:${callback.id}` })
+            continue
+          }
           const message = update.message
           if (!message || message.from?.is_bot) continue
           if (!['private', 'group', 'supergroup'].includes(message.chat.type)) continue
@@ -225,6 +233,9 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       const form = fileForm(file, 'document')
       form.append('chat_id', chatId)
       await fileRequest(`${API}/bot${token}/sendDocument`, { method: 'POST', body: form, signal: timeoutSignal(120_000, AbortSignal.any([...(signal ? [signal] : []), ...(lifecycle ? [lifecycle.signal] : [])])) })
+    },
+    async sendChoices(message, text, buttons) {
+      await api('sendMessage', { chat_id: message.chatId, text, reply_markup: { inline_keyboard: buttons.map(button => [{ text: button.label.slice(0, 60), callback_data: button.token }]) } })
     },
     typingIntervalMs: 5000,
     async addStatusReaction(message, state, _label, signal) {

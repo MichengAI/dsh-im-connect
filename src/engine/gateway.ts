@@ -1,3 +1,4 @@
+import { ChoiceStore } from './choices.js'
 import { MessageProgress, ProgressTracker } from './message-progress.js'
 import { replyText, withReplyLocale } from './command-locale.js'
 import { FileDelivery, type DeliverySession } from './file-delivery.js'
@@ -78,6 +79,7 @@ export class ImEngine {
   private readonly wrappedUserQuestionServices = new WeakSet<object>()
   private legacyServiceTimer?: NodeJS.Timeout
   private disposed = false
+  private readonly choices = new ChoiceStore()
   private readonly progress = new ProgressTracker()
   private readonly mergedMessages = new Map<string, ImMessage[]>()
   private readonly fileDelivery: FileDelivery
@@ -99,7 +101,7 @@ export class ImEngine {
     // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
     this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig)
     this.fileDelivery = new FileDelivery(ctx as unknown as { get(name: string): unknown }, log)
-    this.chatCommands = new ChatCommands(ctx as unknown as { get(name: string): unknown }, this.router, id => this.questions.has(id) || this.broker.has(id), (id, msg) => { if (msg.userId) this.sessionActors.set(id, msg.userId) })
+    this.chatCommands = new ChatCommands(ctx as unknown as { get(name: string): unknown }, this.router, id => this.questions.has(id) || this.broker.has(id), (id, msg) => { if (msg.userId) this.sessionActors.set(id, msg.userId) }, (channel, msg, text, choices, session) => this.choices.show(channel, msg, text, choices, session))
     this.merger = new SessionMerger((config.mergeTimeoutSecs || 5) * 1000, (key, text) => {
       const sep = key.indexOf(':')
       const channelId = key.slice(0, sep)
@@ -228,6 +230,7 @@ export class ImEngine {
 
   dispose(): void {
     this.disposed = true
+    this.choices.clear()
     this.progress.cancel()
     this.mergedMessages.clear()
     this.chatCommands.clear()
@@ -306,9 +309,15 @@ export class ImEngine {
         await this.rejectUnauthorized(channelId, channel, msg)
         return
       }
-      const text = msg.text.trim()
+      let text = msg.text.trim()
       const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
       const binding = this.router.lookup(channelId, kind, msg.chatId)
+      const selected = this.choices.resolve(channelId, msg, binding?.sessionId, !binding || (!this.questions.has(binding.sessionId) && !this.broker.has(binding.sessionId)))
+      if (selected === '') {
+        await this.deliver(channel, msg.chatId, withReplyLocale(this.ctx, () => replyText('选项已失效或不属于当前操作，请重新打开 /menu。')))
+        return
+      }
+      if (selected !== undefined) { text = selected; msg = { ...msg, text, actionToken: undefined } }
       if (text.startsWith('/') && !msg.media?.length) {
         if (!canExecuteCommand(this.resolveCommandPermissions(channelId), kind, msg.userId)) {
           await this.deliver(channel, msg.chatId, withReplyLocale(this.ctx, () => replyText('当前聊天未开启命令权限，可以继续正常对话。')))
@@ -473,6 +482,7 @@ export class ImEngine {
   }
 
   private cancelInputs(channelId: string): void {
+    this.choices.clear(channelId)
     this.progress.cancel(channelId)
     for (const key of this.mergedMessages.keys()) if (key.startsWith(channelId + ':')) { this.mergedMessages.delete(key); this.merger.cancel(key) }
     for (const [key, scope] of this.commandScopes) if (key.startsWith(channelId + ':')) scope.abort()

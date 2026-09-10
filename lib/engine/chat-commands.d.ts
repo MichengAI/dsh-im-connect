@@ -1,3 +1,4 @@
+import type { Choice } from './choices.js';
 import type { ChannelAdapter, ImMessage } from './types.js';
 import type { SessionRouter } from './router.js';
 export interface CommandHost {
@@ -9,9 +10,10 @@ export declare class ChatCommands {
     private readonly router;
     private readonly pending;
     private readonly onSession;
+    private readonly showChoices?;
     private readonly lifetime;
     private readonly choices;
-    constructor(host: CommandHost, router: SessionRouter, pending: (sessionId: string) => boolean, onSession?: (sessionId: string, msg: ImMessage) => void);
+    constructor(host: CommandHost, router: SessionRouter, pending: (sessionId: string) => boolean, onSession?: (sessionId: string, msg: ImMessage) => void, showChoices?: ((channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string) => Promise<string>) | undefined);
     clear(): void;
     private service;
     private call;
