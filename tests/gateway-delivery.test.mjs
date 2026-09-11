@@ -75,18 +75,20 @@ function makeFailingEngine(t) {
   return { engine, handlers, sendCalls, beginReplyCalls, logs, sessionId }
 }
 
-test('流式收口与兜底投递都失败时不标记已投递，后续助手消息仍会重试', async (t) => {
+test('流式收口未知不自动兜底，紧随其后的重复助手消息也不重发', async (t) => {
   const { engine, handlers, sendCalls, beginReplyCalls, sessionId } = makeFailingEngine(t)
   try {
     // 首个文本增量开流（引擎内部 fire-and-forget，轮询等到流建好）
     handlers['session/event']({ id: sessionId }, { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text: '答' } } })
     await waitFor(() => beginReplyCalls.length === 1)
-    // 回合收口：finish 失败 -> deliver 兜底也失败（send 抛错）
+    // finish 可能已成功但回执丢失，不能自动兜底。
     handlers['session/event']({ id: sessionId }, { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '完整答案' }] } } })
-    await waitFor(() => sendCalls.length === 1)
-    // 若错误地标记了已投递，这条会被「忽略重复」吞掉；正确行为是再次尝试投递
+    await sleep(20)
+    assert.equal(sendCalls.length, 0)
+    // 重复终态不能触发第二次尝试。
     handlers['session/event']({ id: sessionId }, { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '完整答案' }] } } })
-    await waitFor(() => sendCalls.length === 2)
+    await sleep(20)
+    assert.equal(sendCalls.length, 0)
   } finally {
     engine.dispose()
   }
@@ -132,6 +134,7 @@ for (const mode of ['completed', 'error', 'disabled', 'switched', 'waiting', 'ne
   engine.register(channel)
   engine.ctx.get = () => undefined
   engine.resolveCommandPermissions = () => ({ dm: { enabled: mode !== 'disabled', users: [] }, group: { enabled: true, users: [] } })
+  engine.addAllowed('qq', 'u')
   const item = new MessageProgress(channel, { chatId: 'user-1', userId: 'u', kind: 'dm', messageId: 'm' }, engine.ctx, () => {})
   engine.progress.begin(sessionId, 'req', [item])
   const emit = event => handlers['session/event']({ id: sessionId }, event)

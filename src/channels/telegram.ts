@@ -227,6 +227,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       lifecycle = undefined
       if (persist) cursorFile.write({ offset })
     },
+    canDeliverDeferred() { return !stopped },
     async send(chatId, text) {
       await api('sendMessage', { chat_id: Number(chatId), text })
     },

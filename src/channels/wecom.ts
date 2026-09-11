@@ -312,6 +312,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       broker = undefined
       statusText = '已停止'
     },
+    canDeliverDeferred() { return !!broker },
     async send(chatId, text) {
       if (!broker) throw new Error('wecom: 尚未连接')
       await broker.send(chatId, text)

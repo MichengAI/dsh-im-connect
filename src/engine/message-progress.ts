@@ -80,7 +80,8 @@ export class ProgressTracker {
   private readonly turns = new Map<string, Turn>()
   private readonly currentTurn = new Map<string, number>()
 
-  constructor(private readonly onComplete: (result: TurnCompletion) => void = () => {}) {}
+  constructor(private readonly onComplete: (result: TurnCompletion) => void = () => {},
+    private readonly onSettled: (sessionId: string, turn: number, delivered: boolean) => void = () => {}) {}
 
   hasTurn(sessionId: string, turn: number | undefined): boolean {
     return turn !== undefined && (this.turns.has(`${sessionId}:${turn}`) || this.ended.has(`${sessionId}:${turn}`))
@@ -127,6 +128,8 @@ export class ProgressTracker {
         const state = data?.reason?.kind === 'error' ? 'error'
           : data?.reason?.kind !== 'completed' ? 'cancelled'
             : results.length === 0 ? 'cancelled' : results.every(Boolean) ? 'success' : 'error'
+        // 交付确认不依赖是否仍适合发送下一步导航，新回合不能遗留旧请求。
+        this.onSettled(sessionId, data.turn, data?.reason?.kind === 'completed' && results.length > 0 && results.every(Boolean))
         const superseded = this.hasNewerTurn(sessionId, data.turn)
         const live = active.groups.filter(group => this.groups.has(group) && group.items.some(item => !item.isFinished()))
         for (const group of live) {

@@ -1,3 +1,5 @@
+import { DeferredDelivery, DeliveryUnavailable, type DeferredEntry } from './deferred-delivery.js'
+import { readDeliveryHistory } from './delivery-history.js'
 import { FileInputError, filePromptParts } from './file-input.js'
 import { ChoiceStore, type Choice } from './choices.js'
 import { MessageProgress, ProgressTracker, type TurnCompletion } from './message-progress.js'
@@ -63,6 +65,12 @@ const DELEGATE_INTERACTION = Symbol('delegate-interaction')
 const USER_QUESTION_WRAPPER = Symbol('dsh-im-connect.user-question-wrapper')
 
 export class ImEngine {
+  private readonly deferred: DeferredDelivery
+  private deferredTimer?: NodeJS.Timeout
+  private recovering = false
+  private recoveryCursor = 0
+  private readonly recoveryScope = new AbortController()
+  private readonly observedTurns = new Map<string, number>()
   private readonly channels = new Map<string, ChannelAdapter>()
   private readonly router: SessionRouter
   private readonly broker = new ApprovalBroker()
@@ -84,6 +92,9 @@ export class ImEngine {
   private readonly choices: ChoiceStore
   private readonly progress = new ProgressTracker(result => {
     void this.notifyCompletion(result).catch(() => this.log('[im-progress] 完成通知发送失败，不重试任务'))
+  }, (sessionId, turn, delivered) => {
+    try { this.deferred.complete(sessionId, turn, delivered) }
+    catch { this.log('[im-delivery] 交付确认落盘失败，保留未知状态') }
   })
   private readonly mergedMessages = new Map<string, ImMessage[]>()
   private readonly fileDelivery: FileDelivery
@@ -101,7 +112,13 @@ export class ImEngine {
     private readonly resolveConfig: (channelId: string) => EngineConfig = () => config,
     private readonly resolvePrivateAccess: (channelId: string) => 'approved' | 'all' = () => 'approved',
     private readonly resolveCommandPermissions: (channelId: string) => CommandPermissions = () => normalizeCommandPermissions(undefined),
+    deliveryFile?: string,
   ) {
+    this.deferred = new DeferredDelivery(deliveryFile)
+    if (deliveryFile) {
+      this.deferredTimer = setInterval(() => { void this.recoverDeliveries() }, 30_000)
+      this.deferredTimer.unref()
+    }
     this.choices = new ChoiceStore(log)
     // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
     this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig)
@@ -126,7 +143,12 @@ export class ImEngine {
     if (typeof on === 'function') {
       for (const kind of ['inserted', 'claimed', 'discarded']) {
         this.disposeEvents.push(on(`agent/inbox/${kind}`, (...args: unknown[]) => {
-          this.progress.inbox(kind, args[0] as Parameters<ProgressTracker['inbox']>[1])
+          const payload = args[0] as Parameters<ProgressTracker['inbox']>[1]
+          if (kind === 'claimed' && Number.isSafeInteger(payload.turn)) {
+            const id = String(payload.agent?.session?.id ?? payload.agent?.id ?? '')
+            this.deferred.claim(id, payload.turn!, payload.message?.source?.rpcId ?? payload.message?.id ?? '')
+          }
+          this.progress.inbox(kind, payload)
         }, { global: true }))
       }
       this.disposeEvents.push(on('session/event', (...args: unknown[]) => {
@@ -236,6 +258,8 @@ export class ImEngine {
 
   dispose(): void {
     this.disposed = true
+    if (this.deferredTimer) clearInterval(this.deferredTimer)
+    this.recoveryScope.abort()
     this.choices.clear()
     this.progress.cancel()
     this.mergedMessages.clear()
@@ -275,6 +299,8 @@ export class ImEngine {
 
   private cancelSessionInteractions(sessionId: string, reason?: unknown): void {
     this.progress.cancel(undefined, sessionId)
+    this.deferred.release(sessionId)
+    this.observedTurns.delete(sessionId)
     this.broker.cancel(sessionId)
     this.questionSelections.delete(sessionId)
     this.questions.cancel(sessionId, reason)
@@ -316,6 +342,7 @@ export class ImEngine {
         await this.rejectUnauthorized(channelId, channel, msg)
         return
       }
+      if (!/^\/delivery(?:\s|$)/i.test(msg.text.trim())) void this.recoverDeliveries(channel, msg)
       let text = msg.text.trim()
       const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
       const binding = this.router.lookup(channelId, kind, msg.chatId)
@@ -429,12 +456,72 @@ export class ImEngine {
     }
   }
 
+  private validDelivery(entry: DeferredEntry): boolean {
+    const channel = this.channels.get(entry.channelId)
+    if (this.disposed || !channel) return false
+    const binding = this.router.lookup(entry.channelId, entry.message.kind ?? 'dm', entry.message.chatId)
+    return binding?.sessionId === entry.sessionId && decideAccess({ userAllowed: this.isAuthorized(entry.channelId, channel, entry.message), kind: entry.message.kind, addressed: true }) === 'allow'
+  }
+
+  private async recoverDelivery(entry: DeferredEntry, fresh = false, explicit = false): Promise<void> {
+    await this.deferred.recover(entry.id, async current => {
+      const signal = AbortSignal.any([this.recoveryScope.signal, AbortSignal.timeout(30_000)])
+      const result = await readDeliveryHistory(this.ctx, current.sessionId, current.id, signal)
+      if (!result) return undefined
+      return withReplyLocale(this.ctx, () => ({ turn: result.turn, text: [replyText('补发此前任务的结果（不会重新执行任务）：'), result.text,
+        result.kind === 'completed' ? replyText('此前任务已完成。文件请在原会话查看。') : result.kind === 'error' ? replyText('此前任务失败，已生成的内容保留。') : replyText('此前任务已停止，已生成的内容保留。')].filter(Boolean).join('\n\n') }))
+    }, current => this.validDelivery(current), async (current, text) => {
+      const channel = this.channels.get(current.channelId)
+      if (!channel || (!fresh && !channel.canDeliverDeferred?.())) throw new DeliveryUnavailable()
+      await channel.send(current.message.chatId, text)
+    }, text => splitText(text, Math.max(1, (this.channels.get(entry.channelId)?.maxMessageLength ?? 2000) - 32)), explicit)
+  }
+
+  private async recoverDeliveries(channel?: ChannelAdapter, message?: ImMessage): Promise<void> {
+    if (this.recovering || this.disposed) return
+    this.recovering = true
+    try {
+      const pending = this.deferred.list(channel?.id, message).filter(entry => ['waiting', 'ready'].includes(entry.status))
+      const start = message ? 0 : this.recoveryCursor % Math.max(1, pending.length)
+      const batch = [...pending.slice(start), ...pending.slice(0, start)].slice(0, 20)
+      this.recoveryCursor = start + batch.length
+      for (const entry of batch) {
+        if (this.disposed) break
+        try { await this.recoverDelivery(entry, !!message) }
+        catch (error) { this.log(`[im-delivery] 单条记录暂时无法恢复: ${error instanceof Error ? error.name : 'Error'}`) }
+      }
+    } catch (error) { this.log(`[im-delivery] 补发检查失败: ${error instanceof Error ? error.name : 'Error'}`) }
+    finally { this.recovering = false }
+  }
+
+  private async deliveryCommand(channel: ChannelAdapter, message: ImMessage): Promise<string> {
+    return withReplyLocale(this.ctx, async () => {
+      const args = message.text.trim().split(/\s+/).slice(1)
+      const entries = this.deferred.list(channel.id, message)
+      if (args.length) {
+        const entry = entries.find(item => item.id === args[1])
+        if (args.length !== 2 || args[0] !== 'retry' || !entry) return replyText('用法：/delivery；补发指定结果：/delivery retry 记录ID。记录仅属于当前聊天和发起人。')
+        if (!this.validDelivery(entry)) return replyText('无法补发：请先恢复原会话绑定及访问权限。不会发送到其他会话。')
+        await this.recoverDelivery(entry, true, true)
+      }
+      const current = this.deferred.list(channel.id, message).slice(-10).reverse()
+      if (!current.length) return replyText('没有近期交付记录。直接发送消息开始任务；查看最近记录：/history。')
+      const states = {
+        waiting: replyText('等待原任务结果'), ready: replyText('等待渠道可发送'), sending: replyText('正在补发'), sent: replyText('已发送'),
+        unknown: replyText('送达未知，自动补发已暂停'), blocked: replyText('绑定或权限已变化，补发已暂停'), expired: replyText('已过期，请在网页查看原会话'),
+      }
+      return [replyText('最近交付记录（最多 10 条，保留 7 天）：'), ...current.map(entry => `${entry.id} — ${states[entry.status]}`), '',
+        replyText('补发：/delivery retry 记录ID。送达未知的结果可能重复；只补发文字，不重新执行任务，文件请在网页查看。')].join('\n')
+    })
+  }
+
   private async handleCommand(channel: ChannelAdapter, msg: ImMessage): Promise<string | undefined> {
     const key = `${channel.id}:${msg.chatId}`
     if (/^\/stop(?:\s|$)/i.test(msg.text.trim())) this.commandScopes.get(key)?.abort()
     const scope = new AbortController()
     this.commandScopes.set(key, scope)
     try {
+      if (/^\/delivery(?:\s|$)/i.test(msg.text.trim())) return await this.deliveryCommand(channel, msg)
       return await this.chatCommands.execute(channel, msg, scope.signal)
     } catch (error) {
       this.log(`[${channel.id}] 命令失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -457,6 +544,7 @@ export class ImEngine {
     const { signal } = scope
     const items = sources.map(source => new MessageProgress(channel, source, this.ctx, this.log, 'queued'))
     let accepted = false
+    let requestId: string | undefined
     let reject = () => { for (const item of items) item.finish('error') }
     try {
       const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
@@ -477,7 +565,8 @@ export class ImEngine {
       if (msg.userId) this.sessionActors.set(binding.sessionId, msg.userId)
       this.streams.reset(`${channel.id}:${msg.chatId}`)
       if (signal.aborted) return
-      const requestId = crypto.randomUUID()
+      requestId = crypto.randomUUID()
+      this.deferred.begin(requestId, binding.sessionId, channel.id, { ...msg, userId: msg.userId ?? sources[0]?.userId })
       reject = this.progress.begin(binding.sessionId, requestId, items)
       if (content.some(part => part.type === 'image' || part.type === 'file')) {
         // Use Chat's public admission entry: session-local model selection, shared
@@ -497,11 +586,12 @@ export class ImEngine {
       })
       accepted = true
       this.log(`[${channel.id}] 已注入 ${binding.sessionId}`)
-    } catch (error) { reject(); throw error }
+    } catch (error) { if (requestId) this.deferred.reject(requestId); reject(); throw error }
     finally { if (!accepted) for (const item of items) item.finish('cancelled') }
   }
 
   private cancelInputs(channelId: string): void {
+    if (!this.disposed) this.deferred.block(channelId)
     this.choices.clear(channelId)
     this.progress.cancel(channelId)
     for (const key of this.mergedMessages.keys()) if (key.startsWith(channelId + ':')) { this.mergedMessages.delete(key); this.merger.cancel(key) }
@@ -803,10 +893,25 @@ export class ImEngine {
 
   private onSessionEvent(session: DeliverySession, event: { type?: string; surfaceOp?: unknown; data?: any }): Promise<void> {
     const id = String(session.id ?? '')
+    if (event.type === 'turn/start' && Number.isSafeInteger(event.data?.turn)) {
+      if (this.observedTurns.size >= 1024) this.observedTurns.delete(this.observedTurns.keys().next().value!)
+      this.observedTurns.set(id, event.data.turn)
+    }
+    if (event.type === 'user/message' && this.observedTurns.has(id)) this.deferred.claim(id, this.observedTurns.get(id)!, event.data?.source?.rpcId ?? event.data?.id ?? '')
+    const turn = event.data?.turn ?? this.observedTurns.get(id)
+    if (['assistant/chunk', 'assistant/message', 'turn/end'].includes(event.type ?? '') && this.deferred.coldTurn(id, turn)) return Promise.resolve()
+    const tracked = this.deferred.turnEntries(id, turn)
+    const binding = this.router.bindingForSession(id)
+    const channel = binding && this.channels.get(binding.channelId)
+    const unavailable = !!channel?.canDeliverDeferred && !channel.canDeliverDeferred()
+    const invalid = tracked.some(entry => entry.status === 'blocked' || !this.validDelivery(entry))
+    if (invalid) for (const entry of tracked) if (entry.status !== 'sent') this.deferred.patch(entry.id, { status: 'blocked' })
+    const skip = (unavailable || invalid) && ['assistant/chunk', 'assistant/message', 'turn/end'].includes(event.type ?? '')
+    if (!skip && (event.type === 'assistant/chunk' || event.type === 'assistant/message')) this.deferred.liveStart(id, turn)
     const trackedEnd = event.type === 'turn/end' && this.progress.hasTurn(id, event.data?.turn)
     this.progress.event(id, event)
-    const outcome = { ok: true }
-    const work = this.processSessionEvent(session, event, outcome, trackedEnd)
+    const outcome = { ok: !skip }
+    const work = skip ? Promise.resolve() : this.processSessionEvent(session, event, outcome, trackedEnd)
     if (event.type === 'assistant/message' && event.surfaceOp === 'append'
       && !event.data?.message?.content?.some((part: { type?: string }) => part.type === 'tool-call')) {
       this.progress.delivery(id, event.data?.turn, work.then(() => outcome.ok, () => false))
@@ -874,9 +979,11 @@ export class ImEngine {
             try {
               await taken.stream.finish(finalText)
             } catch (error) {
-              // 收口失败时大概率没送出去，宁可小概率重复也不能让用户收不到回复
-              this.log(`[${channel.id}] 流式收口失败，改走普通投递: ${error instanceof Error ? error.message : String(error)}`)
-              delivered = await this.deliver(channel, binding.chatId, finalText, outcome)
+              // 请求可能已经到达渠道，不能自动补一份重复回复。
+              this.log(`[${channel.id}] 流式收口结果未知，请通过 /delivery 查询: ${error instanceof Error ? error.message : String(error)}`)
+              delivered = false
+              outcome.ok = false
+              this.streams.markDelivered(streamKey)
             }
             outcome.ok = outcome.ok && delivered
             if (delivered) this.streams.markDelivered(streamKey)
@@ -913,17 +1020,20 @@ export class ImEngine {
     const valid = () => {
       const current = this.router.lookup(channel.id, message.kind ?? 'dm', message.chatId)
       return !this.disposed && this.channels.get(channel.id) === channel && current?.sessionId === result.sessionId
+        && (message.kind === 'group' || this.isAuthorized(channel.id, channel, message))
+        && (!channel.canDeliverDeferred || channel.canDeliverDeferred())
         && !this.progress.hasNewerTurn(result.sessionId, result.turn)
         && !this.questions.has(result.sessionId) && !this.broker.has(result.sessionId)
     }
     if (!valid()) return
-    await withReplyLocale(this.ctx, async () => {
+    const terminalIds: string[] = []
+    const notified = await withReplyLocale(this.ctx, async () => {
       const text = ({
         completed: replyText('本次处理已完成，可在上方查看回复或成果文件。直接发消息即可继续。'),
         empty: replyText('本次处理已结束，未返回可投递的结果。可补充要求后继续。'),
         error: replyText('本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。'),
         cancelled: replyText('本次处理已停止，已返回的内容保留。可直接发消息继续。'),
-        'delivery-failed': replyText('本次处理已结束，但部分回复或文件未能发送。请在网页查看完整结果；不会自动重复执行任务。'),
+        'delivery-failed': replyText('本次处理已结束，但部分回复或文件未能发送。查看交付记录：/delivery；完整结果和文件请在网页查看，不会自动重复执行任务。'),
       })[result.status]
       const allowed = canExecuteCommand(this.resolveCommandPermissions(channel.id), message.kind ?? 'dm', message.userId)
       const choices: Choice[] = allowed ? [
@@ -935,20 +1045,30 @@ export class ImEngine {
       // 完成提示不接管纯数字消息，也不自动重发结果或重新执行任务。
       if (!valid()) return
       if (result.status === 'error' || result.status === 'cancelled' || result.status === 'empty') {
+        for (const entry of this.deferred.list(channel.id, message)) if (entry.sessionId === result.sessionId && entry.turn === result.turn && entry.status === 'waiting') {
+          this.deferred.patch(entry.id, { status: 'unknown' })
+          terminalIds.push(entry.id)
+        }
         const taken = await this.streams.take(`${channel.id}:${message.chatId}`)
         if (!valid()) return
         if (taken.stream) {
           const body = text + (choices.length ? '\n\n' + choices.map(choice => `${choice.label} — ${choice.value}`).join('\n') : '')
           // 已有回复卡片直接收口；收口结果不明时不再补发一张完成卡。
           await taken.stream.finish(body)
-          return
+          return true
         }
       }
-      if (!choices.length) { await this.deliver(channel, message.chatId, text); return }
+      const outcome = { ok: true }
+      if (!choices.length) { await this.deliver(channel, message.chatId, text, outcome); return outcome.ok }
       const fallback = await this.choices.show(channel, message, text, choices, result.sessionId, valid,
         replyText('点击按钮或发送对应命令；按钮 15 分钟内有效，普通文字继续聊天。'), false)
-      if (fallback && valid()) await this.deliver(channel, message.chatId, fallback)
+      if (fallback) {
+        if (!valid()) return false
+        await this.deliver(channel, message.chatId, fallback, outcome)
+      }
+      return outcome.ok
     })
+    if (notified) for (const id of terminalIds) this.deferred.patch(id, { status: 'sent' })
   }
 
   /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */

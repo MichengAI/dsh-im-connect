@@ -13,6 +13,12 @@ export declare class ImEngine {
     private readonly resolveConfig;
     private readonly resolvePrivateAccess;
     private readonly resolveCommandPermissions;
+    private readonly deferred;
+    private deferredTimer?;
+    private recovering;
+    private recoveryCursor;
+    private readonly recoveryScope;
+    private readonly observedTurns;
     private readonly channels;
     private readonly router;
     private readonly broker;
@@ -38,7 +44,7 @@ export declare class ImEngine {
     private readonly chatCommands;
     private readonly commandScopes;
     private readonly inputScopes;
-    constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all', resolveCommandPermissions?: (channelId: string) => CommandPermissions);
+    constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all', resolveCommandPermissions?: (channelId: string) => CommandPermissions, deliveryFile?: string);
     renameSession(sessionId: string, title: string): boolean;
     removeSession(sessionId: string): Promise<boolean>;
     cleanupMissingSession(sessionId: string): Promise<boolean>;
@@ -61,6 +67,10 @@ export declare class ImEngine {
     private isAuthorized;
     private rejectUnauthorized;
     private handleInbound;
+    private validDelivery;
+    private recoverDelivery;
+    private recoverDeliveries;
+    private deliveryCommand;
     private handleCommand;
     private takeMergedMessages;
     private inject;

@@ -38,6 +38,8 @@ export interface ChannelAdapter {
   start(): void | Promise<void>
   stop(): void | Promise<void>
   send(chatId: string, text: string): Promise<void>
+  /** 稳定收件目标可用时允许后台补发；没有此能力的渠道等待原聊天新消息。 */
+  canDeliverDeferred?(): boolean
   /** 原生选择卡片的容量，用于菜单分页；超长正文仍完整降级为文字。 */
   readonly choiceLimits?: { maxButtons: number; maxTextLength: number }
   sendChoices?(message: ImMessage, text: string, buttons: Array<{ label: string; token: string }>): Promise<void | ChoiceReceipt>

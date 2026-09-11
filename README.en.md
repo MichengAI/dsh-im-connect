@@ -239,6 +239,7 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 | Task controls | `/stop`, `/steer <text>`, `/queue` | Stop, provide instructions, or inspect the queue; stopping preserves Host queued messages |
 | Session with a preset | `/presets`, `/preset <number or ID>`, `/preset --default` | Starts and connects a new session in the current workspace without changing account defaults |
 | Model / reasoning | `/models`, `/model <number or provider/model>`, `/reasoning [effort or --default]` | Changes the current selection and updates the Host default for subsequent Chat sessions |
+| Result recovery | `/delivery`, `/delivery retry <record-ID>` | Check recent deliveries and resend text from the original task |
 | Session management | `/history`, `/rename <title>`, `/fork` | Recent text history, rename, or fork and switch |
 | Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
 | Answer an interactive question | Reply with an option number or text; separate multiple choices with commas, or enter a custom answer | Multiple questions arrive in order; only the initiating user can answer in a group |
@@ -333,3 +334,12 @@ npm test
 Security guidance is in [SECURITY.md](SECURITY.md).
 
 Licensed under [Apache License 2.0](LICENSE).
+
+### Result recovery after disconnects and restarts
+
+Delivery tracking starts with ordinary IM messages received after this feature is enabled. If the original result is saved but sending has not started, its final text and completion status can be recovered after reconnecting or restarting. Questions, tools, approvals, and files are never replayed. Messages handled by earlier plugin versions are not recovered retroactively.
+
+- Telegram, Feishu/Lark, and WeCom can attempt background delivery using a stable chat destination. DingTalk, QQ, and WeChat wait for a new message in the original chat to refresh the reply channel. Connection, expiry, and platform quotas still apply.
+- When sending was attempted but delivery is unconfirmed, automatic resend pauses. Use `/delivery` to check records, then `/delivery retry <record-ID>` if you want to resend. This may duplicate text you already received. View files in the original session on the web.
+- Records and resend actions are scoped to the original sender in the current chat, subject to admission and command permissions. Disabling an account, changing the session binding, or changing access pauses recovery. Restore the original binding and access before retrying manually.
+- Recovery is available for 7 days per record, with at most 1,000 records. Delivered records are removed first when capacity is reached; expired records are cleaned up when a new message arrives. Background checks run in batches every 30 seconds. Unreadable history or unfinished tasks remain pending. Recovery does not resume task execution.

@@ -208,6 +208,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       ws = undefined
       statusText = '已停止'
     },
+    canDeliverDeferred() { return statusText === '长连接已建立' },
     async send(chatId, text) {
       if (!client) throw new Error(`${id}: 尚未连接`)
       await client.im.message.create({
