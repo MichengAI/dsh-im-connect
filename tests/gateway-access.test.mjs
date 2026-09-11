@@ -10,6 +10,32 @@ import { SeenStore } from '../lib/engine/seen-store.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+test('先卸载后删除日志时，删除完成事件清理频道残留索引', async t => {
+  let stored = []
+  const f = makeEngine(t, undefined, undefined, { sessionPersistence: { list: async () => stored } })
+  stored = [{ header: { id: f.dmSessionId } }]
+  try {
+    f.handlers['session/disposed']({ id: f.dmSessionId })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.ok(f.store.list().some(item => item.sessionId === f.dmSessionId))
+    assert.equal(typeof f.handlers['api-session/removed'], 'function')
+    await f.handlers['api-session/removed'](f.dmSessionId)
+    assert.ok(f.store.list().some(item => item.sessionId === f.dmSessionId))
+    stored = []
+    await f.handlers['api-session/removed'](f.dmSessionId)
+    assert.equal(f.store.list().some(item => item.sessionId === f.dmSessionId), false)
+  } finally { f.engine.dispose() }
+})
+
+test('删除通知后存储查询失败时保留频道索引', async t => {
+  const f = makeEngine(t, undefined, undefined, { sessionPersistence: { list: async () => { throw new Error('磁盘不可用') } } })
+  try {
+    assert.equal(typeof f.handlers['api-session/removed'], 'function')
+    await f.handlers['api-session/removed'](f.dmSessionId)
+    assert.ok(f.store.list().some(item => item.sessionId === f.dmSessionId))
+  } finally { f.engine.dispose() }
+})
+
 test('workspace 接续的普通 Host ID 会话回传回复、标题及审批，未绑定会话不回传', async t => {
   const { engine, sent, handlers, store, inbound } = makeEngine(t)
   engine.addAllowed('telegram', 'user-1')

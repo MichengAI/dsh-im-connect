@@ -4,6 +4,11 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.45 - 2026-09-11
+
+- Fix stale channel entries remaining after archived sessions are deleted, which made those sessions impossible to open or archive. The plugin now removes its channel index after the Host confirms deletion and retains it when storage state cannot be verified.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.44 - 2026-09-11
 
 - Receive assistant-generated files across channels and export the current session with `/export`. Incoming files follow Chat admission rules, with fewer duplicate file deliveries.
