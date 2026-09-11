@@ -17,7 +17,7 @@ export function commandNavigation(command: string, hasSession: boolean): Choice[
   const reasoning = { label: replyText('调整推理'), value: '/reasoning' }
   const status = { label: replyText('查看状态'), value: '/status' }
   const routes: Record<string, Choice[]> = {
-    help: [sessions, workspaces], sessions: [sessions, workspaces], sessionlist: [sessions, workspaces],
+    sessions: [sessions, workspaces], sessionlist: [sessions, workspaces],
     session: [sessions, status], new: [sessions, models], clear: [sessions, models],
     workspace: [workspaces, sessions], workspaces: [workspaces, sessions], workspacelist: [workspaces, sessions],
     model: [models, reasoning, presets], models: [models, reasoning, presets],

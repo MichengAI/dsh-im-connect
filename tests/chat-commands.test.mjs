@@ -707,15 +707,10 @@ test('真实宿主 Controller 创建预设会话并在归属失败时保留新 I
 })
 
 
-test('帮助正文独立发送，短导航卡片不受企微正文上限影响', async () => {
-  const sent = [], shown = []
-  const f = fixture({ channel: { sendChoices() {}, send: async (_, text) => sent.push(text), maxMessageLength: 4000, choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (...args) => { shown.push(args); return '' } })
-  assert.equal(await f.run('/help'), '')
-  assert.equal(sent.length, 1)
-  assert.match(sent[0], /\n\n会话与工作区\n/)
-  assert.match(sent[0], /\n\n模型与推理\n/)
-  assert.match(sent[0], /\n\n扩展命令：\n/)
-  assert.ok(shown[0][2].length < 500)
-  assert.doesNotMatch(shown[0][2], /\/compact|\/new/)
-  assert.deepEqual(shown[0][3].map(c => c.value), ['/menu sessions', '/menu workspaces', '/menu'])
+for (const native of [false, true]) test(`所有渠道帮助只返回正文、不发送按钮：${native}`, async () => {
+  const f = fixture({ channel: { ...(native ? { sendChoices() {} } : {}), send: async () => { assert.fail('帮助交给统一文字投递') } }, showChoices: async () => { assert.fail('help 不显示按钮') } })
+  const text = await f.run('/help')
+  assert.match(text, /\n\n会话与工作区\n/)
+  assert.match(text, /\n\n扩展命令：\n/)
+  assert.doesNotMatch(text, /帮助导航|接下来可以|返回菜单 —/)
 })

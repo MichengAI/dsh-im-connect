@@ -1,4 +1,3 @@
-import { splitText } from './split.js'
 import type { Choice } from './choices.js'
 import { exportSession } from './session-export.js'
 import { replyText, withReplyLocale } from './command-locale.js'
@@ -129,20 +128,12 @@ export class ChatCommands {
           }
         }
         const navigation: { choices?: Choice[] } = {}
-        let text = await this.run(channel, msg, signal, navigation)
+        const text = await this.run(channel, msg, signal, navigation)
         if (!text) return text
         const command = /^\/([a-z][a-z0-9_-]*)/i.exec(msg.text.trim())?.[1]?.toLowerCase() ?? ''
         const current = this.router.lookup(channel.id, msg.kind ?? 'dm', msg.chatId)
         const choices = navigation.choices ?? commandNavigation(command, !!current)
         if (!choices.length) return text
-        if (command === 'help' && channel.sendChoices && this.showChoices) {
-          // 长帮助先按普通消息投递，短导航卡片不再承载正文，避免渠道容量差异。
-          for (const part of splitText(text, channel.maxMessageLength)) {
-            signal.throwIfAborted()
-            await channel.send(msg.chatId, part)
-          }
-          text = replyText('帮助导航')
-        }
         const fallback = text + related(replyText('接下来可以：'), ...choices.map(choice => `${choice.label} — ${choice.value}`))
         // 导航发送失败不能把已完成的命令改报失败；新会话的按钮绑定切换后的会话。
         if (channel.sendChoices && this.showChoices && !signal.aborted) {
