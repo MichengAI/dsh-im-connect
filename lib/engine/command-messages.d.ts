@@ -1,5 +1,10 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "\u4E5F\u53EF\u4F7F\u7528 /reasoning id:\u7B49\u7EA7ID\uFF1B\u5E8F\u53F7 15 \u5206\u949F\u5185\u6709\u6548\u3002": "You can also use /reasoning id:effort-ID. List numbers are valid for 15 minutes.";
+    readonly "\u7528\u6CD5\uFF1A/menu [sessions|workspaces|models|presets|reasoning] [\u9875\u7801]": "Usage: /menu [sessions|workspaces|models|presets|reasoning] [page]";
+    readonly "\u9009\u62E9\u5DF2\u8FC7\u671F\uFF0C\u6216\u4F1A\u8BDD\u3001\u6A21\u578B\u5DF2\u53D8\u5316\u3002\u8BF7\u53D1\u9001 /reasoning \u91CD\u65B0\u9009\u62E9\u3002": "This selection expired, or the session or model changed. Send /reasoning to choose again.";
+    readonly 恢复默认推理: "Use default reasoning";
+    readonly "\u6A21\u578B\uFF1A{0}\n\u5F53\u524D\u63A8\u7406\uFF1A{1}": "Model: {0}\nCurrent reasoning: {1}";
     readonly "\u7528\u6CD5\uFF1A/menu [sessions|workspaces|models|presets] [\u9875\u7801]": "Usage: /menu [sessions|workspaces|models|presets] [page]";
     readonly "\u65B0\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF1A{0}\uFF0C\u4F46\u672A\u80FD\u63A5\u7EED\u3002\u8BF7\u5728\u7F51\u9875\u68C0\u67E5\u5DE5\u4F5C\u533A\u540E\u53D1\u9001 /session {0}\uFF1B\u539F\u804A\u5929\u7ED1\u5B9A\u4FDD\u7559\u3002": "Session {0} was created but could not be connected. Check its workspace on the web, then send /session {0}. Your previous chat binding is kept.";
     readonly "\u5DF2\u4F7F\u7528\u9884\u8BBE {0} \u65B0\u5EFA\u5E76\u5207\u6362\u4F1A\u8BDD\uFF1A{1}": "Started and switched to session {1} with preset {0}.";

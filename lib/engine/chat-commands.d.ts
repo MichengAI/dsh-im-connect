@@ -13,6 +13,7 @@ export declare class ChatCommands {
     private readonly showChoices?;
     private readonly lifetime;
     private readonly choices;
+    private readonly reasoningChoices;
     constructor(host: CommandHost, router: SessionRouter, pending: (sessionId: string) => boolean, onSession?: (sessionId: string, msg: ImMessage) => void, showChoices?: ((channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, allowNumber?: boolean) => Promise<string>) | undefined);
     clear(): void;
     private service;
@@ -22,6 +23,7 @@ export declare class ChatCommands {
     private snapshot;
     private workspaces;
     private remember;
+    private reasoningChoice;
     private resolve;
     private idle;
     execute(channel: ChannelAdapter, msg: ImMessage, signal: AbortSignal): Promise<string>;

@@ -599,3 +599,64 @@ test('预设原生列表不提供损坏项，页面说明会新建会话', async
   assert.ok(!shown[3].some(c => c.value.includes('broken')))
   assert.ok(shown[3].length <= 6)
 })
+
+
+test('推理原生按钮绑定模型，旧按钮不能修改后来选择的模型', async () => {
+  let shown
+  const f = fixture({ channel: { sendChoices() {} }, showChoices: async (...args) => { shown = args; return '' } })
+  await f.run('/reasoning')
+  const action = shown[3].find(c => c.value.startsWith('/reasoning --choice '))
+  assert.ok(action)
+  f.services.sessionController.follow = async function *() { yield { records: [], projections: { values: { modelSelection: { next: { provider: 'p', model: 'other' } } } } } }
+  await assert.rejects(f.run(action.value), /模型已变化/)
+  assert.ok(!f.calls.some(c => c[0] === 'model'))
+})
+
+test('推理文字序号绑定会话，默认按钮不传旧等级', async () => {
+  const f = fixture()
+  assert.match(await f.run('/reasoning'), /1\. high/)
+  await f.run('/reasoning 1')
+  assert.equal(f.calls.find(c => c[0] === 'model')[1].reasoningEffort, 'high')
+  await f.run('/reasoning')
+  f.router.lookup = () => ({ sessionId: 'other' })
+  await assert.rejects(f.run('/reasoning 1'), /模型已变化/)
+  let shown
+  const native = fixture({ channel: { sendChoices() {} }, showChoices: async (...args) => { shown = args; return '' } })
+  await native.run('/reasoning')
+  const action = shown[3].find(c => /默认/.test(c.label))
+  await native.run(action.value)
+  assert.ok(!Object.hasOwn(native.calls.find(c => c[0] === 'model')[1], 'reasoningEffort'))
+})
+
+test('推理分页符合渠道容量，没有等级时不提供修改按钮', async () => {
+  const shown = []
+  const f = fixture({ channel: { sendChoices() {}, choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (...args) => { shown.push(args); return '' } })
+  const catalog = { default: { provider: 'p', model: 'm' }, groups: [{ id: 'p', models: [{ id: 'm', name: 'Model', reasoning: { efforts: Array.from({ length: 9 }, (_, i) => ({ id: `e${i}`, name: `Effort ${i}` })) } }] }] }
+  f.services.sessionController.modelCatalog = async () => catalog
+  await f.run('/reasoning')
+  await f.run('/menu reasoning 2')
+  assert.ok(shown.every(args => args[3].length <= 6))
+  assert.ok(shown[0][3].some(c => c.value === '/menu reasoning 2'))
+  catalog.groups[0].models[0].reasoning.efforts = []
+  await f.run('/reasoning')
+  assert.ok(!shown.at(-1)[3].some(c => c.value.startsWith('/reasoning --choice')))
+})
+
+
+test('原生渠道的推理数字参数执行选择，不被误当成翻页', async () => {
+  const f = fixture({ channel: { sendChoices() {} }, showChoices: async () => '' })
+  await f.run('/reasoning')
+  await f.run('/reasoning 1')
+  assert.equal(f.calls.find(c => c[0] === 'model')[1].reasoningEffort, 'high')
+})
+
+test('推理按钮不接受跨用户使用且只能消费一次', async () => {
+  let shown
+  const f = fixture({ channel: { sendChoices() {} }, showChoices: async (...args) => { shown = args; return '' } })
+  await f.run('/reasoning')
+  const action = shown[3][0].value
+  await assert.rejects(f.run(action, { userId: 'other' }), /选择已过期/)
+  await f.run(action)
+  await assert.rejects(f.run(action), /选择已过期/)
+  assert.equal(f.calls.filter(c => c[0] === 'model').length, 1)
+})

@@ -42,12 +42,13 @@ export const chatControlHelp = () => [
 export class ChatCommands {
   private readonly lifetime = new AsyncLocalStorage<AbortSignal>()
   private readonly choices = new Map<string, { values: string[]; time: number }>()
+  private readonly reasoningChoices = new Map<string, { scope: string; sessionId: string; provider: string; model: string; effort?: string; time: number }>()
   constructor(private readonly host: CommandHost, private readonly router: SessionRouter,
     private readonly pending: (sessionId: string) => boolean,
     private readonly onSession: (sessionId: string, msg: ImMessage) => void = () => { },
     private readonly showChoices?: (channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, allowNumber?: boolean) => Promise<string>) { }
 
-  clear(): void { this.choices.clear() }
+  clear(): void { this.choices.clear(); this.reasoningChoices.clear() }
 
   private service(name: string): Record<string, (...args: unknown[]) => unknown> {
     const value = this.host.get(name)
@@ -91,11 +92,18 @@ export class ChatCommands {
     this.choices.set(key, { values, time: Date.now() })
   }
 
+  private reasoningChoice(scope: string, sessionId: string, selected: Selection, effort?: string): string {
+    if (this.reasoningChoices.size >= 512) this.reasoningChoices.delete(this.reasoningChoices.keys().next().value!)
+    const token = randomUUID()
+    this.reasoningChoices.set(token, { scope, sessionId, provider: selected.provider, model: selected.model, effort, time: Date.now() })
+    return `--choice ${token}`
+  }
+
   private resolve(key: string, value: string): string {
     if (!/^\d+$/.test(value)) return value
     const choice = this.choices.get(key)
     const selected = choice && Date.now() - choice.time < 15 * 60_000 ? choice.values[Number(value) - 1] : undefined
-    if (!selected) throw new Error(replyText('序号无效或已过期，尚未切换。请发送 /{0} 获取新列表。', key.endsWith(':presets') ? 'presets' : key.endsWith(':models') ? 'models' : key.endsWith(':workspaces') ? 'workspaces' : 'sessions'))
+    if (!selected) throw new Error(replyText('序号无效或已过期，尚未切换。请发送 /{0} 获取新列表。', key.endsWith(':reasoning') ? 'reasoning' : key.endsWith(':presets') ? 'presets' : key.endsWith(':models') ? 'models' : key.endsWith(':workspaces') ? 'workspaces' : 'sessions'))
     return selected
   }
 
@@ -110,10 +118,10 @@ export class ChatCommands {
     return withReplyLocale(this.host, () => this.lifetime.run(signal, async () => {
       try {
         // 原生渠道直接展示选择页，文字渠道沿用原列表及序号契约。
-        const list = /^\/(sessions|sessionlist|workspaces|workspacelist|models|presets|presetlist)(?:\s+(\d+))?\s*$/i.exec(msg.text.trim())
-        if (list && channel.sendChoices && this.showChoices && !msg.media?.length) {
+        const list = /^\/(sessions|sessionlist|workspaces|workspacelist|models|presets|presetlist|reasoning|reasonings|reasoninglist)(?:\s+(\d+))?\s*$/i.exec(msg.text.trim())
+        if (list && !(list[1]!.toLowerCase().startsWith('reasoning') && list[2]) && channel.sendChoices && this.showChoices && !msg.media?.length) {
           const name = list[1]!.toLowerCase()
-          const section = name === 'sessionlist' ? 'sessions' : name === 'workspacelist' ? 'workspaces' : name === 'presetlist' ? 'presets' : name
+          const section = name === 'sessionlist' ? 'sessions' : name === 'workspacelist' ? 'workspaces' : name === 'presetlist' ? 'presets' : name === 'reasonings' || name === 'reasoninglist' ? 'reasoning' : name
           // 尚无会话时 /models 仍可浏览目录，不把查询变成必须创建会话的操作。
           if (section !== 'models' || this.router.lookup(channel.id, msg.kind ?? 'dm', msg.chatId)) {
             msg = { ...msg, text: `/menu ${section} ${list[2] || '1'}` }
@@ -188,7 +196,7 @@ export class ChatCommands {
       const rootPage = /^\d+$/.test(parts[0] ?? '')
       const [section = '', pageText = '1', ...extra] = rootPage ? ['', ...parts] : parts
       const page = Number(pageText)
-      if (extra.length || !['', 'sessions', 'workspaces', 'models', 'presets'].includes(section) || !Number.isSafeInteger(page) || page < 1) throw new Error(replyText('用法：/menu [sessions|workspaces|models|presets] [页码]'))
+      if (extra.length || !['', 'sessions', 'workspaces', 'models', 'presets', 'reasoning'].includes(section) || !Number.isSafeInteger(page) || page < 1) throw new Error(replyText('用法：/menu [sessions|workspaces|models|presets|reasoning] [页码]'))
       let choices: Choice[] = []
       let text = replyText('助手操作菜单')
       if (section === 'sessions') {
@@ -198,6 +206,15 @@ export class ChatCommands {
           && !this.router.isBoundElsewhere?.(row.sessionId, channel.id, kind, msg.chatId)).map(row => ({ label: oneLine(row.projections?.values?.title || row.sessionId), value: `/session ${row.sessionId}` }))
       } else if (section === 'workspaces') {
         choices = (await this.workspaces(signal)).items.map(item => ({ label: oneLine(item.title ? `${item.title} · ${item.path}` : item.path), value: `/workspace ${item.path}` }))
+      } else if (section === 'reasoning') {
+        const sessionId = requireCurrent()
+        const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
+        const selected = (await this.snapshot(sessionId, signal)).projections?.values?.modelSelection?.next || catalog.default
+        const model = catalog.groups.find(group => group.id === selected.provider)?.models.find(item => item.id === selected.model)
+        const efforts = model?.reasoning?.efforts || []
+        text = replyText('模型：{0}\n当前推理：{1}', oneLine(model?.name || selected.model), selected.reasoningEffort || replyText('默认'))
+        choices = efforts.map(item => ({ label: oneLine(item.name || item.id) + (item.id === selected.reasoningEffort ? replyText('〔当前〕') : ''), value: `/reasoning ${this.reasoningChoice(scope, sessionId, selected, item.id)}` }))
+        if (efforts.length) choices.push({ label: replyText('恢复默认推理'), value: `/reasoning ${this.reasoningChoice(scope, sessionId, selected)}` })
       } else if (section === 'presets') {
         choices = (await this.presets()).filter(item => !item.broken).map(item => ({ label: oneLine(item.name || item.id) + (item.isDefault ? replyText('〔默认〕') : ''), value: `/preset id:${item.id}` }))
         choices.push({ label: replyText('跟随默认预设'), value: '/preset --default' })
@@ -221,21 +238,23 @@ export class ChatCommands {
         const pageSize = channel.choiceLimits ? Math.max(1, channel.choiceLimits.maxButtons - 3) : 8
         const pages = Math.max(1, Math.ceil(choices.length / pageSize))
         if (page > pages) throw new Error(replyText('没有第 {0} 页，共 {1} 页。', page, pages))
-        const heading = section === 'sessions' ? replyText('选择会话') : section === 'workspaces' ? replyText('选择工作区') : section === 'presets' ? replyText('选择预设') : section === 'models' ? replyText('选择模型') : replyText('助手操作菜单')
+        const heading = section === 'sessions' ? replyText('选择会话') : section === 'workspaces' ? replyText('选择工作区') : section === 'reasoning' ? text : section === 'presets' ? replyText('选择预设') : section === 'models' ? replyText('选择模型') : replyText('助手操作菜单')
         // 企业微信正文空间有限，菜单展示导航，配置详情通过 /status 查询。
         text = channel.choiceLimits || section ? heading : text
         text += ` · ${page}/${pages}`
         if (section === 'presets') text += '\n' + replyText('选择后在当前工作区新建并切换会话，旧会话保留。账号默认预设不变。')
         if (!choices.length) text += '\n' + replyText('暂无可选项，可返回菜单选择其他操作。')
         choices = choices.slice((page - 1) * pageSize, page * pageSize)
+        if (section === 'reasoning') choices = choices.map((choice, i) => ({ ...choice, displayValue: `/reasoning ${i + 1}` }))
         if (section) this.remember(`${scope}:${section}`, choices.map(choice => choice.value.slice(choice.value.indexOf(' ') + 1)))
         const pageCommand = section ? `/menu ${section}` : '/menu'
         if (page > 1) choices.push({ label: replyText('上一页'), value: `${pageCommand} ${page - 1}` })
         if (page < pages) choices.push({ label: replyText('下一页'), value: `${pageCommand} ${page + 1}` })
+        if (section === 'reasoning' && pages === 1) choices.push({ label: replyText('选择模型'), value: '/menu models' })
         if (section || page > 1) choices.push({ label: replyText('返回菜单'), value: '/menu' })
       }
       signal.throwIfAborted()
-      if (!this.showChoices) return text + '\n' + choices.map(choice => `${choice.label}：${choice.value}`).join('\n')
+      if (!this.showChoices) return text + '\n' + choices.map(choice => `${choice.label}：${choice.displayValue ?? choice.value}`).join('\n')
       return this.showChoices(channel, msg, text, choices, current?.sessionId)
     }
     if (command === 'export') {
@@ -510,10 +529,22 @@ export class ChatCommands {
       }
       const model = catalog.groups.find((group) => group.id === selected.provider)?.models.find((item) => item.id === selected.model)
       const efforts = model?.reasoning?.efforts || []
-      if (!input || command !== 'reasoning') return replyText('模型：{0}\n当前推理：{1}\n{2}', oneLine(model?.name || selected.model), selected.reasoningEffort || replyText('默认'), efforts.length ? replyText('可选等级：\n') + efforts.map((item) => `${item.id} — ${oneLine(item.name)}`).join('\n') : replyText('当前模型没有可选推理等级。')) + related(...(efforts.length ? [replyText('切换：/reasoning {0}', efforts[0]!.id), replyText('恢复默认：/reasoning --default'), replyText('当前模型：/model')] : [replyText('当前模型：/model'), replyText('选择其他模型：/models')]))
-      if (input !== '--default' && !efforts.some((item) => item.id === input)) throw new Error(replyText('推理等级无效，请先 /reasoning 查看。'))
-      await this.call('sessionController', 'selectModel', { sessionId, provider: selected.provider, model: selected.model, ...(input === '--default' ? {} : { reasoningEffort: input }) })
-      return replyText('推理等级已设为：{0}\n{1}', input === '--default' ? replyText('默认') : input, modelDefaultHint()) + related(replyText('查看当前模型：/model'), replyText('查看推理选项：/reasoning'))
+      if (!input || command !== 'reasoning') {
+        this.remember(scope + ':reasoning', efforts.map(item => this.reasoningChoice(scope, sessionId, selected, item.id)))
+        return replyText('模型：{0}\n当前推理：{1}\n{2}', oneLine(model?.name || selected.model), selected.reasoningEffort || replyText('默认'), efforts.length ? replyText('可选等级：\n') + efforts.map((item, i) => `${i + 1}. ${item.id} — ${oneLine(item.name)}`).join('\n') : replyText('当前模型没有可选推理等级。')) + related(...(efforts.length ? [replyText('切换：/reasoning {0}', '1'), replyText('也可使用 /reasoning id:等级ID；序号 15 分钟内有效。'), replyText('恢复默认：/reasoning --default'), replyText('当前模型：/model')] : [replyText('当前模型：/model'), replyText('选择其他模型：/models')]))
+      }
+      const resolved = this.resolve(scope + ':reasoning', input)
+      let effort = resolved.startsWith('id:') ? resolved.slice(3) : resolved
+      if (resolved.startsWith('--choice ')) {
+        const token = resolved.slice(9)
+        const choice = this.reasoningChoices.get(token)
+        if (!choice || choice.scope !== scope || choice.sessionId !== sessionId || choice.provider !== selected.provider || choice.model !== selected.model || Date.now() - choice.time >= 15 * 60_000) throw new Error(replyText('选择已过期，或会话、模型已变化。请发送 /reasoning 重新选择。'))
+        effort = choice.effort ?? '--default'
+        this.reasoningChoices.delete(token)
+      }
+      if (effort !== '--default' && !efforts.some(item => item.id === effort)) throw new Error(replyText('推理等级无效，请先 /reasoning 查看。'))
+      await this.call('sessionController', 'selectModel', { sessionId, provider: selected.provider, model: selected.model, ...(effort === '--default' ? {} : { reasoningEffort: effort }) })
+      return replyText('推理等级已设为：{0}\n{1}', effort === '--default' ? replyText('默认') : effort, modelDefaultHint()) + related(replyText('查看当前模型：/model'), replyText('查看推理选项：/reasoning'))
     }
     if (command === 'history') {
       const snapshot = await this.snapshot(sessionId, signal)

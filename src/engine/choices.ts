@@ -3,7 +3,8 @@ import type { ChannelAdapter, ChoiceReceipt, ImMessage } from './types.js'
 import { replyText } from './command-locale.js'
 import { ChoiceSendError } from './choice-delivery.js'
 
-export interface Choice { label: string; value: string }
+/** displayValue 仅用于文字提示；执行始终读取服务端保存的 value。 */
+export interface Choice { label: string; value: string; displayValue?: string }
 type Entry = { key: string; session?: string; expires: number; choices: Choice[]; valid: () => boolean; allowNumber: boolean; receipt?: ChoiceReceipt; closedText?: string; expiredText: string; selectedTexts: string[] }
 /** 所有按钮只携带随机索引；服务端保留动作，并绑定账号、聊天、操作者和会话。 */
 export class ChoiceStore {
@@ -40,7 +41,7 @@ export class ChoiceStore {
     }
     this.entries.set(token, entry)
     this.scopes.set(key, token)
-    const body = text + '\n\n' + choices.map((choice, i) => `${allowNumber ? `${i + 1}. ` : ''}${choice.label}${choice.value.startsWith('/') ? ` — ${choice.value}` : ''}`).join('\n') + '\n\n' + hint
+    const body = text + '\n\n' + choices.map((choice, i) => `${allowNumber ? `${i + 1}. ` : ''}${choice.label}${choice.value.startsWith('/') ? ` — ${choice.displayValue ?? choice.value}` : ''}`).join('\n') + '\n\n' + hint
     const cardBody = allowNumber ? text + '\n\n' + choices.map((choice, i) => `${i + 1}. ${choice.label}`).join('\n') + '\n\n' + hint : body
     if (channel.sendChoices && (!channel.choiceLimits || (choices.length <= channel.choiceLimits.maxButtons && cardBody.length <= channel.choiceLimits.maxTextLength))) {
       try {

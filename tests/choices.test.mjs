@@ -128,3 +128,13 @@ test('回调时重新判断交互有效性，问题优先于菜单数字', async
   valid = false
   assert.equal(store.resolve('bot', { ...msg, actionToken: token }, 's'), '')
 })
+
+
+test('文字降级显示易读指令，执行仍使用绑定动作', async () => {
+  const store = new ChoiceStore()
+  const msg = { chatId: 'chat', userId: 'u', text: '/reasoning' }
+  const text = await store.show({ id: 'bot' }, msg, 'Reasoning', [{ label: 'High', value: '/reasoning --choice opaque', displayValue: '/reasoning 1' }], 's')
+  assert.match(text, /\/reasoning 1/)
+  assert.doesNotMatch(text, /opaque/)
+  assert.equal(store.resolve('bot', { ...msg, text: '1' }, 's'), '/reasoning --choice opaque')
+})

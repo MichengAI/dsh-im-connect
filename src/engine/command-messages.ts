@@ -1,5 +1,10 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
+  "也可使用 /reasoning id:等级ID；序号 15 分钟内有效。": "You can also use /reasoning id:effort-ID. List numbers are valid for 15 minutes.",
+  "用法：/menu [sessions|workspaces|models|presets|reasoning] [页码]": "Usage: /menu [sessions|workspaces|models|presets|reasoning] [page]",
+  "选择已过期，或会话、模型已变化。请发送 /reasoning 重新选择。": "This selection expired, or the session or model changed. Send /reasoning to choose again.",
+  "恢复默认推理": "Use default reasoning",
+  "模型：{0}\n当前推理：{1}": "Model: {0}\nCurrent reasoning: {1}",
   "用法：/menu [sessions|workspaces|models|presets] [页码]": "Usage: /menu [sessions|workspaces|models|presets] [page]",
   "新会话已创建：{0}，但未能接续。请在网页检查工作区后发送 /session {0}；原聊天绑定保留。": "Session {0} was created but could not be connected. Check its workspace on the web, then send /session {0}. Your previous chat binding is kept.",
   "已使用预设 {0} 新建并切换会话：{1}": "Started and switched to session {1} with preset {0}.",

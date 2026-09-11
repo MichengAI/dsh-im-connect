@@ -1,7 +1,9 @@
 import type { ChannelAdapter, ImMessage } from './types.js';
+/** displayValue 仅用于文字提示；执行始终读取服务端保存的 value。 */
 export interface Choice {
     label: string;
     value: string;
+    displayValue?: string;
 }
 /** 所有按钮只携带随机索引；服务端保留动作，并绑定账号、聊天、操作者和会话。 */
 export declare class ChoiceStore {
