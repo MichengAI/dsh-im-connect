@@ -68,14 +68,28 @@ export class MessageProgress {
   }
 }
 
+export interface TurnCompletion { sessionId: string; turn: number; items: MessageProgress[]; status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed' }
+
 type Group = { requestId: string; sessionId: string; items: MessageProgress[]; turn?: number; revision?: number; waiting?: number }
 type Turn = { groups: Group[]; deliveries: Promise<boolean>[] }
 
 /** 以 user/message 的 id 或 source.rpcId 认领回合，不按聊天或 FIFO 猜测任务归属。 */
 export class ProgressTracker {
   private readonly groups = new Set<Group>()
+  private readonly ended = new Set<string>()
   private readonly turns = new Map<string, Turn>()
   private readonly currentTurn = new Map<string, number>()
+
+  constructor(private readonly onComplete: (result: TurnCompletion) => void = () => {}) {}
+
+  hasTurn(sessionId: string, turn: number | undefined): boolean {
+    return turn !== undefined && (this.turns.has(`${sessionId}:${turn}`) || this.ended.has(`${sessionId}:${turn}`))
+  }
+
+  hasNewerTurn(sessionId: string, turn: number): boolean {
+    const current = this.currentTurn.get(sessionId)
+    return current !== undefined && current > turn
+  }
 
   begin(sessionId: string, requestId: string, items: MessageProgress[]): () => void {
     for (const old of this.groups) if (old.items.every(item => item.isFinished())) this.groups.delete(old)
@@ -107,15 +121,22 @@ export class ProgressTracker {
       const active = this.turns.get(key)
       if (!active) return
       this.turns.delete(key)
+      if (this.ended.size >= 512) this.ended.delete(this.ended.values().next().value!)
+      this.ended.add(key)
       void Promise.all(active.deliveries).then(results => {
         const state = data?.reason?.kind === 'error' ? 'error'
           : data?.reason?.kind !== 'completed' ? 'cancelled'
             : results.length === 0 ? 'cancelled' : results.every(Boolean) ? 'success' : 'error'
-        for (const group of active.groups) {
+        const superseded = this.hasNewerTurn(sessionId, data.turn)
+        const live = active.groups.filter(group => this.groups.has(group) && group.items.some(item => !item.isFinished()))
+        for (const group of live) {
           for (const item of group.items) item.finish(state)
           this.groups.delete(group)
         }
         if (![...this.groups].some(group => group.sessionId === sessionId)) this.currentTurn.delete(sessionId)
+        if (live.length && !superseded) this.onComplete({ sessionId, turn: data.turn, items: live.flatMap(group => group.items),
+          status: data?.reason?.kind === 'error' ? 'error' : data?.reason?.kind !== 'completed' ? 'cancelled'
+            : results.length === 0 ? 'empty' : results.every(Boolean) ? 'completed' : 'delivery-failed' })
       })
     }
   }

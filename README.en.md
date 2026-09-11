@@ -126,6 +126,8 @@ Agent presets: `/presets` (alias `/presetlist`) lists presets; `/preset` shows t
 
 Reasoning: `/reasoning` (aliases `/reasonings`, `/reasoninglist`) lists levels for the current model. Use `/reasoning number` or `/reasoning id:effort-ID`, or `/reasoning --default` to reset. Native channels offer paginated buttons. List selections are bound to the session and model; refresh the list after switching. Model and reasoning updates follow Chat’s default-selection persistence rules.
 
+Work started by an IM message gets one result notice after response and file delivery finishes, with links to recent messages, status, session export and the menu. Failures, stops and delivery failures are distinguished; tasks and files are not retried automatically. When commands are disabled, notices are text-only. Ordinary numbers remain chat input. Approvals and questions keep their existing prompts. Completion navigation is suppressed after switching sessions, disabling the account or starting a later turn.
+
 ## Message progress
 
 Regular chat messages follow the actual task state. Commands continue to use text replies.

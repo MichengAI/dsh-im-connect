@@ -1,6 +1,6 @@
 import { FileInputError, filePromptParts } from './file-input.js'
 import { ChoiceStore, type Choice } from './choices.js'
-import { MessageProgress, ProgressTracker } from './message-progress.js'
+import { MessageProgress, ProgressTracker, type TurnCompletion } from './message-progress.js'
 import { replyText, withReplyLocale } from './command-locale.js'
 import { FileDelivery, type DeliverySession } from './file-delivery.js'
 import { ChatCommands } from './chat-commands.js'
@@ -82,7 +82,9 @@ export class ImEngine {
   private disposed = false
   private readonly questionSelections = new Map<string, Set<number>>()
   private readonly choices: ChoiceStore
-  private readonly progress = new ProgressTracker()
+  private readonly progress = new ProgressTracker(result => {
+    void this.notifyCompletion(result).catch(() => this.log('[im-progress] 完成通知发送失败，不重试任务'))
+  })
   private readonly mergedMessages = new Map<string, ImMessage[]>()
   private readonly fileDelivery: FileDelivery
   private readonly chatCommands: ChatCommands
@@ -801,9 +803,10 @@ export class ImEngine {
 
   private onSessionEvent(session: DeliverySession, event: { type?: string; surfaceOp?: unknown; data?: any }): Promise<void> {
     const id = String(session.id ?? '')
+    const trackedEnd = event.type === 'turn/end' && this.progress.hasTurn(id, event.data?.turn)
     this.progress.event(id, event)
     const outcome = { ok: true }
-    const work = this.processSessionEvent(session, event, outcome)
+    const work = this.processSessionEvent(session, event, outcome, trackedEnd)
     if (event.type === 'assistant/message' && event.surfaceOp === 'append'
       && !event.data?.message?.content?.some((part: { type?: string }) => part.type === 'tool-call')) {
       this.progress.delivery(id, event.data?.turn, work.then(() => outcome.ok, () => false))
@@ -815,6 +818,7 @@ export class ImEngine {
     session: DeliverySession,
     event: { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } },
     outcome: { ok: boolean },
+    trackedEnd = false,
   ): Promise<void> {
     const sessionId = session.id ? String(session.id) : ''
     if (!this.router.bindingForSession(sessionId)) return
@@ -839,7 +843,7 @@ export class ImEngine {
     if (event.type === 'turn/end') {
       const reason = (event.data as { reason?: { kind?: string; error?: { message?: string } } } | undefined)?.reason
       this.log(`[${channel.id}] 回合结束 ${sessionId}: ${reason?.kind ?? 'ok'}`)
-      if (reason?.kind === 'error') {
+      if (reason?.kind === 'error' && !trackedEnd) {
         const detail = reason.error?.message || '模型调用失败'
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
         const failed = '助手没有生成回复，请查看本机日志。'
@@ -899,6 +903,52 @@ export class ImEngine {
         outcome.ok = outcome.ok && filesOk
       }
     }
+  }
+
+  /** 只通知本插件实际认领的请求；正文、文件发送均结束后再提供下一步。 */
+  private async notifyCompletion(result: TurnCompletion): Promise<void> {
+    const first = result.items[0]
+    if (!first) return
+    const { channel, message } = first
+    const valid = () => {
+      const current = this.router.lookup(channel.id, message.kind ?? 'dm', message.chatId)
+      return !this.disposed && this.channels.get(channel.id) === channel && current?.sessionId === result.sessionId
+        && !this.progress.hasNewerTurn(result.sessionId, result.turn)
+        && !this.questions.has(result.sessionId) && !this.broker.has(result.sessionId)
+    }
+    if (!valid()) return
+    await withReplyLocale(this.ctx, async () => {
+      const text = ({
+        completed: replyText('本次处理已完成，可在上方查看回复或成果文件。直接发消息即可继续。'),
+        empty: replyText('本次处理已结束，未返回可投递的结果。可补充要求后继续。'),
+        error: replyText('本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。'),
+        cancelled: replyText('本次处理已停止，已返回的内容保留。可直接发消息继续。'),
+        'delivery-failed': replyText('本次处理已结束，但部分回复或文件未能发送。请在网页查看完整结果；不会自动重复执行任务。'),
+      })[result.status]
+      const allowed = canExecuteCommand(this.resolveCommandPermissions(channel.id), message.kind ?? 'dm', message.userId)
+      const choices: Choice[] = allowed ? [
+        { label: replyText('最近记录'), value: '/history' },
+        { label: replyText('查看状态'), value: '/status' },
+        ...(channel.sendFile ? [{ label: replyText('导出会话'), value: '/export' }] : []),
+        { label: replyText('返回菜单'), value: '/menu' },
+      ] : []
+      // 完成提示不接管纯数字消息，也不自动重发结果或重新执行任务。
+      if (!valid()) return
+      if (result.status === 'error' || result.status === 'cancelled' || result.status === 'empty') {
+        const taken = await this.streams.take(`${channel.id}:${message.chatId}`)
+        if (!valid()) return
+        if (taken.stream) {
+          const body = text + (choices.length ? '\n\n' + choices.map(choice => `${choice.label} — ${choice.value}`).join('\n') : '')
+          // 已有回复卡片直接收口；收口结果不明时不再补发一张完成卡。
+          await taken.stream.finish(body)
+          return
+        }
+      }
+      if (!choices.length) { await this.deliver(channel, message.chatId, text); return }
+      const fallback = await this.choices.show(channel, message, text, choices, result.sessionId, valid,
+        replyText('点击按钮或发送对应命令；按钮 15 分钟内有效，普通文字继续聊天。'), false)
+      if (fallback && valid()) await this.deliver(channel, message.chatId, fallback)
+    })
   }
 
   /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */

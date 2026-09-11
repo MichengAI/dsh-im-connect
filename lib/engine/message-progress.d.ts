@@ -21,11 +21,22 @@ export declare class MessageProgress {
     settled(): Promise<void>;
     private transition;
 }
+export interface TurnCompletion {
+    sessionId: string;
+    turn: number;
+    items: MessageProgress[];
+    status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed';
+}
 /** 以 user/message 的 id 或 source.rpcId 认领回合，不按聊天或 FIFO 猜测任务归属。 */
 export declare class ProgressTracker {
+    private readonly onComplete;
     private readonly groups;
+    private readonly ended;
     private readonly turns;
     private readonly currentTurn;
+    constructor(onComplete?: (result: TurnCompletion) => void);
+    hasTurn(sessionId: string, turn: number | undefined): boolean;
+    hasNewerTurn(sessionId: string, turn: number): boolean;
     begin(sessionId: string, requestId: string, items: MessageProgress[]): () => void;
     event(sessionId: string, event: {
         type?: string;

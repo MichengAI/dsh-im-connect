@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { ImEngine } from '../lib/engine/gateway.js'
 import { SessionMapStore } from '../lib/engine/session-store.js'
+import { MessageProgress } from '../lib/engine/message-progress.js'
 import { SeenStore } from '../lib/engine/seen-store.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -117,4 +118,46 @@ for (const mode of ['text', 'empty', 'stream']) test(`引擎 ${mode} 回复后�
     assert.deepEqual(delivered.at(-1), ['file', 'report.pdf', 'file'])
     assert.equal(delivered.length, mode === 'empty' ? 1 : 2)
   } finally { engine.dispose() }
+})
+
+
+for (const mode of ['completed', 'error', 'disabled', 'switched', 'waiting', 'newer', 'stream-error']) test(`完成导航不重复正文并遵循权限与当前绑定：${mode}`, async t => {
+  const { engine, handlers, sessionId } = makeFailingEngine(t)
+  t.after(() => engine.dispose())
+  const sent = [], cards = []
+  const channel = { id: 'qq', label: 'QQ', maxMessageLength: 2000, start() {}, stop() {}, setMessageHandler() {}, status: () => 'connected',
+    send: async (_, text) => { sent.push(text) }, sendChoices: async (_, text, buttons) => { cards.push({ text, buttons }) },
+    ...(mode === 'stream-error' ? { beginReply: async () => ({ update: async () => {}, finish: async text => sent.push(text) }) } : {}),
+  }
+  engine.register(channel)
+  engine.ctx.get = () => undefined
+  engine.resolveCommandPermissions = () => ({ dm: { enabled: mode !== 'disabled', users: [] }, group: { enabled: true, users: [] } })
+  const item = new MessageProgress(channel, { chatId: 'user-1', userId: 'u', kind: 'dm', messageId: 'm' }, engine.ctx, () => {})
+  engine.progress.begin(sessionId, 'req', [item])
+  const emit = event => handlers['session/event']({ id: sessionId }, event)
+  await emit({ type: 'turn/start', data: { turn: 1 } })
+  await emit({ type: 'user/message', surfaceOp: 'append', data: { id: 'req' } })
+  if (mode === 'stream-error') {
+    await emit({ type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text: 'partial' } } })
+    await sleep(10)
+  } else if (mode !== 'error') await emit({ type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, message: { content: [{ type: 'text', text: 'Answer' }] } } })
+  if (mode === 'switched') engine.router.lookup = () => ({ sessionId: 'new' })
+  if (mode === 'waiting') engine.questions.has = () => true
+  if (mode === 'newer') engine.progress.event(sessionId, { type: 'turn/start', data: { turn: 2 } })
+  const end = { type: 'turn/end', data: { turn: 1, reason: { kind: mode.includes('error') ? 'error' : 'completed' } } }
+  await emit(end)
+  await emit(end)
+  await sleep(20)
+  if (['switched', 'waiting', 'newer'].includes(mode)) { assert.equal(cards.length, 0); assert.deepEqual(sent, ['Answer']); return }
+  if (mode === 'disabled' || mode === 'stream-error') {
+    assert.equal(cards.length, 0)
+    assert.match(sent.at(-1), mode === 'disabled' ? /已完成/ : /处理失败/)
+    if (mode === 'disabled') assert.doesNotMatch(sent.at(-1), /\/history/)
+  } else {
+    assert.equal(cards.length, 1)
+    assert.match(cards[0].text, mode === 'error' ? /处理失败/ : /已完成/)
+    assert.match(cards[0].text, /\/history/)
+    assert.ok(!sent.some(text => text.includes('助手没有生成回复')))
+    assert.equal(engine.choices.resolve('qq', { chatId: 'user-1', userId: 'u', kind: 'dm', text: '1' }, sessionId), undefined)
+  }
 })

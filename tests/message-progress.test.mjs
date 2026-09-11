@@ -144,3 +144,30 @@ test('超时状态的迟到响应不会撤销已经显示的完成标签', async
   late('processing'); await tick()
   assert.equal(f.calls.some(c => c[0] === 'remove'), false)
 })
+
+
+test('完成通知等待投递且同一回合只触发一次，取消后不迟到通知', async t => {
+  const notices = []
+  const tracker = new ProgressTracker(result => { notices.push(result) })
+  const item = new MessageProgress({ id: 'bot' }, { chatId: 'chat' }, { get() {} }, () => {})
+  t.after(() => { tracker.cancel(); item.finish('cleared') })
+  tracker.begin('s', 'request', [item])
+  tracker.event('s', { type: 'turn/start', data: { turn: 1 } })
+  tracker.event('s', { type: 'user/message', surfaceOp: 'append', data: { id: 'request' } })
+  let release
+  tracker.delivery('s', 1, new Promise(resolve => { release = resolve }))
+  tracker.event('s', { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } })
+  tracker.event('s', { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } })
+  await tick(); assert.equal(notices.length, 0)
+  release(false); await tick()
+  assert.equal(notices.length, 1)
+  assert.equal(notices[0].status, 'delivery-failed')
+  const second = new MessageProgress({ id: 'bot' }, { chatId: 'chat' }, { get() {} }, () => {})
+  tracker.begin('s', 'second', [second])
+  tracker.event('s', { type: 'turn/start', data: { turn: 2 } })
+  tracker.event('s', { type: 'user/message', surfaceOp: 'append', data: { id: 'second' } })
+  tracker.delivery('s', 2, new Promise(resolve => { release = resolve }))
+  tracker.event('s', { type: 'turn/end', data: { turn: 2, reason: { kind: 'completed' } } })
+  tracker.cancel(); release(true); await tick()
+  assert.equal(notices.length, 1)
+})
