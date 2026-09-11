@@ -75,6 +75,23 @@ function makeFailingEngine(t) {
   return { engine, handlers, sendCalls, beginReplyCalls, logs, sessionId }
 }
 
+test('新版 Agent 增量只转发文本，未绑定会话不回传', async t => {
+  const { engine, handlers, sessionId } = makeFailingEngine(t)
+  const updates = []
+  engine.register({ id: 'qq', label: 'QQ', maxMessageLength: 2000, start() {}, stop() {}, setMessageHandler() {}, status: () => 'connected',
+    send: async () => {}, beginReply: async () => ({ update: async text => updates.push(text), finish: async () => {} }),
+  })
+  try {
+    const emit = (id, chunk) => handlers['agent/assistant-stream']({ agent: { session: { id } }, frame: { type: 'chunk', chunk } })
+    emit('unbound', { type: 'text-delta', text: 'secret' })
+    emit(sessionId, { type: 'reasoning-delta', text: 'private' })
+    emit(sessionId, { type: 'text-delta', text: '第一段' })
+    emit(sessionId, { type: 'text-delta', text: '第二段' })
+    await waitFor(() => updates.length === 2)
+    assert.deepEqual(updates, ['第一段', '第一段第二段'])
+  } finally { engine.dispose() }
+})
+
 test('流式收口未知不自动兜底，紧随其后的重复助手消息也不重发', async (t) => {
   const { engine, handlers, sendCalls, beginReplyCalls, sessionId } = makeFailingEngine(t)
   try {

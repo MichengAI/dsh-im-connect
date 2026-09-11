@@ -248,6 +248,7 @@ export const commandEnglish = {
   "当前目标仍处于活跃状态，请用 /goal pause 暂停目标。":
     "The current goal is still active. Use /goal pause to pause it.",
   "当前没有正在执行的任务。": "No task is running.",
+  "暂时无法确认当前会话的运行状态，未能请求停止。请用 /status 查看，或到网页检查会话。": "Unable to confirm this session's running status. Stop was not requested. Check /status or open the session on the web.",
   "已请求停止当前运行；排队消息保留，可用 /queue 查看。":
     "Stop requested. Queued messages are preserved; view them with /queue.",
   "确认运行状态：/status": "Check running status: /status",

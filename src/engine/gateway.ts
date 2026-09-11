@@ -154,6 +154,12 @@ export class ImEngine {
       this.disposeEvents.push(on('session/event', (...args: unknown[]) => {
         void this.onSessionEvent(args[0] as { id?: string }, args[1] as { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } })
       }, { global: true }))
+      // 新版宿主将增量移出持久化事件；复用同一投递入口的绑定、准入与冷回合检查。
+      this.disposeEvents.push(on('agent/assistant-stream', (...args: unknown[]) => {
+        const payload = args[0] as { agent?: { session?: { id?: string } }; frame?: { type?: string; chunk?: { type?: string; text?: string } } } | undefined
+        if (!payload?.agent?.session?.id || payload.frame?.type !== 'chunk' || !isAssistantTextDelta(payload.frame.chunk)) return
+        void this.onSessionEvent(payload.agent.session, { type: 'assistant/chunk', data: { chunk: payload.frame.chunk } })
+      }, { global: true }))
       this.disposeEvents.push(on('session/disposed', (...args: unknown[]) => {
         const id = String((args[0] as { id?: string } | undefined)?.id ?? '')
         if (id === '') return

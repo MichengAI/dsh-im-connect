@@ -463,8 +463,16 @@ test('冷会话停止仅在宿主确认空闲时返回空闲，不激活 Agent',
   assert.match(await f.run('/stop'), /No task is running/)
   for (const running of [true, undefined]) {
     f.rows[0].running = running
-    await assert.rejects(f.run('/stop'), /not attached/)
+    await assert.rejects(f.run('/stop'), /Unable to confirm.*\/status/)
   }
+  const list = f.services.sessionController.list
+  for (const unavailable of [false, true]) {
+    f.services.sessionController.list = async () => { if (unavailable) throw new Error('unavailable'); return { items: [] } }
+    await assert.rejects(f.run('/stop'), /Unable to confirm.*\/status/)
+  }
+  f.services.sessionController.list = list
+  f.services.settings = { get: () => ({ preference: 'zh' }) }
+  await assert.rejects(f.run('/stop'), /暂时无法确认.*\/status/)
   f.rows[0].running = false
   f.services.sessionController.cancel = async () => { throw new Error('transport failed') }
   await assert.rejects(f.run('/stop'), /transport failed/)

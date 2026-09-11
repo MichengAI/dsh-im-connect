@@ -4,6 +4,14 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.44 - 2026-09-11
+
+- Receive assistant-generated files across channels and export the current session with `/export`. Incoming files follow Chat admission rules, with fewer duplicate file deliveries.
+- Added `/menu`, Agent preset and reasoning choices, plus cards for commands, approvals and questions on supported channels. Related actions and task status are clearer; `/help` now uses plain text everywhere.
+- Recover text results after disconnects or restarts with `/delivery` and manual retries, without rerunning tasks. Results with unknown delivery status are not resent automatically; manual retries may duplicate a message. Files remain available in the original session.
+- Fixed unresponsive DingTalk card buttons, missing incremental replies on newer DSH versions, and loss of existing reply text when stopping. Improved `/stop` status messages after restarts.
+- Continues to support DSH 0.1.2-rc.1, 0.1.5-rc.1 and 0.1.5-rc.2. Restart DSH and refresh the page after upgrading.
+
 ## 0.1.43 - 2026-09-11
 
 - Add support for DSH 0.1.5-rc.2 while retaining compatibility with 0.1.2-rc.1 and 0.1.5-rc.1.
