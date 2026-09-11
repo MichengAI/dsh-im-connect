@@ -71,7 +71,7 @@ export class MessageProgress {
 export interface TurnCompletion { sessionId: string; turn: number; items: MessageProgress[]; status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed' }
 
 type Group = { requestId: string; sessionId: string; items: MessageProgress[]; turn?: number; revision?: number; waiting?: number }
-type Turn = { groups: Group[]; deliveries: Promise<boolean>[] }
+type Turn = { groups: Group[]; deliveries: Promise<boolean | undefined>[] }
 
 /** 以 user/message 的 id 或 source.rpcId 认领回合，不按聊天或 FIFO 猜测任务归属。 */
 export class ProgressTracker {
@@ -124,7 +124,8 @@ export class ProgressTracker {
       this.turns.delete(key)
       if (this.ended.size >= 512) this.ended.delete(this.ended.values().next().value!)
       this.ended.add(key)
-      void Promise.all(active.deliveries).then(results => {
+      void Promise.all(active.deliveries).then(deliveries => {
+        const results = deliveries.filter((value): value is boolean => value !== undefined)
         const state = data?.reason?.kind === 'error' ? 'error'
           : data?.reason?.kind !== 'completed' ? 'cancelled'
             : results.length === 0 ? 'cancelled' : results.every(Boolean) ? 'success' : 'error'
@@ -165,7 +166,7 @@ export class ProgressTracker {
     }
   }
 
-  delivery(sessionId: string, turn: number | undefined, work: Promise<boolean>): void {
+  delivery(sessionId: string, turn: number | undefined, work: Promise<boolean | undefined>): void {
     if (turn !== undefined) this.turns.get(`${sessionId}:${turn}`)?.deliveries.push(work.catch(() => false))
   }
 

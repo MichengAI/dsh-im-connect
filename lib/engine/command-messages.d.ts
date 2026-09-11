@@ -1,5 +1,6 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "\u672A\u63D0\u4EA4\u4EFB\u52A1\uFF0C\u4E0D\u9700\u8981\u8865\u53D1": "Task was not submitted; no resend needed";
     readonly "\u8865\u53D1\u6B64\u524D\u4EFB\u52A1\u7684\u7ED3\u679C\uFF08\u4E0D\u4F1A\u91CD\u65B0\u6267\u884C\u4EFB\u52A1\uFF09\uFF1A": "Recovered result from an earlier task (the task was not run again):";
     readonly "\u6B64\u524D\u4EFB\u52A1\u5DF2\u5B8C\u6210\u3002\u6587\u4EF6\u8BF7\u5728\u539F\u4F1A\u8BDD\u67E5\u770B\u3002": "The earlier task completed. Open the original session to view files.";
     readonly "\u6B64\u524D\u4EFB\u52A1\u5931\u8D25\uFF0C\u5DF2\u751F\u6210\u7684\u5185\u5BB9\u4FDD\u7559\u3002": "The earlier task failed. Any output already generated is kept.";

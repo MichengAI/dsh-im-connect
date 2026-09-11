@@ -67,13 +67,14 @@ export class FileDelivery {
 
   dispose(): void { this.lifetime.abort(); this.sent.clear() }
 
-  deliver(session: DeliverySession, closing: Event, target: () => { channel: ChannelAdapter; chatId: string } | undefined): Promise<boolean> {
+  deliver(session: DeliverySession, closing: Event, target: () => { channel: ChannelAdapter; chatId: string } | undefined, onContent?: () => void): Promise<boolean> {
     let ok = true
     const initial = target()
     return this.queue.run(String(session.id), async () => {
       if (this.lifetime.signal.aborted) { ok = false; return }
       const selected = filesForReply(session.snapshotEvents?.() ?? session.events ?? [], closing)
       if (!selected?.paths.length) return
+      onContent?.()
       if (!initial) { ok = false; return }
       const key = `${session.id}:${selected.turn}:${initial.channel.id}:${initial.chatId}`
       const sent = this.sent.get(key) ?? new Set<string>()

@@ -186,3 +186,22 @@ for (const phase of ['read', 'send']) test(`停用后重新启用也不能被异
   assert.equal(journal.list()[0].status, 'blocked')
   assert.equal(sends, phase === 'send' ? 1 : 0)
 })
+
+
+test('明确未提交进入 rejected，重载和停用不重新激活，满额优先清理终态', async t => {
+  const { journal, file } = fixture(t)
+  journal.reject('r', true)
+  const loaded = new DeferredDelivery(file)
+  loaded.block('c')
+  await loaded.recover('r', async () => assert.fail('must not read'), valid, async () => assert.fail('must not send'), chunks, true)
+  assert.equal(loaded.list()[0].status, 'rejected')
+  const bounded = new DeferredDelivery()
+  for (let i = 0; i < 1000; i++) { bounded.begin(String(i), 's', 'c', message); bounded.reject(String(i), true) }
+  assert.doesNotThrow(() => bounded.begin('next', 's', 'c', message))
+})
+
+test('冷恢复保留含工具调用消息的文字，但不包含工具参数', () => {
+  const history = events()
+  history[2].data.message.content.push({ type: 'tool-call', arguments: 'secret tool input' })
+  assert.equal(recoverTurn(history, 'r').text, 'answer')
+})

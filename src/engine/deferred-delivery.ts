@@ -6,7 +6,7 @@ import type { ImMessage } from './types.js'
 /** 交付记录不保存临时 webhook、附件或原始用户问题。 */
 export interface DeferredEntry {
   id: string; sessionId: string; channelId: string; message: ImMessage; createdAt: number
-  turn?: number; status: 'waiting' | 'ready' | 'sending' | 'sent' | 'unknown' | 'blocked' | 'expired'
+  turn?: number; status: 'waiting' | 'ready' | 'sending' | 'sent' | 'unknown' | 'blocked' | 'expired' | 'rejected'
   text?: string; parts?: string[]; offset: number
 }
 type Event = { type?: string; seq?: number; surfaceOp?: unknown; data?: any }
@@ -29,7 +29,7 @@ export function recoverTurn(events: Event[], requestId: string): { turn: number;
       target = turn
     }
     if (!matched) continue
-    if (event.type === 'assistant/message' && data?.turn === target && !data?.interrupted && !data?.message?.content?.some((p: any) => p.type === 'tool-call')) {
+    if (event.type === 'assistant/message' && data?.turn === target && !data?.interrupted) {
       const text = (data?.message?.content ?? []).filter((p: any) => p.type === 'text' && typeof p.text === 'string').map((p: any) => p.text).join('\n').trim()
       if (text) replies.push(text)
       if (replies.reduce((size, value) => size + value.length, 0) > 1_000_000) return undefined
@@ -51,7 +51,7 @@ export class DeferredDelivery {
         if (typeof entry.id !== 'string' || typeof entry.sessionId !== 'string' || typeof entry.channelId !== 'string'
           || typeof entry.message?.chatId !== 'string' || !['dm', 'group'].includes(entry.message.kind)
           || !Number.isFinite(entry.createdAt) || !Number.isSafeInteger(entry.offset) || entry.offset < 0
-          || !['waiting', 'ready', 'sending', 'sent', 'unknown', 'blocked', 'expired'].includes(entry.status)
+          || !['waiting', 'ready', 'sending', 'sent', 'unknown', 'blocked', 'expired', 'rejected'].includes(entry.status)
           || (entry.message.userId !== undefined && typeof entry.message.userId !== 'string')
           || (entry.turn !== undefined && !Number.isSafeInteger(entry.turn))
           || this.entries.some(e => e.id === entry.id)
@@ -75,13 +75,16 @@ export class DeferredDelivery {
   begin(id: string, sessionId: string, channelId: string, message: ImMessage): void {
     const previous = this.entries
     this.entries = this.entries.filter(e => Date.now() - e.createdAt < 7 * 86400_000)
-    while (this.entries.length >= 1000 && this.entries.some(e => e.status === 'sent')) this.entries.splice(this.entries.findIndex(e => e.status === 'sent'), 1)
+    while (this.entries.length >= 1000 && this.entries.some(e => ['sent', 'rejected'].includes(e.status))) this.entries.splice(this.entries.findIndex(e => ['sent', 'rejected'].includes(e.status)), 1)
     if (this.entries.length >= 1000) { this.entries = previous; throw new Error('Delivery journal full; inspect /delivery') }
     this.entries.push({ id, sessionId, channelId, message: { chatId: message.chatId, userId: message.userId, kind: message.kind ?? 'dm', text: '', addressed: true }, createdAt: Date.now(), status: 'waiting', offset: 0 })
     try { this.flush() } catch (error) { this.entries = previous; throw error }
     this.active.add(id)
   }
-  reject(id: string): void { this.active.delete(id) }
+  reject(id: string, definite = false): void {
+    this.patch(id, { status: definite ? 'rejected' : 'unknown' })
+    this.active.delete(id)
+  }
   patch(id: string, update: Partial<DeferredEntry>): void {
     const entry = this.entries.find(e => e.id === id)
     if (!entry) return
@@ -110,7 +113,7 @@ export class DeferredDelivery {
     }
   }
   block(channelId: string): void {
-    for (const e of this.entries) if (e.channelId === channelId && e.status !== 'sent') this.patch(e.id, { status: 'blocked' })
+    for (const e of this.entries) if (e.channelId === channelId && !['sent', 'rejected'].includes(e.status)) this.patch(e.id, { status: 'blocked' })
     this.release(undefined, channelId)
   }
   coldTurn(sessionId: string, turn: number | undefined): boolean {

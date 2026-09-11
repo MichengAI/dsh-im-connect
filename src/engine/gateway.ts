@@ -468,7 +468,7 @@ export class ImEngine {
       const signal = AbortSignal.any([this.recoveryScope.signal, AbortSignal.timeout(30_000)])
       const result = await readDeliveryHistory(this.ctx, current.sessionId, current.id, signal)
       if (!result) return undefined
-      return withReplyLocale(this.ctx, () => ({ turn: result.turn, text: [replyText('补发此前任务的结果（不会重新执行任务）：'), result.text,
+      return withReplyLocale(this.ctx, () => ({ turn: result.turn, text: [result.text ? replyText('补发此前任务的结果（不会重新执行任务）：') : '', result.text,
         result.kind === 'completed' ? replyText('此前任务已完成。文件请在原会话查看。') : result.kind === 'error' ? replyText('此前任务失败，已生成的内容保留。') : replyText('此前任务已停止，已生成的内容保留。')].filter(Boolean).join('\n\n') }))
     }, current => this.validDelivery(current), async (current, text) => {
       const channel = this.channels.get(current.channelId)
@@ -507,7 +507,7 @@ export class ImEngine {
       const current = this.deferred.list(channel.id, message).slice(-10).reverse()
       if (!current.length) return replyText('没有近期交付记录。直接发送消息开始任务；查看最近记录：/history。')
       const states = {
-        waiting: replyText('等待原任务结果'), ready: replyText('等待渠道可发送'), sending: replyText('正在补发'), sent: replyText('已发送'),
+        rejected: replyText('未提交任务，不需要补发'), waiting: replyText('等待原任务结果'), ready: replyText('等待渠道可发送'), sending: replyText('正在补发'), sent: replyText('已发送'),
         unknown: replyText('送达未知，自动补发已暂停'), blocked: replyText('绑定或权限已变化，补发已暂停'), expired: replyText('已过期，请在网页查看原会话'),
       }
       return [replyText('最近交付记录（最多 10 条，保留 7 天）：'), ...current.map(entry => `${entry.id} — ${states[entry.status]}`), '',
@@ -544,6 +544,7 @@ export class ImEngine {
     const { signal } = scope
     const items = sources.map(source => new MessageProgress(channel, source, this.ctx, this.log, 'queued'))
     let accepted = false
+    let submitted = false
     let requestId: string | undefined
     let reject = () => { for (const item of items) item.finish('error') }
     try {
@@ -577,16 +578,20 @@ export class ImEngine {
           prompt(request: { requestId: string; sessionId: string; mode: 'queue'; content: Array<Record<string, unknown>> }, signal: AbortSignal): Promise<unknown>
         } | undefined
         if (!controller?.prompt) throw new ImageInputError('当前 Host 不支持 Chat 图片输入，请升级 DeepSeek Harness。')
+        submitted = true
         await controller.prompt({ requestId, sessionId: binding.sessionId, mode: 'queue', content }, signal)
-      } else this.router.followup(binding, {
+      } else {
+        submitted = true
+        this.router.followup(binding, {
         id: requestId,
         role: 'user',
         content,
         source: { kind: 'user', rpcId: requestId },
-      })
+        })
+      }
       accepted = true
       this.log(`[${channel.id}] 已注入 ${binding.sessionId}`)
-    } catch (error) { if (requestId) this.deferred.reject(requestId); reject(); throw error }
+    } catch (error) { if (requestId) this.deferred.reject(requestId, !submitted); reject(); throw error }
     finally { if (!accepted) for (const item of items) item.finish('cancelled') }
   }
 
@@ -907,14 +912,12 @@ export class ImEngine {
     const invalid = tracked.some(entry => entry.status === 'blocked' || !this.validDelivery(entry))
     if (invalid) for (const entry of tracked) if (entry.status !== 'sent') this.deferred.patch(entry.id, { status: 'blocked' })
     const skip = (unavailable || invalid) && ['assistant/chunk', 'assistant/message', 'turn/end'].includes(event.type ?? '')
-    if (!skip && (event.type === 'assistant/chunk' || event.type === 'assistant/message')) this.deferred.liveStart(id, turn)
     const trackedEnd = event.type === 'turn/end' && this.progress.hasTurn(id, event.data?.turn)
     this.progress.event(id, event)
-    const outcome = { ok: !skip }
+    const outcome = { ok: !skip, content: false }
     const work = skip ? Promise.resolve() : this.processSessionEvent(session, event, outcome, trackedEnd)
-    if (event.type === 'assistant/message' && event.surfaceOp === 'append'
-      && !event.data?.message?.content?.some((part: { type?: string }) => part.type === 'tool-call')) {
-      this.progress.delivery(id, event.data?.turn, work.then(() => outcome.ok, () => false))
+    if (event.type === 'assistant/message' && event.surfaceOp === 'append') {
+      this.progress.delivery(id, event.data?.turn, work.then(() => !outcome.ok ? false : outcome.content ? true : undefined, () => false))
     }
     return work.catch(error => { this.log(`[im-progress] 会话回复失败: ${error instanceof Error ? error.name : 'Error'}`) })
   }
@@ -922,7 +925,7 @@ export class ImEngine {
   private async processSessionEvent(
     session: DeliverySession,
     event: { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } },
-    outcome: { ok: boolean },
+    outcome: { ok: boolean; content: boolean },
     trackedEnd = false,
   ): Promise<void> {
     const sessionId = session.id ? String(session.id) : ''
@@ -937,7 +940,9 @@ export class ImEngine {
     if (!binding || !channel) return
     const streamKey = `${binding.channelId}:${binding.chatId}`
     const chunk = event.data?.chunk
+    const markAttempt = () => this.deferred.liveStart(sessionId, (event.data as { turn?: number })?.turn ?? this.observedTurns.get(sessionId)!)
     if (event.type === 'assistant/chunk' && channel.beginReply && isAssistantTextDelta(chunk)) {
+      markAttempt()
       // 事件回调不在请求链路里，流式更新失败必须自兜底，避免 unhandled rejection
       void this.streams.onTextDelta(streamKey, chunk.text, () => channel.beginReply!(binding.chatId).catch(() => undefined))
         .catch((error) => {
@@ -955,7 +960,7 @@ export class ImEngine {
         const taken = await this.streams.take(streamKey)
         let failureDelivered: boolean
         if (taken.stream) {
-          failureDelivered = await taken.stream.finish(failed).then(() => true).catch(() => this.deliver(channel, binding.chatId, failed))
+          failureDelivered = await taken.stream.finish([taken.text, failed].filter(Boolean).join('\n\n')).then(() => true).catch(() => this.deliver(channel, binding.chatId, failed))
         } else {
           failureDelivered = await this.deliver(channel, binding.chatId, failed)
         }
@@ -975,6 +980,8 @@ export class ImEngine {
         if (taken.stream) {
           const finalText = text || taken.text
           if (finalText) {
+            outcome.content = true
+            markAttempt()
             let delivered = true
             try {
               await taken.stream.finish(finalText)
@@ -995,6 +1002,8 @@ export class ImEngine {
           return
         }
         if (text) {
+          outcome.content = true
+          markAttempt()
           this.log(`[${channel.id}] 准备回复 ${sessionId}，长度 ${text.length}`)
           const delivered = await this.deliver(channel, binding.chatId, text, outcome)
           outcome.ok = outcome.ok && delivered
@@ -1006,7 +1015,7 @@ export class ImEngine {
           const current = this.router.bindingForSession(sessionId)
           return !this.disposed && current?.channelId === binding.channelId && current.chatId === binding.chatId
             && this.channels.get(binding.channelId) === channel ? { channel, chatId: binding.chatId } : undefined
-        })
+        }, () => { outcome.content = true; markAttempt() })
         outcome.ok = outcome.ok && filesOk
       }
     }
@@ -1054,7 +1063,7 @@ export class ImEngine {
         if (taken.stream) {
           const body = text + (choices.length ? '\n\n' + choices.map(choice => `${choice.label} — ${choice.value}`).join('\n') : '')
           // 已有回复卡片直接收口；收口结果不明时不再补发一张完成卡。
-          await taken.stream.finish(body)
+          await taken.stream.finish([taken.text, body].filter(Boolean).join('\n\n'))
           return true
         }
       }

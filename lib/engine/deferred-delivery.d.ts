@@ -7,7 +7,7 @@ export interface DeferredEntry {
     message: ImMessage;
     createdAt: number;
     turn?: number;
-    status: 'waiting' | 'ready' | 'sending' | 'sent' | 'unknown' | 'blocked' | 'expired';
+    status: 'waiting' | 'ready' | 'sending' | 'sent' | 'unknown' | 'blocked' | 'expired' | 'rejected';
     text?: string;
     parts?: string[];
     offset: number;
@@ -34,7 +34,7 @@ export declare class DeferredDelivery {
     list(channelId?: string, message?: ImMessage): DeferredEntry[];
     turnEntries(sessionId: string, turn: number | undefined): DeferredEntry[];
     begin(id: string, sessionId: string, channelId: string, message: ImMessage): void;
-    reject(id: string): void;
+    reject(id: string, definite?: boolean): void;
     patch(id: string, update: Partial<DeferredEntry>): void;
     claim(sessionId: string, turn: number, requestId: string): void;
     liveStart(sessionId: string, turn: number): string[];

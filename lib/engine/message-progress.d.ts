@@ -59,7 +59,7 @@ export declare class ProgressTracker {
         };
         turn?: number;
     }): void;
-    delivery(sessionId: string, turn: number | undefined, work: Promise<boolean>): void;
+    delivery(sessionId: string, turn: number | undefined, work: Promise<boolean | undefined>): void;
     waiting(sessionId: string, waiting: boolean): () => void;
     cancel(channelId?: string, sessionId?: string): void;
 }

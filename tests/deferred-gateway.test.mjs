@@ -139,3 +139,83 @@ test('新回合已开始时，旧回合的交付仍收口，不依赖完成导�
   assert.equal(engine.deferred.list()[0].status, 'sent')
   assert.equal(engine.deferred.coldTurn(f.sessionId, 1), true)
 })
+
+
+test('含工具调用的已送达文字计入完成结果', async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  await engine.inject(channel, message)
+  f.completeHistory()
+  f.history[2].data.message.content.push({ type: 'tool-call', id: 'tool', name: 'read', arguments: '{}' })
+  for (const event of f.history) await engine.onSessionEvent({ id: f.sessionId }, event)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(engine.deferred.list()[0].status, 'sent')
+  assert.ok(f.sent.some(text => text.includes('已完成')))
+  assert.ok(!f.sent.some(text => text.includes('未返回可投递')))
+})
+
+test('失败收口保留已累计的流式正文', async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  let final
+  channel.beginReply = async () => ({ update: async () => {}, finish: async text => { final = text } })
+  await engine.inject(channel, message)
+  f.completeHistory()
+  for (const event of f.history.slice(0, 2)) await engine.onSessionEvent({ id: f.sessionId }, event)
+  await engine.onSessionEvent({ id: f.sessionId }, { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text: 'HALF-ANSWER' } } })
+  await new Promise(resolve => setImmediate(resolve))
+  await engine.onSessionEvent({ id: f.sessionId }, { type: 'turn/end', data: { turn: 1, reason: { kind: 'error' } } })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.match(final, /HALF-ANSWER/)
+  assert.match(final, /处理失败/)
+})
+
+test('注入抛错不再每轮扫描未认领记录', async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  engine.router.followup = () => { throw new Error('uncertain admission') }
+  await assert.rejects(engine.inject(channel, message))
+  assert.equal(engine.deferred.list()[0].status, 'unknown')
+  engine.ctx.get = () => { assert.fail('must not poll rejected input') }
+  await engine.recoverDeliveries()
+  await engine.recoverDeliveries()
+})
+
+test('空正文补发只返回结束状态', async t => {
+  const f = fixture(t), first = f.make()
+  await first.engine.inject(first.channel, message)
+  first.engine.dispose(); f.completeHistory()
+  f.history[2].data.message.content = []
+  await f.make().engine.recoverDeliveries()
+  assert.equal(f.sent.length, 1)
+  assert.doesNotMatch(f.sent[0], /补发此前任务的结果/)
+  assert.match(f.sent[0], /此前任务已完成/)
+})
+
+
+for (const withFile of [false, true]) test(`纯工具调用回合按实际成果记账：file=${withFile}`, async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  await engine.inject(channel, message)
+  f.completeHistory()
+  f.history[2].data.message.content = withFile ? [] : [{ type: 'tool-call', name: 'read', arguments: '{}' }]
+  if (withFile) {
+    f.history.splice(2, 0, { type: 'deliverables/presented', data: { turn: 1, files: [{ path: 'report.txt' }] } })
+    channel.sendFile = async () => {}
+    const get = engine.ctx.get
+    engine.ctx.get = name => name === 'workspaceFiles' ? { readAll: async () => ({ data: 'YQ==', eof: true, offset: 0 }) } : get(name)
+  }
+  const session = { id: f.sessionId, header: { cwd: 'D:\\workspace' }, snapshotEvents: () => f.history }
+  for (const event of f.history) await engine.onSessionEvent(session, event)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.ok(f.sent.some(text => text.includes(withFile ? '已完成' : '未返回可投递')))
+})
+
+
+test('提交宿主前失败明确记录 rejected，自动和手动均不读取历史', async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  engine.progress.begin = () => { throw new Error('before dispatch') }
+  await assert.rejects(engine.inject(channel, message))
+  const entry = engine.deferred.list()[0]
+  assert.equal(entry.status, 'rejected')
+  engine.ctx.get = () => { assert.fail('must not read history') }
+  await engine.recoverDeliveries()
+  await engine.deferred.recover(entry.id, async () => assert.fail('must not read'), () => true, async () => assert.fail('must not send'), text => [text], true)
+  assert.equal(f.requests.length, 0)
+})
