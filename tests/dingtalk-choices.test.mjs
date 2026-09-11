@@ -66,16 +66,20 @@ test('钉钉回调只接受已发卡片的原操作者与动作，收口后不�
   }
   await tick()
   assert.equal(received.length, 1)
-  listeners.get(TOPIC_CARD)({ headers: { messageId: 'valid' }, data: callback({ outTrackId: cardId }) })
-  await tick()
-  assert.equal(received[1].chatId, 'group')
-  assert.equal(received[1].kind, 'group')
-  assert.equal(received[1].actionToken, 'opaque:0')
-  assert.ok(acknowledgements.includes('valid'))
+  const shapes = [{ actionIds: ['opaque:0'] }, { actionIds: ['template-button'], params: { id: 'opaque:0' } }, { params: { id: 'opaque:0' } }]
+  for (const [index, cardPrivateData] of shapes.entries()) {
+    const id = `valid-${index}`
+    listeners.get(TOPIC_CARD)({ headers: { messageId: id }, data: callback({ outTrackId: cardId, content: JSON.stringify({ cardPrivateData }) }) })
+    await tick()
+    assert.equal(received[index + 1].chatId, 'group')
+    assert.equal(received[index + 1].kind, 'group')
+    assert.equal(received[index + 1].actionToken, 'opaque:0')
+    assert.ok(acknowledgements.includes(id))
+  }
   await receipt.close('Selected')
   listeners.get(TOPIC_CARD)({ data: callback({ outTrackId: cardId }) })
   await tick()
-  assert.equal(received.length, 2)
+  assert.equal(received.length, 4)
 })
 
 test('钉钉卡片回调拒绝畸形内容、错误身份类型和多个动作', () => {
@@ -84,4 +88,29 @@ test('钉钉卡片回调拒绝畸形内容、错误身份类型和多个动作',
   assert.equal(parseDingtalkCardAction(callback({ content: '{}' })), undefined)
   assert.equal(parseDingtalkCardAction(callback({ content: JSON.stringify({ cardPrivateData: { actionIds: ['a', 'b'] } }) })), undefined)
   assert.deepEqual(parseDingtalkCardAction(callback()), { cardId: 'card', userId: 'owner', token: 'opaque:0' })
+})
+
+
+test('钉钉回调允许 SDK 可省略类型及字符串身份枚举，仍拒绝其他身份', () => {
+  assert.deepEqual(parseDingtalkCardAction(callback({ type: undefined, userIdType: '1' })), { cardId: 'card', userId: 'owner', token: 'opaque:0' })
+  assert.equal(parseDingtalkCardAction(callback({ userIdType: '2' })), undefined)
+  assert.equal(parseDingtalkCardAction(callback({ type: 'other' })), undefined)
+})
+
+
+test('模板组件动作与业务参数分离时，仅匹配已发送令牌且拒绝歧义', () => {
+  const allowed = new Set(['opaque:0', 'opaque:1'])
+  const data = params => callback({ content: JSON.stringify({ cardPrivateData: { actionIds: ['template-button'], params } }) })
+  assert.equal(parseDingtalkCardAction(data({ id: 'opaque:0' }), allowed).token, 'opaque:0')
+  assert.equal(parseDingtalkCardAction(data({ id: '/new' }), allowed), undefined)
+  assert.equal(parseDingtalkCardAction(data({ a: 'opaque:0', b: 'opaque:1' }), allowed), undefined)
+})
+
+
+test('只有 params 也能还原唯一已发令牌，跨字段冲突仍拒绝', () => {
+  const allowed = new Set(['opaque:0', 'opaque:1'])
+  const payload = cardPrivateData => callback({ content: JSON.stringify({ cardPrivateData }) })
+  assert.equal(parseDingtalkCardAction(payload({ params: { id: 'opaque:0' } }), allowed)?.token, 'opaque:0')
+  assert.equal(parseDingtalkCardAction(payload({ params: { id: 'opaque:0', other: 'opaque:1' } }), allowed), undefined)
+  assert.equal(parseDingtalkCardAction(payload({ actionIds: ['opaque:0'], params: { id: 'opaque:1' } }), allowed), undefined)
 })

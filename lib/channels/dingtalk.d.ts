@@ -4,8 +4,7 @@ export interface DingtalkConfig {
     clientSecret?: string;
     additionalImageHosts?: readonly string[];
 }
-/** 官方 Stream 卡片事件的操作者与 actionIds；不从按钮值读取聊天或命令。 */
-export declare function parseDingtalkCardAction(raw: string): {
+export declare function parseDingtalkCardAction(raw: string, allowed?: ReadonlySet<string>): {
     cardId: string;
     userId: string;
     token: string;
