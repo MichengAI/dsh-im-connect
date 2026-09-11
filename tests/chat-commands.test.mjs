@@ -85,7 +85,7 @@ test('模型回复提供可点击导航，正文保留且不启用数字快捷�
   const f = fixture({ channel: { sendChoices() {} }, showChoices: async (...args) => { shown = args; return '' } })
   assert.equal(await f.run('/model'), '')
   assert.match(shown[2], /当前模型/)
-  assert.deepEqual(shown[3].map(choice => choice.value), ['/menu models', '/reasoning', '/menu'])
+  assert.deepEqual(shown[3].map(choice => choice.value), ['/menu models', '/reasoning', '/menu presets', '/menu'])
   assert.equal(shown[4], 's1')
   assert.equal(shown[5], false)
 })
@@ -659,4 +659,50 @@ test('推理按钮不接受跨用户使用且只能消费一次', async () => {
   await f.run(action)
   await assert.rejects(f.run(action), /选择已过期/)
   assert.equal(f.calls.filter(c => c[0] === 'model').length, 1)
+})
+
+
+test('预设、推理、模型页面互通且英语导航没有中文提示', async () => {
+  const shown = []
+  const f = presetFixture({ channel: { sendChoices() {}, choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (...args) => { shown.push(args); return '' } })
+  f.services.settings = { get() { return { preference: 'en' } } }
+  f.services.agentPresets.remoteExportList = async () => ({ presets: [{ id: 'standard', isDefault: true, name: 'Standard' }] })
+  f.services.sessionController.modelCatalog = async () => ({ default: { provider: 'p', model: 'm' }, groups: [{ id: 'p', models: [{ id: 'm', name: 'Model', reasoning: { efforts: [{ id: 'high', name: 'High' }] } }] }] })
+  await f.run('/presets')
+  assert.ok(shown.at(-1)[3].some(c => c.value === '/menu models'))
+  assert.ok(shown.at(-1)[3].some(c => c.value === '/reasoning'))
+  await f.run('/reasoning')
+  assert.ok(shown.at(-1)[3].some(c => c.value === '/menu presets'))
+  await f.run('/models')
+  assert.ok(shown.at(-1)[3].some(c => c.value === '/menu presets'))
+  assert.ok(shown.every(args => args[3].length <= 6))
+  for (const args of shown) assert.doesNotMatch(args[2] + args[3].map(c => c.label).join(' '), /[\u4e00-\u9fff]/)
+})
+
+
+test('真实宿主 Controller 创建预设会话并在归属失败时保留新 ID', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT }, async () => {
+  const { join } = await import('node:path')
+  const { pathToFileURL } = await import('node:url')
+  const { SessionCommandController } = await import(pathToFileURL(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/commands.js')).href)
+  for (const failAttach of [false, true]) {
+    const f = presetFixture()
+    const created = []
+    const workspace = { id: 'w1', path: 'D:\\one', async attachSession(id) { if (failAttach) throw new Error('fixture attach failure'); created.push(['attach', id]) } }
+    const controller = new SessionCommandController({ workspaceRegistry: { get: id => id === 'w1' ? workspace : undefined } }, {
+      async ensureSession(id, cwd, existing, preset) { created.push(['ensure', id, cwd, existing, preset]); return { session: { id, preset } } },
+      presetForSession: session => session.preset ?? 'standard',
+    }, 'D:\\default')
+    f.services.sessionController.create = request => controller.create(request)
+    const text = await f.run('/preset id:42')
+    const id = created[0][1]
+    assert.deepEqual(created[0].slice(2), ['D:\\one', false, '42'])
+    if (failAttach) {
+      assert.match(text, /新会话已创建/)
+      assert.ok(text.includes(`/session ${id}`))
+      assert.ok(!f.calls.some(c => c[0] === 'bind'))
+    } else {
+      assert.equal(created[1][1], id)
+      assert.equal(f.calls.find(c => c[0] === 'bind')[4], id)
+    }
+  }
 })

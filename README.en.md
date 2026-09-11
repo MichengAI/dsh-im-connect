@@ -111,15 +111,20 @@ After a valid selection, supported cards remove their buttons and mark the selec
 
 On channels with native buttons, `/sessions`, `/workspaces` and `/models` open a selector directly. After paging, numbered replies and `/session N`, `/workspace N` or `/model N` refer to the current selection page. Text channels keep their original list numbering.
 
-Send `/menu` or `/m` to select sessions, workspaces and models, or start, stop, export and inspect a session. Lists support pagination. Click a button or reply with the current menu number; ordinary text exits the menu.
+Send `/menu` or `/m` to select sessions, workspaces, models and Agent presets, or start, stop, export and inspect a session. Lists support pagination. Click a button or reply with the current menu number; ordinary text exits the menu.
 
-Menus include previous, next and back actions. WeCom menus paginate to fit card limits, including the main menu (`/menu 2`). Open a selector directly with `/menu sessions`, `/menu workspaces` or `/menu models`.
+Menus include previous, next and back actions. WeCom menus paginate to fit card limits, including the main menu (`/menu 2`). Open a selector directly with `/menu sessions`, `/menu workspaces` or `/menu models`; presets and reasoning use `/menu presets` and `/menu reasoning`.
 
 Common command replies offer related next steps: for example, `/model` → select a model / adjust reasoning → back to menu. Supported channels offer buttons; text replies include the commands to send. Navigation buttons on ordinary result replies do not accept numeric shortcuts, so numbers remain chat input; only selection menus accept numbered replies. Oversized cards fall back to complete text.
 
 DingTalk, Telegram and Feishu/Lark use native buttons. WeCom uses cards when button count and text length fit platform limits. Other cases, QQ and Weixin use numbered text. Explicit rejections and capacity limits fall back to complete text. Uncertain network delivery produces a confirmation notice instead of resending the card. Menus are scoped to the account, chat, operator and session, expire after 15 minutes or restart, and recheck permissions on selection. Used buttons cannot execute again.
 
 Approvals and questions use the same native-button channels: allow once/reject, single-choice selection, and multiple selections followed by submit. Open questions retain text input. If a card cannot show the full prompt or fails to send, text is used without omitting approval details. Existing approval eligibility and requester restrictions apply; disabling commands does not disable pending approvals or questions.
+
+
+Agent presets: `/presets` (alias `/presetlist`) lists presets; `/preset` shows the current preset. `/preset number-or-ID` starts and switches to a new session in the current workspace, keeping previous sessions. Use `/preset id:ID` for numeric IDs and `/preset --default` for the default preset. Account defaults remain unchanged; later `/new` commands still use account settings. Native buttons support direct selection; text lists use numbers valid for 15 minutes.
+
+Reasoning: `/reasoning` (aliases `/reasonings`, `/reasoninglist`) lists levels for the current model. Use `/reasoning number` or `/reasoning id:effort-ID`, or `/reasoning --default` to reset. Native channels offer paginated buttons. List selections are bound to the session and model; refresh the list after switching. Model and reasoning updates follow Chat’s default-selection persistence rules.
 
 ## Message progress
 
@@ -230,6 +235,7 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 | Command permissions | Open Settings on the account row and toggle DM/group commands | Admission is checked first; disabling commands keeps conversation and approval/question replies available |
 | Sessions / workspaces | `/sessions`, `/session <number or ID>`; `/workspaces`, `/workspace <number or ID>` | Resume ordinary Chat sessions; workspace selection creates a session without changing account defaults |
 | Task controls | `/stop`, `/steer <text>`, `/queue` | Stop, provide instructions, or inspect the queue; stopping preserves Host queued messages |
+| Session with a preset | `/presets`, `/preset <number or ID>`, `/preset --default` | Starts and connects a new session in the current workspace without changing account defaults |
 | Model / reasoning | `/models`, `/model <number or provider/model>`, `/reasoning [effort or --default]` | Changes the current selection and updates the Host default for subsequent Chat sessions |
 | Session management | `/history`, `/rename <title>`, `/fork` | Recent text history, rename, or fork and switch |
 | Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
@@ -325,7 +331,3 @@ npm test
 Security guidance is in [SECURITY.md](SECURITY.md).
 
 Licensed under [Apache License 2.0](LICENSE).
-
-Agent presets: `/presets` (alias `/presetlist`) lists presets; `/preset` shows the current preset. `/preset number-or-ID` starts and switches to a new session in the current workspace, keeping previous sessions. Use `/preset id:ID` for numeric IDs and `/preset --default` for the default preset. Account defaults remain unchanged; later `/new` commands still use account settings. Native buttons support direct selection; text lists use numbers valid for 15 minutes.
-
-Reasoning: `/reasoning` (aliases `/reasonings`, `/reasoninglist`) lists levels for the current model. Use `/reasoning number` or `/reasoning id:effort-ID`, or `/reasoning --default` to reset. Native channels offer paginated buttons. List selections are bound to the session and model; refresh the list after switching. Model and reasoning updates follow Chat’s default-selection persistence rules.

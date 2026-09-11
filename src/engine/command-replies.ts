@@ -13,20 +13,23 @@ export function commandNavigation(command: string, hasSession: boolean): Choice[
   const sessions = { label: replyText('选择会话'), value: '/menu sessions' }
   const workspaces = { label: replyText('选择工作区'), value: '/menu workspaces' }
   const models = { label: replyText('选择模型'), value: '/menu models' }
+  const presets = { label: replyText('选择预设'), value: '/menu presets' }
+  const reasoning = { label: replyText('调整推理'), value: '/reasoning' }
   const status = { label: replyText('查看状态'), value: '/status' }
   const routes: Record<string, Choice[]> = {
     help: [sessions, workspaces], sessions: [sessions, workspaces], sessionlist: [sessions, workspaces],
     session: [sessions, status], new: [sessions, models], clear: [sessions, models],
     workspace: [workspaces, sessions], workspaces: [workspaces, sessions], workspacelist: [workspaces, sessions],
-    model: [models, { label: replyText('调整推理'), value: '/reasoning' }], models: [models, status],
-    reasoning: [models, status], reasonings: [models, status], reasoninglist: [models, status],
+    model: [models, reasoning, presets], models: [models, reasoning, presets],
+    preset: [presets, models, reasoning], presets: [presets, models, reasoning], presetlist: [presets, models, reasoning],
+    reasoning: [models, presets], reasonings: [models, presets], reasoninglist: [models, presets],
     status: [{ label: replyText('查看队列'), value: '/queue' }, sessions],
     queue: [status], stop: [status, { label: replyText('查看队列'), value: '/queue' }], steer: [status],
     history: [sessions, status], rename: [sessions, status], fork: [sessions, status], export: [sessions, status],
     compact: [status], permission: [status], plan: [status], goal: [status], feedback: [status], simplify: [status],
   }
   if (!routes[command]) return []
-  return [...routes[command]!.filter(choice => hasSession || choice.value === '/menu sessions' || choice.value === '/menu workspaces'),
+  return [...routes[command]!.filter(choice => hasSession || choice.value === '/menu presets' || choice.value === '/menu sessions' || choice.value === '/menu workspaces'),
     { label: replyText('返回菜单'), value: '/menu' }]
 }
 

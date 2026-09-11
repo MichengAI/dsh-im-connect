@@ -5,7 +5,6 @@ export declare const commandEnglish: {
     readonly "\u9009\u62E9\u5DF2\u8FC7\u671F\uFF0C\u6216\u4F1A\u8BDD\u3001\u6A21\u578B\u5DF2\u53D8\u5316\u3002\u8BF7\u53D1\u9001 /reasoning \u91CD\u65B0\u9009\u62E9\u3002": "This selection expired, or the session or model changed. Send /reasoning to choose again.";
     readonly 恢复默认推理: "Use default reasoning";
     readonly "\u6A21\u578B\uFF1A{0}\n\u5F53\u524D\u63A8\u7406\uFF1A{1}": "Model: {0}\nCurrent reasoning: {1}";
-    readonly "\u7528\u6CD5\uFF1A/menu [sessions|workspaces|models|presets] [\u9875\u7801]": "Usage: /menu [sessions|workspaces|models|presets] [page]";
     readonly "\u65B0\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF1A{0}\uFF0C\u4F46\u672A\u80FD\u63A5\u7EED\u3002\u8BF7\u5728\u7F51\u9875\u68C0\u67E5\u5DE5\u4F5C\u533A\u540E\u53D1\u9001 /session {0}\uFF1B\u539F\u804A\u5929\u7ED1\u5B9A\u4FDD\u7559\u3002": "Session {0} was created but could not be connected. Check its workspace on the web, then send /session {0}. Your previous chat binding is kept.";
     readonly "\u5DF2\u4F7F\u7528\u9884\u8BBE {0} \u65B0\u5EFA\u5E76\u5207\u6362\u4F1A\u8BDD\uFF1A{1}": "Started and switched to session {1} with preset {0}.";
     readonly "\u65E0\u6CD5\u786E\u5B9A\u5F53\u524D\u5DE5\u4F5C\u533A\uFF0C\u8BF7\u5148\u7528 /workspace \u9009\u62E9\u5DE5\u4F5C\u533A\u3002": "The current workspace could not be determined. Choose one with /workspace first.";
@@ -64,7 +63,6 @@ export declare const commandEnglish: {
     readonly 选择会话: "Select session";
     readonly 新会话: "New session";
     readonly 助手操作菜单: "Assistant menu";
-    readonly "\u7528\u6CD5\uFF1A/menu [sessions|workspaces|models] [\u9875\u7801]": "Usage: /menu [sessions|workspaces|models] [page]";
     readonly "\u9009\u9879\u5DF2\u5931\u6548\u6216\u4E0D\u5C5E\u4E8E\u5F53\u524D\u64CD\u4F5C\uFF0C\u8BF7\u91CD\u65B0\u6253\u5F00 /menu\u3002": "This option has expired or belongs to another action. Open /menu again.";
     readonly "\u70B9\u51FB\u9009\u9879\u6216\u56DE\u590D\u5E8F\u53F7\uFF1B15 \u5206\u949F\u5185\u6709\u6548\uFF0C\u666E\u901A\u6587\u5B57\u9000\u51FA\u83DC\u5355\u3002": "Choose an option or reply with its number. Valid for 15 minutes; ordinary text exits the menu.";
     readonly '\u4F1A\u8BDD ZIP \u8D85\u8FC7 32 MiB\uFF0C\u672A\u53D1\u9001\u3002\u8BF7\u5728\u7F51\u9875 Chat \u4E2D\u6267\u884C /export \u4E0B\u8F7D\u3002': "The session ZIP exceeds 32 MiB and was not sent. Run /export in web Chat to download it.";
