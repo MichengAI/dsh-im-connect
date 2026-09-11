@@ -454,6 +454,22 @@ test('状态优先目标操作，停止先提交且能报告当前空闲', async
   assert.match(await f.run('/stop'), /当前没有正在执行的任务/)
 })
 
+test('冷会话停止仅在宿主确认空闲时返回空闲，不激活 Agent', async () => {
+  const f = fixture()
+  f.services.sessionController.cancel = async () => { throw Object.assign(new Error('not attached'), { code: 'session/not-found' }) }
+  assert.match(await f.run('/stop'), /当前没有正在执行的任务/)
+  assert.equal(f.calls.some(call => call[0] === 'resolve'), false)
+  f.services.settings = { get: () => ({ preference: 'en' }) }
+  assert.match(await f.run('/stop'), /No task is running/)
+  for (const running of [true, undefined]) {
+    f.rows[0].running = running
+    await assert.rejects(f.run('/stop'), /not attached/)
+  }
+  f.rows[0].running = false
+  f.services.sessionController.cancel = async () => { throw new Error('transport failed') }
+  await assert.rejects(f.run('/stop'), /transport failed/)
+})
+
 test('改名回显旧名称，分叉缺回合按错误码提供指引', async () => {
   const f = fixture()
   f.rows[0].projections = { values: { title: '旧名称' } }
