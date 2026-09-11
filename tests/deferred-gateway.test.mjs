@@ -219,3 +219,41 @@ test('提交宿主前失败明确记录 rejected，自动和手动均不读取�
   await engine.deferred.recover(entry.id, async () => assert.fail('must not read'), () => true, async () => assert.fail('must not send'), text => [text], true)
   assert.equal(f.requests.length, 0)
 })
+
+
+test('记录落盘异常不能覆盖原始准入错误，进度仍清理', async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  const original = new Error('original admission error')
+  engine.router.followup = () => {
+    engine.deferred.flush = () => { throw new Error('disk full') }
+    throw original
+  }
+  await assert.rejects(engine.inject(channel, message), error => error === original)
+  assert.equal(engine.progress.groups.size, 0)
+})
+
+test('空结果的 reaction 为已结束，不冒充用户取消', async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  const reactions = []
+  channel.addStatusReaction = async (_message, state, label) => { reactions.push({ state, label }) }
+  await engine.inject(channel, { ...message, messageId: 'empty-reaction' })
+  f.completeHistory(); f.history[2].data.message.content = []
+  for (const event of f.history) await engine.onSessionEvent({ id: f.sessionId }, event)
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(reactions.at(-1).state, 'ended')
+  assert.match(reactions.at(-1).label, /已结束/)
+})
+
+
+for (const english of [false, true]) test(`手动补发找不到记录时明确回执且继续暂停：en=${english}`, async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  if (english) f.setEnglish()
+  await engine.inject(channel, message)
+  const id = f.requests[0].id
+  engine.deferred.reject(id)
+  const response = await engine.deliveryCommand(channel, { ...message, text: `/delivery retry ${id}` })
+  assert.match(response, english ? /Nothing was sent/ : /本次未发送/)
+  assert.equal(engine.deferred.list()[0].status, 'unknown')
+  assert.equal(f.sent.length, 0)
+  assert.equal(f.requests.length, 1)
+})

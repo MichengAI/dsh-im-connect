@@ -186,7 +186,6 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
             log(`[dingtalk] 卡片回调拒绝 reason=${rejected}${paramsShape}`)
             return
           }
-          log('[dingtalk] 卡片回调已接收，进入命令校验')
           const message = { ...entry.message, text: '', media: undefined, actionToken: action.token,
             messageId: res.headers?.messageId ? `card:${res.headers.messageId}` : undefined }
           const work = (receiving.get(message.chatId) ?? Promise.resolve()).then(async () => {

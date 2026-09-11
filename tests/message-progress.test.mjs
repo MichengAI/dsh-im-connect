@@ -62,7 +62,7 @@ test('没有匹配的宿主消息不能按 FIFO 消耗任务；无投递回合�
   f.start(1, 'web-input'); f.tracker.delivery('session', 1, Promise.resolve(true)); f.end(1)
   await tick(); await item.settled(); assert.equal(f.calls.at(-1)[2], 'processing')
   f.start(2, 'one'); f.end(2); await tick(); await item.settled()
-  assert.equal(f.calls.at(-1)[2], 'cancelled')
+  assert.equal(f.calls.at(-1)[2], 'ended')
 })
 test('取消之后的迟到投递结果不得重新标为成功', async t => {
   const f = fixture(t), item = f.make('one')

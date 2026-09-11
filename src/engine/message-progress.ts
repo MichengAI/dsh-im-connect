@@ -32,7 +32,7 @@ export class MessageProgress {
       ? acquireTyping(this.channel, this.message.chatId, operation => this.safely(operation)) : undefined
   }
 
-  finish(state: 'success' | 'error' | 'cancelled' | 'cleared'): void {
+  finish(state: 'success' | 'ended' | 'error' | 'cancelled' | 'cleared'): void {
     if (this.terminal) return
     this.terminal = true
     clearTimeout(this.expiry)
@@ -57,7 +57,7 @@ export class MessageProgress {
       if (state === 'cleared' || !this.channel.addStatusReaction || !this.message.messageId) return
       const label = withReplyLocale(this.host, () => ({
         queued: replyText('⏳排队中'), processing: replyText('🤔思考中'), waiting: replyText('⏳等待确认'), success: replyText('✅已完成'),
-        error: replyText('❌处理失败'), cancelled: replyText('🚫已取消'),
+        ended: replyText('✅已结束'), error: replyText('❌处理失败'), cancelled: replyText('🚫已取消'),
       })[state])
       await this.safely(async signal => {
         const reaction = await this.channel.addStatusReaction!(this.message, state, label, signal)
@@ -128,7 +128,7 @@ export class ProgressTracker {
         const results = deliveries.filter((value): value is boolean => value !== undefined)
         const state = data?.reason?.kind === 'error' ? 'error'
           : data?.reason?.kind !== 'completed' ? 'cancelled'
-            : results.length === 0 ? 'cancelled' : results.every(Boolean) ? 'success' : 'error'
+            : results.length === 0 ? 'ended' : results.every(Boolean) ? 'success' : 'error'
         // 交付确认不依赖是否仍适合发送下一步导航，新回合不能遗留旧请求。
         this.onSettled(sessionId, data.turn, data?.reason?.kind === 'completed' && results.length > 0 && results.every(Boolean))
         const superseded = this.hasNewerTurn(sessionId, data.turn)

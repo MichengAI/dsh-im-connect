@@ -29,6 +29,7 @@ export declare class DeferredDelivery {
     private entries;
     private readonly queue;
     private readonly active;
+    private readonly quarantined;
     constructor(file?: string | undefined);
     private flush;
     list(channelId?: string, message?: ImMessage): DeferredEntry[];
@@ -45,7 +46,7 @@ export declare class DeferredDelivery {
     recover(id: string, read: (entry: DeferredEntry) => Promise<{
         text: string;
         turn?: number;
-    } | undefined>, valid: (entry: DeferredEntry) => boolean, send: (entry: DeferredEntry, text: string) => Promise<void>, chunks: (text: string) => string[], explicit?: boolean): Promise<void>;
+    } | undefined>, valid: (entry: DeferredEntry) => boolean, send: (entry: DeferredEntry, text: string) => Promise<void>, chunks: (text: string) => string[], explicit?: boolean): Promise<'missing' | 'unavailable' | undefined>;
 }
 export declare class DeliveryUnavailable extends Error {
 }

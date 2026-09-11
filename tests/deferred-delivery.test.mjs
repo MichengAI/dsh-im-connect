@@ -205,3 +205,24 @@ test('冷恢复保留含工具调用消息的文字，但不包含工具参数',
   history[2].data.message.content.push({ type: 'tool-call', arguments: 'secret tool input' })
   assert.equal(recoverTurn(history, 'r').text, 'answer')
 })
+
+
+for (const fail of [false, true]) test(`手动重试未知结果查不到或读失败仍暂停：${fail}`, async t => {
+  const { journal } = fixture(t)
+  journal.reject('r')
+  let reads = 0
+  const unavailable = async () => { reads++; if (fail) throw new Error('history unavailable') }
+  const result = await journal.recover('r', unavailable, valid, async () => assert.fail('no send'), chunks, true)
+  assert.equal(result, fail ? 'unavailable' : 'missing')
+  assert.equal(journal.list()[0].status, 'unknown')
+  await journal.recover('r', unavailable, valid, async () => assert.fail('no send'), chunks)
+  assert.equal(reads, 1)
+})
+
+test('拒绝记录落盘失败仍释放活动占用，并在本进程禁止自动恢复', async t => {
+  const { journal } = fixture(t)
+  journal.flush = () => { throw new Error('disk full') }
+  assert.throws(() => journal.reject('r'), /disk full/)
+  assert.equal(journal.active.has('r'), false)
+  await journal.recover('r', async () => assert.fail('no read'), valid, async () => assert.fail('no send'), chunks)
+})

@@ -463,8 +463,8 @@ export class ImEngine {
     return binding?.sessionId === entry.sessionId && decideAccess({ userAllowed: this.isAuthorized(entry.channelId, channel, entry.message), kind: entry.message.kind, addressed: true }) === 'allow'
   }
 
-  private async recoverDelivery(entry: DeferredEntry, fresh = false, explicit = false): Promise<void> {
-    await this.deferred.recover(entry.id, async current => {
+  private async recoverDelivery(entry: DeferredEntry, fresh = false, explicit = false): Promise<'missing' | 'unavailable' | undefined> {
+    return this.deferred.recover(entry.id, async current => {
       const signal = AbortSignal.any([this.recoveryScope.signal, AbortSignal.timeout(30_000)])
       const result = await readDeliveryHistory(this.ctx, current.sessionId, current.id, signal)
       if (!result) return undefined
@@ -502,7 +502,8 @@ export class ImEngine {
         const entry = entries.find(item => item.id === args[1])
         if (args.length !== 2 || args[0] !== 'retry' || !entry) return replyText('用法：/delivery；补发指定结果：/delivery retry 记录ID。记录仅属于当前聊天和发起人。')
         if (!this.validDelivery(entry)) return replyText('无法补发：请先恢复原会话绑定及访问权限。不会发送到其他会话。')
-        await this.recoverDelivery(entry, true, true)
+        const result = await this.recoverDelivery(entry, true, true)
+        if (result) return replyText('暂未找到可补发的结果，本次未发送，自动补发状态未改变。可稍后重试，或在网页查看原会话。')
       }
       const current = this.deferred.list(channel.id, message).slice(-10).reverse()
       if (!current.length) return replyText('没有近期交付记录。直接发送消息开始任务；查看最近记录：/history。')
@@ -591,7 +592,12 @@ export class ImEngine {
       }
       accepted = true
       this.log(`[${channel.id}] 已注入 ${binding.sessionId}`)
-    } catch (error) { if (requestId) this.deferred.reject(requestId, !submitted); reject(); throw error }
+    } catch (error) {
+      try { if (requestId) this.deferred.reject(requestId, !submitted) }
+      catch { this.log('[im-delivery] 注入失败记录落盘失败，已暂停本进程恢复') }
+      try { reject() } catch { this.log('[im-progress] 注入失败后的进度清理失败') }
+      throw error
+    }
     finally { if (!accepted) for (const item of items) item.finish('cancelled') }
   }
 

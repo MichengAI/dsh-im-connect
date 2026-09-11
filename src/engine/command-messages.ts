@@ -1,5 +1,7 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
+  "✅已结束": "✅Finished",
+  "暂未找到可补发的结果，本次未发送，自动补发状态未改变。可稍后重试，或在网页查看原会话。": "No result is available to resend right now. Nothing was sent, and automatic recovery remains unchanged. Try again later or open the original session on the web.",
   "未提交任务，不需要补发": "Task was not submitted; no resend needed",
   "补发此前任务的结果（不会重新执行任务）：": "Recovered result from an earlier task (the task was not run again):",
   "此前任务已完成。文件请在原会话查看。": "The earlier task completed. Open the original session to view files.",

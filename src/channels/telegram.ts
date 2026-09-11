@@ -246,7 +246,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     typingIntervalMs: 5000,
     async addStatusReaction(message, state, _label, signal) {
       if (!message.messageId || state === 'cancelled') return
-      const emoji = state === 'success' ? '👍' : state === 'error' ? '👎' : state === 'waiting' ? '🤔' : '👀'
+      const emoji = (state === 'success' || state === 'ended') ? '👍' : state === 'error' ? '👎' : state === 'waiting' ? '🤔' : '👀'
       await fileRequest(`${API}/bot${token}/setMessageReaction`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, signal,
         body: JSON.stringify({ chat_id: message.chatId, message_id: Number(message.messageId), reaction: [{ type: 'emoji', emoji }] }),

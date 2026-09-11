@@ -42,6 +42,7 @@ export class DeferredDelivery {
   private entries: DeferredEntry[] = []
   private readonly queue = new KeyedSerialQueue()
   private readonly active = new Set<string>()
+  private readonly quarantined = new Set<string>()
   constructor(private readonly file?: string) {
     if (!file) return
     try {
@@ -82,8 +83,9 @@ export class DeferredDelivery {
     this.active.add(id)
   }
   reject(id: string, definite = false): void {
-    this.patch(id, { status: definite ? 'rejected' : 'unknown' })
-    this.active.delete(id)
+    try { this.patch(id, { status: definite ? 'rejected' : 'unknown' }) }
+    catch (error) { this.quarantined.add(id); throw error }
+    finally { this.active.delete(id) }
   }
   patch(id: string, update: Partial<DeferredEntry>): void {
     const entry = this.entries.find(e => e.id === id)
@@ -124,18 +126,22 @@ export class DeferredDelivery {
     for (const e of this.entries) if ((!sessionId || e.sessionId === sessionId) && (!channelId || e.channelId === channelId)) this.active.delete(e.id)
   }
   async recover(id: string, read: (entry: DeferredEntry) => Promise<{ text: string; turn?: number } | undefined>, valid: (entry: DeferredEntry) => boolean,
-    send: (entry: DeferredEntry, text: string) => Promise<void>, chunks: (text: string) => string[], explicit = false): Promise<void> {
+    send: (entry: DeferredEntry, text: string) => Promise<void>, chunks: (text: string) => string[], explicit = false): Promise<'missing' | 'unavailable' | undefined> {
     const sessionId = this.entries.find(e => e.id === id)?.sessionId ?? id
     return this.queue.run(sessionId, async () => {
       const entry = this.entries.find(e => e.id === id)
-      if (!entry || this.active.has(id)) return
-      if (explicit && ['unknown', 'blocked'].includes(entry.status)) this.patch(id, { status: entry.text ? 'ready' : 'waiting' })
-      if (!['waiting', 'ready'].includes(entry.status)) return
+      if (!entry || this.active.has(id) || this.quarantined.has(id)) return
+      const originalStatus = entry.status
+      const pausedRetry = explicit && ['unknown', 'blocked'].includes(originalStatus)
+      if (!pausedRetry && !['waiting', 'ready'].includes(entry.status)) return
       if (Date.now() - entry.createdAt > 7 * 86400_000) { this.patch(id, { status: 'expired' }); return }
       if (!valid(entry)) { this.patch(id, { status: 'blocked' }); return }
       if (!entry.text) {
-        const result = await read({ ...entry })
-        if (!result || !['waiting', 'ready'].includes(entry.status)) return
+        let result: { text: string; turn?: number } | undefined
+        try { result = await read({ ...entry }) }
+        catch (error) { if (explicit) return 'unavailable'; throw error }
+        if (!result) return explicit ? 'missing' : undefined
+        if (entry.status !== originalStatus) return
         this.patch(id, { text: result.text, turn: result.turn ?? entry.turn, status: 'ready' })
       }
       if (!valid(entry)) { this.patch(id, { status: 'blocked' }); return }

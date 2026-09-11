@@ -16,7 +16,7 @@ export declare class MessageProgress {
     }, log: (line: string) => void, initial?: 'queued' | 'processing');
     private safely;
     update(state: 'queued' | 'processing' | 'waiting'): void;
-    finish(state: 'success' | 'error' | 'cancelled' | 'cleared'): void;
+    finish(state: 'success' | 'ended' | 'error' | 'cancelled' | 'cleared'): void;
     isFinished(): boolean;
     settled(): Promise<void>;
     private transition;

@@ -23,7 +23,7 @@ export interface ReplyStream {
     update(text: string): Promise<void>;
     finish(text: string): Promise<void>;
 }
-export type MessageStatus = 'queued' | 'processing' | 'waiting' | 'success' | 'error' | 'cancelled' | 'cleared';
+export type MessageStatus = 'queued' | 'processing' | 'waiting' | 'success' | 'ended' | 'error' | 'cancelled' | 'cleared';
 /** 已发送卡片的更新句柄；更新只能修改原消息，不能再次发送。 */
 export interface ChoiceReceipt {
     close(text: string): Promise<void>;
