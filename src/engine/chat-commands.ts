@@ -1,3 +1,4 @@
+import { splitText } from './split.js'
 import type { Choice } from './choices.js'
 import { exportSession } from './session-export.js'
 import { replyText, withReplyLocale } from './command-locale.js'
@@ -22,7 +23,7 @@ interface Descriptor { name: string; description: string }
 export interface CommandHost { get(name: string): unknown }
 export const chatControlHelp = () => [
   replyText('IM 助理已连接 DeepSeek Harness。直接发送文字即可开始任务。'), replyText('例如：帮我整理今天的待办。'), '',
-  replyText('/menu 或 /m — 打开操作菜单'),
+  replyText('/menu 或 /m — 打开操作菜单'), '',
   replyText('会话与工作区'),
   replyText('/new — 新开会话（也可用 /clear）；旧会话保留在频道列表'),
   replyText('/sessions [页码] — 列出会话；/session 序号或ID — 切换会话'),
@@ -128,12 +129,20 @@ export class ChatCommands {
           }
         }
         const navigation: { choices?: Choice[] } = {}
-        const text = await this.run(channel, msg, signal, navigation)
+        let text = await this.run(channel, msg, signal, navigation)
         if (!text) return text
         const command = /^\/([a-z][a-z0-9_-]*)/i.exec(msg.text.trim())?.[1]?.toLowerCase() ?? ''
         const current = this.router.lookup(channel.id, msg.kind ?? 'dm', msg.chatId)
         const choices = navigation.choices ?? commandNavigation(command, !!current)
         if (!choices.length) return text
+        if (command === 'help' && channel.sendChoices && this.showChoices) {
+          // 长帮助先按普通消息投递，短导航卡片不再承载正文，避免渠道容量差异。
+          for (const part of splitText(text, channel.maxMessageLength)) {
+            signal.throwIfAborted()
+            await channel.send(msg.chatId, part)
+          }
+          text = replyText('帮助导航')
+        }
         const fallback = text + related(replyText('接下来可以：'), ...choices.map(choice => `${choice.label} — ${choice.value}`))
         // 导航发送失败不能把已完成的命令改报失败；新会话的按钮绑定切换后的会话。
         if (channel.sendChoices && this.showChoices && !signal.aborted) {
@@ -234,9 +243,20 @@ export class ChatCommands {
         ]
       }
       {
-        // 为上一页、下一页和返回入口预留容量，主菜单也必须分页。
-        const pageSize = channel.choiceLimits ? Math.max(1, channel.choiceLimits.maxButtons - 3) : 8
-        const pages = Math.max(1, Math.ceil(choices.length / pageSize))
+        // 按每页实际需要的导航按钮计算容量，首页不预留不存在的上一页。
+        const limit = channel.choiceLimits?.maxButtons ?? 11
+        const slices: Choice[][] = []
+        let offset = 0
+        do {
+          const back = section ? 1 : slices.length ? 1 : 0
+          const previous = slices.length ? 1 : 0
+          const remaining = choices.length - offset
+          const capacity = Math.max(1, limit - back - previous)
+          const size = remaining <= capacity ? capacity : Math.max(1, capacity - 1)
+          slices.push(choices.slice(offset, offset + size))
+          offset += size
+        } while (offset < choices.length)
+        const pages = slices.length
         if (page > pages) throw new Error(replyText('没有第 {0} 页，共 {1} 页。', page, pages))
         const heading = section === 'sessions' ? replyText('选择会话') : section === 'workspaces' ? replyText('选择工作区') : section === 'reasoning' ? text : section === 'presets' ? replyText('选择预设') : section === 'models' ? replyText('选择模型') : replyText('助手操作菜单')
         // 企业微信正文空间有限，菜单展示导航，配置详情通过 /status 查询。
@@ -244,13 +264,13 @@ export class ChatCommands {
         text += ` · ${page}/${pages}`
         if (section === 'presets') text += '\n' + replyText('选择后在当前工作区新建并切换会话，旧会话保留。账号默认预设不变。')
         if (!choices.length) text += '\n' + replyText('暂无可选项，可返回菜单选择其他操作。')
-        choices = choices.slice((page - 1) * pageSize, page * pageSize)
+        choices = slices[page - 1]!
         if (section === 'reasoning') choices = choices.map((choice, i) => ({ ...choice, displayValue: `/reasoning ${i + 1}` }))
         if (section) this.remember(`${scope}:${section}`, choices.map(choice => choice.value.slice(choice.value.indexOf(' ') + 1)))
         const pageCommand = section ? `/menu ${section}` : '/menu'
         if (page > 1) choices.push({ label: replyText('上一页'), value: `${pageCommand} ${page - 1}` })
         if (page < pages) choices.push({ label: replyText('下一页'), value: `${pageCommand} ${page + 1}` })
-        if (current && pages === 1 && ['models', 'presets', 'reasoning'].includes(section)) {
+        if (current && pages === 1 && choices.length + 3 <= limit && ['models', 'presets', 'reasoning'].includes(section)) {
           choices.push(...commandNavigation(section, true).filter(choice => choice.value !== '/menu' && choice.value !== `/menu ${section}`))
         }
         if (section || page > 1) choices.push({ label: replyText('返回菜单'), value: '/menu' })

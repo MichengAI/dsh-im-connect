@@ -138,3 +138,15 @@ test('文字降级显示易读指令，执行仍使用绑定动作', async () =>
   assert.doesNotMatch(text, /opaque/)
   assert.equal(store.resolve('bot', { ...msg, text: '1' }, 's'), '/reasoning --choice opaque')
 })
+
+
+test('导航卡片不重复按钮文字，文字降级不要求点击不存在的按钮', async () => {
+  const store = new ChoiceStore()
+  let card
+  const choices = [{ label: '选择会话', value: '/menu sessions' }]
+  await store.show({ id: 'native', sendChoices: async (_, text) => { card = text } }, msg, '接下来可以：', choices, undefined, undefined, undefined, false)
+  assert.doesNotMatch(card, /选择会话|\/menu sessions/)
+  const text = await store.show({ id: 'text' }, msg, '接下来可以：', choices, undefined, undefined, undefined, false)
+  assert.match(text, /选择会话 — \/menu sessions/)
+  assert.doesNotMatch(text, /点击/)
+})

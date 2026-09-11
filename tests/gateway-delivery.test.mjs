@@ -156,7 +156,7 @@ for (const mode of ['completed', 'error', 'disabled', 'switched', 'waiting', 'ne
   } else {
     assert.equal(cards.length, 1)
     assert.match(cards[0].text, mode === 'error' ? /处理失败/ : /已完成/)
-    assert.match(cards[0].text, /\/history/)
+    assert.equal(cards[0].buttons.length, 3)
     assert.ok(!sent.some(text => text.includes('助手没有生成回复')))
     assert.equal(engine.choices.resolve('qq', { chatId: 'user-1', userId: 'u', kind: 'dm', text: '1' }, sessionId), undefined)
   }

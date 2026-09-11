@@ -46,16 +46,15 @@ test('企业微信主菜单按容量分页，每页可继续或返回且不漏�
   const shown = []
   const f = fixture({ channel: { choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (_, __, text, choices) => { shown.push({ text, choices }); return '' } })
   await f.run('/menu')
-  assert.match(shown[0].text, /1\/3/)
+  assert.match(shown[0].text, /1\/2/)
   assert.equal(shown[0].choices.at(-1).value, '/menu 2')
   await f.run('/menu 2')
-  await f.run('/menu 3')
   assert.ok(shown.every(page => page.choices.length <= 6))
-  assert.equal(shown[2].choices.at(-1).value, '/menu')
+  assert.equal(shown[1].choices.at(-1).value, '/menu')
   assert.ok(shown.flatMap(page => page.choices).some(choice => choice.value === '/export'))
   await f.run('/menu sessions')
-  assert.match(shown[3].text, /选择会话/)
-  assert.equal(shown[3].choices.at(-1).value, '/menu')
+  assert.match(shown[2].text, /选择会话/)
+  assert.equal(shown[2].choices.at(-1).value, '/menu')
 })
 
 test('原生列表直接选择，序号映射当前页；文字渠道保持原列表', async () => {
@@ -705,4 +704,18 @@ test('真实宿主 Controller 创建预设会话并在归属失败时保留新 I
       assert.equal(f.calls.find(c => c[0] === 'bind')[4], id)
     }
   }
+})
+
+
+test('帮助正文独立发送，短导航卡片不受企微正文上限影响', async () => {
+  const sent = [], shown = []
+  const f = fixture({ channel: { sendChoices() {}, send: async (_, text) => sent.push(text), maxMessageLength: 4000, choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (...args) => { shown.push(args); return '' } })
+  assert.equal(await f.run('/help'), '')
+  assert.equal(sent.length, 1)
+  assert.match(sent[0], /\n\n会话与工作区\n/)
+  assert.match(sent[0], /\n\n模型与推理\n/)
+  assert.match(sent[0], /\n\n扩展命令：\n/)
+  assert.ok(shown[0][2].length < 500)
+  assert.doesNotMatch(shown[0][2], /\/compact|\/new/)
+  assert.deepEqual(shown[0][3].map(c => c.value), ['/menu sessions', '/menu workspaces', '/menu'])
 })

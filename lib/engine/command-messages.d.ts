@@ -1,5 +1,9 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly "\u70B9\u51FB\u4E0B\u65B9\u6309\u94AE\u9009\u62E9\u64CD\u4F5C\uFF1B15 \u5206\u949F\u5185\u6709\u6548\uFF0C\u666E\u901A\u6587\u5B57\u7EE7\u7EED\u804A\u5929\u3002": "Choose an action using the buttons below. Valid for 15 minutes; ordinary text continues the chat.";
+    readonly "\u53D1\u9001\u5BF9\u5E94\u547D\u4EE4\u5373\u53EF\u64CD\u4F5C\uFF0C\u666E\u901A\u6587\u5B57\u7EE7\u7EED\u804A\u5929\u3002": "Send the corresponding command to take an action, or send ordinary text to continue chatting.";
+    readonly "\u56DE\u590D\u5E8F\u53F7\u6216\u53D1\u9001\u5BF9\u5E94\u547D\u4EE4\uFF1B15 \u5206\u949F\u5185\u6709\u6548\uFF0C\u666E\u901A\u6587\u5B57\u9000\u51FA\u83DC\u5355\u3002": "Reply with a number or send a command. Valid for 15 minutes; ordinary text exits the menu.";
+    readonly 帮助导航: "Help navigation";
     readonly "\u672C\u6B21\u5904\u7406\u5DF2\u7ED3\u675F\uFF0C\u4F46\u90E8\u5206\u56DE\u590D\u6216\u6587\u4EF6\u672A\u80FD\u53D1\u9001\u3002\u8BF7\u5728\u7F51\u9875\u67E5\u770B\u5B8C\u6574\u7ED3\u679C\uFF1B\u4E0D\u4F1A\u81EA\u52A8\u91CD\u590D\u6267\u884C\u4EFB\u52A1\u3002": "This turn ended, but some responses or files could not be delivered. View the full results on the web. The task will not be run again automatically.";
     readonly "\u672C\u6B21\u5904\u7406\u5DF2\u505C\u6B62\uFF0C\u5DF2\u8FD4\u56DE\u7684\u5185\u5BB9\u4FDD\u7559\u3002\u53EF\u76F4\u63A5\u53D1\u6D88\u606F\u7EE7\u7EED\u3002": "This turn stopped. Any results already sent are kept. Send a message to continue.";
     readonly "\u672C\u6B21\u5904\u7406\u5931\u8D25\uFF0C\u5DF2\u8FD4\u56DE\u7684\u5185\u5BB9\u4FDD\u7559\u3002\u8BF7\u67E5\u770B\u4F1A\u8BDD\u72B6\u6001\uFF0C\u6216\u8865\u5145\u8981\u6C42\u540E\u91CD\u8BD5\u3002": "This turn failed. Any results already sent are kept. Check the session status, or send more details to try again.";
