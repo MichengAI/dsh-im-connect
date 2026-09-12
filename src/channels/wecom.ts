@@ -364,9 +364,9 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       await broker.send(chatId, text)
     },
     choiceLimits: { maxButtons: 6, maxTextLength: 4000 },
-    async sendChoices(message, text, buttons) {
+    async sendChoices(message, text, buttons, options) {
       if (!client || !broker || buttons.length > 6 || text.length > 4000) throw new Error('use-text-menu')
-      const fullText = text + '\n\n' + buttons.map((button, index) => `${index + 1}. ${button.label}`).join('\n')
+      const fullText = options?.numberedChoicesIncluded ? text : text + '\n\n' + buttons.map((button, index) => `${index + 1}. ${button.label}`).join('\n')
       if (fullText.length > 4000) throw new Error('use-text-menu')
       await broker.sendCard(message.chatId, message.messageId, {
         card_type: 'button_interaction', task_id: buttons[0]?.token.split(':')[0],

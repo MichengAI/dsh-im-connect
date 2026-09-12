@@ -42,7 +42,8 @@ export interface ChannelAdapter {
   canDeliverDeferred?(): boolean
   /** 原生选择卡片的容量，用于菜单分页；超长正文仍完整降级为文字。 */
   readonly choiceLimits?: { maxButtons: number; maxTextLength: number }
-  sendChoices?(message: ImMessage, text: string, buttons: Array<{ label: string; token: string }>): Promise<void | ChoiceReceipt>
+  /** numberedChoicesIncluded 表示正文已包含与按钮顺序一致的完整编号选项，渠道无需再次追加。 */
+  sendChoices?(message: ImMessage, text: string, buttons: Array<{ label: string; token: string }>, options?: { numberedChoicesIncluded?: boolean }): Promise<void | ChoiceReceipt>
   /** 发送宿主已允许读取的完整文件；失败必须抛错，取消后不继续提交消息。 */
   sendFile?(chatId: string, file: { name: string; data: Uint8Array }, signal?: AbortSignal): Promise<void>
   setMessageHandler(handler: (msg: ImMessage) => void | Promise<void>): void

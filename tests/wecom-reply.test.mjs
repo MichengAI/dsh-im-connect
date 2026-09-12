@@ -2,6 +2,25 @@ import assert from 'node:assert/strict'
 import test, { mock } from 'node:test'
 import { WSClient } from '@wecom/aibot-node-sdk'
 import { WecomReplyBroker, createWecomChannel } from '../lib/channels/wecom.js'
+import { ChoiceStore } from '../lib/engine/choices.js'
+
+for (const allowNumber of [true, false]) test(`企微菜单每个选项只展示一次：allowNumber=${allowNumber}`, async t => {
+  t.after(() => mock.restoreAll())
+  const calls = []
+  mock.method(WSClient.prototype, 'connect', function () { this.emit('authenticated') })
+  mock.method(WSClient.prototype, 'disconnect', () => {})
+  mock.method(WSClient.prototype, 'sendMessage', async (_, body) => calls.push(body))
+  const channel = createWecomChannel({ botId: 'test', secret: 'test' }, () => {})
+  t.after(() => channel.stop())
+  await channel.start()
+  const store = new ChoiceStore()
+  const choices = ['新会话', '选择会话', '选择工作区', '选择模型', '停止任务', '下一页'].map((label, i) => ({ label, value: `/test${i}` }))
+  assert.equal(await store.show(channel, { chatId: 'u', userId: 'u' }, '助手操作菜单 · 1/2', choices, undefined, () => true, undefined, allowNumber), '')
+  assert.equal(calls.length, 2)
+  const body = calls[0].markdown.content
+  for (const [i, choice] of choices.entries()) assert.equal(body.split(`${i + 1}. ${choice.label}`).length - 1, 1)
+  assert.deepEqual(calls[1].template_card.button_list.map(button => button.text), ['1', '2', '3', '4', '5', '6'])
+})
 
 for (const mode of ['send', 'finish']) for (const code of [846605, '846605', 123, undefined]) {
   test(`企微正文仅明确过期回调降级：${mode}/${code}`, async t => {
