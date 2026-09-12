@@ -1,5 +1,6 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly 按上方完整说明选择操作: "Choose an option described above";
     readonly "\u2705\u5DF2\u7ED3\u675F": "✅Finished";
     readonly "\u6682\u672A\u627E\u5230\u53EF\u8865\u53D1\u7684\u7ED3\u679C\uFF0C\u672C\u6B21\u672A\u53D1\u9001\uFF0C\u81EA\u52A8\u8865\u53D1\u72B6\u6001\u672A\u6539\u53D8\u3002\u53EF\u7A0D\u540E\u91CD\u8BD5\uFF0C\u6216\u5728\u7F51\u9875\u67E5\u770B\u539F\u4F1A\u8BDD\u3002": "No result is available to resend right now. Nothing was sent, and automatic recovery remains unchanged. Try again later or open the original session on the web.";
     readonly "\u672A\u63D0\u4EA4\u4EFB\u52A1\uFF0C\u4E0D\u9700\u8981\u8865\u53D1": "Task was not submitted; no resend needed";

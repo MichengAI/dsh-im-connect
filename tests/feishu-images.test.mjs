@@ -3,6 +3,22 @@ import assert from 'node:assert/strict'
 import { Readable } from 'node:stream'
 import * as feishu from '../lib/channels/feishu.js'
 
+test('飞书媒体失败提示的业务拒绝记录失败，不泄漏响应详情', async () => {
+  let callback
+  const logs = []
+  const sdk = { defaultHttpInstance: {}, Client: class {
+    request = async () => ({ bot: { open_id: 'bot' } })
+    im = { message: { create: async () => ({ code: 230001, msg: 'private-detail' }) } }
+  }, EventDispatcher: class { register(events) { callback = events['im.message.receive_v1']; return this } }, WSClient: class { async start() {} close() {} } }
+  const channel = feishu.createFeishuChannel('feishu', { appId: 'test', appSecret: 'test' }, line => logs.push(line), async () => sdk)
+  try {
+    await channel.start()
+    await callback({ message: { chat_id: 'c', chat_type: 'p2p', message_id: 'm', message_type: 'image', content: '{}' } })
+    assert.ok(logs.some(line => line.includes('媒体提示发送失败')))
+    assert.ok(!logs.some(line => line.includes('private-detail')))
+  } finally { await channel.stop() }
+})
+
 for (const id of ['feishu', 'lark']) test(`${id} rejects excess image count before any resource download`, async () => {
   let callback, downloads = 0
   const received = [], replies = []

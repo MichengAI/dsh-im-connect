@@ -122,7 +122,7 @@ export declare class SessionRouter {
     private create;
     private resume;
     private createHandle;
-    attachMappedSessions(): Promise<void>;
+    attachMappedSessions(active?: () => boolean): Promise<void>;
     private syncStoredTitle;
     private recoverHistory;
     private isArchived;

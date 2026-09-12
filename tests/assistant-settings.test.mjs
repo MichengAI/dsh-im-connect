@@ -6,6 +6,20 @@ import { join } from 'node:path'
 import { normalizeAssistantModel, normalizeEffort, normalizePermission, normalizeWorkspacePath, pickAssistantModel } from '../lib/engine/assistant-settings.js'
 import { ChannelManager } from '../lib/manager.js'
 
+test('初始化期间卸载后不得恢复会话或访问失效服务', async t => {
+  const manager = makeManager(t)
+  let release
+  const waiting = new Promise(resolve => { release = resolve })
+  manager.migrateLegacyWeixinToken = () => waiting
+  manager.clearUnsupportedReasoningEfforts = async () => { assert.fail('卸载后仍读取服务') }
+  const work = manager.initEnabled()
+  manager.disposeApi()
+  release()
+  await work
+  manager.engine.attachMappedSessions = async () => { assert.fail('卸载后仍恢复会话') }
+  await manager.attachMappedSessions()
+})
+
 test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', () => {
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   assert.equal(manifest.engines?.node, '^22.19.0 || >=24.0.0')

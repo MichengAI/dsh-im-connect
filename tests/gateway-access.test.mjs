@@ -1082,14 +1082,17 @@ test('审批按钮重验操作者且不可批准下一次请求，命令关闭�
   const f = makeEngine(t, undefined, undefined, {}, { resolveCommandPermissions: () => ({ dm: { enabled: false, users: [] }, group: { enabled: false, users: [] } }) })
   t.after(() => f.engine.dispose()); f.engine.addAllowed('telegram', 'user-1'); f.engine.addAllowed('telegram', 'other')
   const buttons = []
-  f.engine.channels.get('telegram').sendChoices = async (_, __, choices) => buttons.push(choices)
+  f.engine.channels.get('telegram').sendChoices = async (message, __, choices) => {
+    if (buttons.length === 1) assert.equal(message.messageId, 'approval-answer')
+    buttons.push(choices)
+  }
   const req = { session: { id: f.dmSessionId }, toolName: 'read' }
   const first = f.handlers['approval/request'](req, async () => 'fallback')
   await waitFor(() => f.engine.broker.isReady(f.dmSessionId))
   const token = buttons[0][0].token
   await f.inbound({ chatId: 'user-1', userId: 'other', text: '', kind: 'dm', actionToken: token })
   assert.equal(f.engine.broker.isReady(f.dmSessionId), true)
-  await f.inbound({ chatId: 'user-1', userId: 'user-1', text: '', kind: 'dm', actionToken: token })
+  await f.inbound({ chatId: 'user-1', userId: 'user-1', text: '', kind: 'dm', actionToken: token, messageId: 'approval-answer' })
   assert.deepEqual(await first, { behavior: 'allow' })
   const second = f.handlers['approval/request'](req, async () => 'fallback')
   await waitFor(() => buttons.length === 2 && f.engine.broker.isReady(f.dmSessionId))
@@ -1103,10 +1106,13 @@ test('多选问答按钮切换选项后显式提交，返回同一 Host 答案�
   const f = makeEngine(t)
   t.after(() => f.engine.dispose()); f.engine.addAllowed('telegram', 'user-1')
   const cards = []
-  f.engine.channels.get('telegram').sendChoices = async (_, __, buttons) => cards.push(buttons)
+  f.engine.channels.get('telegram').sendChoices = async (message, __, buttons) => {
+    if (cards.length) assert.equal(message.messageId, `click-${cards.length}`)
+    cards.push(buttons)
+  }
   const work = f.handlers['user-questions/request']({ agent: { id: f.dmSessionId }, questions: [{ id: 'q', question: '选择', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] }] }, async () => ({ answers: [] }))
   await waitFor(() => f.engine.questions.isReady(f.dmSessionId))
-  const click = token => f.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '', actionToken: token })
+  const click = token => f.inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '', actionToken: token, messageId: `click-${cards.length}` })
   await click(cards.at(-1)[0].token); await waitFor(() => cards.length === 2)
   await click(cards.at(-1)[1].token); await waitFor(() => cards.length === 3)
   assert.equal(f.engine.questions.has(f.dmSessionId), true)

@@ -26,6 +26,7 @@ export declare class ImEngine {
     private readonly merger;
     private readonly extraAllow;
     private readonly sessionActors;
+    private readonly interactionMessageIds;
     private readonly questionActors;
     private readonly questionDeliveries;
     private readonly questionPromptDelivered;

@@ -135,7 +135,11 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
       const body = await res.text().catch(() => '')
       throw new Error(`qq ${path}: HTTP ${res.status} ${body.slice(0, 200)}`)
     }
-    return res.json() as Promise<T>
+    const data = await res.json() as T & { code?: number | string }
+    if (data?.code !== undefined && data.code !== 0 && data.code !== '0') {
+      throw new Error(`qq request rejected: code=${data.code}`)
+    }
+    return data
   }
 
   function remember(chatId: string, kind: 'dm' | 'group', messageId?: string): void {

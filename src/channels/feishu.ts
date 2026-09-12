@@ -179,6 +179,9 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               await client?.im.message.create({
                 params: { receive_id_type: 'chat_id' },
                 data: { receive_id: message.chat_id, msg_type: 'text', content: JSON.stringify({ text: '图片或消息读取失败，请重发图片或发送文字。' }) },
+              }).then(result => {
+                const code = (result as { code?: number | string } | undefined)?.code
+                if (code !== undefined && code !== 0 && code !== '0') throw new Error('media-notice-rejected')
               }).catch(() => log(`[${id}] 媒体提示发送失败`))
               return
             }
@@ -214,8 +217,8 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       const result = await client.im.message.create({
         params: { receive_id_type: 'chat_id' },
         data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text }) },
-      }) as { code?: number } | undefined
-      if (result?.code) throw new Error(`${id}: text-send-rejected code=${result.code}`)
+      }) as { code?: number | string } | undefined
+      if (result?.code !== undefined && result.code !== 0 && result.code !== '0') throw new Error(`${id}: text-send-rejected code=${result.code}`)
     },
     async sendChoices(message, text, buttons) {
       if (!client) throw new Error('channel-unavailable')

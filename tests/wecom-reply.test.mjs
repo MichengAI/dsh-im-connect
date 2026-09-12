@@ -1,6 +1,60 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
-import { WecomReplyBroker } from '../lib/channels/wecom.js'
+import test, { mock } from 'node:test'
+import { WSClient } from '@wecom/aibot-node-sdk'
+import { WecomReplyBroker, createWecomChannel } from '../lib/channels/wecom.js'
+
+test('企微长问题保留全部说明，按钮编号与全文选项一致', async t => {
+  t.after(() => mock.restoreAll())
+  const calls = []
+  mock.method(WSClient.prototype, 'connect', function () { this.emit('authenticated') })
+  mock.method(WSClient.prototype, 'disconnect', () => {})
+  mock.method(WSClient.prototype, 'sendMessage', async (_, body) => calls.push(body))
+  const channel = createWecomChannel({ botId: 'test', secret: 'test' }, () => {})
+  t.after(() => channel.stop())
+  await channel.start()
+  const text = '完整问题与注意事项。'.repeat(60)
+  const buttons = [{ label: '把已有任务改成每天早上九点并保留原来的推送目标', token: 't:0' }, { label: '新建独立任务', token: 't:1' }]
+  await channel.sendChoices({ chatId: 'user' }, text, buttons)
+  assert.equal(calls[0].msgtype, 'markdown')
+  assert.ok(calls[0].markdown.content.startsWith(text))
+  assert.ok(calls[0].markdown.content.includes(`1. ${buttons[0].label}`))
+  assert.deepEqual(calls[1].template_card.button_list.map(button => [button.text, button.key]), [['1', 't:0'], ['2', 't:1']])
+  assert.equal(calls[1].template_card.sub_title_text, undefined)
+})
+
+test('企微完整说明已发送但卡片失败，不重复正文或留下旧回调', async t => {
+  const client = fakeClient()
+  client.sendMessage = async () => { throw new Error('card failed') }
+  const broker = new WecomReplyBroker(client, () => {})
+  t.after(() => broker.dispose())
+  broker.remember('user', { body: { msgid: 'q' } })
+  await broker.sendCard('user', 'q', {}, '1. 完整选项')
+  assert.equal(client.calls.length, 1)
+  assert.equal(broker.pendingCount(), 0)
+})
+
+test('企微先投递完整说明再发操作卡片，使用对应消息帧', async t => {
+  const client = fakeClient()
+  const broker = new WecomReplyBroker(client, () => {})
+  t.after(() => broker.dispose())
+  const frame = { body: { msgid: 'question' } }
+  broker.remember('user', frame)
+  const text = '完整问题\n1. 把已有任务改成 09:00\n2. 新建另一个任务\n3. 保留原任务'
+  await broker.sendCard('user', 'question', {}, text)
+  assert.deepEqual(client.calls.map(call => call.type), ['replyStream', 'sendMessage'])
+  assert.equal(client.calls[0].content, text)
+  assert.equal(client.calls[0].frame, frame)
+  assert.equal(broker.pendingCount(), 0)
+})
+
+test('数字消息 ID 与字符串输入使用相同的回调归属', async t => {
+  const client = fakeClient()
+  const broker = new WecomReplyBroker(client, () => {})
+  t.after(() => broker.dispose())
+  broker.remember('user', { body: { msgid: 123 } })
+  await broker.sendCard('user', '123', {})
+  assert.equal(broker.pendingCount(), 0)
+})
 
 function fakeClient() {
   const calls = []

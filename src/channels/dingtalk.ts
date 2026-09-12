@@ -17,8 +17,9 @@ async function sendWebhookText(webhook: string, text: string): Promise<void> {
     signal: timeoutSignal(30_000),
   })
   if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)
-  const result = await res.json() as { errcode?: number }
-  if (result.errcode !== 0) throw new Error(`dingtalk text-send-rejected errcode=${result.errcode ?? 'missing'}`)
+  let result: { errcode?: number | string } | null
+  try { result = await res.json() as typeof result } catch { throw new Error('dingtalk text-send-invalid-response') }
+  if (result?.errcode !== 0 && result?.errcode !== '0') throw new Error(`dingtalk text-send-rejected errcode=${result?.errcode ?? 'missing'}`)
 }
 
 async function postDingtalk(path: string, body: unknown, signal: AbortSignal, headers: Record<string, string> = {}) {

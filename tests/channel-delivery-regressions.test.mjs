@@ -5,6 +5,15 @@ import { createDingtalkChannel } from '../lib/channels/dingtalk.js'
 import { DingtalkCardClient, openDingtalkCardStream } from '../lib/channels/dingtalk-card.js'
 import { createFeishuChannel } from '../lib/channels/feishu.js'
 import { createTelegramChannel } from '../lib/channels/telegram.js'
+import { createQqChannel } from '../lib/channels/qq.js'
+
+test('QQ HTTP 成功但明确业务拒绝时不能算正文送达', async t => {
+  t.after(() => mock.restoreAll())
+  mock.method(globalThis, 'fetch', async url => Response.json(String(url).includes('getAppAccessToken')
+    ? { access_token: 'test', expires_in: 7200 } : { code: 40001, message: 'mock rejected' }))
+  const channel = createQqChannel({ appId: 'test', appSecret: 'test' }, () => {})
+  await assert.rejects(channel.send('user', '正文'), /40001/)
+})
 
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
@@ -29,7 +38,7 @@ for (const failed of [false, true]) test(`钉钉收口等待在途增量：更�
   assert.equal(calls.at(-1), 'finished')
 })
 
-for (const fallback of [false, true]) test(`钉钉文字业务拒绝必须抛错：降级=${fallback}`, async t => {
+for (const fallback of [false, true]) for (const response of ['rejected', 'invalid', 'string-zero']) test(`钉钉文字回执校验：降级=${fallback}，回执=${response}`, async t => {
   t.after(() => mock.restoreAll())
   const listeners = new Map()
   mock.method(DWClient.prototype, 'connect', async () => {})
@@ -37,7 +46,7 @@ for (const fallback of [false, true]) test(`钉钉文字业务拒绝必须抛错
   mock.method(DWClient.prototype, 'registerCallbackListener', (topic, handler) => { listeners.set(topic, handler) })
   mock.method(DWClient.prototype, 'socketCallBackResponse', () => {})
   mock.method(DingtalkCardClient.prototype, 'create', async () => { throw new Error('card unavailable') })
-  mock.method(globalThis, 'fetch', async () => Response.json({ errcode: 40035, errmsg: 'mock rejected' }))
+  mock.method(globalThis, 'fetch', async () => response === 'invalid' ? new Response('') : Response.json({ errcode: response === 'string-zero' ? '0' : 40035, errmsg: 'mock rejected' }))
   const channel = createDingtalkChannel({ clientId: 'test', clientSecret: 'test' }, () => {})
   t.after(() => channel.stop())
   channel.setMessageHandler(() => {})
@@ -45,7 +54,8 @@ for (const fallback of [false, true]) test(`钉钉文字业务拒绝必须抛错
   await listeners.get(TOPIC_ROBOT)({ data: JSON.stringify({ msgtype: 'text', text: { content: 'test' }, senderStaffId: 'user', conversationType: '1', msgId: 'msg', sessionWebhook: 'https://example.invalid/mock' }) })
   await tick()
   const send = fallback ? (await channel.beginReply('user')).finish : text => channel.send('user', text)
-  await assert.rejects(send('正文'), /40035/)
+  if (response === 'string-zero') await send('正文')
+  else await assert.rejects(send('正文'), response === 'invalid' ? /invalid-response/ : /40035/)
 })
 
 for (const id of ['feishu', 'lark']) test(`${id} 真实 SDK 的业务拒绝不能视为正文送达`, async t => {

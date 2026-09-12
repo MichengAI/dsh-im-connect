@@ -1,5 +1,6 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export const commandEnglish = {
+  "按上方完整说明选择操作": "Choose an option described above",
   "✅已结束": "✅Finished",
   "暂未找到可补发的结果，本次未发送，自动补发状态未改变。可稍后重试，或在网页查看原会话。": "No result is available to resend right now. Nothing was sent, and automatic recovery remains unchanged. Try again later or open the original session on the web.",
   "未提交任务，不需要补发": "Task was not submitted; no resend needed",

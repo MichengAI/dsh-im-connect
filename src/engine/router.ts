@@ -528,11 +528,14 @@ export class SessionRouter {
     return handle
   }
 
-  async attachMappedSessions(): Promise<void> {
+  async attachMappedSessions(active: () => boolean = () => true): Promise<void> {
     const started = Date.now()
+    if (!active()) return
     await this.recoverHistory()
+    if (!active()) return
     await this.pruneMissingSessions()
     for (const record of this.store.list()) {
+      if (!active()) return
       if (record.adopted || this.isArchived(record.sessionId)) continue
       await this.attachWorkspace(record.sessionId, record.channel, record.cwd)
     }

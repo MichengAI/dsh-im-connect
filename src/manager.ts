@@ -436,14 +436,17 @@ export class ChannelManager {
   }
 
   attachMappedSessions(): Promise<void> {
+    if (this.disposed) return Promise.resolve()
     return this.engine.attachMappedSessions()
   }
 
   async initEnabled(): Promise<void> {
+    if (this.disposed) return
     const started = Date.now()
     await this.migrateLegacyWeixinToken().catch((error) => {
       this.log(`[manager] 迁移旧版微信 token 失败，已保留原文件: ${error instanceof Error ? error.message : String(error)}`)
     })
+    if (this.disposed) return
     await this.clearUnsupportedReasoningEfforts()
     for (const [id, state] of Object.entries(this.store.channels)) {
       if (this.disposed) return

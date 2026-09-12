@@ -78,6 +78,7 @@ export class ImEngine {
   private readonly merger: SessionMerger
   private readonly extraAllow = new Map<string, Set<string>>()
   private readonly sessionActors = new Map<string, string>()
+  private readonly interactionMessageIds = new Map<string, string | undefined>()
   private readonly questionActors = new Map<string, string>()
   private readonly questionDeliveries = new Map<string, Promise<InteractionDeliveryResult>>()
   private readonly questionPromptDelivered = new Set<string>()
@@ -233,7 +234,7 @@ export class ImEngine {
   }
 
   attachMappedSessions(): Promise<void> {
-    return this.router.attachMappedSessions()
+    return this.router.attachMappedSessions(() => !this.disposed)
   }
 
   register(channel: ChannelAdapter): void {
@@ -277,6 +278,7 @@ export class ImEngine {
     this.choices.clear()
     this.progress.cancel()
     this.mergedMessages.clear()
+    this.interactionMessageIds.clear()
     this.chatCommands.clear()
     for (const scope of this.commandScopes.values()) scope.abort()
     this.commandScopes.clear()
@@ -319,6 +321,7 @@ export class ImEngine {
     this.questionSelections.delete(sessionId)
     this.questions.cancel(sessionId, reason)
     this.sessionActors.delete(sessionId)
+    this.interactionMessageIds.delete(sessionId)
     this.questionActors.delete(sessionId)
     this.questionDeliveries.delete(sessionId)
     this.questionPromptDelivered.delete(sessionId)
@@ -368,6 +371,7 @@ export class ImEngine {
       if (selected?.startsWith('#question:') && binding) {
         const current = this.questions.current(binding.sessionId)
         if (!current) return
+        this.interactionMessageIds.set(binding.sessionId, msg.messageId)
         const index = Number(selected.slice('#question:'.length))
         const values = this.questionSelections.get(binding.sessionId) ?? new Set<number>()
         if (values.has(index)) values.delete(index); else values.add(index)
@@ -408,6 +412,7 @@ export class ImEngine {
           await this.deliver(channel, msg.chatId, '请用文字回答当前问题。')
           return
         }
+        if (this.questions.isReady(binding.sessionId)) this.interactionMessageIds.set(binding.sessionId, msg.messageId)
         const result = this.questions.answer(binding.sessionId, text)
         if (result.handled) {
           this.questionSelections.delete(binding.sessionId)
@@ -579,6 +584,7 @@ export class ImEngine {
       if (files.length) content.push(...await withReplyLocale(this.ctx, () => filePromptParts(this.ctx, binding.sessionId, files, signal)))
       if (signal.aborted || content.length === 0) return
       if (msg.userId) this.sessionActors.set(binding.sessionId, msg.userId)
+      this.interactionMessageIds.set(binding.sessionId, msg.messageId)
       this.streams.reset(`${channel.id}:${msg.chatId}`)
       if (signal.aborted) return
       requestId = crypto.randomUUID()
@@ -633,6 +639,7 @@ export class ImEngine {
       await this.channels.get(channelId)?.send(msg.chatId, '审批详情仍在发送，请稍后再回复。').catch(() => undefined)
       return true
     }
+    this.interactionMessageIds.set(binding.sessionId, msg.messageId)
     const ok = this.broker.answer(binding.sessionId, allow)
     if (ok) await this.channels.get(channelId)?.send(msg.chatId, withReplyLocale(this.ctx, () => allow ? replyText('已批准。') : replyText('已拒绝。')))
     return ok
@@ -674,7 +681,7 @@ export class ImEngine {
       if (!wait) return DELEGATE_INTERACTION
       const ticket = this.broker.token(sessionId)
       const delivery = await this.deliverInteraction(channel, binding.chatId, prompt, req.signal, {
-        sessionId, message: { chatId: binding.chatId, userId: actor, kind: 'dm', text: '' },
+        sessionId, message: { chatId: binding.chatId, userId: actor, kind: 'dm', text: '', messageId: this.interactionMessageIds.get(sessionId) },
         choices: withReplyLocale(this.ctx, () => [{ label: replyText('批准一次'), value: 'allow' }, { label: replyText('拒绝'), value: 'reject' }]),
         valid: () => this.broker.token(sessionId) === ticket && this.broker.isReady(sessionId),
       })
@@ -1136,7 +1143,7 @@ export class ImEngine {
     })) ?? []
     if (current?.question.multiSelect && selected.size) choices.push({ label: withReplyLocale(this.ctx, () => replyText('提交所选')), value: [...selected].map(index => index + 1).join(',') })
     tracked = this.deliverInteraction(channel, chatId, text, signal, current && actor && choices.length ? {
-      sessionId, message: { chatId, userId: actor, kind: binding?.kind ?? 'dm', text: '' }, choices,
+      sessionId, message: { chatId, userId: actor, kind: binding?.kind ?? 'dm', text: '', messageId: this.interactionMessageIds.get(sessionId) }, choices,
       valid: () => this.questions.isReady(sessionId) && this.questions.current(sessionId)?.question === current.question,
     } : undefined).then((result) => {
       if (result.deliveredAny) this.questionPromptDelivered.add(sessionId)

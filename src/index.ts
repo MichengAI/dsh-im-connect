@@ -73,7 +73,10 @@ export function apply(ctx: Context, config: PluginConfig): void {
   log(`[boot] ChannelManager 构造 ${Date.now() - applyStarted}ms`)
   ctx.effect(() => {
     manager.registerApi(ctx)
-    void manager.initEnabled().finally(() => { void manager.attachMappedSessions() })
+    // 卸载或初始化失败后不再恢复会话；保留一个完整异常链，避免后台拒绝终止宿主。
+    void manager.initEnabled().then(() => manager.attachMappedSessions()).catch(error => {
+      fileLog.append(`${new Date().toISOString()} [boot] 初始化失败: ${error instanceof Error ? error.message : String(error)}\n`)
+    })
     log(`[boot] apply 完成 ${Date.now() - applyStarted}ms`)
     return () => { manager.disposeApi(); void fileLog.flush() }
   }, 'im-connect.serve')

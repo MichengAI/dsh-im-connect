@@ -20,6 +20,8 @@ export interface WecomSdkClient {
     on(event: string, fn: (payload?: unknown) => void): void;
 }
 export declare function frameBody(frame: unknown): Record<string, unknown>;
+/** 仅规范化可无损表示的消息 ID，不以队列位置猜测回调归属。 */
+export declare function wecomMessageId(value: unknown): string | undefined;
 export declare function messageText(body: Record<string, unknown>): string;
 /** 企业微信智能机器人必须按回调帧 replyStream，主动 sendMessage 用户看不到。 */
 export declare class WecomReplyBroker {
@@ -41,7 +43,7 @@ export declare class WecomReplyBroker {
     dispose(): void;
     send(chatId: string, text: string): Promise<void>;
     /** 发送交互卡片，并按原消息标识管理待回复帧。 */
-    sendCard(chatId: string, messageId: string | undefined, card: unknown): Promise<void>;
+    sendCard(chatId: string, messageId: string | undefined, card: unknown, fullText?: string): Promise<void>;
     sendFile(chatId: string, file: {
         name: string;
         data: Uint8Array;
