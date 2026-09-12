@@ -3,6 +3,23 @@ import test, { mock } from 'node:test'
 import { WSClient } from '@wecom/aibot-node-sdk'
 import { WecomReplyBroker, createWecomChannel } from '../lib/channels/wecom.js'
 
+for (const mode of ['send', 'finish']) for (const code of [846605, '846605', 123, undefined]) {
+  test(`企微正文仅明确过期回调降级：${mode}/${code}`, async t => {
+    const client = fakeClient()
+    const broker = new WecomReplyBroker(client, () => {})
+    t.after(() => broker.dispose())
+    broker.remember('u', { body: { msgid: 'q' } })
+    const stream = mode === 'finish' ? await broker.beginReply('u') : undefined
+    const error = code === undefined ? new Error('Reply ack timeout (5000ms)') : { errcode: code }
+    client.replyStream = async () => { throw error }
+    const work = () => stream ? stream.finish('完整正文') : broker.send('u', '完整正文')
+    if (String(code) === '846605') await work()
+    else await assert.rejects(work, actual => actual === error)
+    assert.deepEqual(client.calls.filter(call => call.type === 'sendMessage').map(call => call.body.markdown.content),
+      String(code) === '846605' ? ['完整正文'] : [])
+  })
+}
+
 test('企微按钮事件不作为普通消息回调，后续答复主动发送', async t => {
   t.after(() => mock.restoreAll())
   let sdk, done
@@ -200,11 +217,11 @@ test('同一聊天连续两条消息各自收口，不互相覆盖回调帧', as
   ])
 })
 
-test('流式收口失败时回退主动推送，不丢回复', async () => {
+test('流式收口明确过期时回退主动推送', async () => {
   const calls = []
   const client = {
     async replyStream(frame, streamId, content, finish) {
-      if (finish === true) throw new Error('stream closed')
+      if (finish === true) throw { errcode: 846605, errmsg: 'invalid req_id' }
       calls.push(['replyStream', content])
       return undefined
     },
@@ -222,12 +239,12 @@ test('流式收口失败时回退主动推送，不丢回复', async () => {
   ])
 })
 
-test('回调回复失败时才退回主动推送', async () => {
+test('回调回复明确过期时退回主动推送', async () => {
   const calls = []
   const client = {
     async replyStream() {
       calls.push('replyStream')
-      throw new Error('callback expired')
+      throw { errcode: 846605, errmsg: 'invalid req_id' }
     },
     async sendMessage(chatId, body) {
       calls.push(['sendMessage', chatId, body])

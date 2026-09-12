@@ -6,6 +6,11 @@ import { KeyedSerialQueue } from '../engine/keyed-queue.js'
 import { timeoutSignal } from '../engine/abort.js'
 import { fileMedia, MAX_CHANNEL_IMAGES } from './channel-image-download.js'
 
+// 沿用 SDK 允许缺省业务码的响应，同时兼容数字和字符串零码。
+function isRejectedCode(code: unknown): boolean {
+  return code !== undefined && code !== 0 && code !== '0'
+}
+
 interface FeishuContentMessage {
   message_id?: string
   message_type?: string
@@ -181,7 +186,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
                 data: { receive_id: message.chat_id, msg_type: 'text', content: JSON.stringify({ text: '图片或消息读取失败，请重发图片或发送文字。' }) },
               }).then(result => {
                 const code = (result as { code?: number | string } | undefined)?.code
-                if (code !== undefined && code !== 0 && code !== '0') throw new Error('media-notice-rejected')
+                if (isRejectedCode(code)) throw new Error('media-notice-rejected')
               }).catch(() => log(`[${id}] 媒体提示发送失败`))
               return
             }
@@ -218,7 +223,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         params: { receive_id_type: 'chat_id' },
         data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text }) },
       }) as { code?: number | string } | undefined
-      if (result?.code !== undefined && result.code !== 0 && result.code !== '0') throw new Error(`${id}: text-send-rejected code=${result.code}`)
+      if (isRejectedCode(result?.code)) throw new Error(`${id}: text-send-rejected code=${result?.code}`)
     },
     async sendChoices(message, text, buttons) {
       if (!client) throw new Error('channel-unavailable')
@@ -229,7 +234,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
             type: 'default', value: { token: button.token, group: message.kind === 'group' } }] })),
         ] }),
       } }).catch(error => { throw choiceSendError(error) }) as { code?: number; data?: { message_id?: string } } | undefined
-      if (result?.code) throw new ChoiceSendError('rejected')
+      if (isRejectedCode(result?.code)) throw new ChoiceSendError('rejected')
       const messageId = result?.data?.message_id
       const sender = client
       if (!messageId) return
@@ -237,7 +242,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         const updated = await sender.im.message.patch({ path: { message_id: messageId }, data: { content: JSON.stringify({ config: { wide_screen_mode: true }, elements: [
           { tag: 'markdown', content: text }, { tag: 'div', text: { tag: 'plain_text', content: status } },
         ] }) } }) as { code?: number } | undefined
-        if (updated?.code) throw new Error('card-update-failed')
+        if (isRejectedCode(updated?.code)) throw new Error('card-update-failed')
       } }
     },
     async addStatusReaction(message, state, _label, signal) {
@@ -247,14 +252,14 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       const result = await fileOperation(client.im.messageReaction.create({
         path: { message_id: message.messageId }, data: { reaction_type: { emoji_type: emoji } },
       }), signal)
-      if (result.code || !result.data?.reaction_id) throw new Error('reaction-rejected')
+      if (isRejectedCode(result.code) || !result.data?.reaction_id) throw new Error('reaction-rejected')
       return result.data.reaction_id
     },
     async removeStatusReaction(message, reaction, signal) {
       if (!client) return
       signal.throwIfAborted()
       const result = await fileOperation(client.im.messageReaction.delete({ path: { message_id: message.messageId, reaction_id: reaction } }), signal)
-      if (result.code) throw new Error('reaction-rejected')
+      if (isRejectedCode(result.code)) throw new Error('reaction-rejected')
     },
     async sendFile(chatId, file, signal) {
       if (!client || !lifecycle) throw new Error(`${id}: 尚未连接`)
@@ -268,7 +273,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         params: { receive_id_type: 'chat_id' },
         data: { receive_id: chatId, msg_type: 'file', content: JSON.stringify({ file_key: uploaded.file_key }) },
       }) as { code?: number }
-      if (sent.code) throw new Error('file-send-rejected')
+      if (isRejectedCode(sent.code)) throw new Error('file-send-rejected')
     },
     setMessageHandler(h) { handler = h },
     status() { return statusText },

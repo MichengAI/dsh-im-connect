@@ -149,8 +149,20 @@ test('含工具调用的已送达文字计入完成结果', async t => {
   for (const event of f.history) await engine.onSessionEvent({ id: f.sessionId }, event)
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(engine.deferred.list()[0].status, 'sent')
-  assert.ok(!f.sent.some(text => text.includes('本次处理已完成')))
-  assert.ok(!f.sent.some(text => text.includes('未返回可投递')))
+  assert.deepEqual(f.sent, ['original answer'])
+})
+
+test('取消回合只发送一次停止文字，不发送卡片', async t => {
+  const f = fixture(t), { engine, channel } = f.make()
+  channel.sendChoices = async () => assert.fail('取消通知不应发送卡片')
+  await engine.inject(channel, message)
+  f.completeHistory()
+  const events = [...f.history.slice(0, 2), { type: 'turn/end', data: { turn: 1, reason: { kind: 'cancelled' } } }]
+  for (const event of events) await engine.onSessionEvent({ id: f.sessionId }, event)
+  await new Promise(resolve => setImmediate(resolve))
+  await engine.onSessionEvent({ id: f.sessionId }, events.at(-1))
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(f.sent, ['本次处理已停止，已返回的内容保留。可直接发消息继续。'])
 })
 
 test('失败收口保留已累计的流式正文', async t => {
@@ -192,19 +204,24 @@ test('空正文补发只返回结束状态', async t => {
 
 for (const withFile of [false, true]) test(`纯工具调用回合按实际成果记账：file=${withFile}`, async t => {
   const f = fixture(t), { engine, channel } = f.make()
+  let fileCalls = 0
   await engine.inject(channel, message)
   f.completeHistory()
   f.history[2].data.message.content = withFile ? [] : [{ type: 'tool-call', name: 'read', arguments: '{}' }]
   if (withFile) {
     f.history.splice(2, 0, { type: 'deliverables/presented', data: { turn: 1, files: [{ path: 'report.txt' }] } })
-    channel.sendFile = async () => {}
+    channel.sendFile = async () => { fileCalls++ }
     const get = engine.ctx.get
     engine.ctx.get = name => name === 'workspaceFiles' ? { readAll: async () => ({ data: 'YQ==', eof: true, offset: 0 }) } : get(name)
   }
   const session = { id: f.sessionId, header: { cwd: 'D:\\workspace' }, snapshotEvents: () => f.history }
   for (const event of f.history) await engine.onSessionEvent(session, event)
   await new Promise(resolve => setImmediate(resolve))
-  if (withFile) assert.ok(!f.sent.some(text => text.includes('本次处理已完成')))
+  if (withFile) {
+    assert.equal(fileCalls, 1)
+    assert.deepEqual(f.sent, [])
+    assert.equal(engine.deferred.list()[0].status, 'sent')
+  }
   else assert.ok(f.sent.some(text => text.includes('未返回可投递')))
 })
 

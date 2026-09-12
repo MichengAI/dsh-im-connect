@@ -6,6 +6,11 @@ import { quietSdkLogger } from '../engine/quiet-logger.js'
 import { requestChannelBytes, fileMedia, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
 import { validateAdditionalImageHosts } from './image-host-policy.js'
 
+// 明确过期代表平台拒收；超时等未知结果不能重发全文。
+function isExpiredCallback(error: unknown): boolean {
+  return Number((error as { errcode?: unknown })?.errcode) === 846605
+}
+
 async function downloadWecomImage(image: { url?: string; aeskey?: string }, additionalImageHosts: readonly string[]): Promise<ImMedia> {
   if (!image.url || !image.aeskey) throw new Error('图片缺少下载地址或解密密钥')
   // SDK downloadFile has no response-size or redirect/SSRF controls. Reuse its
@@ -139,6 +144,7 @@ export class WecomReplyBroker {
         this.log(`[wecom] 已通过回调回复 ${chatId}`)
         return
       } catch (error) {
+        if (!isExpiredCallback(error)) throw error
         this.log(`[wecom] 回调回复失败，改走主动推送：${error instanceof Error ? error.message : String(error)}`)
       }
     }
@@ -155,7 +161,7 @@ export class WecomReplyBroker {
         try { await this.client.replyStream(item.frame, item.streamId, fullText, true) }
         catch (error) {
           // 平台已明确拒绝过期回调，可安全改为主动推送；超时等未知结果不自动重发。
-          if (Number((error as { errcode?: unknown })?.errcode) !== 846605) throw error
+          if (!isExpiredCallback(error)) throw error
           await this.client.sendMessage(chatId, { msgtype: 'markdown', markdown: { content: fullText } })
         }
       }
@@ -168,8 +174,8 @@ export class WecomReplyBroker {
       // 完整说明已包含选项序号；按钮失败不重复正文，也不占用下一条消息帧。
       this.log('[wecom] 操作卡片发送失败，完整说明已发送，可回复选项序号或命令')
     }
-    // 卡片已回答该输入，不能再把它的回调交给下一条正文；完成导航也不能取走后续输入。
-    // 仅成功后移除，失败时保留原帧供文字菜单降级。
+    // 卡片或完整说明已送达后移除对应帧，不能取走并发期间的新输入。
+    // 无完整说明且卡片失败时已在上方抛错，保留原帧供文字菜单降级。
     if (!item) return
     const list = this.pending.get(chatId)?.filter(entry => entry !== item) ?? []
     if (list.length) this.pending.set(chatId, list)
@@ -203,8 +209,10 @@ export class WecomReplyBroker {
         try {
           await this.client.replyStream(item.frame, item.streamId, text, true)
         } catch (error) {
+          if (!isExpiredCallback(error)) throw error
           this.log(`[wecom] 回调收口失败，改走主动推送：${error instanceof Error ? error.message : String(error)}`)
           await this.client.sendMessage(chatId, { msgtype: 'markdown', markdown: { content: text } })
+          return
         }
         this.log(`[wecom] 已通过回调回复 ${chatId}`)
       },

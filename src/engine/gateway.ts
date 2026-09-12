@@ -1051,6 +1051,7 @@ export class ImEngine {
   /** 正常交付保持安静；仅异常结果追加必要文字提示。 */
   private async notifyCompletion(result: TurnCompletion): Promise<void> {
     if (result.status === 'completed') return
+    const status = result.status
     const first = result.items[0]
     if (!first) return
     const { channel, message } = first
@@ -1066,12 +1067,11 @@ export class ImEngine {
     const terminalIds: string[] = []
     const notified = await withReplyLocale(this.ctx, async () => {
       const text = ({
-        completed: replyText('本次处理已完成，可在上方查看回复或成果文件。直接发消息即可继续。'),
         empty: replyText('本次处理已结束，未返回可投递的结果。可补充要求后继续。'),
         error: replyText('本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。'),
         cancelled: replyText('本次处理已停止，已返回的内容保留。可直接发消息继续。'),
         'delivery-failed': replyText('本次处理已结束，但部分回复或文件未能发送。查看交付记录：/delivery；完整结果和文件请在网页查看，不会自动重复执行任务。'),
-      })[result.status]
+      })[status]
       if (!valid()) return
       if (result.status === 'error' || result.status === 'cancelled' || result.status === 'empty') {
         for (const entry of this.deferred.list(channel.id, message)) if (entry.sessionId === result.sessionId && entry.turn === result.turn && entry.status === 'waiting') {

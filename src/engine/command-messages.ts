@@ -29,7 +29,6 @@ export const commandEnglish = {
   "本次处理已停止，已返回的内容保留。可直接发消息继续。": "This turn stopped. Any results already sent are kept. Send a message to continue.",
   "本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。": "This turn failed. Any results already sent are kept. Check the session status, or send more details to try again.",
   "本次处理已结束，未返回可投递的结果。可补充要求后继续。": "This turn ended without a deliverable result. Send more details to continue.",
-  "本次处理已完成，可在上方查看回复或成果文件。直接发消息即可继续。": "This turn is complete. See the responses or output files above, and send a message to continue.",
   "也可使用 /reasoning id:等级ID；序号 15 分钟内有效。": "You can also use /reasoning id:effort-ID. List numbers are valid for 15 minutes.",
   "用法：/menu [sessions|workspaces|models|presets|reasoning] [页码]": "Usage: /menu [sessions|workspaces|models|presets|reasoning] [page]",
   "选择已过期，或会话、模型已变化。请发送 /reasoning 重新选择。": "This selection expired, or the session or model changed. Send /reasoning to choose again.",
