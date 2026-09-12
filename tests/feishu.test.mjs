@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { isFeishuBotMentioned, createFeishuChannel } from '../lib/channels/feishu.js'
 
-for (const code of [undefined, 0, '0', 230001, '230001']) test(`飞书发送入口统一业务码：${code}`, async t => {
+for (const code of [undefined, 0, '0', 230001, '230001']) test(`飞书发送入口统一业务码：${JSON.stringify(code)}`, async t => {
   let currentCode = code
   const result = () => ({ code: currentCode, data: { message_id: 'm', reaction_id: 'r' } })
   const sdk = { defaultHttpInstance: {}, Client: class {

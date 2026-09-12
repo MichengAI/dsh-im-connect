@@ -140,7 +140,7 @@ for (const mode of ['text', 'empty', 'stream']) test(`引擎 ${mode} 回复后�
 })
 
 
-for (const mode of ['completed', 'error', 'disabled', 'switched', 'waiting', 'newer', 'stream-error']) test(`完成导航不重复正文并遵循权限与当前绑定：${mode}`, async t => {
+for (const mode of ['completed', 'error', 'disabled', 'switched', 'waiting', 'newer', 'stream-error']) test(`回合结束反馈不重复正文并遵循权限与当前绑定：${mode}`, async t => {
   const { engine, handlers, sessionId } = makeFailingEngine(t)
   t.after(() => engine.dispose())
   const sent = [], cards = []

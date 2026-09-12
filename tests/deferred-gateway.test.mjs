@@ -121,7 +121,7 @@ test('手动补发限定发起人和命令权限，英文输出不混入中文�
 })
 
 
-test('新回合已开始时，旧回合的交付仍收口，不依赖完成导航通知', async t => {
+test('新回合已开始时，旧回合仍完成交付记账', async t => {
   const f = fixture(t), { engine, channel } = f.make()
   await engine.inject(channel, message)
   f.completeHistory()

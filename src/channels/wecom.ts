@@ -62,7 +62,7 @@ export function messageText(body: Record<string, unknown>): string {
   return ''
 }
 
-/** 企业微信智能机器人必须按回调帧 replyStream，主动 sendMessage 用户看不到。 */
+/** 普通回复使用对应消息帧的 replyStream；按钮结果等主动推送路径的客户端可见性仍待真机验收。 */
 export class WecomReplyBroker {
   // 同一聊天可能连续来多条消息，每条都有独立的回调帧，必须排队而不是单槽覆盖
   private readonly pending = new Map<string, Array<{ frame: unknown; streamId: string; started: boolean; expiresAt: number }>>()

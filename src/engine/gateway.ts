@@ -1082,7 +1082,7 @@ export class ImEngine {
         if (!valid()) return
         if (taken.stream) {
           const body = text
-          // 已有回复卡片直接收口；收口结果不明时不再补发一张完成卡。
+          // 复用已有回复流发送异常说明；收口结果不明时不重复发送。
           await taken.stream.finish([taken.text, body].filter(Boolean).join('\n\n'))
           return true
         }

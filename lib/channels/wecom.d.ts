@@ -23,7 +23,7 @@ export declare function frameBody(frame: unknown): Record<string, unknown>;
 /** 仅规范化可无损表示的消息 ID，不以队列位置猜测回调归属。 */
 export declare function wecomMessageId(value: unknown): string | undefined;
 export declare function messageText(body: Record<string, unknown>): string;
-/** 企业微信智能机器人必须按回调帧 replyStream，主动 sendMessage 用户看不到。 */
+/** 普通回复使用对应消息帧的 replyStream；按钮结果等主动推送路径的客户端可见性仍待真机验收。 */
 export declare class WecomReplyBroker {
     private readonly client;
     private readonly log;
