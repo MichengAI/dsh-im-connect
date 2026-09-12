@@ -4,6 +4,14 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.46 - 2026-09-12
+
+- Fix WeCom menus showing duplicate options, long questions being truncated in cards, and extra completion notes plus numbered cards after a successful reply.
+- Fix WeCom replies going missing or being sent twice after a button tap. Only expired callbacks are resent proactively; unknown errors no longer trigger a full automatic retry.
+- Fix DingTalk incremental reply completion order, Feishu business errors being treated as success, and Telegram long replies being truncated.
+- Restore native sidebar channel tabs that previously showed only Tasks and Scheduled.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.45 - 2026-09-11
 
 - Fix stale channel entries remaining after archived sessions are deleted, which made those sessions impossible to open or archive. The plugin now removes its channel index after the Host confirms deletion and retains it when storage state cannot be verified.
