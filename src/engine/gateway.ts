@@ -1048,8 +1048,9 @@ export class ImEngine {
     }
   }
 
-  /** 只通知本插件实际认领的请求；正文、文件发送均结束后再提供下一步。 */
+  /** 正常交付保持安静；仅异常结果追加必要文字提示。 */
   private async notifyCompletion(result: TurnCompletion): Promise<void> {
+    if (result.status === 'completed') return
     const first = result.items[0]
     if (!first) return
     const { channel, message } = first
@@ -1071,14 +1072,6 @@ export class ImEngine {
         cancelled: replyText('本次处理已停止，已返回的内容保留。可直接发消息继续。'),
         'delivery-failed': replyText('本次处理已结束，但部分回复或文件未能发送。查看交付记录：/delivery；完整结果和文件请在网页查看，不会自动重复执行任务。'),
       })[result.status]
-      const allowed = canExecuteCommand(this.resolveCommandPermissions(channel.id), message.kind ?? 'dm', message.userId)
-      const choices: Choice[] = allowed ? [
-        { label: replyText('最近记录'), value: '/history' },
-        { label: replyText('查看状态'), value: '/status' },
-        ...(channel.sendFile ? [{ label: replyText('导出会话'), value: '/export' }] : []),
-        { label: replyText('返回菜单'), value: '/menu' },
-      ] : []
-      // 完成提示不接管纯数字消息，也不自动重发结果或重新执行任务。
       if (!valid()) return
       if (result.status === 'error' || result.status === 'cancelled' || result.status === 'empty') {
         for (const entry of this.deferred.list(channel.id, message)) if (entry.sessionId === result.sessionId && entry.turn === result.turn && entry.status === 'waiting') {
@@ -1088,20 +1081,14 @@ export class ImEngine {
         const taken = await this.streams.take(`${channel.id}:${message.chatId}`)
         if (!valid()) return
         if (taken.stream) {
-          const body = text + (choices.length ? '\n\n' + choices.map(choice => `${choice.label} — ${choice.value}`).join('\n') : '')
+          const body = text
           // 已有回复卡片直接收口；收口结果不明时不再补发一张完成卡。
           await taken.stream.finish([taken.text, body].filter(Boolean).join('\n\n'))
           return true
         }
       }
       const outcome = { ok: true }
-      if (!choices.length) { await this.deliver(channel, message.chatId, text, outcome); return outcome.ok }
-      const fallback = await this.choices.show(channel, message, text, choices, result.sessionId, valid,
-        replyText('点击按钮或发送对应命令；按钮 15 分钟内有效，普通文字继续聊天。'), false)
-      if (fallback) {
-        if (!valid()) return false
-        await this.deliver(channel, message.chatId, fallback, outcome)
-      }
+      await this.deliver(channel, message.chatId, text, outcome)
       return outcome.ok
     })
     if (notified) for (const id of terminalIds) this.deferred.patch(id, { status: 'sent' })

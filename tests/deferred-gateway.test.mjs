@@ -149,7 +149,7 @@ test('含工具调用的已送达文字计入完成结果', async t => {
   for (const event of f.history) await engine.onSessionEvent({ id: f.sessionId }, event)
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(engine.deferred.list()[0].status, 'sent')
-  assert.ok(f.sent.some(text => text.includes('已完成')))
+  assert.ok(!f.sent.some(text => text.includes('本次处理已完成')))
   assert.ok(!f.sent.some(text => text.includes('未返回可投递')))
 })
 
@@ -204,7 +204,8 @@ for (const withFile of [false, true]) test(`纯工具调用回合按实际成果
   const session = { id: f.sessionId, header: { cwd: 'D:\\workspace' }, snapshotEvents: () => f.history }
   for (const event of f.history) await engine.onSessionEvent(session, event)
   await new Promise(resolve => setImmediate(resolve))
-  assert.ok(f.sent.some(text => text.includes(withFile ? '已完成' : '未返回可投递')))
+  if (withFile) assert.ok(!f.sent.some(text => text.includes('本次处理已完成')))
+  else assert.ok(f.sent.some(text => text.includes('未返回可投递')))
 })
 
 

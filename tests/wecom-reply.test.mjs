@@ -3,6 +3,41 @@ import test, { mock } from 'node:test'
 import { WSClient } from '@wecom/aibot-node-sdk'
 import { WecomReplyBroker, createWecomChannel } from '../lib/channels/wecom.js'
 
+test('企微按钮事件不作为普通消息回调，后续答复主动发送', async t => {
+  t.after(() => mock.restoreAll())
+  let sdk, done
+  const handled = new Promise(resolve => { done = resolve })
+  const sent = []
+  mock.method(WSClient.prototype, 'connect', function () { sdk = this; this.emit('authenticated') })
+  mock.method(WSClient.prototype, 'disconnect', () => {})
+  mock.method(WSClient.prototype, 'replyStream', async () => assert.fail('按钮帧不可 replyStream'))
+  mock.method(WSClient.prototype, 'sendMessage', async (_, body) => sent.push(body))
+  const channel = createWecomChannel({ botId: 'test', secret: 'test' }, () => {})
+  t.after(() => channel.stop())
+  channel.setMessageHandler(async msg => { try { await channel.send(msg.chatId, '操作结果') } finally { done() } })
+  await channel.start()
+  sdk.emit('event.template_card_event', { headers: { req_id: 'event' }, body: { msgid: 'event', from: { userid: 'u' }, chattype: 'single', event: { template_card_event: { event_key: 'token:0' } } } })
+  await handled
+  assert.equal(sent[0].markdown.content, '操作结果')
+})
+
+for (const known of [true, false]) test(`企微完整说明回调失败仅明确拒绝可降级：known=${known}`, async t => {
+  const client = fakeClient()
+  client.replyStream = async () => { throw known ? { errcode: 846605 } : new Error('timeout') }
+  const broker = new WecomReplyBroker(client, () => {})
+  t.after(() => broker.dispose())
+  broker.remember('u', { body: { msgid: 'q' } })
+  if (known) {
+    await broker.sendCard('u', 'q', {}, '完整说明')
+    assert.equal(client.calls[0].body.markdown.content, '完整说明')
+    assert.equal(client.calls[1].body.msgtype, 'template_card')
+    assert.equal(broker.pendingCount(), 0)
+  } else {
+    await assert.rejects(broker.sendCard('u', 'q', {}, '完整说明'), /timeout/)
+    assert.equal(client.calls.length, 0)
+  }
+})
+
 test('企微长问题保留全部说明，按钮编号与全文选项一致', async t => {
   t.after(() => mock.restoreAll())
   const calls = []

@@ -95,7 +95,7 @@ export declare class ImEngine {
     private approvalPrompt;
     private onSessionEvent;
     private processSessionEvent;
-    /** 只通知本插件实际认领的请求；正文、文件发送均结束后再提供下一步。 */
+    /** 正常交付保持安静；仅异常结果追加必要文字提示。 */
     private notifyCompletion;
     /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
     private deliver;

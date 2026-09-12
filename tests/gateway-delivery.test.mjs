@@ -168,16 +168,8 @@ for (const mode of ['completed', 'error', 'disabled', 'switched', 'waiting', 'ne
   await emit(end)
   await emit(end)
   await sleep(20)
-  if (['switched', 'waiting', 'newer'].includes(mode)) { assert.equal(cards.length, 0); assert.deepEqual(sent, ['Answer']); return }
-  if (mode === 'disabled' || mode === 'stream-error') {
-    assert.equal(cards.length, 0)
-    assert.match(sent.at(-1), mode === 'disabled' ? /已完成/ : /处理失败/)
-    if (mode === 'disabled') assert.doesNotMatch(sent.at(-1), /\/history/)
-  } else {
-    assert.equal(cards.length, 1)
-    assert.match(cards[0].text, mode === 'error' ? /处理失败/ : /已完成/)
-    assert.equal(cards[0].buttons.length, 3)
-    assert.ok(!sent.some(text => text.includes('助手没有生成回复')))
-    assert.equal(engine.choices.resolve('qq', { chatId: 'user-1', userId: 'u', kind: 'dm', text: '1' }, sessionId), undefined)
-  }
+  assert.equal(cards.length, 0)
+  if (mode === 'error' || mode === 'stream-error') assert.match(sent.at(-1), /处理失败/)
+  else assert.deepEqual(sent, ['Answer'])
+  assert.equal(engine.choices.resolve('qq', { chatId: 'user-1', userId: 'u', kind: 'dm', text: '1' }, sessionId), undefined)
 })
