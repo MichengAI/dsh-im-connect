@@ -270,7 +270,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       let inflight = Promise.resolve()
 
       const flush = async (text: string, allowSend: boolean) => {
-        const next = text.slice(0, 4000) || '…'
+        const next = [...text].slice(0, 4000).join('') || '…'
         if (next === last) return
         // last 只在发送成功后更新：失败时保留旧值，finish 才能靠 sendMessage 兜底送出全文
         try {
@@ -305,7 +305,12 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
             timer = undefined
           }
           await inflight.catch(() => undefined)
-          await flush(text || pending || last, true)
+          const chars = [...(text || pending || last)]
+          await flush(chars.slice(0, 4000).join(''), true)
+          // 首段更新原气泡，剩余正文依次发送；全部确认后上层才能发送完成导航。
+          for (let offset = 4000; offset < chars.length; offset += 4000) {
+            await api('sendMessage', { chat_id: Number(chatId), text: chars.slice(offset, offset + 4000).join('') })
+          }
         },
       }
     },

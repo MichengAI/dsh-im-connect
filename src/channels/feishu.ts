@@ -211,10 +211,11 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
     canDeliverDeferred() { return statusText === '长连接已建立' },
     async send(chatId, text) {
       if (!client) throw new Error(`${id}: 尚未连接`)
-      await client.im.message.create({
+      const result = await client.im.message.create({
         params: { receive_id_type: 'chat_id' },
         data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text }) },
-      })
+      }) as { code?: number } | undefined
+      if (result?.code) throw new Error(`${id}: text-send-rejected code=${result.code}`)
     },
     async sendChoices(message, text, buttons) {
       if (!client) throw new Error('channel-unavailable')

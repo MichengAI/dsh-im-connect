@@ -138,6 +138,19 @@ export class WecomReplyBroker {
     this.log(`[wecom] 已主动推送 ${chatId}`)
   }
 
+  /** 发送交互卡片，并按原消息标识管理待回复帧。 */
+  async sendCard(chatId: string, messageId: string | undefined, card: unknown): Promise<void> {
+    this.prune(chatId)
+    const item = messageId ? this.pending.get(chatId)?.find(entry => frameBody(entry.frame).msgid === messageId) : undefined
+    await this.client.sendMessage(chatId, { msgtype: 'template_card', template_card: card })
+    // 卡片已回答该输入，不能再把它的回调交给下一条正文；完成导航也不能取走后续输入。
+    // 仅成功后移除，失败时保留原帧供文字菜单降级。
+    if (!item) return
+    const list = this.pending.get(chatId)?.filter(entry => entry !== item) ?? []
+    if (list.length) this.pending.set(chatId, list)
+    else this.pending.delete(chatId)
+  }
+
   async sendFile(chatId: string, file: { name: string; data: Uint8Array }, signal?: AbortSignal): Promise<void> {
     signal = AbortSignal.any([this.lifetime.signal, ...(signal ? [signal] : [])])
     this.pruneAll()
@@ -319,12 +332,12 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     },
     choiceLimits: { maxButtons: 6, maxTextLength: 500 },
     async sendChoices(message, text, buttons) {
-      if (!client || buttons.length > 6 || text.length > 500) throw new Error('use-text-menu')
-      await client.sendMessage(message.chatId, { msgtype: 'template_card', template_card: {
+      if (!client || !broker || buttons.length > 6 || text.length > 500) throw new Error('use-text-menu')
+      await broker.sendCard(message.chatId, message.messageId, {
         card_type: 'button_interaction', task_id: buttons[0]?.token.split(':')[0],
         main_title: { title: text.split('\n')[0]?.slice(0, 36) }, sub_title_text: text.slice(0, 500),
         button_list: buttons.map(button => ({ text: button.label.slice(0, 36), key: button.token, style: 1 })),
-      } }).catch(error => { throw choiceSendError(error) })
+      }).catch(error => { throw choiceSendError(error) })
       const sender = client
       const token = buttons[0]?.token.split(':')[0]
       return { close: async (status: string) => {

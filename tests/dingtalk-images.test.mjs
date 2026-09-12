@@ -11,7 +11,7 @@ function setup(downloadImage = async () => ({ kind: 'image', data: png, mediaTyp
   mock.method(DWClient.prototype, 'connect', async () => {})
   mock.method(DWClient.prototype, 'disconnect', () => {})
   mock.method(DWClient.prototype, 'registerCallbackListener', (_topic, cb) => { callback = cb })
-  mock.method(globalThis, 'fetch', async (url, options) => { replies.push({ url: String(url), options }); return new Response('{}') })
+  mock.method(globalThis, 'fetch', async (url, options) => { replies.push({ url: String(url), options }); return Response.json({ errcode: 0, errmsg: 'ok' }) })
   const channel = createDingtalkChannel({ clientId: 'bot', clientSecret: 'secret' }, line => logs.push(line), { downloadImage })
   channel.setMessageHandler(async msg => { received.push(msg); await channel.send(msg.chatId, 'answer') })
   const event = (id, extra) => ({ msgId: id, senderStaffId: 'u', conversationType: '1', sessionWebhook: `https://oapi.dingtalk.com/robot/send?token=${id}`, ...extra })

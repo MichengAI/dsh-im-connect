@@ -191,6 +191,7 @@ export async function openDingtalkCardStream(
   let timer: NodeJS.Timeout | null = null
   let last = 0
   let closed = false
+  let inflight = Promise.resolve()
 
   const flush = async (text: string) => {
     if (closed) return
@@ -208,7 +209,7 @@ export async function openDingtalkCardStream(
       timer = setTimeout(() => {
         timer = null
         const next = pending
-        if (next) void flush(next).catch((error) => {
+        if (next) inflight = inflight.then(() => flush(next)).catch((error) => {
           log(`[dingtalk] AI Card 更新失败: ${error instanceof Error ? error.message : String(error)}`)
         })
       }, wait)
@@ -220,6 +221,8 @@ export async function openDingtalkCardStream(
       if (timer) clearTimeout(timer)
       timer = null
       try {
+        // 在途增量必须结束后再写最终全文，避免旧内容晚到覆盖收口。
+        await inflight
         await client.finish(cardInstanceId, text || '（无文本回复）')
       } catch (error) {
         log(`[dingtalk] AI Card 收口失败: ${error instanceof Error ? error.message : String(error)}`)

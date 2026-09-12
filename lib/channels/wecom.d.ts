@@ -40,6 +40,8 @@ export declare class WecomReplyBroker {
     pendingCount(): number;
     dispose(): void;
     send(chatId: string, text: string): Promise<void>;
+    /** 发送交互卡片，并按原消息标识管理待回复帧。 */
+    sendCard(chatId: string, messageId: string | undefined, card: unknown): Promise<void>;
     sendFile(chatId: string, file: {
         name: string;
         data: Uint8Array;

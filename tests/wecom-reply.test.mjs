@@ -15,6 +15,50 @@ function fakeClient() {
   }
 }
 
+test('菜单卡片消费对应回调，下一条正文不会回复到旧命令', async t => {
+  const client = fakeClient()
+  const broker = new WecomReplyBroker(client, () => {})
+  t.after(() => broker.dispose())
+  const command = { body: { msgid: 'command' } }
+  const question = { body: { msgid: 'question' } }
+  broker.remember('user', command)
+  await broker.sendCard('user', 'command', { card_type: 'button_interaction' })
+  assert.equal(broker.pendingCount(), 0)
+  broker.remember('user', question)
+  await broker.startThinking('user')
+  await broker.send('user', '任务已创建')
+  assert.equal(client.calls.at(-1).frame, question)
+  assert.equal(client.calls.at(-1).content, '任务已创建')
+})
+
+test('迟到的完成卡片不消费下一条消息的回调', async t => {
+  const client = fakeClient()
+  const broker = new WecomReplyBroker(client, () => {})
+  t.after(() => broker.dispose())
+  broker.remember('user', { body: { msgid: 'first' } })
+  await broker.send('user', '第一条答案')
+  const next = { body: { msgid: 'next' } }
+  broker.remember('user', next)
+  await broker.sendCard('user', 'first', {})
+  await broker.sendCard('user', undefined, {})
+  assert.equal(broker.pendingCount(), 1)
+  await broker.send('user', '第二条答案')
+  assert.equal(client.calls.at(-1).frame, next)
+})
+
+test('卡片发送失败保留原回调供文字降级', async t => {
+  const client = fakeClient()
+  client.sendMessage = async () => { throw new Error('card rejected') }
+  const broker = new WecomReplyBroker(client, () => {})
+  t.after(() => broker.dispose())
+  const frame = { body: { msgid: 'command' } }
+  broker.remember('user', frame)
+  await assert.rejects(broker.sendCard('user', 'command', {}), /card rejected/)
+  assert.equal(broker.pendingCount(), 1)
+  await broker.send('user', '文字菜单')
+  assert.equal(client.calls.at(-1).frame, frame)
+})
+
 test('企业微信回复必须走回调帧 replyStream，不能只主动推送', async () => {
   const client = fakeClient()
   const logs = []

@@ -8,6 +8,19 @@ import { DingtalkTokenCache } from './dingtalk-token-cache.js'
 import { timeoutSignal } from '../engine/abort.js'
 import { requestChannelBytes, fileMedia, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
 
+/** HTTP 成功不代表机器人接受了正文；业务拒绝必须向交付层传播。 */
+async function sendWebhookText(webhook: string, text: string): Promise<void> {
+  const res = await fetch(webhook, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    // 命令与通知按纯文本排版：Markdown 会合并单换行，代码与列表保留原始换行。
+    body: JSON.stringify({ msgtype: 'text', text: { content: text } }),
+    signal: timeoutSignal(30_000),
+  })
+  if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)
+  const result = await res.json() as { errcode?: number }
+  if (result.errcode !== 0) throw new Error(`dingtalk text-send-rejected errcode=${result.errcode ?? 'missing'}`)
+}
+
 async function postDingtalk(path: string, body: unknown, signal: AbortSignal, headers: Record<string, string> = {}) {
   const bytes = await requestChannelBytes(`https://api.dingtalk.com/v1.0/${path}`, {
     method: 'POST', headers: { 'content-type': 'application/json', ...headers },
@@ -330,14 +343,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
     async send(chatId, text) {
       const webhook = webhooks.get(chatId)
       if (!webhook) throw new Error('dingtalk: 没有可回复的 webhook，请先在钉钉里发一条消息')
-      const res = await fetch(webhook, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        // 命令和通知按纯文本排版，避免 Markdown 合并单换行。
-        body: JSON.stringify({ msgtype: 'text', text: { content: text } }),
-        signal: timeoutSignal(30_000),
-      })
-      if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)
+      await sendWebhookText(webhook, text)
     },
     async beginReply(chatId): Promise<ReplyStream> {
       const target = targets.get(chatId)
@@ -349,14 +355,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
         const sendText = async (text: string) => {
           const webhook = webhooks.get(chatId)
           if (!webhook) throw new Error('dingtalk: 没有可回复的 webhook')
-          const res = await fetch(webhook, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            // 卡片不可用时保留原始换行，代码与列表以文本展示。
-            body: JSON.stringify({ msgtype: 'text', text: { content: text } }),
-            signal: timeoutSignal(30_000),
-          })
-          if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)
+          await sendWebhookText(webhook, text)
         }
         return {
           async update() { /* 普通文本无法中途改 */ },
