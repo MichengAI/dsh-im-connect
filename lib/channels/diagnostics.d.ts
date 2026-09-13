@@ -1,5 +1,5 @@
 /** 诊断只返回静态结论与数字状态码，不返回平台正文、凭据或用户身份。 */
-export type DiagnosticReason = 'ok' | 'auth' | 'permission' | 'rate-limit' | 'server' | 'network' | 'timeout' | 'invalid-response' | 'rejected' | 'webhook-conflict' | 'missing-context' | 'not-connected' | 'unsupported' | 'changed';
+export type DiagnosticReason = 'ok' | 'local-state' | 'cancelled' | 'auth' | 'permission' | 'rate-limit' | 'server' | 'network' | 'timeout' | 'invalid-response' | 'rejected' | 'webhook-conflict' | 'missing-context' | 'not-connected' | 'unsupported' | 'changed';
 export interface DiagnosticCheck {
     id: 'credentials' | 'bot' | 'webhook' | 'gateway' | 'config' | 'heartbeat';
     status: 'passed' | 'failed' | 'unverified';

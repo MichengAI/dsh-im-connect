@@ -121,6 +121,17 @@ test('状态检查保留离线账号的接收选择，暂停与断开分别返�
   assert.equal(manager.store.channels[id].lastCheckedAt, '2026-01-01T00:00:00Z')
 })
 
+test('取密异常归为本地状态失败，不误导检查网络或暴露秘密', async t => {
+  const manager = makeManager(t)
+  const id = 'telegram:local-failure'
+  manager.store.channels[id] = { platform: 'telegram', enabled: true, config: {} }
+  manager.resolveSecrets = async () => { throw new Error('private-secret') }
+  const result = await manager.checkAccount(id)
+  assert.equal(result.diagnostics.checks[0].reason, 'local-state')
+  assert.equal(result.diagnostics.checks[0].status, 'failed')
+  assert.ok(!JSON.stringify(result).includes('private-secret'))
+})
+
 test('同账号诊断请求合并，卸载取消诊断且不保存过期结果', async t => {
   const manager = makeManager(t)
   const id = 'telegram:diagnostic'

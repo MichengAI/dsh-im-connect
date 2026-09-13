@@ -1,5 +1,5 @@
 /** 诊断只返回静态结论与数字状态码，不返回平台正文、凭据或用户身份。 */
-export type DiagnosticReason = 'ok' | 'auth' | 'permission' | 'rate-limit' | 'server' | 'network' | 'timeout' | 'invalid-response' | 'rejected' | 'webhook-conflict' | 'missing-context' | 'not-connected' | 'unsupported' | 'changed'
+export type DiagnosticReason = 'ok' | 'local-state' | 'cancelled' | 'auth' | 'permission' | 'rate-limit' | 'server' | 'network' | 'timeout' | 'invalid-response' | 'rejected' | 'webhook-conflict' | 'missing-context' | 'not-connected' | 'unsupported' | 'changed'
 export interface DiagnosticCheck {
   id: 'credentials' | 'bot' | 'webhook' | 'gateway' | 'config' | 'heartbeat'
   status: 'passed' | 'failed' | 'unverified'
@@ -21,8 +21,8 @@ export async function probe(id: DiagnosticCheck['id'], signal: AbortSignal, run:
     signal.throwIfAborted()
     return { id, status: 'passed', reason: 'ok', durationMs: Date.now() - started }
   } catch (error) {
-    const failure = error instanceof DiagnosticError ? error : new DiagnosticError(signal.aborted ? 'timeout' : 'network')
-    return { id, status: ['missing-context', 'not-connected', 'unsupported', 'changed'].includes(failure.reason) ? 'unverified' : 'failed', reason: failure.reason, durationMs: Date.now() - started,
+    const failure = error instanceof DiagnosticError ? error : new DiagnosticError(signal.aborted ? signal.reason?.name === 'TimeoutError' ? 'timeout' : 'cancelled' : 'network')
+    return { id, status: ['cancelled', 'missing-context', 'not-connected', 'unsupported', 'changed'].includes(failure.reason) ? 'unverified' : 'failed', reason: failure.reason, durationMs: Date.now() - started,
       ...(failure.httpStatus === undefined ? {} : { httpStatus: failure.httpStatus }), ...(failure.platformCode === undefined ? {} : { platformCode: failure.platformCode }) }
   }
 }

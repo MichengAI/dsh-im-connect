@@ -795,10 +795,16 @@ export class ChannelManager {
       const preparation = await probe('credentials', signal, async () => {
         let adapter = this.running.get(accountId)
         if (!adapter) {
-          const platform = this.platformOf(accountId, state)
-          const resolved = await fileOperation(this.resolveSecrets(platform, accountId, state.config ?? {}), signal)
-          signal.throwIfAborted()
-          adapter = createChannelAdapter(platform, resolved, this.log, this.accountStateDir(accountId, platform))
+          try {
+            const platform = this.platformOf(accountId, state)
+            const resolved = await fileOperation(this.resolveSecrets(platform, accountId, state.config ?? {}), signal)
+            signal.throwIfAborted()
+            adapter = createChannelAdapter(platform, resolved, this.log, this.accountStateDir(accountId, platform))
+          } catch (error) {
+            signal.throwIfAborted()
+            if (error instanceof DiagnosticError) throw error
+            throw new DiagnosticError('local-state')
+          }
         }
         if (!adapter) throw new DiagnosticError('auth')
         if (!adapter.diagnose) throw new DiagnosticError('unsupported')

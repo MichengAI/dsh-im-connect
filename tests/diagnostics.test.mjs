@@ -68,9 +68,15 @@ for (const payload of ['not JSON', '{}', JSON.stringify({ huge: 'x'.repeat(65536
 
 test('诊断超时中止网络请求并返回超时原因', async t => {
   const controller = new AbortController()
-  t.mock.method(globalThis, 'fetch', async (_, init) => new Promise((_, reject) => { init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }); controller.abort() }))
+  t.mock.method(globalThis, 'fetch', async (_, init) => new Promise((_, reject) => { init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }); controller.abort(new DOMException('timeout', 'TimeoutError')) }))
   const result = await probe('bot', controller.signal, () => diagnosticJson('https://example.test', controller.signal))
   assert.equal(result.reason, 'timeout')
+})
+
+test('普通取消为未验证，不冒充网络超时', async () => {
+  const result = await probe('bot', AbortSignal.abort(), async () => assert.fail('取消后不应发起请求'))
+  assert.equal(result.reason, 'cancelled')
+  assert.equal(result.status, 'unverified')
 })
 
 for (const stale of [false, true]) test(`微信诊断只调用 getconfig，不消费游标或发送输入状态：失效=${stale}`, async t => {
