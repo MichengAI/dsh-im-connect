@@ -1,9 +1,7 @@
 name: 同步 GitHub Release 说明
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_call:
 
 permissions:
   contents: write
@@ -24,12 +22,25 @@ jobs:
       - name: 生成双语版本说明
         run: node scripts/extract-release-notes.mjs "$GITHUB_REF_NAME" release-notes.md
 
-      - name: 创建或更新 GitHub Release
+      - name: 创建或更新 GitHub Release（仅说明）
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: pwsh
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
-          else
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
-          fi
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          $OutputEncoding = [System.Text.Encoding]::UTF8
+          $tag = [Uri]::EscapeDataString($env:GITHUB_REF_NAME)
+          $response = @(gh api --include "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" 2>$null)
+          $queryExit = $LASTEXITCODE
+          $status = 0
+          foreach ($line in $response) {
+            if ($line -match '^HTTP/\S+\s+(\d{3})\b') { $status = [int]$Matches[1] }
+          }
+          if ($queryExit -eq 0 -and $status -eq 200) {
+            gh release edit $env:GITHUB_REF_NAME --title $env:GITHUB_REF_NAME --notes-file release-notes.md
+          } elseif ($status -eq 404) {
+            gh release create $env:GITHUB_REF_NAME --verify-tag --title $env:GITHUB_REF_NAME --notes-file release-notes.md
+          } else {
+            throw "查询 Release 失败：HTTP $status，退出码 $queryExit"
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
