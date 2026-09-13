@@ -1,5 +1,7 @@
 import { type CommandPermissions } from './engine/command-permissions.js';
 import type { Context } from '@deepseek-ai/cordis';
+import { type ConnectionState } from './channels/connection-state.js';
+import { type DiagnosticCheck } from './channels/diagnostics.js';
 import type { ChannelId } from './engine/session-id.js';
 import { type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js';
 import type { EngineConfig } from './engine/types.js';
@@ -36,6 +38,8 @@ export interface AccountView {
     autoName: boolean;
     nameOrdinal?: number;
     connected: boolean;
+    connectionState: ConnectionState;
+    receiveConfigured: boolean;
     receiveEnabled: boolean;
     configuredKeys: string[];
     status: string;
@@ -46,6 +50,16 @@ export interface AccountView {
     commandPermissions: CommandPermissions;
     privateAccess: 'approved' | 'all';
     lastCheckedAt?: string;
+}
+interface AccountDiagnosticResult {
+    ok: boolean;
+    account?: AccountView;
+    diagnostics?: {
+        version: 1;
+        checkedAt: string;
+        checks: DiagnosticCheck[];
+    };
+    error?: string;
 }
 export interface ChannelView {
     id: ChannelId;
@@ -88,6 +102,8 @@ export declare class ChannelManager {
     private readonly engineConfig;
     private store;
     private readonly running;
+    private readonly diagnosticJobs;
+    private readonly diagnosticAbort;
     private readonly channelOperations;
     private apiDisposers;
     private disposed;
@@ -132,6 +148,8 @@ export declare class ChannelManager {
         error?: string;
         account?: AccountView;
     }>;
+    /** 查询平台或现有连接心跳；同账号合并请求，总等待 12 秒，不启动接收器。 */
+    checkAccount(accountId: string): Promise<AccountDiagnosticResult>;
     reconnect(accountId: string): Promise<{
         ok: boolean;
         error?: string;

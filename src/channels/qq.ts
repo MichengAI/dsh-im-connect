@@ -1,6 +1,7 @@
 /** QQ 开放平台机器人：官方 WebSocket 网关，不是个人 QQ 号。 */
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { timeoutSignal } from '../engine/abort.js'
+import { diagnosticJson, probe, requireDiagnostic } from './diagnostics.js'
 
 import { validateAdditionalImageHosts } from './image-host-policy.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
@@ -387,6 +388,19 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
       }
     },
     setMessageHandler(h) { handler = h },
+    async diagnose(signal) {
+      let token: string
+      const auth = await probe('credentials', signal, async () => {
+        const data = await diagnosticJson(TOKEN_URL, signal, { appId, clientSecret: appSecret })
+        requireDiagnostic(typeof data.access_token === 'string' && data.access_token)
+        token = data.access_token
+      })
+      if (auth.status !== 'passed') return [auth]
+      return [auth, await probe('gateway', signal, async () => {
+        const data = await diagnosticJson(`${API}${GATEWAY_PATH}`, signal, undefined, { Authorization: `QQBot ${token}`, 'X-Union-Appid': appId })
+        requireDiagnostic(typeof data.url === 'string' && data.url.startsWith('wss://'))
+      })]
+    },
     status() { return statusText },
   }
 }

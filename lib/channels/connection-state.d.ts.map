@@ -1,0 +1,1 @@
+{"version":3,"file":"connection-state.d.ts","sourceRoot":"","sources":["../../src/channels/connection-state.ts"],"names":[],"mappings":"AAAA,yCAAyC;AACzC,MAAM,MAAM,eAAe,GAAG,WAAW,GAAG,YAAY,GAAG,cAAc,GAAG,cAAc,GAAG,SAAS,GAAG,OAAO,GAAG,SAAS,CAAA;AAK5H,wBAAgB,eAAe,CAAC,MAAM,EAAE,MAAM,GAAG,eAAe,CAQ/D"}

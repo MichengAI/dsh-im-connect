@@ -141,6 +141,10 @@ Done means the turn completed normally and both text and files were delivered. S
 
 ## Screenshots
 
+Use **Diagnose connection** in account settings to query platform APIs: WeChat configuration, a ping acknowledgement on the existing WeCom connection, DingTalk credentials, Feishu/Lark credentials and bot identity, QQ credentials and gateway, or Telegram bot identity and Webhook conflicts.
+
+Each check reports passed, failed, or unverified, with timing and a suggested next step. No test messages are sent and no extra message polling is started. Passing one check does not verify all messaging permissions. An older backend prompts you to restart DSH and refresh the page. See the [connection diagnostics API and validation notes (Chinese)](docs/01-当前工作/I015-命令权限与Chat命令/06-账号状态检查.md).
+
 Add accounts under each channel in **Settings → IM Assistant**. Expand a channel, select an account, and configure its workspace, model, permission, private access, and receive state independently in its settings dialog:
 
 ![IM Assistant settings](assets/screenshots/settings-channels.png)

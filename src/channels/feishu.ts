@@ -1,4 +1,5 @@
 import { choiceSendError, ChoiceSendError } from '../engine/choice-delivery.js'
+import { diagnosticJson, platformResult, probe, requireDiagnostic } from './diagnostics.js'
 import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
@@ -276,6 +277,23 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       if (isRejectedCode(sent.code)) throw new Error('file-send-rejected')
     },
     setMessageHandler(h) { handler = h },
+    async diagnose(signal) {
+      const domain = id === 'lark' || config.domain === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn'
+      let token: string
+      const auth = await probe('credentials', signal, async () => {
+        const data = await diagnosticJson(`${domain}/open-apis/auth/v3/tenant_access_token/internal`, signal, { app_id: appId, app_secret: appSecret })
+        platformResult(data.code, [10003, 10014])
+        requireDiagnostic(typeof data.tenant_access_token === 'string' && data.tenant_access_token)
+        token = data.tenant_access_token
+      })
+      if (auth.status !== 'passed') return [auth]
+      return [auth, await probe('bot', signal, async () => {
+        const data = await diagnosticJson(`${domain}/open-apis/bot/v3/info`, signal, undefined, { Authorization: `Bearer ${token}` })
+        platformResult(data.code)
+        const bot = data.bot as { open_id?: unknown } | undefined
+        requireDiagnostic(typeof bot?.open_id === 'string' && bot.open_id)
+      })]
+    },
     status() { return statusText },
   }
 }

@@ -66,6 +66,82 @@ function makeManager(t, ctx = {}) {
   return manager
 }
 
+test('账号在线统计只接受明确就绪状态，连接中与异常不算在线', t => {
+  const manager = makeManager(t)
+  manager.store.channels['telegram:test'] = { platform: 'telegram', enabled: true, config: {} }
+  for (const status of ['连接中', '等待网关握手', '鉴权中', '重连中', '已断开（code 1006）', '连接错误', '轮询异常（详情见本机日志）', '未登录', '等待扫码', '已停止', '未知新状态']) {
+    manager.running.set('telegram:test', { status: () => status, stop() {} })
+    const channel = manager.list().find(item => item.id === 'telegram')
+    assert.equal(channel.accounts[0].connected, false, status)
+    assert.equal(channel.online, 0, status)
+  }
+  for (const status of ['已连接', 'Stream 已连接', '长连接已建立', '轮询中', '已登录', '已登录（自动恢复）']) {
+    manager.running.set('telegram:test', { status: () => status, stop() {} })
+    assert.equal(manager.list().find(item => item.id === 'telegram').online, 1, status)
+  }
+})
+
+test('状态检查调用诊断并返回接收配置，不启动渠道或发送消息', async t => {
+  const manager = makeManager(t)
+  manager.store.channels['telegram:test'] = { platform: 'telegram', enabled: true, receiveEnabled: false, config: {} }
+  manager.running.set('telegram:test', {
+    status: () => '轮询中',
+    stop() {},
+    start: () => assert.fail('不应启动渠道'),
+    send: () => assert.fail('不应发送消息'),
+  })
+  const result = await manager.checkAccount('telegram:test')
+  assert.equal(result.ok, true)
+  assert.equal(result.account.connectionState, 'connected')
+  assert.equal(result.account.receiveConfigured, false)
+  assert.ok(Number.isFinite(Date.parse(result.account.lastCheckedAt)))
+  assert.equal((await manager.checkAccount('missing')).ok, false)
+  manager.running.get('telegram:test').status = () => { throw new Error('secret-token') }
+  const failed = await manager.checkAccount('telegram:test')
+  assert.equal(failed.account.connectionState, 'unknown')
+  assert.equal(failed.account.connected, false)
+  assert.ok(!JSON.stringify(failed).includes('secret-token'))
+})
+
+test('状态检查保留离线账号的接收选择，暂停与断开分别返回，落盘失败不更新时间', async t => {
+  const manager = makeManager(t)
+  const id = 'telegram:offline'
+  manager.store.channels[id] = { platform: 'telegram', enabled: true, receiveEnabled: true, config: {} }
+  const offline = (await manager.checkAccount(id)).account
+  assert.equal(offline.connectionState, 'disconnected')
+  assert.equal(offline.receiveConfigured, true)
+  assert.equal(offline.receiveEnabled, false)
+  manager.store.channels[id].receiveEnabled = false
+  const paused = (await manager.checkAccount(id)).account
+  assert.equal(paused.connectionState, 'stopped')
+  assert.equal(paused.receiveConfigured, false)
+  manager.store.channels[id].lastCheckedAt = '2026-01-01T00:00:00Z'
+  manager.flush = () => { throw new Error('disk failure') }
+  await assert.rejects(() => manager.checkAccount(id), /disk failure/)
+  assert.equal(manager.store.channels[id].lastCheckedAt, '2026-01-01T00:00:00Z')
+})
+
+test('同账号诊断请求合并，卸载取消诊断且不保存过期结果', async t => {
+  const manager = makeManager(t)
+  const id = 'telegram:diagnostic'
+  manager.store.channels[id] = { platform: 'telegram', enabled: true, config: {} }
+  let calls = 0, began
+  const started = new Promise(resolve => { began = resolve })
+  manager.running.set(id, { status: () => '轮询中', stop() {}, diagnose: signal => {
+    calls++
+    began()
+    return new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
+  } })
+  const first = manager.checkAccount(id)
+  const second = manager.checkAccount(id)
+  assert.equal(first, second)
+  await started
+  manager.disposeApi()
+  assert.equal((await first).ok, false)
+  assert.equal(calls, 1)
+  assert.equal(manager.store.channels[id].lastCheckedAt, undefined)
+})
+
 test('账号 Agent 预设复用 Host 名册，验证后保存并保留旧会话预设', async t => {
   const manager = makeManager(t, { get: name => name === 'agentPresets' ? { remoteExportList: async () => ({ presets: [{ id: 'standard' }, { id: 'research', name: '研究' }, { id: 'broken', broken: 'missing plugin' }] }) } : undefined })
   manager.startOne = async () => undefined
@@ -184,7 +260,8 @@ test('渠道分组只显示账号数量，账号子行保留状态和独立操�
   assert.doesNotMatch(rows, /h\(Logo|className: "ima-account-id"/)
   assert.match(rows, /role: "switch"/)
   assert.match(rows, /setSettingsAccount\(account.id\)/)
-  assert.match(rows, /account.statusOnline/)
+  assert.match(rows, /account.connectionState/)
+  assert.match(rows, /connection.paused/)
   assert.match(client, /t\("account.count", \{ count: ch.total \}\)/)
 })
 
@@ -259,7 +336,7 @@ test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
   assert.match(client, /"settings\.title": "IM Assistant"/)
   assert.match(client, /"settings\.title": "IM助理"/)
   assert.match(client, /"action\.addAccount": "Add account"/)
-  assert.match(client, /"action\.checkConnection": "Check"/)
+  assert.match(client, /"action\.checkConnection": "Diagnose connection"/)
   assert.match(client, /"action\.removeAccount": "Remove"/)
   assert.match(client, /"account\.privateAll": "Allow all DM users"/)
   assert.match(client, /"account\.removeConfirm": "Remove this account\? Its saved settings and credentials will also be deleted\."/)

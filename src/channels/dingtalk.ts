@@ -1,5 +1,6 @@
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { randomUUID } from 'node:crypto'
+import { diagnosticJson, probe, requireDiagnostic } from './diagnostics.js'
 import { ChoiceSendError } from '../engine/choice-delivery.js'
 import { fileForm, fileRequest } from './file-send.js'
 import { DingtalkCardClient, openDingtalkCardStream, type CardTarget } from './dingtalk-card.js'
@@ -365,6 +366,13 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
       }
     },
     setMessageHandler(h) { handler = h },
+    async diagnose(signal) {
+      return [await probe('credentials', signal, async () => {
+        // 独立请求，不清空或替换正常收发的 token 缓存。
+        const data = await diagnosticJson('https://api.dingtalk.com/v1.0/oauth2/accessToken', signal, { appKey: clientId, appSecret: clientSecret })
+        requireDiagnostic(typeof data.accessToken === 'string' && data.accessToken)
+      })]
+    },
     status() { return statusText },
   }
 }

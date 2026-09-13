@@ -19,6 +19,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { writePrivateFileSync } from '../engine/secure-file.js'
 import { isAbortError, sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { backupCorruptFileSync } from '../engine/atomic-file.js'
+import { diagnosticJson, DiagnosticError, platformResult, probe, requireDiagnostic } from './diagnostics.js'
 
 export interface WeixinChannelConfig {
   enabled?: boolean
@@ -858,6 +859,19 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
     },
     setMessageHandler(h) {
       handler = h
+    },
+    async diagnose(signal) {
+      return [await probe('config', signal, async () => {
+        if (!botToken) throw new DiagnosticError('auth')
+        const userId = state.allowedUserId
+        if (!userId) throw new DiagnosticError('missing-context')
+        const base = new URL(state.baseUrl || BASE_URL)
+        if (base.protocol !== 'https:' || !(base.hostname === 'weixin.qq.com' || base.hostname.endsWith('.weixin.qq.com')) || base.username || base.password) throw new DiagnosticError('unsupported')
+        const data = await diagnosticJson(`${base.origin}/ilink/bot/getconfig`, signal, { ilink_user_id: userId, context_token: state.contextTokens[userId] ?? '', base_info: { channel_version: '1.0.0' } }, headers())
+        platformResult(data.ret ?? data.errcode, [-14])
+        if (data.errcode !== undefined) platformResult(data.errcode, [-14])
+        requireDiagnostic(typeof data.typing_ticket === 'string' && data.typing_ticket)
+      })]
     },
     status() {
       return statusText

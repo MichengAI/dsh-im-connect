@@ -1,4 +1,5 @@
 import { choiceSendError } from '../engine/choice-delivery.js'
+import { diagnosticJson, DiagnosticError, probe, requireDiagnostic } from './diagnostics.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { fileForm, fileRequest } from './file-send.js'
 import { JsonStateFile } from '../engine/json-state.js'
@@ -315,6 +316,21 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       }
     },
     setMessageHandler(h) { handler = h },
+    async diagnose(signal) {
+      const query = async (method: string) => {
+        const data = await diagnosticJson(`${API}/bot${token}/${method}`, signal, {})
+        if (data.ok === false) throw new DiagnosticError(data.error_code === 401 ? 'auth' : 'rejected', undefined, typeof data.error_code === 'number' ? data.error_code : undefined)
+        requireDiagnostic(data.ok === true && data.result && typeof data.result === 'object')
+        return data.result as Record<string, unknown>
+      }
+      const identity = await probe('bot', signal, async () => { const bot = await query('getMe'); requireDiagnostic(bot.id && bot.is_bot === true) })
+      if (identity.status !== 'passed') return [identity]
+      return [identity, await probe('webhook', signal, async () => {
+        const webhook = await query('getWebhookInfo')
+        requireDiagnostic(typeof webhook.url === 'string')
+        if (webhook.url) throw new DiagnosticError('webhook-conflict')
+      })]
+    },
     status() { return stopped ? '已停止' : lastError ? '轮询异常（详情见本机日志）' : '轮询中' },
   }
 }

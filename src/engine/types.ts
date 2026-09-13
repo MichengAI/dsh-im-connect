@@ -48,6 +48,8 @@ export interface ChannelAdapter {
   sendFile?(chatId: string, file: { name: string; data: Uint8Array }, signal?: AbortSignal): Promise<void>
   setMessageHandler(handler: (msg: ImMessage) => void | Promise<void>): void
   status(): string
+  /** 使用平台查询或现有连接心跳诊断，不发送聊天消息，也不启动新连接。 */
+  diagnose?(signal: AbortSignal): Promise<import('../channels/diagnostics.js').DiagnosticCheck[]>
   loginUrl?(): string | undefined
   /** 状态回应针对原消息，不依赖聊天最近一条消息的可变槽位。 */
   addStatusReaction?(message: ImMessage, state: MessageStatus, label: string, signal: AbortSignal): Promise<string | undefined>

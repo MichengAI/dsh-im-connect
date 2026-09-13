@@ -5,6 +5,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createChannelAdapter } from './channels/factory.js'
+import { connectionState, type ConnectionState } from './channels/connection-state.js'
+import { type DiagnosticCheck, DiagnosticError, probe } from './channels/diagnostics.js'
+import { fileOperation } from './engine/abort.js'
 import { parseAdditionalImageHosts } from './channels/image-host-policy.js'
 import { CHANNEL_META, CHANNEL_ORDER, supportsQr } from './channels/meta.js'
 import { PairingHub } from './channels/qr/hub.js'
@@ -130,6 +133,8 @@ export interface AccountView {
   autoName: boolean
   nameOrdinal?: number
   connected: boolean
+  connectionState: ConnectionState
+  receiveConfigured: boolean
   receiveEnabled: boolean
   configuredKeys: string[]
   status: string
@@ -140,6 +145,13 @@ export interface AccountView {
   commandPermissions: CommandPermissions
   privateAccess: 'approved' | 'all'
   lastCheckedAt?: string
+}
+
+interface AccountDiagnosticResult {
+  ok: boolean
+  account?: AccountView
+  diagnostics?: { version: 1; checkedAt: string; checks: DiagnosticCheck[] }
+  error?: string
 }
 
 export interface ChannelView {
@@ -200,6 +212,8 @@ export class ChannelManager {
   private readonly engineConfig: EngineConfig
   private store: Persisted = { channels: {}, allowlist: {}, pending: {} }
   private readonly running = new Map<string, ChannelAdapter>()
+  private readonly diagnosticJobs = new Map<string, Promise<AccountDiagnosticResult>>()
+  private readonly diagnosticAbort = new AbortController()
   private readonly channelOperations = new KeyedSerialQueue()
   private apiDisposers: Array<() => void> = []
   // dispose 后阻止 initEnabled/startOne 再拉起渠道，避免插件重载时新旧双实例并存
@@ -273,8 +287,15 @@ export class ChannelManager {
     const platform = this.platformOf(accountId, state)
     const config = state.config ?? {}
     const adapter = this.running.get(accountId)
-    const status = adapter?.status() ?? state.lastError ?? (state.enabled ? '未连接' : '已停止')
-    const connected = adapter !== undefined && !status.includes('失败') && status !== '未连接' && status !== '已停止'
+    let status = state.receiveEnabled === false ? '已停止' : state.lastError ?? (state.enabled ? '未连接' : '已停止')
+    try {
+      if (adapter) status = adapter.status()
+    } catch {
+      // 状态读取失败不能影响其他账号，也不向浏览器泄露 SDK 异常。
+      status = '状态读取失败'
+    }
+    const runtimeState = connectionState(status)
+    const connected = adapter !== undefined && runtimeState === 'connected'
     const defaultNamePrefix = `${CHANNEL_META[platform].label}账号`
     const name = String(state.name || defaultNamePrefix).trim()
     const defaultNameSuffix = name.startsWith(`${defaultNamePrefix} `) ? name.slice(defaultNamePrefix.length + 1) : ''
@@ -286,6 +307,8 @@ export class ChannelManager {
       autoName,
       ...(autoName ? { nameOrdinal: Number(defaultNameSuffix || 1) } : {}),
       connected,
+      connectionState: runtimeState,
+      receiveConfigured: state.receiveEnabled !== false,
       receiveEnabled: connected && state.receiveEnabled !== false,
       configuredKeys: Object.keys(config).filter((key) => Boolean(config[key]) && !key.endsWith('Ref')),
       status,
@@ -641,10 +664,8 @@ export class ChannelManager {
             return
           }
           if (action === 'check') {
-            const state = this.store.channels[accountId]!
-            state.lastCheckedAt = new Date().toISOString()
-            this.flush()
-            send(200, { ok: true, account: this.accountView(accountId, state) })
+            const result = await this.checkAccount(accountId)
+            send(result.ok ? 200 : 404, result)
             return
           }
           if (action === 'remove') {
@@ -714,6 +735,7 @@ export class ChannelManager {
 
   disposeApi(): void {
     this.disposed = true
+    this.diagnosticAbort.abort()
     for (const dispose of this.apiDisposers) dispose()
     this.apiDisposers = []
     this.pairing.dispose()
@@ -758,6 +780,41 @@ export class ChannelManager {
       if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
       return { ok: true, account: this.accountView(accountId, state) }
     })
+  }
+
+  /** 查询平台或现有连接心跳；同账号合并请求，总等待 12 秒，不启动接收器。 */
+  checkAccount(accountId: string): Promise<AccountDiagnosticResult> {
+    const existing = this.diagnosticJobs.get(accountId)
+    if (existing) return existing
+    const job = this.channelOperations.run(accountId, async (): Promise<AccountDiagnosticResult> => {
+      const state = this.store.channels[accountId]
+      if (!state) return { ok: false, error: '账号不存在' }
+      if (this.disposed) return { ok: false, error: '操作失败，请查看本机日志' }
+      const signal = AbortSignal.any([AbortSignal.timeout(12_000), this.diagnosticAbort.signal])
+      let checks: DiagnosticCheck[] = []
+      const preparation = await probe('credentials', signal, async () => {
+        let adapter = this.running.get(accountId)
+        if (!adapter) {
+          const platform = this.platformOf(accountId, state)
+          const resolved = await fileOperation(this.resolveSecrets(platform, accountId, state.config ?? {}), signal)
+          signal.throwIfAborted()
+          adapter = createChannelAdapter(platform, resolved, this.log, this.accountStateDir(accountId, platform))
+        }
+        if (!adapter) throw new DiagnosticError('auth')
+        if (!adapter.diagnose) throw new DiagnosticError('unsupported')
+        checks = await fileOperation(adapter.diagnose(signal), signal)
+      })
+      if (preparation.status !== 'passed') checks = [preparation]
+      if (this.disposed) return { ok: false, error: '操作失败，请查看本机日志' }
+      const checkedAt = new Date().toISOString()
+      const previous = state.lastCheckedAt
+      state.lastCheckedAt = checkedAt
+      try { this.flush() } catch (error) { state.lastCheckedAt = previous; throw error }
+      return { ok: true, account: this.accountView(accountId, state), diagnostics: { version: 1, checkedAt, checks } }
+    })
+    this.diagnosticJobs.set(accountId, job)
+    void job.finally(() => { if (this.diagnosticJobs.get(accountId) === job) this.diagnosticJobs.delete(accountId) }).catch(() => undefined)
+    return job
   }
 
   async reconnect(accountId: string): Promise<{ ok: boolean; error?: string }> {

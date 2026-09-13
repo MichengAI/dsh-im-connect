@@ -5,6 +5,14 @@ export interface WecomConfig {
     additionalImageHosts?: readonly string[];
 }
 export interface WecomSdkClient {
+    readonly isConnected?: boolean;
+    reply?(frame: {
+        headers: {
+            req_id: string;
+        };
+    }, body: Record<string, unknown>, cmd?: string): Promise<{
+        errcode?: number;
+    }>;
     replyStream(frame: unknown, streamId: string, content: string, finish?: boolean): Promise<unknown>;
     uploadMedia?(data: Buffer, options: {
         type: 'file';

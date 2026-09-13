@@ -1,4 +1,6 @@
 import { choiceSendError } from '../engine/choice-delivery.js'
+import { randomUUID } from 'node:crypto'
+import { DiagnosticError, platformResult, probe } from './diagnostics.js'
 import { replyText } from '../engine/command-locale.js'
 import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
@@ -26,6 +28,8 @@ export interface WecomConfig {
 }
 
 export interface WecomSdkClient {
+  readonly isConnected?: boolean
+  reply?(frame: { headers: { req_id: string } }, body: Record<string, unknown>, cmd?: string): Promise<{ errcode?: number }>
   replyStream(frame: unknown, streamId: string, content: string, finish?: boolean): Promise<unknown>
   uploadMedia?(data: Buffer, options: { type: 'file'; filename: string }): Promise<{ media_id: string }>
   replyMedia?(frame: unknown, type: 'file', mediaId: string): Promise<unknown>
@@ -253,6 +257,9 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
         throw new Error('缺少依赖 @wecom/aibot-node-sdk')
       }
       client = new sdk.WSClient({ botId, secret, maxAuthFailureAttempts: 1, logger: quietSdkLogger(log, 'wecom') })
+      client.on('authenticated', () => { if (generation === startedGeneration) statusText = '长连接已建立' })
+      client.on('disconnected', () => { if (generation === startedGeneration) statusText = '已断开' })
+      client.on('reconnecting', () => { if (generation === startedGeneration) statusText = '重连中' })
       const newStreamId = sdk.generateReqId
         ? () => sdk.generateReqId!('stream')
         : () => `stream_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`
@@ -392,7 +399,23 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       await broker?.startThinking(chatId).catch(() => undefined)
     },
     setMessageHandler(h) { handler = h },
-    status() { return statusText },
+    async diagnose(signal) {
+      return [await probe('heartbeat', signal, async () => {
+        if (!client?.isConnected) throw new DiagnosticError('not-connected')
+        if (!client.reply) throw new DiagnosticError('unsupported')
+        // SDK 按 req_id 前缀吞掉常规 ping 回执；独立前缀让公开 reply API 等待本次回执。
+        try {
+          const result = await fileOperation(client.reply({ headers: { req_id: `diagnostic_${randomUUID()}` } }, {}, 'ping'), signal)
+          platformResult(result.errcode)
+        } catch (error) {
+          const code = (error as { errcode?: unknown })?.errcode
+          if (code !== undefined) platformResult(code)
+          if (error instanceof Error && /timeout/i.test(error.message)) throw new DiagnosticError('timeout')
+          throw error
+        }
+      })]
+    },
+    status() { return client?.isConnected === false && statusText === '长连接已建立' ? '已断开' : statusText },
   }
 }
 
