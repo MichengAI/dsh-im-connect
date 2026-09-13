@@ -4,7 +4,10 @@ import test from 'node:test'
 import ts from 'typescript'
 
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-const componentSource = source.slice(source.indexOf('    function AccountConnectionCheck('), source.indexOf('    function GithubMark16('))
+const componentStart = source.indexOf('    function AccountConnectionCheck(')
+const componentEnd = source.indexOf('    function GithubMark16(')
+assert.ok(componentStart >= 0 && componentEnd > componentStart, '诊断组件切片边界失效，请更新夹具定位')
+const componentSource = source.slice(componentStart, componentEnd)
 const translations = new Function(source.slice(source.indexOf('    const IM_LOCALES ='), source.indexOf('    const h = React.createElement;')) + '; return IM_LOCALES;')()
 
 // 提取实际按钮节点进行渲染，避免复制 disabled/title 条件而让测试与产品各自漂移。
@@ -25,6 +28,7 @@ function receiveSwitch(account, lang, onAction, busy = {}) {
   visit(parsed)
   assert.equal(matches.length, 1, '账号接收开关应唯一，结构变化后需更新夹具')
   const h = (type, props, ...children) => ({ type, props, children })
+  // 按钮新增闭包依赖时须同步下列参数；缺失依赖应明确失败，不能静默跳过。
   return new Function('h', 'account', 'busy', 't', 'accountLabel', 'onAction', `return ${matches[0].getText()}`)(
     h, account, busy, key => translations[lang][key], account => account.id, onAction)
 }

@@ -1,0 +1,13 @@
+{
+  "calls": [
+    {
+      "kind": "platform",
+      "method": "getMe"
+    },
+    {
+      "kind": "platform",
+      "method": "getWebhookInfo"
+    }
+  ],
+  "noMessagesSent": true
+}
