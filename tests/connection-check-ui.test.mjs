@@ -1,10 +1,54 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import ts from 'typescript'
 
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 const componentSource = source.slice(source.indexOf('    function AccountConnectionCheck('), source.indexOf('    function GithubMark16('))
 const translations = new Function(source.slice(source.indexOf('    const IM_LOCALES ='), source.indexOf('    const h = React.createElement;')) + '; return IM_LOCALES;')()
+
+// 提取实际按钮节点进行渲染，避免复制 disabled/title 条件而让测试与产品各自漂移。
+function receiveSwitch(account, lang, onAction, busy = {}) {
+  const parsed = ts.createSourceFile('client.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const matches = []
+  function visit(node, inSettings = false) {
+    const settings = inSettings || ts.isFunctionDeclaration(node) && node.name?.text === 'SettingsPage'
+    if (settings && ts.isCallExpression(node) && node.expression.getText() === 'h'
+      && ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text === 'button') {
+      const props = node.arguments[1]
+      if (props && ts.isObjectLiteralExpression(props) && props.properties.some(property =>
+        ts.isPropertyAssignment(property) && property.name.getText() === 'role'
+        && ts.isStringLiteral(property.initializer) && property.initializer.text === 'switch')) matches.push(node)
+    }
+    ts.forEachChild(node, child => visit(child, settings))
+  }
+  visit(parsed)
+  assert.equal(matches.length, 1, '账号接收开关应唯一，结构变化后需更新夹具')
+  const h = (type, props, ...children) => ({ type, props, children })
+  return new Function('h', 'account', 'busy', 't', 'accountLabel', 'onAction', `return ${matches[0].getText()}`)(
+    h, account, busy, key => translations[lang][key], account => account.id, onAction)
+}
+
+test('旧后端接收开关禁用并解释原因，新后端按用户意图切换', async () => {
+  for (const lang of ['zh', 'en']) {
+    for (const receiveEnabled of [true, false]) {
+      const button = receiveSwitch({ id: 'a', receiveEnabled }, lang, () => assert.fail('禁用按钮不应触发请求'))
+      assert.equal(button.props.disabled, true)
+      assert.equal(button.props.title, translations[lang]['connection.receiveUnknown'])
+    }
+    for (const receiveConfigured of [true, false]) {
+      const calls = []
+      const account = { id: 'a', receiveConfigured, receiveEnabled: false }
+      const button = receiveSwitch(account, lang, (...args) => calls.push(args))
+      assert.equal(button.props.disabled, false)
+      assert.equal(button.props['aria-checked'], receiveConfigured)
+      assert.equal(button.props.title, translations[lang]['account.receive'])
+      await button.props.onClick()
+      assert.deepEqual(calls, [['a', 'receive', { receiveEnabled: !receiveConfigured }]])
+      assert.equal(receiveSwitch(account, lang, () => {}, { a: true }).props.disabled, true)
+    }
+  }
+})
 
 function fixture(onAction) {
   const slots = [], effects = []

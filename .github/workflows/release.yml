@@ -29,6 +29,8 @@ jobs:
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $OutputEncoding = [System.Text.Encoding]::UTF8
+          # 预期的 404 由下方状态分支处理，非零退出码不提前抛出原生命令异常。
+          $PSNativeCommandUseErrorActionPreference = $false
           $tag = [Uri]::EscapeDataString($env:GITHUB_REF_NAME)
           $response = @(gh api --include "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" 2>$null)
           $queryExit = $LASTEXITCODE

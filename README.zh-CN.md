@@ -292,7 +292,8 @@ DSH 后端保持本机监听；远程访问使用受控 HTTPS 反向代理，并
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location <your-projects-directory>
+# 替换为本机已存在的项目目录。
+Set-Location "$HOME\Projects"
 git clone https://github.com/MichengAI/dsh-im-connect.git
 Set-Location .\dsh-im-connect
 npm install

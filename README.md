@@ -292,7 +292,8 @@ Use this for debugging or unpublished changes. The cloned directory becomes the 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location <your-projects-directory>
+# Replace this with an existing projects directory.
+Set-Location "$HOME\Projects"
 git clone https://github.com/MichengAI/dsh-im-connect.git
 Set-Location .\dsh-im-connect
 npm install
