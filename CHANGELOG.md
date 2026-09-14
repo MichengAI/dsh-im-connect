@@ -4,6 +4,10 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.49 - 2026-09-14
+
+- Fix an older sidebar tab registration removing its replacement during cleanup, preserving shared tabs when plugins hand over ownership.
+
 ## 0.1.48 - 2026-09-14
 
 - Fix the Channels sidebar entry disappearing when used with the archive and automation plugins.
