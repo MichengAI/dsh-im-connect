@@ -4,6 +4,10 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.48 - 2026-09-14
+
+- Fix the Channels sidebar entry disappearing when used with the archive and automation plugins.
+
 ## 0.1.47 - 2026-09-13
 
 - Diagnose account connections through platform APIs or an existing connection heartbeat. Results distinguish passed, failed and unverified checks, with specific guidance for credentials, local state, network failures and Telegram Webhook conflicts; no test messages are sent.
