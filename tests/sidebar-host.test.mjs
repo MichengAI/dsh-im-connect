@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { extractBlock } from './sidebar-lifecycle-harness.mjs'
 
 // 读发布产物 lib/client.js（npm test 先 build 再跑），确保验证的就是上线文件
 const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
 
 test('新版侧栏使用实际生效的槽位投影，不误选已被替换的任务树', () => {
-  const code = client.slice(client.indexOf('    function pickOfficialWorkspaces'), client.indexOf('    function apply(ctx)'))
+  const code = extractBlock(client, '    function pickOfficialWorkspaces', '    function apply(ctx)', 'IM 侧栏选择器')
   const pick = new Function(code + '; return pickOfficialWorkspaces;')()
   const stale = { component: function OldTree() {} }, active = { component: function LiveTree() {} }
   const slots = { entries: () => [stale], entriesOfSlot() { assert.equal(this, slots); return [active] } }
@@ -85,12 +86,11 @@ test('频道会话菜单由列表统一开关，同一时间只开一个', () =>
 })
 
 test('频道列表改模型后仍显示映射会话，只隐藏已归档', () => {
-  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(client, /!archived.has\(sess.sessionId\)/)
   assert.doesNotMatch(client, /present.has\(sess.sessionId\)/)
 })
 test('频道页只渲染有可见会话的渠道文件夹', () => {
-  const src = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const src = client
   assert.match(src, /\.filter\(\(g\) => \(g\.sessions \|\| \[\]\)\.length > 0\)/)
   assert.match(src, /!error && visibleGroups\.length === 0/)
   assert.match(src, /if \(sessions\.length\) visibleGroups\.push/)

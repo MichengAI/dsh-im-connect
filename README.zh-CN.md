@@ -327,6 +327,12 @@ dsh plugin --profile web add .
 
 修改渠道或会话逻辑时，必须保持：引擎不写死平台名、渠道不创建 agent、网页任务与 IM 频道分列。
 
+### 原生侧栏协作协议
+
+IM 与定时插件通过 `sidebar.workspaces` 当前显示项及条目／组件上的 `__dshNativeTabs` 注册表共享页签。这是插件间约定，不是 DSH 官方稳定 API。直接替换或恢复侧栏组件、交接注册表且宿主不会发送槽位通知时，变更方应在状态更新完成后通过微任务派发 `window` 事件 `dsh-native-sidebar-change`（普通 `Event`，无负载）。接收方重新读取当前显示项；仅插入页签不转发该事件，避免通知循环。
+
+清理时只恢复自己仍持有的组件、移除自己拥有的注册表和页签，并解除事件、槽位及页签订阅。事件名、注册表结构或通知语义变更需要协作插件同步兼容。IM 每 250ms、最多 20 次的启动重试在成功插入页签后提前结束；它只兼容启动加载顺序，不能保证旧插件在重试结束后无声替换组件时重新接入。
+
 ## 验证
 
 真实管理认证测试需要把 `DSH_CONNECTION_CONTRACT_ROOT` 指向隔离安装的 `@deepseek-ai/dsh-client-connection` 包根目录；与 Gateway 共存的用例同时使用图片契约的 `DSH_CHAT_CONTRACT_ROOT`。未配置时本地会跳过对应契约测试，CI 已配置执行。测试使用临时 HTTP 服务和临时凭据，不代表真实 Cloudflare 部署联调。
@@ -338,6 +344,8 @@ npm test
 ```
 
 `prepublishOnly` 会在发布前自动执行测试。
+
+侧栏测试读取构建后的 `lib/client.js`；直接运行单项测试前先执行 `npm run build`。生命周期 Harness 验证模拟插槽、通知与计时器下的接入和卸载，不执行 React 渲染，也不代替真实消息、归档、定时任务或 Desktop 验收。
 
 
 ## 断线与重启后的结果补发

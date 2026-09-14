@@ -327,6 +327,12 @@ dsh plugin --profile web add .
 
 When changing channel or session logic, keep the engine platform-agnostic, keep adapters from creating agents, and keep web tasks separate from IM channels.
 
+### Native sidebar coordination protocol
+
+IM and Automation share tabs through the active `sidebar.workspaces` entry and the `__dshNativeTabs` registry on the entry or component. This is an inter-plugin convention, not an official stable DSH API. When replacing or restoring a sidebar component or handing over a registry without a host slot notification, the changing plugin should dispatch `dsh-native-sidebar-change` on `window` in a microtask after updating its state (a plain `Event`, with no payload). Receivers reread the active entry. Inserting a tab alone must not forward the event, to avoid notification loops.
+
+Cleanup restores only components still owned by the plugin, removes its own registry and tabs, and releases event, slot, and tab subscriptions. Changes to the event name, registry structure, or notification semantics require coordinated compatibility updates. IM retries startup every 250ms for at most 20 attempts and stops early after inserting a tab. This only covers startup ordering; it cannot guarantee reconnection when an older plugin silently replaces a component after retries end.
+
 ## Validation
 
 For real management-authentication tests, set `DSH_CONNECTION_CONTRACT_ROOT` to the isolated `@deepseek-ai/dsh-client-connection` package root. The Gateway-coexistence case also uses `DSH_CHAT_CONTRACT_ROOT` from the image contracts. Local runs skip these contracts when unconfigured; CI supplies both. Tests use temporary HTTP servers and credentials, not a live Cloudflare deployment.
@@ -338,6 +344,8 @@ npm test
 ```
 
 `prepublishOnly` runs the tests before publishing.
+
+Sidebar tests read the built `lib/client.js`; run `npm run build` before invoking individual tests directly. The lifecycle harness verifies attachment and disposal with simulated slots, notifications, and timers. It does not render React or replace validation of real messages, archiving, scheduled tasks, or Desktop.
 
 
 ## Result recovery after disconnects and restarts
