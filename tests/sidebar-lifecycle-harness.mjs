@@ -1,15 +1,22 @@
 // 执行真实接入闭包，以可控插槽、计时器验证加载顺序和卸载，不模拟 React 渲染。
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 // 定位失败或标记重复时立即报错，避免执行空片段或另一个同名闭包。
-export function extractBlock(source, startMarker, endMarker, label) {
+export function extractBlock(source, startMarker, endMarker, label, required = []) {
   source = source.replace(/\r\n/g, '\n')
   const start = source.indexOf(startMarker), end = source.indexOf(endMarker)
   if (start < 0 || end <= start || source.indexOf(startMarker, start + 1) >= 0 || source.indexOf(endMarker, end + 1) >= 0) {
     throw new Error(`${label}：抽取标记缺失、重复或顺序错误，请更新测试定位`)
   }
-  return source.slice(start, end)
+  const body = source.slice(start, end)
+  for (const marker of required) assert.ok(body.includes(marker), `${label}：缺少 ${marker}，请更新测试定位`)
+  return body
 }
+
+const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+const registryCode = extractBlock(client, '    function createNativeTabRegistry(', '    function applyRegistryFilters(', 'IM 注册表', ['function attachNativeTabRegistry(', 'function findNativeTabRegistry('])
+export const nativeTabs = new Function(registryCode + '; return { createNativeTabRegistry, attachNativeTabRegistry, findNativeTabRegistry };')()
 
 export function createHarness(body, kind) {
   let entries = [], codex = false
@@ -27,14 +34,8 @@ export function createHarness(body, kind) {
       return () => subscriptions.get(name).delete(callback)
     },
   }
-  const registry = tree => {
-    const items = new Map()
-    return { officialTree: tree, getTabs: () => [...items.values()], insert(tab) {
-      items.set(tab.id, tab)
-      return () => { if (items.get(tab.id) === tab) items.delete(tab.id) }
-    } }
-  }
-  const find = entry => entry?.__dshNativeTabs ?? entry?.component?.__dshNativeTabs
+  const registry = nativeTabs.createNativeTabRegistry
+  const find = nativeTabs.findNativeTabRegistry
   const ownFlag = kind === 'automation' ? '__dshAutomationWrapped' : '__imConnectWrapped'
   const ctx = { slots }
   const env = {
@@ -46,7 +47,7 @@ export function createHarness(body, kind) {
     isForeignSidebarHost: component => !!component?.__dshNativeTabHost,
     resolveOfficialTreeComponent: component => component,
     createNativeTabRegistry: registry,
-    attachNativeTabRegistry: (target, value) => { target.__dshNativeTabs = value; return value },
+    attachNativeTabRegistry: nativeTabs.attachNativeTabRegistry,
     findNativeTabRegistry: find,
     subscribeLocale: () => () => {}, subscribeChannelMembership: () => () => {},
     isChannelSession: () => false,
@@ -62,7 +63,7 @@ export function createHarness(body, kind) {
     setCodex(value) { codex = value; emit('sidebar') },
     start() { return new Function(...Object.keys(env), body)(...Object.values(env)) },
     async settle() { for (let i = 0; i < 8; i++) await Promise.resolve() },
-    tick() { for (const f of [...timers.values()]) f() },
+    tick() { const callbacks = [...timers.values()]; for (const f of callbacks) f(); return callbacks.length },
     assertAttached(entry) {
       const id = kind === 'automation' ? 'schedule' : 'channels'
       assert.ok(entry.component[ownFlag] || find(entry)?.getTabs().some(t => t.id === id), `${id} 未接入当前显示项`)
@@ -78,13 +79,13 @@ export function lifecycleCases(test, body, kind) {
       stop()
       await h.settle()
       assert.equal(entry.component, original)
-      assert.equal(h.find(entry), undefined)
+      assert.equal(h.find(entry), null)
       if (trigger === 'event') h.window.dispatchEvent(new Event('dsh-native-sidebar-change'))
       else if (trigger === 'timer') h.tick()
       else h.emit(trigger)
       await h.settle()
       assert.equal(entry.component, original)
-      assert.equal(h.find(entry), undefined)
+      assert.equal(h.find(entry), null)
     })
   }
   test('后注册的高优先级侧栏接入页签，移除后恢复官方侧栏', async () => {
@@ -93,7 +94,7 @@ export function lifecycleCases(test, body, kind) {
     const archive = h.add(-0.5)
     await h.settle(); h.assertAttached(archive)
     assert.equal(official.component, original)
-    assert.equal(h.find(official), undefined)
+    assert.equal(h.find(official), null)
     h.remove(archive); await h.settle(); h.assertAttached(official)
     stop(); await h.settle(); assert.equal(official.component, original)
   })
