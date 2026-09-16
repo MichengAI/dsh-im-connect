@@ -4,6 +4,12 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.50 - 2026-09-16
+
+- Add support for DSH 0.1.6-alpha.1 while retaining compatibility with 0.1.2-rc.1, 0.1.5-rc.1 and 0.1.5-rc.2.
+- Prefer official inspect for session history. An empty persisted prefix no longer overwrites existing permissions, and file delivery still uses the live turn log.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.49 - 2026-09-14
 
 - Fix an older sidebar tab registration removing its replacement during cleanup, preserving shared tabs when plugins hand over ownership.
