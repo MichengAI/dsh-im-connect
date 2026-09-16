@@ -2,7 +2,7 @@ import { basename, resolve } from 'node:path'
 import type { ChannelAdapter } from './types.js'
 import { KeyedSerialQueue } from './keyed-queue.js'
 import { replyText, withReplyLocale } from './command-locale.js'
-import { readSessionHistory } from './session-history.js'
+import { readLiveSessionHistory } from './session-history.js'
 
 type Event = { type?: string; seq?: number; surfaceOp?: unknown; data?: any }
 export interface DeliverySession {
@@ -32,8 +32,8 @@ function mutationPath(name: string, raw: unknown): string | undefined {
 
 /** 只选当前回复所在回合、已成功产生或明确 present 的文件。 */
 export function filesForReply(events: readonly Event[], closing: Event): { turn: number; paths: string[] } | undefined {
-  const end = events.findIndex(event => event === closing || (closing.seq !== undefined && event.seq === closing.seq))
-  if (end < 0) return
+  let end = events.findIndex(event => event === closing || (closing.seq !== undefined && event.seq === closing.seq))
+  if (end < 0) end = events.length
   if (closing.surfaceOp !== 'append' || closing.data?.interrupted
     || closing.data?.message?.content?.some((part: any) => part.type === 'tool-call')) return
   const prefix = events.slice(0, end)
@@ -72,7 +72,7 @@ export class FileDelivery {
     const initial = target()
     return this.queue.run(String(session.id), async () => {
       if (this.lifetime.signal.aborted) { ok = false; return }
-      const selected = filesForReply(await readSessionHistory(this.host, session) ?? [], closing)
+      const selected = filesForReply(readLiveSessionHistory(session) ?? [], closing)
       if (!selected?.paths.length) return
       onContent?.()
       if (!initial) { ok = false; return }

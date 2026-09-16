@@ -745,6 +745,24 @@ test('索引写入失败保留原磁盘映射与内存绑定', async t => {
   f.store.flush = flush
 })
 
+test('inspect 空数组时恢复权限仍读同步快照', async t => {
+  const f = makeRouter(t)
+  const old = await f.router.getOrCreate('wecom', 'dm', 'inspect-empty', '旧')
+  await f.router.disposeChannel('wecom')
+  const originalGet = f.ctx.get
+  f.ctx.get = name => name === 'sessionController'
+    ? { inspect: async () => ({ events: [] }) }
+    : originalGet?.(name)
+  const session = { id: old.sessionId, snapshotEvents: () => [{ type: 'permission/preset', data: {} }] }
+  f.ctx.agents.resume = async opts => {
+    await opts.setup({ agent: { session } })
+    return { agent: { session }, async dispose() {} }
+  }
+  const before = f.permissionSelections.length
+  await f.router.getOrCreate('wecom', 'dm', 'inspect-empty', '继续')
+  assert.equal(f.permissionSelections.length - before, 0)
+})
+
 test('恢复权限优先 inspect，不读同步快照', async t => {
   const f = makeRouter(t)
   const old = await f.router.getOrCreate('wecom', 'dm', 'inspect-permission', '旧')

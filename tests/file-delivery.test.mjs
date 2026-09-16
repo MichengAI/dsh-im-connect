@@ -19,12 +19,28 @@ function delivery(t, readAll, options = {}) {
   const host = { get(name) {
     if (name === 'workspaceFiles') return { readAll: async (...args) => { reads.push(args); return readAll ? readAll(...args) : { data: Buffer.from('report').toString('base64'), offset: 0, eof: true } } }
     if (name === 'settings') return { get: () => ({ preference: options.locale }) }
+    if (name === 'sessionController') return options.sessionController
   } }
   const channel = { id: 'test', sendFile: async (id, file) => files.push({ id, ...file }), send: async (id, text) => messages.push(text) }
   const sender = new FileDelivery(host, () => {})
   t.after(() => sender.dispose())
   return { sender, channel, files, messages, reads, target: () => ({ channel, chatId: 'chat' }) }
 }
+
+test('找不到 closing 身份时仍按回合回传', () => {
+  const f = fixture()
+  const clone = { type: f.closing.type, surfaceOp: f.closing.surfaceOp, data: f.closing.data }
+  assert.deepEqual(filesForReply(f.events, clone).paths, ['D:\\outside\\报告.pdf'])
+})
+
+test('回传用活日志，忽略 inspect 的空存储前缀', async t => {
+  const f = fixture()
+  const s = delivery(t, undefined, {
+    sessionController: { inspect: async () => ({ events: [] }) },
+  })
+  await s.sender.deliver(f.session, f.closing, s.target)
+  assert.equal(s.files.length, 1)
+})
 
 test('成功变更与 present 合并去重，任意正文路径不回传', () => {
   const f = fixture(['one.txt', 'one.txt'])
