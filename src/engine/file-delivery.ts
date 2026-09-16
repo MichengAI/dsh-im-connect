@@ -2,12 +2,12 @@ import { basename, resolve } from 'node:path'
 import type { ChannelAdapter } from './types.js'
 import { KeyedSerialQueue } from './keyed-queue.js'
 import { replyText, withReplyLocale } from './command-locale.js'
+import { readSessionHistory } from './session-history.js'
 
 type Event = { type?: string; seq?: number; surfaceOp?: unknown; data?: any }
 export interface DeliverySession {
   id?: string
   header?: { cwd?: string }
-  snapshotEvents?: () => readonly Event[]
   events?: readonly Event[]
 }
 
@@ -72,7 +72,7 @@ export class FileDelivery {
     const initial = target()
     return this.queue.run(String(session.id), async () => {
       if (this.lifetime.signal.aborted) { ok = false; return }
-      const selected = filesForReply(session.snapshotEvents?.() ?? session.events ?? [], closing)
+      const selected = filesForReply(await readSessionHistory(this.host, session) ?? [], closing)
       if (!selected?.paths.length) return
       onContent?.()
       if (!initial) { ok = false; return }

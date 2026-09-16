@@ -10,7 +10,6 @@ export interface DeliverySession {
     header?: {
         cwd?: string;
     };
-    snapshotEvents?: () => readonly Event[];
     events?: readonly Event[];
 }
 /** 只选当前回复所在回合、已成功产生或明确 present 的文件。 */

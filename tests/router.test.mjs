@@ -745,6 +745,23 @@ test('索引写入失败保留原磁盘映射与内存绑定', async t => {
   f.store.flush = flush
 })
 
+test('恢复权限优先 inspect，不读同步快照', async t => {
+  const f = makeRouter(t)
+  const old = await f.router.getOrCreate('wecom', 'dm', 'inspect-permission', '旧')
+  await f.router.disposeChannel('wecom')
+  const originalGet = f.ctx.get
+  f.ctx.get = name => name === 'sessionController'
+    ? { inspect: async id => { assert.equal(id, old.sessionId); return { events: [{ type: 'permission/preset', data: {} }] } } }
+    : originalGet?.(name)
+  f.ctx.agents.resume = async opts => {
+    await opts.setup({ agent: { session: { id: old.sessionId, snapshotEvents: () => [] } } })
+    return { agent: { session: { id: old.sessionId } }, async dispose() {} }
+  }
+  const before = f.permissionSelections.length
+  await f.router.getOrCreate('wecom', 'dm', 'inspect-permission', '继续')
+  assert.equal(f.permissionSelections.length - before, 0)
+})
+
 for (const type of ['permission/preset', 'sandbox/mode', 'approval/policy', 'legacy']) {
   test(`恢复会话权限 ${type} 不被账号默认覆盖，旧空记录补默认`, async t => {
     const f = makeRouter(t)

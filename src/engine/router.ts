@@ -7,6 +7,7 @@ import type { EngineConfig } from './types.js'
 import { KeyedSerialQueue } from './keyed-queue.js'
 import { sameWorkspacePath } from './workspace-path.js'
 import { readSessionTitle } from './session-title.js'
+import { readSessionHistory } from './session-history.js'
 
 const DEFAULT_DISPOSE_TIMEOUT_MS = 10_000
 
@@ -21,7 +22,7 @@ function storedHeader(item: unknown): StoredHeader {
   return header
 }
 
-type SetupAgent = { session?: { snapshotEvents?: () => readonly { type: string }[]; events?: readonly { type: string }[] } }
+type SetupAgent = { session?: { id?: string; events?: readonly { type: string }[] } }
 
 export interface ChatBinding {
   key: string
@@ -451,7 +452,7 @@ export class SessionRouter {
     }
     const liveAgent = this.ctx.agents?.get?.(record.sessionId)
     if (liveAgent) {
-      this.syncStoredTitle(record.sessionId, liveAgent)
+      await this.syncStoredTitle(record.sessionId, liveAgent)
       const binding: ChatBinding = {
         key: sessionKeyOf(record.channel, record.kind, record.chatId),
         channelId: record.channel,
@@ -472,7 +473,7 @@ export class SessionRouter {
         },
         setup: this.presetSetup(record.channel, record.agentPreset, true),
       })
-      this.syncStoredTitle(record.sessionId, handle.agent)
+      await this.syncStoredTitle(record.sessionId, handle.agent)
       await this.attachWorkspace(record.sessionId, record.channel, record.cwd)
       return {
         key: sessionKeyOf(record.channel, record.kind, record.chatId),
@@ -542,9 +543,9 @@ export class SessionRouter {
     this.log(`[boot] attachMappedSessions ${Date.now() - started}ms`)
   }
 
-  private syncStoredTitle(sessionId: string, agent: unknown): void {
-    const session = (agent as { session?: { snapshotEvents?: () => readonly { type: string; data?: unknown }[]; events?: readonly { type: string; data?: unknown }[] } } | undefined)?.session
-    const events = session?.snapshotEvents?.() ?? session?.events ?? []
+  private async syncStoredTitle(sessionId: string, agent: unknown): Promise<void> {
+    const session = (agent as { session?: { id?: string; events?: readonly { type: string; data?: unknown }[] } } | undefined)?.session
+    const events = await readSessionHistory(this.ctx, session) ?? []
     const latest = readSessionTitle(events.findLast(event => event.type === 'session/title')?.data)
     if (latest) this.setTitle(sessionId, latest.title, latest.source)
   }
@@ -631,9 +632,9 @@ export class SessionRouter {
       // 0.1.5 显式传入 Agent；仅旧版单参数契约读取作用域属性。
       const agent = explicitAgent ?? (agentCtx as { agent?: SetupAgent }).agent
       const session = agent?.session
-      const events = session?.snapshotEvents?.() ?? session?.events
+      const events = await readSessionHistory(ctx, session)
       // 在挂载前读取历史；来源不可读取时也不冒险覆盖已有权限。
-      const preservePermission = restoring && (!events || events.some(event => ['permission/preset', 'sandbox/mode', 'approval/policy'].includes(event.type)))
+      const preservePermission = restoring && (!events || events.some(event => ['permission/preset', 'sandbox/mode', 'approval/policy'].includes(event.type ?? '')))
       if (ctx.agentPresets?.mount) await ctx.agentPresets.mount(agentCtx, preset)
       // Account defaults belong in agentOptions (including on legacy Hosts),
       // not a second installModelSelection middleware. Its outer after-next

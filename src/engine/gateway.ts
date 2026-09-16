@@ -15,6 +15,7 @@ import { SessionRouter } from './router.js'
 import { initialSessionTitle, readSessionTitle } from './session-title.js'
 import { SeenStore } from './seen-store.js'
 import { SessionMapStore } from './session-store.js'
+import { readSessionHistory } from './session-history.js'
 import { type ChatKind } from './session-id.js'
 import { canAnswerToolApproval, decideAccess } from './access.js'
 import { splitText } from './split.js'
@@ -32,7 +33,6 @@ interface AgentLike {
   id?: string
   session?: {
     id?: string
-    snapshotEvents?: () => readonly { type?: string; data?: Record<string, unknown> }[]
     events?: readonly { type?: string; data?: Record<string, unknown> }[]
   }
 }
@@ -672,7 +672,7 @@ export class ImEngine {
         await this.deliver(channel, binding.chatId, '当前用户可以私聊，但工具调用审批仅限已批准用户；请在网页端处理。')
         return DELEGATE_INTERACTION
       }
-      const prompt = withReplyLocale(this.ctx, () => this.approvalPrompt(req))
+      const prompt = await withReplyLocale(this.ctx, () => this.approvalPrompt(req))
       if (!prompt) {
         await this.deliver(channel, binding.chatId, '该操作需要审批，但无法在 IM 中完整展示；请在网页端处理。')
         return DELEGATE_INTERACTION
@@ -886,7 +886,7 @@ export class ImEngine {
     })
   }
 
-  private approvalPrompt(req: ApprovalRequestLike): string | undefined {
+  private async approvalPrompt(req: ApprovalRequestLike): Promise<string | undefined> {
     const toolName = req.toolName?.trim() || (req.session ? '工具操作' : '')
     if (!toolName) return undefined
     const lines = [
@@ -898,7 +898,7 @@ export class ImEngine {
     if (req.agent && !callId) return undefined
     if (callId) {
       const session = req.agent?.session
-      const events = session?.snapshotEvents?.() ?? session?.events ?? []
+      const events = await readSessionHistory(this.ctx, session) ?? []
       const event = events.findLast((item) => {
         if (item.type === 'tool/call') return item.data?.callId === callId
         if (item.type === 'tool/code-dispatch-start' || item.type === 'tool/ptc-dispatch-start') return item.data?.subCallId === callId

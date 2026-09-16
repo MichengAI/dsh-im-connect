@@ -6,6 +6,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import type { ChannelAdapter, ImMessage } from './types.js'
 import { commandNavigation, extensionHelp, extensionReply, oneLine, related } from './command-replies.js'
+import { readSessionHistory } from './session-history.js'
 import type { SessionRouter } from './router.js'
 
 const modelDefaultHint = () => replyText('与 Chat 一致，此操作也会尝试保存后续 Chat 新会话的默认模型选择；已有其他会话不会主动修改。')
@@ -167,9 +168,9 @@ export class ChatCommands {
     let cwd: string | undefined
     let model: Selection | undefined
     try {
-      const session = (binding.handle?.agent as | { session?: { header?: { cwd?: string }; snapshotEvents?: () => readonly { type: string; data?: Selection }[]; events?: readonly { type: string; data?: Selection }[] } } | undefined)?.session
+      const session = (binding.handle?.agent as | { session?: { id?: string; header?: { cwd?: string }; events?: readonly { type: string; data?: Selection }[] } } | undefined)?.session
       cwd = session?.header?.cwd
-      model = (session?.snapshotEvents?.() ?? session?.events ?? []).findLast((event) => event.type === 'model/selection')?.data
+      model = (await readSessionHistory(this.host, session, signal) ?? []).findLast((event) => event.type === 'model/selection')?.data as Selection | undefined
     } catch { /* 继续尝试宿主快照，不能改用账号默认值冒充实际配置。 */ }
     const [snapshot, rows] = await Promise.all([
       model?.provider && model.model ? undefined : this.optional((sig) => this.snapshot(binding.sessionId, sig), signal),
