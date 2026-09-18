@@ -331,13 +331,13 @@ test('轮换保留历史句柄，打开历史不换绑，停用统一释放且�
 })
 
 test('真实网页 SessionManager 在 new 后无需刷新即可重新选择历史', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT }, async t => {
-  // 直接执行宿主的 select 方法；隔离浏览器通知依赖，保留真实的列表准入判断。
+  // 旧宿主有 select；alpha.2 导航已离开 SessionManager，只核列表准入与 Host 绑定。
   const source = readFileSync(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/client/sessions/manager.js'), 'utf8')
   const start = source.indexOf('    select(sessionId) {')
-  const end = source.indexOf('    /**', start)
-  assert.ok(start >= 0 && end > start)
+  const end = start >= 0 ? source.indexOf('    /**', start) : -1
+  const hasSelect = start >= 0 && end > start
   const browser = {
-    ...new Function('return ({' + source.slice(start, end) + '})')(),
+    ...(hasSelect ? new Function('return ({' + source.slice(start, end) + '})')() : {}),
     summaries: [], sessions: new Map(), addresses: new Map(), catalogs: new Map(),
     completedNotifications: new Set(), navigationAddress() {}, refreshSubagents() {}, notifier: { notifyNow() {} },
     handleSessionAdded(row) { this.summaries.push(row) },
@@ -353,10 +353,15 @@ test('真实网页 SessionManager 在 new 后无需刷新即可重新选择历�
     return handle
   }
   const old = await f.router.getOrCreate('wecom', 'dm', 'browser', '你好')
-  browser.select(old.sessionId)
+  if (hasSelect) browser.select(old.sessionId)
   const next = await f.router.rotate('wecom', 'dm', 'browser', '新会话')
-  browser.select(next.sessionId)
-  assert.doesNotThrow(() => browser.select(old.sessionId))
+  if (hasSelect) {
+    browser.select(next.sessionId)
+    assert.doesNotThrow(() => browser.select(old.sessionId))
+  } else {
+    assert.equal(browser.summaries.some(row => row.sessionId === old.sessionId), true)
+    assert.equal(browser.summaries.some(row => row.sessionId === next.sessionId), true)
+  }
   assert.equal(f.router.lookup('wecom', 'dm', 'browser').sessionId, next.sessionId)
   await f.router.disposeAll()
 })
