@@ -2462,9 +2462,11 @@ window.__ModuleLoader__.load({
       const [tab, setTab] = useState(() => {
         try { return localStorage.getItem(TAB_KEY) || "tasks"; } catch { return "tasks"; }
       });
-      const currentId = typeof rawUseSessions === "function"
-        ? rawUseSessions((state) => currentSessionId(state))
-        : (props.selectedId || null);
+      const sessionSnap = typeof rawUseSessions === "function"
+        ? rawUseSessions((state) => state)
+        : undefined;
+      const currentId = sessionSnap ? currentSessionId(sessionSnap) : (props.selectedId || null);
+      const sessionById = (sessionSnap && sessionSnap.byId) || {};
       const useTaskSessions = useCallback((selector, eq) => {
         if (typeof rawUseSessions !== "function") return selector({ ids: [], byId: {}, current: null });
         return rawUseSessions((state) => selector(applyRegistryFilters(filterTaskSessions(state), nativeTabs)), eq);
@@ -2492,8 +2494,7 @@ window.__ModuleLoader__.load({
         if (matched && matched.id !== "schedule") setTab(matched.id);
       }, [currentId, extraTabs, membershipRevision]);
       const openSession = (id) => {
-        const snap = typeof rawUseSessions === "function" ? rawUseSessions((state) => state) : undefined;
-        openListedSession(resolveHostSessionId(id, snap && snap.byId), props.openSession || props.open);
+        openListedSession(resolveHostSessionId(id, sessionById), props.openSession || props.open);
       };
       const officialProps = Object.assign({}, props, { useSessions: useTaskSessions, t: officialT, openSession, open: openSession });
       const channelRail = h(ChannelRail, {
@@ -2707,17 +2708,7 @@ window.__ModuleLoader__.load({
               label: t("rail.channels"),
               order: 20,
               matchSession: isChannelSession,
-              render: (props) => h(LocalizedChannelRail, Object.assign({}, props, {
-                skin: "native",
-                openSession: (id) => {
-                  const snap = typeof props.useSessions === "function" ? props.useSessions((state) => state) : undefined;
-                  openListedSession(resolveHostSessionId(id, snap && snap.byId), props.openSession || props.open);
-                },
-                open: (id) => {
-                  const snap = typeof props.useSessions === "function" ? props.useSessions((state) => state) : undefined;
-                  openListedSession(resolveHostSessionId(id, snap && snap.byId), props.openSession || props.open);
-                },
-              })),
+              render: (props) => h(LocalizedChannelRail, Object.assign({}, props, { skin: "native" })),
             });
           };
           refreshInsertedTab();
