@@ -4,6 +4,10 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## Unreleased
+
+- Align the channel session list with official WorkspaceBrowser chrome. Folder icons stay channel logos; hover still swaps to the official chevron.
+
 ## 0.1.50 - 2026-09-16
 
 - Add support for DSH 0.1.6-alpha.1 while retaining compatibility with 0.1.2-rc.1, 0.1.5-rc.1 and 0.1.5-rc.2.

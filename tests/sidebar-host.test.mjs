@@ -32,8 +32,8 @@ test('任务页包裹官方 WorkspaceBrowser，不换掉原生树', () => {
 
 test('原生任务树保留 Host 的 workspace 翻译器', () => {
   assert.match(client, /const officialT = props\.officialT \|\| t/)
-  assert.match(client, /officialProps = Object\.assign\(\{\}, props, \{ useSessions: useTaskSessions, t: officialT \}\)/)
-  assert.match(client, /return h\(SessionSwitcher, Object\.assign\(\{\}, props, \{ t, officialT: props\.t \}\)\)/)
+  assert.match(client, /officialProps = Object\.assign\(\{\}, props, \{ useSessions: useTaskSessions, t: officialT, openSession, open: openSession \}\)/)
+  assert.match(client, /return h\(SessionSwitcher, Object\.assign\(\{\}, props, \{ t, officialT: props\.t, openChannelSettings \}\)\)/)
   assert.doesNotMatch(client, /officialProps = Object\.assign\(\{\}, props, \{ useSessions: useTaskSessions, t \}\)/)
 })
 
@@ -54,8 +54,22 @@ test('频道注册表页签随 Host 语言刷新且切换宿主时清理旧订�
 
 test('原生归档走官方 archiveSession，不本地删除', () => {
   assert.match(client, /归档会话/)
+  assert.match(client, /archiveHostSession/)
   assert.match(client, /ctx\.workspaces\.archiveSession/)
   assert.doesNotMatch(client, /onClick: \(\) => run\("remove"\)/)
+})
+
+test('打开会话走官方导航双路径，不硬读未注入服务', () => {
+  assert.match(client, /function probeService\(/)
+  assert.match(client, /function openHostSession\(/)
+  assert.match(client, /reflect\.get\(name\)/)
+  assert.match(client, /uiWorkspace\.openSession/)
+  assert.match(client, /retainedBy\.mainView/)
+  assert.match(client, /typeof ctx\.sessions\.open === "function"/)
+  assert.match(client, /sessions\.retain === "function"\) return false/)
+  assert.match(client, /tryOpenListedSession/)
+  assert.doesNotMatch(client, /ctx\.sessions\.open\(id\); return/)
+  assert.doesNotMatch(client, /ctx\.uiWorkspace/)
 })
 test('频道页按渠道分组，不套官方工作区树', () => {
   assert.match(client, /const channelRail = h\(ChannelRail/)
@@ -73,16 +87,97 @@ test('客户端模块按完整包名注册，避免 client-modules 加载失败'
   assert.match(client, /id:\s*"@michengai\/dsh-im-connect"/)
   assert.doesNotMatch(client, /id:\s*"dsh-im-connect"/)
 })
-test('频道会话菜单由列表统一开关，同一时间只开一个', () => {
-  assert.match(client, /const \[openMenu, setOpenMenu\] = useState\(null\)/)
-  assert.match(client, /function SessionPointerMenu/)
+test('频道会话菜单走官方 Menu，同一时间只开一个', () => {
+  assert.match(client, /const \[openMenu, setOpenMenu\] = useState\(\)/)
+  assert.match(client, /h\(Menu,/)
+  assert.match(client, /portal: true/)
+  assert.match(client, /closeOnPointerLeave: true/)
   assert.match(client, /ReactDOM\.createPortal/)
-  assert.match(client, /onMenuChange\(true, e\)/)
-  assert.match(client, /pointerPoint\(event\)/)
-  assert.match(client, /menuOpen: openMenu && openMenu.id === sess\.sessionId/)
-  assert.match(client, /data-ima-session-menu/)
-  assert.match(client, /function ChannelSessionRow\(\{ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange \}\)/)
+  assert.match(client, /onContextMenu/)
+  assert.match(client, /menuOpen: openMenu === sess\.sessionId/)
+  assert.match(client, /hasArchiveManagerPlugin/)
+  assert.match(client, /rail\.deleteSession/)
+  assert.match(client, /has-current-session/)
+  assert.match(client, /\.ima-n-sess\.is-menu \.ima-n-acts/)
+  assert.match(client, /\.ima-n-sess\.is-menu \.ima-n-time\{display:none\}/)
+  assert.match(client, /\.ima-n-sess:focus-visible:not\(\.is-on\)/)
+  assert.match(client, /\.ima-n-row,\.ima-n-sess\{[^}]*padding:0 8px;[^}]*padding-inline-start:calc\(8px \+ var\(--dsh-workspace-indent,0px\)\)/)
+  assert.doesNotMatch(client, /\.ima-n-row\{[^}]*padding-left:8px/)
+  assert.doesNotMatch(client, /\.ima-n-sess\{[^}]*padding-left:16px/)
+  assert.doesNotMatch(client, /\.ima-n-row,\.ima-n-sess\{[^}]*padding:0 8px 0 12px/)
+  assert.match(client, /\.ima-native-project>\*\+\*/)
+  assert.match(client, /\.ima-native-project\+\.ima-native-project/)
+  assert.match(client, /function ChannelGroupRow\(/)
+  assert.match(client, /h\(Logo, \{ id, small: true \}\)/)
+  assert.match(client, /ima-n-chevron/)
+  assert.doesNotMatch(client, /function ChannelFolderIcon\(/)
+  assert.match(client, /id: "channel-settings"/)
+  assert.match(client, /--dsh-session-list-scrollbar-width:8px/)
+  assert.match(client, /\.ima-n-list-area/)
+  assert.match(client, /margin-right:calc\(-1 \* var\(--dsh-session-list-edge-inset\)\)/)
+  assert.doesNotMatch(client, /margin-right:calc\(-1 \* var\(--dsh-session-list-edge-inset\) \+ var\(--dsh-session-list-scrollbar-offset\)\)/)
+  assert.match(client, /\.ima-n-toolbar\.is-search \.ima-n-search\{border:\.5px solid var\(--dsw-alias-border-l4\)/)
+  assert.match(client, /\.dcu-wb-empty,\.ima-native-empty\{padding:16px 12px/)
+  assert.match(client, /const hasCurrentSession = typeof selectedId === "string"/)
+  assert.match(client, /\.dcu-wb,\.ima-native\{[^}]*overflow:hidden/)
+  assert.match(client, /\.ima-native\.ima-rail/)
+  assert.match(client, /rail\.channelSettings/)
+  assert.match(client, /function openSettingsSection\(/)
+  assert.match(client, /openChannelSettings/)
+  assert.doesNotMatch(client, /canArchiveGroup && h\("span", \{ className: "ima-n-acts"/)
+  assert.match(client, /function hoverTimeLabel\(/)
+  assert.match(client, /h\(HoverCard,/)
+  assert.match(client, /\.ima-n-hover\{[^}]*width:244px/)
+  assert.match(client, /"time\.minutes": "\{n\}分钟"/)
+  assert.match(client, /"time\.ago": "\{t\}前"/)
+  assert.match(client, /rail\.archiveGroup/)
+  assert.doesNotMatch(client, /\balign:\s*"end"/)
+  assert.doesNotMatch(client, /\bdense\b/)
+  assert.doesNotMatch(client, /\bcompact:\s*true\b/)
+  assert.match(client, /function ChannelSessionRow\(\{ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange, canDelete, onDeleteSession, flat \}\)/)
+  assert.doesNotMatch(client, /function SessionPointerMenu/)
+  assert.doesNotMatch(client, /function pointerPoint/)
   assert.doesNotMatch(client, /function ChannelSessionRow\([^\)]*\) \{\s*const \[menu, setMenu\] = useState\(false\)/)
+})
+
+test('频道列表时间走官方紧凑标签，悬停才加前', () => {
+  const code = extractBlock(client, '    function relativeTimeParts(', '    function ChannelSessionRow(', '相对时间')
+  const interpolate = (key, params = {}) => {
+    const dict = {
+      'time.now': '刚刚',
+      'time.minutes': '{n}分钟',
+      'time.hours': '{n}小时',
+      'time.days': '{n}天',
+      'time.ago': '{t}前',
+    }
+    return String(dict[key] || key).replace(/\{(\w+)\}/g, (_, name) => params[name] ?? '')
+  }
+  const api = new Function(code + '; return { timeLabel, hoverTimeLabel };')()
+  const now = Date.parse('2026-09-18T12:00:00.000Z')
+  assert.equal(api.timeLabel('2026-09-18T11:05:00.000Z', interpolate, now), '55分钟')
+  assert.equal(api.hoverTimeLabel('2026-09-18T11:05:00.000Z', interpolate, now), '55分钟前')
+  assert.equal(api.timeLabel('2026-09-17T12:00:00.000Z', interpolate, now), '1天')
+  assert.equal(api.hoverTimeLabel('2026-09-17T12:00:00.000Z', interpolate, now), '1天前')
+})
+
+test('频道文件夹菜单打开对应渠道设置页', () => {
+  const requestCode = extractBlock(client, '    function parseChannelSettingsRequest(', '    function pickSettingsSectionButton(', '渠道设置请求')
+  const requestApi = new Function(requestCode + '; return { parseChannelSettingsRequest, resolveChannelSettingsTarget };')()
+  assert.equal(requestApi.parseChannelSettingsRequest({ channelId: ' wecom ', name: '企业微信' }).channelId, 'wecom')
+  assert.equal(requestApi.parseChannelSettingsRequest({ name: '企业微信' }), undefined)
+  assert.deepEqual(requestApi.resolveChannelSettingsTarget({ channelId: 'wecom' }, [
+    { id: 'wecom', accounts: [{ id: 'wecom:a' }] },
+  ]), { channelId: 'wecom', accountId: 'wecom:a' })
+  assert.deepEqual(requestApi.resolveChannelSettingsTarget({ channelId: 'wecom' }, [
+    { id: 'wecom', accounts: [{ id: 'wecom:a' }, { id: 'wecom:b' }] },
+  ]), { channelId: 'wecom', accountId: undefined })
+  const navCode = extractBlock(client, '    function pickSettingsSectionButton(', '    function requestCodexSettingsSection(', '设置分区按钮')
+  const navApi = new Function(navCode + '; return { pickSettingsSectionButton, pickSettingsLauncher };')()
+  assert.equal(navApi.pickSettingsSectionButton([{ textContent: ' IM助理 ' }, { textContent: '通用' }], ['IM助理', 'IM Assistant']).textContent.trim(), 'IM助理')
+  assert.equal(navApi.pickSettingsLauncher([
+    { textContent: '搜索', getAttribute: () => '' },
+    { textContent: '设置', getAttribute: () => '设置' },
+  ]).textContent, '设置')
 })
 
 test('频道列表改模型后仍显示映射会话，只隐藏已归档', () => {
