@@ -602,6 +602,22 @@ window.__ModuleLoader__.load({
       }
       return null;
     }
+    function resolveHostSessionId(sessionId, sessionById) {
+      if (!sessionId) return sessionId;
+      const listed = sessionById && sessionById[sessionId];
+      const fromKey = listed && (listed.id || listed.sessionId);
+      if (fromKey && String(fromKey).trim()) return String(fromKey).trim();
+      return sessionId;
+    }
+    function isCurrentListedSession(selectedId, sessionId, sessionById) {
+      if (!selectedId || !sessionId) return false;
+      if (selectedId === sessionId) return true;
+      const listed = sessionById && sessionById[sessionId];
+      if (listed && (listed.id === selectedId || listed.sessionId === selectedId)) return true;
+      const selected = sessionById && sessionById[selectedId];
+      if (selected && (selected.id === sessionId || selected.sessionId === sessionId)) return true;
+      return false;
+    }
     function openHostSession(ctx, id) {
       if (!id) return false;
       const uiWorkspace = probeService(ctx, "uiWorkspace");
@@ -625,7 +641,7 @@ window.__ModuleLoader__.load({
     function archiveHostSession(ctx, id) {
       const uiWorkspace = probeService(ctx, "uiWorkspace");
       if (uiWorkspace && typeof uiWorkspace.archiveSession === "function") return uiWorkspace.archiveSession(id);
-      return ctx.workspaces.archiveSession(id);
+      if (ctx.workspaces && typeof ctx.workspaces.archiveSession === "function") return ctx.workspaces.archiveSession(id);
     }
     function forkHostSession(ctx, id) {
       const uiWorkspace = probeService(ctx, "uiWorkspace");
@@ -2090,7 +2106,7 @@ window.__ModuleLoader__.load({
       const archived = new Set(props.archivedIds || []);
       const skin = props.skin || channelSkin;
       const native = skin !== "codex";
-      const open = (id) => openListedSession(id, props.openSession || props.open);
+      const open = (id) => openListedSession(resolveHostSessionId(id, props.sessionById), props.openSession || props.open);
       const canDelete = canDeleteChannelSession(archiveManagerInstalled, props.deleteSession);
       const canArchiveGroup = canArchiveChannelGroup(archiveManagerInstalled, props.archiveSession);
       useEffect(() => {
@@ -2172,7 +2188,7 @@ window.__ModuleLoader__.load({
           ...visibleGroups.map((g) => {
             const visible = g.sessions || [];
             const expanded = !folded[g.id];
-            const hasCurrentSession = typeof selectedId === "string" && visible.some((sess) => sess.sessionId === selectedId);
+            const hasCurrentSession = typeof selectedId === "string" && visible.some((sess) => isCurrentListedSession(selectedId, sess.sessionId, props.sessionById));
             return h("div", { key: g.id, className: native ? "ima-native-project" : "dcu-wb-project" },
             groupMode !== "list" && (native
               ? h(ChannelGroupRow, {
@@ -2215,7 +2231,7 @@ window.__ModuleLoader__.load({
                 key: sess.sessionId,
                 sess,
                 flat: groupMode === "list",
-                selected: selectedId === sess.sessionId,
+                selected: isCurrentListedSession(selectedId, sess.sessionId, props.sessionById),
                 sessionById: props.sessionById,
                 menuOpen: openMenu === sess.sessionId,
                 onMenuChange: (next) => {
@@ -2475,7 +2491,10 @@ window.__ModuleLoader__.load({
         const matched = extraTabs.find((item) => item.matchSession && item.matchSession(currentId));
         if (matched && matched.id !== "schedule") setTab(matched.id);
       }, [currentId, extraTabs, membershipRevision]);
-      const openSession = (id) => openListedSession(id, props.openSession || props.open);
+      const openSession = (id) => {
+        const snap = typeof rawUseSessions === "function" ? rawUseSessions((state) => state) : undefined;
+        openListedSession(resolveHostSessionId(id, snap && snap.byId), props.openSession || props.open);
+      };
       const officialProps = Object.assign({}, props, { useSessions: useTaskSessions, t: officialT, openSession, open: openSession });
       const channelRail = h(ChannelRail, {
         openSession,
@@ -2690,8 +2709,14 @@ window.__ModuleLoader__.load({
               matchSession: isChannelSession,
               render: (props) => h(LocalizedChannelRail, Object.assign({}, props, {
                 skin: "native",
-                openSession: (id) => openListedSession(id, props.openSession || props.open),
-                open: (id) => openListedSession(id, props.openSession || props.open),
+                openSession: (id) => {
+                  const snap = typeof props.useSessions === "function" ? props.useSessions((state) => state) : undefined;
+                  openListedSession(resolveHostSessionId(id, snap && snap.byId), props.openSession || props.open);
+                },
+                open: (id) => {
+                  const snap = typeof props.useSessions === "function" ? props.useSessions((state) => state) : undefined;
+                  openListedSession(resolveHostSessionId(id, snap && snap.byId), props.openSession || props.open);
+                },
               })),
             });
           };

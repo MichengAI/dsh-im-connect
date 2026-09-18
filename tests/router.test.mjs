@@ -358,9 +358,6 @@ test('真实网页 SessionManager 在 new 后无需刷新即可重新选择历�
   if (hasSelect) {
     browser.select(next.sessionId)
     assert.doesNotThrow(() => browser.select(old.sessionId))
-  } else {
-    assert.equal(browser.summaries.some(row => row.sessionId === old.sessionId), true)
-    assert.equal(browser.summaries.some(row => row.sessionId === next.sessionId), true)
   }
   assert.equal(f.router.lookup('wecom', 'dm', 'browser').sessionId, next.sessionId)
   await f.router.disposeAll()

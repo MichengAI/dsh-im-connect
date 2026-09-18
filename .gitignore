@@ -28,6 +28,7 @@ docs/07-迭代归档/2026/*
 !docs/07-迭代归档/2026/I014-频道会话保留与命名/
 *.log
 *.tgz
+test-shots/
 .env
 .env.*
 secrets.json

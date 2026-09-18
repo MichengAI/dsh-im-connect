@@ -6,6 +6,9 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## Unreleased
 
+- Add support for DSH 0.1.6-alpha.2 while retaining compatibility with 0.1.2-rc.1, 0.1.5-rc.1, 0.1.5-rc.2 and 0.1.6-alpha.1.
+- Open channel sessions through official workspace navigation on hosts that no longer expose `sessions.open`.
+- Folder menus can open that channel’s settings.
 - Align the channel session list with official WorkspaceBrowser chrome. Folder icons stay channel logos; hover still swaps to the official chevron.
 
 ## 0.1.50 - 2026-09-16

@@ -107,6 +107,7 @@ test('频道会话菜单走官方 Menu，同一时间只开一个', () => {
   assert.doesNotMatch(client, /\.ima-n-row,\.ima-n-sess\{[^}]*padding:0 8px 0 12px/)
   assert.match(client, /\.ima-native-project>\*\+\*/)
   assert.match(client, /\.ima-native-project\+\.ima-native-project/)
+  // 下面是侧栏 chrome 的源码契约，不是打开/高亮行为回归；行为在 session-compat.test.mjs。
   assert.match(client, /function ChannelGroupRow\(/)
   assert.match(client, /h\(Logo, \{ id, small: true \}\)/)
   assert.match(client, /ima-n-chevron/)

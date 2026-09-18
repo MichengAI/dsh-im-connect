@@ -8,12 +8,14 @@ const code = extractBlock(client, '    function probeService(ctx, name) {', '   
 const {
   probeService,
   currentSessionId,
+  resolveHostSessionId,
+  isCurrentListedSession,
   openHostSession,
   pickHostDirectory,
   archiveHostSession,
   forkHostSession,
   renameHostSession,
-} = new Function(`${code}; return { probeService, currentSessionId, openHostSession, pickHostDirectory, archiveHostSession, forkHostSession, renameHostSession };`)()
+} = new Function(`${code}; return { probeService, currentSessionId, resolveHostSessionId, isCurrentListedSession, openHostSession, pickHostDirectory, archiveHostSession, forkHostSession, renameHostSession };`)()
 
 test('当前会话先认 list.current，没有再按 retainedBy.mainView 反查', () => {
   assert.equal(currentSessionId({ current: 'legacy', ids: ['a'], byId: { a: { retainedBy: { mainView: 1 } } } }), 'legacy')
@@ -26,6 +28,19 @@ test('当前会话先认 list.current，没有再按 retainedBy.mainView 反查'
   }), 'main-view')
   assert.equal(currentSessionId({ byId: { other: { retainedBy: { sidebar: 1 } } } }), null)
   assert.equal(currentSessionId(undefined), null)
+})
+
+test('row.id 与 map key 不一致时，打开用官方 id，高亮两边都认', () => {
+  const byId = {
+    parked: { retainedBy: {} },
+    main: { id: 'main-view', retainedBy: { mainView: 1 } },
+  }
+  assert.equal(currentSessionId({ ids: ['parked', 'main'], byId }), 'main-view')
+  assert.equal(resolveHostSessionId('main', byId), 'main-view')
+  assert.equal(resolveHostSessionId('main-view', byId), 'main-view')
+  assert.equal(isCurrentListedSession('main-view', 'main', byId), true)
+  assert.equal(isCurrentListedSession('main-view', 'other', byId), false)
+  assert.equal(resolveHostSessionId('im:wecom:1', undefined), 'im:wecom:1')
 })
 
 test('打开会话优先官方导航，有 reflect 时不硬读未注入服务', () => {
@@ -113,6 +128,7 @@ test('归档优先官方导航，否则回退 workspaces.archiveSession', async 
     workspaces: { archiveSession: async (id) => archived.push(`legacy:${id}`) },
   }, 's2')
   assert.deepEqual(archived, ['nav:s1', 'legacy:s2'])
+  assert.equal(await archiveHostSession({ reflect: { get() { return undefined } } }, 's3'), undefined)
 })
 
 test('分叉优先官方 forkSession，否则 fork 后再打开', async () => {
