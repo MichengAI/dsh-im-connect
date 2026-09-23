@@ -6,6 +6,8 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## Unreleased
 
+## 0.1.52 - 2026-09-23
+
 - Add support for DSH 0.1.7-alpha.1, 0.1.7-alpha.2, and npm `latest` 0.1.5-rc.3 while retaining compatibility with 0.1.2-rc.1, 0.1.5-rc.1, 0.1.5-rc.2, 0.1.6-alpha.1 and 0.1.6-alpha.2. The optional `dsh-client-runtime` peer now lists only the versions published on npm (`0.1.1-rc.1` / `0.1.1-rc.2`); later hosts inject their own bundled copy.
 - Read Chat files through `workspaceFiles.readBytes` on 0.1.7 hosts. A call with no byte range is the whole file or a too-large error, so a payload that leaves out `eof`/`offset` still counts as complete; explicit `eof: false` or a non-zero offset is still rejected. 0.1.7-alpha.1 and alpha.2 return literal `offset: 0, eof: true` on that path. Keep `readAll` and the local filesystem fallback on older hosts.
 - Treat V4 tool-result errors on `message.isError` so failed writes are not sent to IM.
@@ -16,6 +18,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 - Drop leftover Chip/ChannelCard chrome, use Ant Segmented/Tag/Alert on bind, diagnostics and pending approvals, fill missing field labels, and tree-shake plus minify the bundled Ant Design client. `antd` and `react-dom` stay in `devDependencies`; `dsh plugin add` no longer installs a second Ant tree.
 - Folder icons fall back through `IconFolderClose16` and `IconFolderClose`. The remove-account confirm follows the host dark theme. Channel session menus do not include pin. The previous release did not offer it either.
 - Channel rows always use the 0.1.7 session list: 5px scrollbar, 10px caption time, 10px action gap, 12px workspace-tree indent, archived caption color, animated title scroll, 800ms hover cards, workspace tree, archived filters, and double-click rename. Older hosts still open menus through the items API those menus actually have. Channel groups still use channel logos. Pin and manual sort stay unavailable.
+- Restart DSH and refresh the page after upgrading.
 
 ## 0.1.51 - 2026-09-18
 

@@ -6,6 +6,8 @@
 
 ## 未发布
 
+## 0.1.52 - 2026-09-23
+
 - 新增对 DSH 0.1.7-alpha.1、0.1.7-alpha.2 和 npm `latest` 0.1.5-rc.3 的支持，继续兼容 0.1.2-rc.1、0.1.5-rc.1、0.1.5-rc.2、0.1.6-alpha.1 和 0.1.6-alpha.2。optional `dsh-client-runtime` peer 只声明 npm 已发布的 `0.1.1-rc.1` / `0.1.1-rc.2`；更新宿主注入自己的打包副本。
 - 在 0.1.7 宿主上通过 `workspaceFiles.readBytes` 读取 Chat 文件。不带 range 的调用要么是整文件，要么因过大抛错，不返回分片，因此缺 `eof`/`offset` 仍按完整文件处理；显式 `eof: false` 或非零 offset 仍拒绝。0.1.7-alpha.1 / alpha.2 的无 range 分支返回的是字面量 `offset: 0, eof: true`。旧宿主继续使用 `readAll` 或本机文件系统。
 - 识别 V4 `tool/result` 上的 `message.isError`，避免把失败的写入发到 IM。
@@ -16,6 +18,7 @@
 - 清掉 Chip/ChannelCard 残留样式，绑定、诊断和待审批改用 Ant Segmented/Tag/Alert，补齐凭据字段词条，并按需压缩 Ant Design 客户端包。`antd` 和 `react-dom` 留在 `devDependencies`，`dsh plugin add` 不再另装一棵 Ant。
 - 文件夹图标按 `IconFolderClose16`、`IconFolderClose` 回退。删除账号确认框跟随宿主暗色主题。频道会话菜单不提供置顶。上一个已发布版本也没有这项。
 - 频道行一律使用 0.1.7 会话列表：5px 滚动条、10px 说明色时间、10px 操作间距、工作区树每层缩进 12px、已归档用说明色、长标题悬停匀速滚动、悬停卡片等 800ms，并提供工作区树、归档筛选和双击重命名。更早宿主的菜单仍走它们自己的 items 接口。分组仍用渠道图标。仍然不提供置顶和手工排序。
+- 升级后请重启 DSH 并刷新页面。
 
 ## 0.1.51 - 2026-09-18
 
