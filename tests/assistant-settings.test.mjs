@@ -34,13 +34,17 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
     '@deepseek-ai/dsh-host-webserver',
   ]
   const developmentPackages = dshPackages.filter((packageName) => packageName !== '@deepseek-ai/dsh-client-runtime')
-  for (const packageName of dshPackages) {
-    assert.equal(manifest.peerDependencies[packageName], '0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1 || 0.1.7-alpha.2')
-  }
+  const hostUnion = '0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.5-rc.3 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1 || 0.1.7-alpha.2'
   for (const packageName of developmentPackages) {
+    assert.equal(manifest.peerDependencies[packageName], hostUnion)
     assert.equal(manifest.devDependencies[packageName], '0.1.7-alpha.2')
   }
+  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-runtime'], '0.1.1-rc.1 || 0.1.1-rc.2')
   assert.equal(manifest.peerDependenciesMeta['@deepseek-ai/dsh-client-runtime'].optional, true)
+  assert.equal(manifest.dependencies?.antd, undefined)
+  assert.equal(manifest.dependencies?.['react-dom'], undefined)
+  assert.equal(manifest.devDependencies.antd, '^6.6.5')
+  assert.equal(manifest.devDependencies['react-dom'], '^18.3.1')
 })
 
 function makeManager(t, ctx = {}) {

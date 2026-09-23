@@ -123,7 +123,7 @@ type WorkspaceFileBytes = { data: string; eof: boolean; offset: number }
 
 function encodeFileBytes(result: { data: unknown; eof?: boolean; offset?: number }): WorkspaceFileBytes {
   const offset = result.offset ?? 0
-  const eof = result.eof === true
+  const eof = result.eof !== false
   if (typeof result.data === 'string') return { data: result.data, eof, offset }
   if (result.data instanceof Uint8Array) return { data: Buffer.from(result.data).toString('base64'), eof, offset }
   throw new Error('incomplete-file')

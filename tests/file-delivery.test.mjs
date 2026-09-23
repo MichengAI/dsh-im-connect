@@ -157,6 +157,22 @@ test('0.1.7 用 workspaceFiles.readBytes 读完整文件，data 可以是原始�
   assert.deepEqual(reads[0].options, {})
 })
 
+test('0.1.7 readBytes 只给字节、省略 eof/offset 仍按完整文件回传', async t => {
+  const f = fixture()
+  const sender = new FileDelivery({
+    get(name) {
+      if (name !== 'workspaceFiles') return
+      return { readBytes: async () => ({ data: Buffer.from('bytes-only') }) }
+    },
+  }, () => {})
+  t.after(() => sender.dispose())
+  const files = []
+  const channel = { id: 'test', send: async () => {}, sendFile: async (_, file) => files.push(file) }
+  await sender.deliver(f.session, f.closing, () => ({ channel, chatId: 'c' }))
+  assert.equal(files.length, 1)
+  assert.equal(Buffer.from(files[0].data).toString(), 'bytes-only')
+})
+
 test('旧宿主基于 fs 完整读取，拒绝符号链接与超限文件', async () => {
   const f = fixture(), sent = []
   let type = 'file', size = 4

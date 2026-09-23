@@ -3,10 +3,15 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { commandEnglish } from './command-messages.js'
 
 const localeScope = new AsyncLocalStorage<'zh' | 'en'>()
+function isLocaleDocument(row: { ns?: string; id?: string; namespace?: string } | undefined): boolean {
+  const ns = String(row?.ns ?? row?.id ?? row?.namespace ?? '')
+  return ns === 'locale' || /(^|[./-])locale$/i.test(ns)
+}
+
 function readHostPreference(host: { get(name: string): unknown }): unknown {
   const settings = host.get('settings') as {
     get?(namespace: string): { preference?: unknown } | undefined
-    describe?(): readonly { ns?: string; value?: { preference?: unknown; locale?: unknown } }[]
+    describe?(): readonly { ns?: string; id?: string; namespace?: string; value?: { preference?: unknown; locale?: unknown } }[]
   } | undefined
   if (typeof settings?.get === 'function') {
     const preference = settings.get('locale')?.preference
@@ -14,6 +19,7 @@ function readHostPreference(host: { get(name: string): unknown }): unknown {
   }
   if (typeof settings?.describe === 'function') {
     for (const row of settings.describe() ?? []) {
+      if (!isLocaleDocument(row)) continue
       const value = row?.value?.preference ?? row?.value?.locale
       if (typeof value === 'string') return value
     }
