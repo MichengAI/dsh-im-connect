@@ -4,11 +4,12 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
-## Unreleased
+## 0.1.54 - 2026-09-24
 
-- Support DSH 0.1.7-rc.1. The 0.1.6 and 0.1.7 alphas leave the supported set. Published 0.1.53 still says those alphas are supported; upgrading from an alpha host shows a peer-range warning, and the plugin code still runs.
-- 0.1.2-rc.1 and the 0.1.5 release candidates stay. They belong to the published release-candidate line, a different line from the later alphas, which is why an older candidate remains after a newer alpha is dropped.
-- On 0.1.2-rc.1 and the 0.1.5 candidates, a workspace snapshot without `items` or `archivedSessionIds` collapses “Workspace Tree” into one ungrouped group, and “Archived only” becomes an empty list.
+- Support DSH 0.1.7-rc.1, and keep 0.1.2-rc.1 and the 0.1.5 release candidates. The 0.1.6 and 0.1.7 preview builds are no longer supported; move to 0.1.7-rc.1.
+- The older 0.1.2 and 0.1.5 builds stay available because they are published release candidates.
+- On 0.1.2 and 0.1.5, grouping the channel list by workspace tree can show a single ungrouped list, and showing only archived sessions can be empty.
+- Restart DSH and refresh the page after upgrading.
 
 ## 0.1.53 - 2026-09-23
 

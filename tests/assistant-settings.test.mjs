@@ -39,7 +39,7 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
     assert.equal(manifest.peerDependencies[packageName], hostUnion)
     assert.equal(manifest.devDependencies[packageName], '0.1.7-rc.1')
   }
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-runtime'], '0.1.1-rc.1 || 0.1.1-rc.2')
+  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-runtime'], hostUnion)
   assert.equal(manifest.peerDependenciesMeta['@deepseek-ai/dsh-client-runtime'].optional, true)
   assert.equal(manifest.dependencies?.antd, undefined)
   assert.equal(manifest.dependencies?.['react-dom'], undefined)
