@@ -17,7 +17,8 @@ function receiveSwitch(account, lang, onAction, busy = {}) {
   function visit(node, inSettings = false) {
     const settings = inSettings || ts.isFunctionDeclaration(node) && node.name?.text === 'SettingsPage'
     if (settings && ts.isCallExpression(node) && node.expression.getText() === 'h'
-      && ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text === 'button') {
+      && (ts.isIdentifier(node.arguments[0]) && node.arguments[0].text === 'Switch'
+        || ts.isStringLiteral(node.arguments[0]) && node.arguments[0].text === 'button')) {
       const props = node.arguments[1]
       if (props && ts.isObjectLiteralExpression(props) && props.properties.some(property =>
         ts.isPropertyAssignment(property) && property.name.getText() === 'role'
@@ -29,8 +30,8 @@ function receiveSwitch(account, lang, onAction, busy = {}) {
   assert.equal(matches.length, 1, '账号接收开关应唯一，结构变化后需更新夹具')
   const h = (type, props, ...children) => ({ type, props, children })
   // 按钮新增闭包依赖时须同步下列参数；缺失依赖应明确失败，不能静默跳过。
-  return new Function('h', 'account', 'busy', 't', 'accountLabel', 'onAction', `return ${matches[0].getText()}`)(
-    h, account, busy, key => translations[lang][key], account => account.id, onAction)
+  return new Function('h', 'Switch', 'account', 'busy', 't', 'accountLabel', 'onAction', `return ${matches[0].getText()}`)(
+    h, 'Switch', account, busy, key => translations[lang][key], account => account.id, onAction)
 }
 
 test('旧后端接收开关禁用并解释原因，新后端按用户意图切换', async () => {
@@ -47,7 +48,7 @@ test('旧后端接收开关禁用并解释原因，新后端按用户意图切�
       assert.equal(button.props.disabled, false)
       assert.equal(button.props['aria-checked'], receiveConfigured)
       assert.equal(button.props.title, translations[lang]['account.receive'])
-      await button.props.onClick()
+      await (button.props.onChange || button.props.onClick)(!receiveConfigured)
       assert.deepEqual(calls, [['a', 'receive', { receiveEnabled: !receiveConfigured }]])
       assert.equal(receiveSwitch(account, lang, () => {}, { a: true }).props.disabled, true)
     }
@@ -70,7 +71,7 @@ function fixture(onAction) {
     }
   }
   const h = (type, props, ...children) => typeof type === 'function' ? type(props) : ({ type, props: props || {}, children: children.flat(Infinity).filter(value => value !== null && value !== false) })
-  const Component = new Function('h', 'useState', 'useEffect', 'useRef', 'Logo', 'accountLabel', 'AccountSettingsPicker', 'CommandPermissionSettings', componentSource + '; return AccountInspector;')(h, useState, useEffect, useRef, 'Logo', account => account.id, 'Picker', 'Permissions')
+  const Component = new Function('h', 'useState', 'useEffect', 'useRef', 'Logo', 'accountLabel', 'AccountSettingsPicker', 'CommandPermissionSettings', 'Button', 'Modal', 'Tag', 'Alert', componentSource + '; return AccountInspector;')(h, useState, useEffect, useRef, 'Logo', account => account.id, 'Picker', 'Permissions', 'Button', { confirm() {} }, 'Tag', 'Alert')
   const render = (account = { id: 'a', connectionState: 'connected', connected: true, receiveConfigured: true }, lang = 'zh') => {
     cursor = 0
     const tree = Component({ account, onAction, t: key => translations[lang][key] ?? key, onSave: async () => true })
@@ -86,7 +87,7 @@ function find(tree, predicate) {
   if (predicate(tree)) return tree
   for (const child of tree.children || []) { const found = find(child, predicate); if (found) return found }
 }
-const checkButton = tree => find(tree, node => node.type === 'button' && /诊断连接|检查中|Diagnose connection|Checking/.test(node.children.join('')))
+const checkButton = tree => find(tree, node => (node.type === 'button' || node.type === 'Button') && /诊断连接|检查中|Diagnose connection|Checking/.test(node.children.join('')))
 const diagnostics = { version: 1, checkedAt: '2026-09-13T10:00:00.000Z', checks: [{ id: 'bot', status: 'passed', reason: 'ok', durationMs: 20 }] };
 const report = tree => find(tree, node => node.props.role === 'status')
 

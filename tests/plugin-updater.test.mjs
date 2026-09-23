@@ -41,14 +41,17 @@ test('IM 客户端与 Host 绑定自身更新入口', async () => {
   assert.match(client, /document\.createElementNS\("http:\/\/www\.w3\.org\/2000\/svg", "svg"\)/)
   assert.doesNotMatch(client, /react-dom\/client/)
   assert.match(updateUi, /data-mpi-label/)
-  assert.match(updateUi, /overlay\.addEventListener\("keydown"/)
-  assert.match(updateUi, /<header class="mpi-head"><h2><\/h2><button type="button" class="mpi-dialog-close" data-action="close"><\/button><\/header>/)
-  assert.match(updateUi, /<footer class="mpi-actions"><div class="mpi-actions-group">/)
-  assert.match(updateUi, /background:var\(--dsw-alias-bg-layer-2/)
-  assert.match(updateUi, /box-shadow:var\(--dsw-shadow-lv3/)
-  assert.match(updateUi, /border-radius:14px/)
+  assert.match(updateUi, /size: "small", shape: "default"/)
+  assert.match(updateUi, /className: "mpi-dialog"/)
+  assert.match(updateUi, /host\.className = "mpi-check-host"/)
+  assert.match(updateUi, /document\.addEventListener\("keydown", onKey, true\)/)
   assert.match(updateUi, /if \(version\.textContent !== versionLabel\)/)
   assert.match(updateUi, /else if \(payload\.latestCheckFailed\)/)
+  assert.match(updateUi, /width: 680, zIndex: 1200/)
+  assert.match(updateUi, /ReactDOM\.createRoot/)
+  assert.doesNotMatch(updateUi, /require\("react-dom\/client"\)/)
+  const packed = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(packed, /^\{\s*handlePluginUpdateEscape,/m)
   assert.ok(
     client.indexOf('const t = ctx.locale.bind(IM_LOCALE_NS)') < client.indexOf('ctx.effect(() => observePluginUpdate'),
     '更新 UI effect 同步执行前必须先初始化 locale 绑定',

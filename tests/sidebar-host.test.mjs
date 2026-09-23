@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { extractBlock } from './sidebar-lifecycle-harness.mjs'
 
-// 读发布产物 lib/client.js（npm test 先 build 再跑），确保验证的就是上线文件
-const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+// 读发布产物里的插件本体（antd 打在前面），确保验证的就是上线文件
+const bundled = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+const client = bundled.slice(bundled.lastIndexOf('    var module = { exports: {} };'))
 
 test('新版侧栏使用实际生效的槽位投影，不误选已被替换的任务树', () => {
   const code = extractBlock(client, '    function pickOfficialWorkspaces', '    function apply(ctx)', 'IM 侧栏选择器')
@@ -33,7 +34,7 @@ test('任务页包裹官方 WorkspaceBrowser，不换掉原生树', () => {
 test('原生任务树保留 Host 的 workspace 翻译器', () => {
   assert.match(client, /const officialT = props\.officialT \|\| t/)
   assert.match(client, /officialProps = Object\.assign\(\{\}, props, \{ useSessions: useTaskSessions, t: officialT, openSession, open: openSession \}\)/)
-  assert.match(client, /return h\(SessionSwitcher, Object\.assign\(\{\}, props, \{ t, officialT: props\.t, openChannelSettings \}\)\)/)
+  assert.match(client, /return h\(AntdProvider, null, h\(SessionSwitcher, Object\.assign\(\{\}, props, \{ t, officialT: props\.t, openChannelSettings \}\)\)\)/)
   assert.doesNotMatch(client, /officialProps = Object\.assign\(\{\}, props, \{ useSessions: useTaskSessions, t \}\)/)
 })
 
@@ -55,7 +56,8 @@ test('频道注册表页签随 Host 语言刷新且切换宿主时清理旧订�
 test('原生归档走官方 archiveSession，不本地删除', () => {
   assert.match(client, /归档会话/)
   assert.match(client, /archiveHostSession/)
-  assert.match(client, /ctx\.workspaces\.archiveSession/)
+  assert.match(client, /hostWorkspaceApi\(ctx\)/)
+  assert.match(client, /api\.archiveSession/)
   assert.doesNotMatch(client, /onClick: \(\) => run\("remove"\)/)
 })
 
@@ -84,14 +86,39 @@ test('别人已经包裹时只插入频道页签，自己包裹时提供插入�
   assert.match(client, /__dshNativeTabHost/)
 })
 test('客户端模块按完整包名注册，避免 client-modules 加载失败', () => {
-  assert.match(client, /id:\s*"@michengai\/dsh-im-connect"/)
+  assert.match(bundled, /id:\s*"@michengai\/dsh-im-connect"/)
   assert.doesNotMatch(client, /id:\s*"dsh-im-connect"/)
 })
+test('发布产物把 antd 打进包，不再 require 宿主没有的 antd', () => {
+  assert.match(bundled, /const __imAntdBundle = __imAntdModule\.exports/)
+  assert.match(client, /const antd = __imAntdBundle\.antd/)
+  assert.doesNotMatch(client, /require\("antd"\)/)
+  assert.doesNotMatch(client, /require\("antd\//)
+})
+test('0.1.7 图标优先 Regular 名，缺导出时不渲染 undefined', () => {
+  assert.match(client, /function pickHostIcon\(/)
+  assert.match(client, /IconEditOutlineRegular/)
+  assert.match(client, /IconEllipsisOutlineRegular/)
+  assert.match(client, /IconArchiveOutlineRegular/)
+  assert.match(client, /IconBranchOutlineRegular/)
+  assert.match(client, /IconTrashOutlineRegular/)
+  const code = extractBlock(client, '    function pickHostIcon(...names) {', '    const IconListPenOutline16 = pickHostIcon', '宿主图标')
+  const factory = new Function('primitives', `${code}; return pickHostIcon;`)
+  const Regular = () => 'regular'
+  const Legacy = () => 'legacy'
+  assert.equal(factory({ IconEditOutlineRegular: Regular, IconEditOutline16: Legacy })('IconEditOutlineRegular', 'IconEditOutline16')(), 'regular')
+  assert.equal(factory({ IconEditOutline16: Legacy })('IconEditOutlineRegular', 'IconEditOutline16')(), 'legacy')
+  assert.equal(factory({})('IconEditOutlineRegular', 'IconEditOutline16')(), null)
+})
+
 test('频道会话菜单走官方 Menu，同一时间只开一个', () => {
   assert.match(client, /const \[openMenu, setOpenMenu\] = useState\(\)/)
-  assert.match(client, /h\(Menu,/)
+  assert.match(client, /h\(HostMenu,/)
   assert.match(client, /portal: true/)
   assert.match(client, /closeOnPointerLeave: true/)
+  assert.match(client, /align: "end"/)
+  assert.match(client, /dense: true/)
+  assert.match(client, /function hostMenuRendersChildren\(/)
   assert.match(client, /ReactDOM\.createPortal/)
   assert.match(client, /onContextMenu/)
   assert.match(client, /menuOpen: openMenu === sess\.sessionId/)
@@ -110,7 +137,10 @@ test('频道会话菜单走官方 Menu，同一时间只开一个', () => {
   // 下面是侧栏 chrome 的源码契约，不是打开/高亮行为回归；行为在 session-compat.test.mjs。
   assert.match(client, /function ChannelGroupRow\(/)
   assert.match(client, /h\(Logo, \{ id, small: true \}\)/)
-  assert.match(client, /ima-n-chevron/)
+  assert.doesNotMatch(client, /ima-n-chevron/)
+  assert.doesNotMatch(client, /\.ima-n-row:hover \.ima-n-folder\{display:none\}/)
+  assert.match(client, /h\(StateDot, \{ state: "ongoing", size: 10 \}\)/)
+  assert.doesNotMatch(client, /function RunningStateDot|ima-run-dot/)
   assert.doesNotMatch(client, /function ChannelFolderIcon\(/)
   assert.match(client, /id: "channel-settings"/)
   assert.match(client, /--dsh-session-list-scrollbar-width:8px/)
@@ -131,17 +161,18 @@ test('频道会话菜单走官方 Menu，同一时间只开一个', () => {
   assert.doesNotMatch(client, /canArchiveGroup && h\("span", \{ className: "ima-n-acts"/)
   assert.match(client, /function hoverTimeLabel\(/)
   assert.match(client, /h\(HoverCard,/)
+  assert.match(client, /openDelayMs: 800/)
   assert.match(client, /\.ima-n-hover\{[^}]*width:244px/)
   assert.match(client, /"time\.minutes": "\{n\}分钟"/)
   assert.match(client, /"time\.ago": "\{t\}前"/)
   assert.match(client, /rail\.archiveGroup/)
-  assert.doesNotMatch(client, /\balign:\s*"end"/)
-  assert.doesNotMatch(client, /\bdense\b/)
-  assert.doesNotMatch(client, /\bcompact:\s*true\b/)
-  assert.match(client, /function ChannelSessionRow\(\{ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange, canDelete, onDeleteSession, flat \}\)/)
+  assert.match(client, /h\(HostModal,/)
+  assert.match(client, /variant: "outline"/)
+  assert.match(client, /function ChannelSessionRow\(\{ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange, canDelete, onDeleteSession, flat, renderSlot \}\)/)
   assert.doesNotMatch(client, /function SessionPointerMenu/)
   assert.doesNotMatch(client, /function pointerPoint/)
   assert.doesNotMatch(client, /function ChannelSessionRow\([^\)]*\) \{\s*const \[menu, setMenu\] = useState\(false\)/)
+  assert.doesNotMatch(client, /h\(Dropdown,/)
 })
 
 test('频道列表时间走官方紧凑标签，悬停才加前', () => {
@@ -185,8 +216,16 @@ test('频道文件夹菜单打开对应渠道设置页', () => {
 })
 
 test('频道列表改模型后仍显示映射会话，只隐藏已归档', () => {
-  assert.match(client, /!archived.has\(sess.sessionId\)/)
+  assert.match(client, /function channelSessionVisible\(/)
+  assert.match(client, /if \(filter === "only"\) return isArchived/)
+  assert.match(client, /if \(filter === "show"\) return true/)
+  assert.match(client, /return !isArchived/)
+  assert.match(client, /channelSessionVisible\(sess.sessionId, archived, archivedFilter\)/)
   assert.doesNotMatch(client, /present.has\(sess.sessionId\)/)
+  assert.doesNotMatch(client, /id: "manual"/)
+  assert.match(client, /id: "only-archived"/)
+  assert.match(client, /rail\.onlyArchived/)
+  assert.match(client, /archived \? " is-archived"/)
 })
 test('频道页只渲染有可见会话的渠道文件夹', () => {
   const src = client

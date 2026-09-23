@@ -12,4 +12,7 @@ test('全部英文文案有内容且占位符与中文一致', () => {
     assert.deepEqual(parameters(value), parameters(key), key)
   }
   assert.equal(withReplyLocale({ get: () => ({ get: () => ({ preference: 'en' }) }) }, () => replyText('工作区：{0}', 'D:\\中文\\{1}')), 'Workspace: D:\\中文\\{1}')
+  assert.equal(withReplyLocale({
+    get: (name) => name === 'settings' ? { describe: () => [{ ns: 'ui-settings-general', value: { preference: 'en-US' } }] } : undefined,
+  }, () => replyText('工作区：{0}', 'D:\\docs')), 'Workspace: D:\\docs')
 })

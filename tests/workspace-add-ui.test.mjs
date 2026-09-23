@@ -19,7 +19,6 @@ for (const mode of ['missing', 'empty', 'throw', 'reject', 'selected']) {
     )
     const pending = handler()
     assert.equal(adding, true)
-    assert.equal(open, '')
     assert.equal(path, '')
     await pending
     assert.deepEqual(created, mode === 'selected' ? ['D:\\Work'] : [])

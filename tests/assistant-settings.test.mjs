@@ -35,10 +35,10 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
   ]
   const developmentPackages = dshPackages.filter((packageName) => packageName !== '@deepseek-ai/dsh-client-runtime')
   for (const packageName of dshPackages) {
-    assert.equal(manifest.peerDependencies[packageName], '0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1 || 0.1.6-alpha.2')
+    assert.equal(manifest.peerDependencies[packageName], '0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1 || 0.1.7-alpha.2')
   }
   for (const packageName of developmentPackages) {
-    assert.equal(manifest.devDependencies[packageName], '0.1.6-alpha.2')
+    assert.equal(manifest.devDependencies[packageName], '0.1.7-alpha.2')
   }
   assert.equal(manifest.peerDependenciesMeta['@deepseek-ai/dsh-client-runtime'].optional, true)
 })
@@ -220,17 +220,18 @@ test('权限菜单直接使用 Host 官方列表与官方文案', () => {
   assert.match(client, /"permission\.fullAccess": "完全访问"/)
   assert.match(client, /ctx\.locale\.bind\("permission\.access"\)/)
   assert.match(client, /ctx\.locale\.bind\("model"\)/)
-  assert.match(client, /label: modelT\("menu\.model"\)/)
-  assert.match(client, /label: modelT\("menu\.effort"\)/)
+  assert.match(client, /modelT\("menu\.model"\)/)
+  assert.match(client, /modelT\("menu\.effort"\)/)
   assert.doesNotMatch(client, /label: "Model"|label: "Effort"/, '模型选择器必须使用 Chat 的官方国际化词条')
   assert.match(manager, /official\.names\.map\(\(name\) => official\.optionOf\(name\)\)/)
   assert.match(manager, /permissions: this\.permissionOptions\(\)/)
   assert.match(router, /permissionPresets\.set\(agent\.session, permission\)/)
   assert.doesNotMatch(router, /setSandboxMode/)
   assert.match(client, /require\("@deepseek-ai\/dsh-client-ui-primitives"\)/)
-  assert.match(client, /h\(RiskConfirmation, \{/)
-  assert.match(client, /onAcknowledgedChange: setFullAccessAcknowledged/)
-  assert.match(client, /acknowledged: fullAccessAcknowledged/)
+  assert.doesNotMatch(client, /h\(RiskConfirmation/)
+  assert.match(client, /h\(Checkbox, \{ checked: fullAccessAcknowledged/)
+  assert.match(client, /permissionT\("confirm.title"\)/)
+  assert.match(client, /okButtonProps: \{ disabled: !fullAccessAcknowledged \}/)
   assert.match(client, /if \(next === "danger-full-access"\)/)
   assert.doesNotMatch(client, /function openFullAccessConfirmation/)
   assert.doesNotMatch(client, /ima-risk-warning|ima-full-access-dialog/)
@@ -279,7 +280,7 @@ test('渠道分组只显示账号数量，账号子行保留状态和独立操�
 test('账号详情操作按钮允许换行，保持标签可读', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(client, /\.ima-inspector-actions\{[^}]*flex-wrap:wrap/)
-  assert.match(client, /\.ima-inspector-actions \.ima-btn\{[^}]*flex:none[^}]*padding:0 8px[^}]*font-size:12px[^}]*white-space:nowrap/)
+  assert.match(client, /\.ima-inspector-actions \.ant-btn\{[^}]*flex:none[^}]*white-space:nowrap/)
 })
 
 test('企业微信侧边栏小图标移除白色应用底板并放大有效标记', () => {
@@ -290,20 +291,22 @@ test('企业微信侧边栏小图标移除白色应用底板并放大有效标�
   assert.match(client, /h\(BrandMark, \{ id, compact: small \}\)/)
 })
 
-test('账号弹窗挂到 body，保留主题和关闭事件', () => {
+test('账号弹窗使用 Ant Modal，不再自制遮罩', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  const source = client.slice(client.indexOf('    function AccountModalLayer('), client.indexOf('    function BindModal('))
-  const body = {}, child = {}, close = () => {}
-  const render = new Function('ReactDOM', 'h', 'document', source + '\nreturn AccountModalLayer')(
-    { createPortal: (node, target) => ({ node, target }) },
-    (type, props, children) => ({ type, props, children }), { body },
-  )
-  const result = render({ children: child, onClick: close })
-  assert.equal(result.target, body)
-  assert.equal(result.node.children, child)
-  assert.equal(result.node.props.onClick, close)
-  assert.equal(result.node.props.className, 'ima-page ima-mask')
+  assert.match(client, /selectedAccount && h\(Modal,/)
+  assert.match(client, /className: "ima-account-modal"/)
+  assert.match(client, /className: "ima-bind-modal"/)
+  assert.doesNotMatch(client, /function AccountModalLayer/)
+  assert.doesNotMatch(client, /ima-page ima-mask/)
   assert.doesNotMatch(client, /h\("div", \{ className: "ima-mask"/)
+})
+
+test('账号弹窗继承成功色变量，已连接和诊断通过用绿色 Tag', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /\.ima-page,\.ima-account-modal,\.ima-bind-modal,\.ima-inspector\{[^}]*--ima-ok/)
+  assert.match(client, /h\(Tag, \{\s*color: account\.receiveConfigured === false \? "warning" : account\.connectionState === "connected" \? "success"/)
+  assert.match(client, /h\(Tag, \{ color: item\.status === "passed" \? "success"/)
+  assert.doesNotMatch(client, /function ChannelCard|\.ima-chip|ima-inspector-empty|ima-diagnostic-passed|\.ima-control\{/)
 })
 
 test('账号通过设置按钮打开弹窗，不再占用列表侧栏', () => {
@@ -312,11 +315,9 @@ test('账号通过设置按钮打开弹窗，不再占用列表侧栏', () => {
   assert.match(client, /useState\(storedAccountSelection\)/)
   assert.match(client, /const next = all\.some\(\(item\) => item\.id === current\) \? current : ""/)
   assert.doesNotMatch(client, /\? current : \(\(data\.channels[\s\S]*all\[0\]\?\.id/, '首次进入不能自动选中第一个账号')
-  assert.match(client, /settings\.selectAccountTitle": "选择一个账号"/)
-  assert.match(client, /settings\.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。"/)
-  assert.match(client, /settings\.noAccountsTitle": "还没有接入账号"/)
-  assert.match(client, /settings\.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。"/)
-  assert.match(client, /selectedAccount && h\(AccountModalLayer,/)
+  assert.doesNotMatch(client, /settings\.selectAccountTitle/)
+  assert.doesNotMatch(client, /settings\.noAccountsTitle/)
+  assert.match(client, /selectedAccount && h\(Modal,/)
   assert.match(client, /if \(action === "remove" && selected === id\) selectAccount\(removalFallback\)/)
 })
 
@@ -359,7 +360,7 @@ test('IM 自有界面注册双语词典并随 Host 语言刷新', () => {
   assert.match(client, /t\("action\.addAccount"\)/)
   assert.match(client, /t\("account\.privateAccess"\)/)
   assert.match(client, /t\("account\.receive"\)/)
-  assert.match(client, /window\.confirm\(t\("account\.removeConfirm"\)\)/)
+  assert.match(client, /content: t\("account\.removeConfirm"\)/)
   assert.match(client, /function accountLabel\(account, t\)/)
   assert.match(client, /t\("error\.detailsInLog"\)/)
 
@@ -383,10 +384,49 @@ test('设置标题旁提供项目主页与问题反馈入口', () => {
   assert.match(client, /"settings\.feedback": "问题反馈"/)
   assert.match(client, /"settings\.feedback": "Issues"/)
   assert.match(client, /className: "ima-title-links"/)
-  assert.match(client, /className: "ima-title-link"/)
-  assert.match(client, /\.ima-title-link\{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var\(--dsw-alias-label-secondary\);background:transparent;border:1px solid var\(--dsw-alias-border-l2\);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap\}/)
-  assert.match(client, /\.ima-title-link:focus-visible\{outline:2px solid var\(--dsw-alias-state-success-primary\);outline-offset:2px\}/)
+  assert.match(client, /size: "small", shape: "default", href: "https:\/\/github\.com\/MichengAI\/dsh-im-connect"/)
+  assert.match(client, /size: "small", shape: "default", href: "https:\/\/github\.com\/MichengAI\/dsh-im-connect\/issues"/)
+  assert.match(client, /\.ima-title-links\{display:inline-flex;align-items:center;gap:8px/)
   assert.match(client, /@media\(max-width:720px\)\{\.ima-title-row\{flex-wrap:wrap\}\}/)
+})
+
+test('Ant 亮暗跟随宿主 html/body 的 data-ds-dark-theme', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /function hostIsDark\(\)/)
+  assert.match(client, /document\.documentElement\.hasAttribute\("data-ds-dark-theme"\)/)
+  assert.match(client, /document\.body\.hasAttribute\("data-ds-dark-theme"\)/)
+  assert.match(client, /function useHostDark\(\)/)
+  assert.match(client, /attributeFilter: \["data-ds-dark-theme"\]/)
+  assert.match(client, /algorithm: dark \? theme\.darkAlgorithm : theme\.defaultAlgorithm/)
+  assert.doesNotMatch(client, /function hostDarkTheme\(/)
+})
+
+test('账号页渠道行与账号行用网格对齐，表单单列', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /className: "ima-platform-meta"/)
+  assert.match(client, /\.ima-platform-head\{display:grid;grid-template-columns:auto minmax\(0,1fr\) auto/)
+  assert.match(client, /\.ima-account-row\{display:grid;grid-template-columns:minmax\(0,1fr\) auto auto auto/)
+  assert.match(client, /\.ima-account-settings\{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px\}/)
+  assert.match(client, /\.ima-account-settings\.compact\{grid-template-columns:1fr\}/)
+  assert.match(client, /h\(Button, \{ onClick: \(e\) => \{ e\.stopPropagation\(\); setEditing\(ch\.id\); \}/)
+  assert.match(client, /h\(Button, \{ onClick: \(\) => \{ selectAccount\(account\.id\); setSettingsAccount\(account\.id\); \}/)
+  assert.match(client, /shape: "round", size: "middle"/)
+  assert.match(client, /className: "ima-model-effort"/)
+  assert.match(client, /\.ima-model-effort\{display:grid;grid-template-columns:1fr 1fr/)
+  assert.doesNotMatch(client, /field\("workspace",[\s\S]*?\}\), true\)/)
+  assert.match(client, /ctx\.locale\.bind\("settings\.agentPreset"\)/)
+  assert.match(client, /presetT\("nav"\)/)
+  assert.match(client, /presetStandardName/)
+})
+
+test('账号命令权限沿用旧版两列下拉，控件换成 Ant Select', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const command = client.slice(client.indexOf('function CommandPermissionSettings'), client.indexOf('function AccountConnectionCheck'))
+  assert.match(command, /className: "ima-command-permissions ima-account-settings"/)
+  assert.match(command, /h\(Select, \{/)
+  assert.match(command, /t\("command\.enabled"\)/)
+  assert.match(command, /t\("command\.disabled"\)/)
+  assert.doesNotMatch(command, /h\(Switch/)
 })
 
 test('IM 模型菜单只使用适配器声明的模型与推理等级', () => {
@@ -394,7 +434,7 @@ test('IM 模型菜单只使用适配器声明的模型与推理等级', () => {
   const manager = readFileSync(new URL('../src/manager.ts', import.meta.url), 'utf8')
   assert.doesNotMatch(client, /DEFAULT_EFFORTS/, '不能在客户端伪造 Low、Medium、High')
   assert.match(client, /const modelGroups = providers\.map/)
-  assert.match(client, /reasoning && h\(ChipRow/)
+  assert.match(client, /reasoning && field\("effort", modelT\("menu\.effort"\)/)
   assert.match(client, /modelT\("empty\.models"\)/)
   assert.match(client, /reasoning\.defaultEffort \? \[\] : \[\{ id: "", name: modelT\("effort\.providerDefault"\) \}\]/)
   assert.match(manager, /resolveModelInfo\?/)

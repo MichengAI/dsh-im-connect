@@ -14,7 +14,7 @@ test('命令权限仅有聊天类型开关，不要求用户 ID', async () => {
     if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial
     return [state[index], next => { state[index] = typeof next === 'function' ? next(state[index]) : next }]
   }
-  const Component = new Function('h', 'useState', 'useEffect', 'ChipMenu', 'ChipRow', source.slice(start, end) + '\nreturn CommandPermissionSettings;')(h, useState, () => {}, "ChipMenu", "ChipRow")
+  const Component = new Function('h', 'useState', 'useEffect', 'Select', source.slice(start, end) + '\nreturn CommandPermissionSettings;')(h, useState, () => {}, 'Select')
   const render = () => { cursor = 0; return Component({ onSave: async value => { saved.push(value); return true }, t: key => key }) }
   const find = (tree, predicate) => {
     if (tree && typeof tree === 'object') { if (predicate(tree)) return tree; for (const child of tree.children || []) { const found = find(child, predicate); if (found) return found } }
@@ -22,6 +22,8 @@ test('命令权限仅有聊天类型开关，不要求用户 ID', async () => {
   const tree = render()
   assert.equal(find(tree, node => node.type === 'input'), undefined)
   assert.equal(find(tree, node => node.type === 'select'), undefined)
-  await find(tree, node => node.type === 'ChipRow' && node.props.label === 'command.disabled').props.onClick()
+  const toggle = find(tree, node => node.type === 'Select' && node.props['aria-label'] === 'command.dm')
+  assert.equal(toggle.props.value, 'on')
+  await toggle.props.onChange('off')
   assert.deepEqual(saved, [{ dm: { enabled: false, users: [] }, group: { enabled: true, users: [] } }])
 })

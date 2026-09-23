@@ -13,9 +13,12 @@ const {
   openHostSession,
   pickHostDirectory,
   archiveHostSession,
+  unarchiveHostSession,
+  pinHostSession,
+  activeSessionRefusal,
   forkHostSession,
   renameHostSession,
-} = new Function(`${code}; return { probeService, currentSessionId, resolveHostSessionId, isCurrentListedSession, openHostSession, pickHostDirectory, archiveHostSession, forkHostSession, renameHostSession };`)()
+} = new Function(`${code}; return { probeService, currentSessionId, resolveHostSessionId, isCurrentListedSession, openHostSession, pickHostDirectory, archiveHostSession, unarchiveHostSession, pinHostSession, activeSessionRefusal, forkHostSession, renameHostSession };`)()
 
 test('当前会话先认 list.current，没有再按 retainedBy.mainView 反查', () => {
   assert.equal(currentSessionId({ current: 'legacy', ids: ['a'], byId: { a: { retainedBy: { mainView: 1 } } } }), 'legacy')
@@ -129,6 +132,30 @@ test('归档优先官方导航，否则回退 workspaces.archiveSession', async 
   }, 's2')
   assert.deepEqual(archived, ['nav:s1', 'legacy:s2'])
   assert.equal(await archiveHostSession({ reflect: { get() { return undefined } } }, 's3'), undefined)
+})
+
+test('运行中会话归档可带 stopActivity，并识别宿主拒绝', async () => {
+  const calls = []
+  await archiveHostSession({
+    reflect: { get(name) { return name === 'uiWorkspace' ? { archiveSession: async (id, options) => calls.push([id, options]) } : undefined } },
+  }, 'run', { stopActivity: true })
+  assert.deepEqual(calls, [['run', { stopActivity: true }]])
+  assert.equal(activeSessionRefusal({ reason: { name: 'WorkspaceArchiveError' } }), true)
+  assert.equal(activeSessionRefusal({ rpcError: { code: 'workspace/session-active', details: { activity: {} } } }), true)
+  assert.equal(activeSessionRefusal(new Error('other')), false)
+  const restored = []
+  await unarchiveHostSession({
+    reflect: { get(name) { return name === 'uiWorkspace' ? { unarchiveSession: async (id) => restored.push(id) } : undefined } },
+  }, 's4')
+  assert.deepEqual(restored, ['s4'])
+  const pins = []
+  await pinHostSession({
+    reflect: { get(name) { return name === 'uiWorkspace' ? { pinSession: async (id, next) => pins.push([id, next]) } : undefined } },
+  }, 's5', true)
+  await pinHostSession({
+    reflect: { get(name) { return name === 'uiWorkspace' ? { unpinSession: async (id) => pins.push(['off', id]) } : undefined } },
+  }, 's5', false)
+  assert.deepEqual(pins, [['s5', true], ['off', 's5']])
 })
 
 test('分叉优先官方 forkSession，否则 fork 后再打开', async () => {

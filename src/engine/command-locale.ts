@@ -3,11 +3,29 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { commandEnglish } from './command-messages.js'
 
 const localeScope = new AsyncLocalStorage<'zh' | 'en'>()
+function readHostPreference(host: { get(name: string): unknown }): unknown {
+  const settings = host.get('settings') as {
+    get?(namespace: string): { preference?: unknown } | undefined
+    describe?(): readonly { ns?: string; value?: { preference?: unknown; locale?: unknown } }[]
+  } | undefined
+  if (typeof settings?.get === 'function') {
+    const preference = settings.get('locale')?.preference
+    if (preference !== undefined) return preference
+  }
+  if (typeof settings?.describe === 'function') {
+    for (const row of settings.describe() ?? []) {
+      const value = row?.value?.preference ?? row?.value?.locale
+      if (typeof value === 'string') return value
+    }
+  }
+  const locale = host.get('locale') as { preference?: unknown; current?: unknown } | undefined
+  return locale?.preference ?? locale?.current
+}
+
 export function withReplyLocale<T>(host: { get(name: string): unknown }, run: () => T): T {
   let locale: 'zh' | 'en' = 'zh'
   try {
-    const settings = host.get('settings') as { get(namespace: string): { preference?: unknown } | undefined } | undefined
-    const preference = settings?.get('locale')?.preference
+    const preference = readHostPreference(host)
     if (typeof preference === 'string' && /^en(?:-|$)/i.test(preference)) locale = 'en'
   } catch { /* 语言服务不可用不能阻止命令执行，保留既有中文默认。 */ }
   return localeScope.run(locale, run)

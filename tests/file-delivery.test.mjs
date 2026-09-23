@@ -48,9 +48,13 @@ test('成功变更与 present 合并去重，任意正文路径不回传', () =>
   f.closing.data.message.content[0].text = 'C:\\secret.txt'
   assert.deepEqual(filesForReply(f.events, f.closing).paths, ['one.txt', 'existing.pdf'])
 })
-for (const mode of ['failed', 'other-turn', 'replacement', 'unsupported']) test(`排除 ${mode} 工具结果`, () => {
+for (const mode of ['failed', 'failed-v4', 'other-turn', 'replacement', 'unsupported']) test(`排除 ${mode} 工具结果`, () => {
   const f = fixture()
   if (mode === 'failed') f.events[2].data.message.content[0].isError = true
+  if (mode === 'failed-v4') {
+    f.events[2].data.message.isError = true
+    f.events[2].data.message.content = [{ type: 'text', text: 'write failed' }]
+  }
   if (mode === 'other-turn') f.events[2].data.turn = 2
   if (mode === 'replacement') f.events[2].surfaceOp = 'replace'
   if (mode === 'unsupported') f.events[1].data.name = 'read'
@@ -130,6 +134,29 @@ for (const mode of ['rebind', 'dispose']) test(`读取途中 ${mode} 不回传`,
   assert.equal(s.files.length, 0)
   assert.equal(s.messages.length, 0)
 })
+test('0.1.7 用 workspaceFiles.readBytes 读完整文件，data 可以是原始字节', async t => {
+  const f = fixture(), reads = []
+  const sender = new FileDelivery({
+    get(name) {
+      if (name !== 'workspaceFiles') return
+      return {
+        readBytes: async (scope, path, options, signal) => {
+          reads.push({ scope, path, options, aborted: signal.aborted })
+          return { data: Buffer.from('bytes-file'), offset: 0, eof: true }
+        },
+      }
+    },
+  }, () => {})
+  t.after(() => sender.dispose())
+  const files = []
+  const channel = { id: 'test', send: async () => {}, sendFile: async (_, file) => files.push(file) }
+  await sender.deliver(f.session, f.closing, () => ({ channel, chatId: 'c' }))
+  assert.equal(files.length, 1)
+  assert.equal(Buffer.from(files[0].data).toString(), 'bytes-file')
+  assert.deepEqual(reads[0].scope, { sessionId: 'im:s', workspaceRoot: 'D:\\workspace' })
+  assert.deepEqual(reads[0].options, {})
+})
+
 test('旧宿主基于 fs 完整读取，拒绝符号链接与超限文件', async () => {
   const f = fixture(), sent = []
   let type = 'file', size = 4

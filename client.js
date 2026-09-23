@@ -10,25 +10,56 @@ window.__ModuleLoader__.load({
     const { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } = React;
     const ReactDOM = require("react-dom");
     const primitives = require("@deepseek-ai/dsh-client-ui-primitives");
-    const {
-      RiskConfirmation,
-      Button,
-      Menu,
-      Modal,
-      IconListPenOutline16,
-      IconRefreshOutline16,
-      IconDownloadOutline16,
-      IconCopyOutline16,
-      IconCloseOutline16,
-      IconEditOutline16,
-      IconBranchOutline16,
-      IconArchiveOutline20,
-      IconTrashOutline16,
-      IconEllipsisOutline16,
-    } = primitives;
+    const HostMenu = typeof primitives.Menu === "function" ? primitives.Menu : function MissingHostMenu(props) { return props.anchor || null; };
+    const HostModal = typeof primitives.Modal === "function" ? primitives.Modal : function MissingHostModal() { return null; };
+    const HostButton = typeof primitives.Button === "function" ? primitives.Button : function MissingHostButton(props) { return h("button", { type: "button", className: props && props.className, disabled: props && props.disabled, onClick: props && props.onClick }, props && props.children); };
+    // 0.1.7 把尺寸从图标名里拿掉了（IconEditOutlineRegular）。旧宿主仍导出 *16/*20。
+    function pickHostIcon(...names) {
+      for (const name of names) {
+        const icon = primitives[name];
+        if (typeof icon === "function") return icon;
+      }
+      return function MissingHostIcon() { return null; };
+    }
+    function hostOrFallback(icon, Fallback) {
+      return function HostOrFallback(props) {
+        const node = icon(props);
+        return node == null ? Fallback(props) : node;
+      };
+    }
+    // 0.1.7 的 Menu 会渲染 children。同一版才出现不带尺寸的图标名，旧 Menu 只认 items。
+    function hostMenuRendersChildren() {
+      return typeof primitives.IconEllipsisOutlineRegular === "function";
+    }
+    const IconListPenOutline16 = pickHostIcon("IconListPenOutlineRegular", "IconListPenOutline16");
+    const IconRefreshOutline16 = pickHostIcon("IconRefreshOutlineRegular", "IconRefreshOutline16");
+    const IconDownloadOutline16 = pickHostIcon("IconDownloadOutlineRegular", "IconDownloadOutline16");
+    const IconCopyOutline16 = pickHostIcon("IconCopyOutlineRegular", "IconCopyOutline16");
+    const IconCloseOutline16 = pickHostIcon("IconCloseOutlineRegular", "IconCloseOutline16");
+    const IconEditOutline16 = pickHostIcon("IconEditOutlineRegular", "IconEditOutline16");
+    const IconBranchOutline16 = pickHostIcon("IconBranchOutlineRegular", "IconBranchOutline16");
+    const IconArchiveOutline20 = pickHostIcon("IconArchiveOutlineRegular", "IconArchiveOutline20");
+    const IconArchiveCheckHost = pickHostIcon("IconArchiveCheckOutlineRegular");
+    const IconTrashOutline16 = pickHostIcon("IconTrashOutlineRegular", "IconTrashOutline16");
+    const IconEllipsisOutline16 = pickHostIcon("IconEllipsisOutlineRegular", "IconEllipsisOutline16");
+    const IconSearchHost = pickHostIcon("IconSearchOutlineRegular", "IconSearchOutline16");
+    const IconCloseFillHost = pickHostIcon("IconCloseFillRegular", "IconCloseOutline16");
+    const IconSlidersHost = pickHostIcon("IconSlidersTwoOutlineRegular", "IconSlidersOutline16");
+    const IconFolderClose = pickHostIcon("IconFolderCloseRegular", "IconFolderOutline16");
+    const IconClockOutline = pickHostIcon("IconClockOutlineRegular", "IconClockOutline16");
+    const IconFlatListOutline = pickHostIcon("IconFlatListOutlineRegular");
+    const antd = require("antd");
+    const { ConfigProvider, theme, Modal, Select, Switch, Button: AntdButton, Input, Progress, Checkbox, Segmented, Tag, Alert } = antd;
+    function Button(props) {
+      return React.createElement(AntdButton, Object.assign({ shape: "round", size: "middle" }, props));
+    }
+    const zhCN = require("antd/locale/zh_CN");
+    const enUS = require("antd/locale/en_US");
+    const antdZh = zhCN && zhCN.default ? zhCN.default : zhCN;
+    const antdEn = enUS && enUS.default ? enUS.default : enUS;
     const HoverCard = primitives.HoverCard;
     const StateDot = primitives.StateDot;
-    const IconSettingsOutline16 = primitives.IconSettingsOutline16;
+    const IconSettingsOutline16 = pickHostIcon("IconSettingsOutlineRegular", "IconSettingsOutline16");
     const ARCHIVE_MANAGER_PLUGIN = "@michengai/dsh-archive-manager";
     function hasArchiveManagerPlugin(root) {
       return !!(root && typeof root.querySelector === "function" && root.querySelector('[data-plugin="' + ARCHIVE_MANAGER_PLUGIN + '"]'));
@@ -39,8 +70,15 @@ window.__ModuleLoader__.load({
     function canArchiveChannelGroup(archiveManagerInstalled, archiveSession) {
       return archiveManagerInstalled && typeof archiveSession === "function";
     }
-    async function archiveChannelGroup(sessionIds, archiveSession) {
-      for (const sessionId of sessionIds) await archiveSession(sessionId);
+    function channelSessionVisible(sessionId, archived, filter) {
+      if (!sessionId) return false;
+      const isArchived = archived.has(sessionId);
+      if (filter === "only") return isArchived;
+      if (filter === "show") return true;
+      return !isArchived;
+    }
+    async function archiveChannelGroup(sessionIds, archiveSession, options) {
+      for (const sessionId of sessionIds) await archiveSession(sessionId, options);
     }
     const CHANNEL_SETTINGS_EVENT = "dsh-im-connect:open-channel-settings";
     const CHANNEL_SETTINGS_STORAGE_KEY = "dsh-im-connect:pending-channel-settings";
@@ -195,20 +233,21 @@ window.__ModuleLoader__.load({
         "connection.title": "本次状态检查", "connection.scope": "仅检查本机渠道运行状态，未验证平台凭据或消息收发。", "connection.checkedAt": "检查时间", "connection.receiveOn": "接收开关已开启", "connection.receiveOff": "接收开关已关闭；请在账号列表开启后再发送消息。", "connection.checking": "检查中…",
         "connection.next.connected": "可在原聊天发送消息验证收发；私聊仍需符合准入设置。", "connection.next.connecting": "请稍后再次检查；等待扫码时请完成手机确认。", "connection.next.reconnecting": "渠道正在尝试恢复，请稍后再次检查。", "connection.next.disconnected": "请重新连接；需要扫码的渠道可重新添加绑定。", "connection.next.stopped": "请点击重新连接以启动账号。", "connection.next.error": "请尝试重新连接；仍有异常时查看本机日志。", "connection.next.unknown": "暂时无法确认状态，请稍后再检查或查看本机日志。",
         "settings.label": "IM助理", "settings.title": "IM助理", "settings.description": "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。", "settings.viewProject": "GitHub", "settings.feedback": "问题反馈",
-        "settings.aria": "IM助理", "settings.selectAccountTitle": "选择一个账号", "settings.selectAccountDescription": "从左侧选择账号，查看并修改工作区、模型和权限配置。", "settings.noAccountsTitle": "还没有接入账号", "settings.noAccountsDescription": "请在左侧选择对应渠道，然后点击“添加账号”。", "settings.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
-        "account.agentPreset": "Agent 预设", "account.presetUnavailable": "预设不可用", "account.presetNote": "更改后使用新会话，旧会话保留。", "action.settings": "设置", "command.title": "命令权限", "command.note": "先按原有准入规则判断，再检查命令权限。关闭命令仍可正常对话、处理附件和回答审批。", "command.dm": "私聊命令", "command.group": "群聊命令", "command.enabled": "可以执行命令", "command.disabled": "仅正常对话", "command.user": "平台用户 ID", "command.add": "添加用户例外", "command.remove": "移除", "command.save": "保存命令权限", "command.invalid": "请填写有效且不重复的用户 ID。",
+        "settings.aria": "IM助理", "settings.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
+        "account.agentPreset": "Agent 预设", "account.presetUnavailable": "预设不可用", "account.presetNote": "更改后使用新会话，旧会话保留。", "action.settings": "设置", "command.dm": "私聊命令", "command.group": "群聊命令", "command.enabled": "可以执行命令", "command.disabled": "仅正常对话",
         "account.workspace": "工作区", "account.currentWorkspace": "当前工作区", "account.selectWorkspace": "请选择工作区", "account.selectModel": "请选择模型", "account.selectPermission": "请选择权限", "account.privateAccess": "私聊准入", "account.privateApproved": "仅已批准用户", "account.privateAll": "允许所有私聊用户", "account.autoNameNote": "绑定成功后会自动生成账号名，无需手动填写。", "account.defaultName": "{channel}账号 {count}",
-        "account.count": "{count} 个账号", "account.countZero": "0 个账号", "account.countOnline": "{online} / {total} 在线", "account.countOffline": "{total} / {total} 离线", "account.statusProcessing": "处理中…", "account.statusOnline": "在线", "account.statusOffline": "离线", "account.statusRunning": "运行正常", "account.statusNotConnected": "未连接", "account.receive": "接收消息", "account.receiveDescription": "关闭后保留账号配置，但不接收新消息", "account.removeConfirm": "确定移除这个账号？本机保存的配置和凭据将一并删除。",
+        "account.count": "{count} 个账号", "account.statusProcessing": "处理中…", "account.statusNotConnected": "未连接", "account.receive": "接收消息", "account.receiveDescription": "关闭后保留账号配置，但不接收新消息", "account.removeConfirm": "确定移除这个账号？本机保存的配置和凭据将一并删除。",
         "action.addAccount": "添加账号", "action.generateQr": "生成二维码", "action.checkConnection": "诊断连接", "action.reconnectAccount": "重新连接", "action.removeAccount": "移除接入", "status.saving": "保存中…", "status.saved": "已保存",
         "channel.dingtalk": "钉钉", "channel.feishu": "飞书", "channel.lark": "Lark", "channel.weixin": "微信", "channel.wecom": "企业微信", "channel.qq": "QQ", "channel.telegram": "Telegram",
         "field.dingtalk.clientId": "Client ID（原 AppKey）", "field.dingtalk.clientSecret": "Client Secret（原 AppSecret）",
+        "field.wecom.botId": "Bot ID", "field.wecom.secret": "Secret", "field.qq.appId": "AppID", "field.qq.appSecret": "AppSecret", "field.telegram.token": "Bot Token",
         "bind.title": "配置 {channel}", "bind.close": "关闭", "bind.quick": "快捷绑定（推荐）", "bind.manual": "手动配置", "bind.saving": "正在保存账号…", "bind.success": "绑定成功，频道已连接", "bind.newIdentity": "检测到新的账号身份，已创建新账号", "bind.qrAlt": "{channel} 绑定二维码", "bind.generating": "正在生成…", "bind.expire": "二维码 {time} 后过期", "bind.scanned": "已扫码，请在手机上确认", "bind.retry": "请重新生成二维码", "bind.refresh": "重新生成二维码", "action.saving": "保存中…", "action.confirm": "确认",
         "qr.weixin": "请使用微信扫描二维码完成绑定", "qr.feishu": "请使用飞书扫描二维码，将自动创建机器人", "qr.lark": "请使用 Lark 扫描二维码完成配对", "qr.wecom": "请使用企业微信扫描二维码，快捷绑定机器人", "qr.dingtalk": "请使用钉钉扫描二维码，自动创建机器人", "qr.qq": "请使用手机 QQ 扫描二维码，创建开放平台机器人", "qr.default": "请使用对应 App 扫描二维码",
-        "status.unconfigured": "未配置", "status.connected": "已连接", "status.connecting": "接入中…", "action.configure": "配置", "action.more": "{channel} 更多", "action.reconnect": "重新接入", "action.disconnect": "断开", "action.removeConfig": "删除配置", "action.receive": "接收消息",
+        "status.connected": "已连接", "action.more": "{channel} 更多",
         "error.loadAssistant": "无法加载账号配置", "error.noModels": "当前 Host 还没有可用模型，请先在网页里配置提供商", "error.save": "保存失败", "error.chooseWorkspace": "请选择工作区目录", "error.workspaceUnavailable": "当前 Host 无法新增工作区", "error.addWorkspace": "新增工作区失败", "error.load": "加载失败", "error.connection": "无法连接本机 IM 助理接口", "error.request": "请求失败", "error.action": "操作失败", "error.qr": "无法生成二维码", "error.detailsInLog": "操作失败，请查看服务器日志。",
-        "composer.aria": "全局会话配置", "composer.project": "选择项目", "composer.projectAria": "项目", "composer.noWorkspaces": "暂无工作区", "composer.addWorkspace": "添加工作区…", "composer.permission": "权限", "composer.noModels": "暂无模型", "composer.workspacePath": "工作区路径", "action.cancel": "取消", "action.adding": "添加中…",
+        "composer.noWorkspaces": "暂无工作区", "composer.addWorkspace": "添加工作区…", "composer.permission": "权限", "composer.noModels": "暂无模型", "composer.workspacePath": "工作区路径", "action.cancel": "取消", "action.adding": "添加中…",
         "permission.readOnly": "只读", "permission.workspaceWrite": "工作区写入", "permission.fullAccess": "完全访问",
-        "rail.workspace": "工作区", "rail.search": "搜索", "rail.searchPlaceholder": "搜索会话...", "rail.clearSearch": "清除搜索", "rail.filter": "筛选", "rail.group": "分组方式", "rail.byWorkspace": "按工作区", "rail.list": "单列表", "rail.sort": "排序方式", "rail.manual": "手动排序", "rail.recent": "最近更新", "rail.running": "运行中", "rail.idle": "空闲", "rail.renameAria": "重命名会话", "rail.rename": "重命名", "rail.fork": "分叉会话", "rail.archive": "归档会话", "rail.archiveFailed": "归档失败，未移除会话。请稍后重试或检查宿主日志。", "rail.deleteSession": "删除会话", "rail.deleteSessionConfirm": "删除会话", "rail.deleteSessionDescription": "将永久删除会话“{name}”及其子代理（含正在运行的）和全部记录（对话内容、统计、缓存），此操作不可恢复。", "rail.deleteSessionPending": "正在删除会话…", "rail.deleteSessionFailed": "删除会话失败：{message}", "rail.deleteSessionClose": "关闭", "rail.deleteSessionCancel": "取消", "rail.groupActions": "“{name}”的频道操作", "rail.channelSettings": "渠道设置", "rail.archiveGroup": "归档整组会话", "rail.archiveGroupConfirm": "确认归档", "rail.archiveGroupDescription": "将归档“{name}”下的 {count} 个会话。归档后可以在“设置 → 已归档”中恢复。", "rail.archiveGroupPending": "正在归档整组会话…", "rail.archiveGroupFailed": "部分会话归档失败：{message}", "rail.archiveGroupClose": "关闭", "rail.archiveGroupCancel": "取消", "rail.empty": "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。", "rail.noTasks": "暂无网页任务", "rail.ungrouped": "未分组", "rail.tabsAria": "工作区分类", "rail.tasks": "任务", "rail.channels": "频道",
+        "rail.workspace": "工作区", "rail.sessions": "会话", "rail.search": "搜索", "rail.searchPlaceholder": "搜索会话...", "rail.clearSearch": "清除搜索", "rail.filter": "筛选", "rail.group": "分组方式", "rail.byWorkspace": "按工作区", "rail.list": "单列表", "rail.sort": "排序方式", "rail.recent": "最近更新", "rail.showArchived": "显示已归档", "rail.onlyArchived": "仅显示已归档", "rail.hideArchived": "隐藏已归档", "rail.running": "运行中", "rail.idle": "空闲", "rail.renameAria": "重命名会话", "rail.rename": "重命名", "rail.fork": "分叉会话", "rail.pin": "置顶会话", "rail.unpin": "取消置顶", "rail.archive": "归档会话", "rail.unarchive": "恢复会话", "rail.stopArchive": "停止并归档", "rail.stopArchiveDescription": "会话“{name}”仍在运行。停止后才能归档。", "rail.stopArchiveConfirm": "停止并归档", "rail.stopArchivePending": "正在停止并归档…", "rail.stopArchiveGroupDescription": "“{name}”下仍有运行中的会话。停止这些会话后才能归档整组。", "rail.archiveFailed": "归档失败，未移除会话。请稍后重试或检查宿主日志。", "rail.deleteSession": "删除会话", "rail.deleteSessionConfirm": "删除会话", "rail.deleteSessionDescription": "将永久删除会话“{name}”及其子代理（含正在运行的）和全部记录（对话内容、统计、缓存），此操作不可恢复。", "rail.deleteSessionPending": "正在删除会话…", "rail.deleteSessionFailed": "删除会话失败：{message}", "rail.deleteSessionClose": "关闭", "rail.deleteSessionCancel": "取消", "rail.groupActions": "“{name}”的频道操作", "rail.channelSettings": "渠道设置", "rail.archiveGroup": "归档整组会话", "rail.archiveGroupConfirm": "确认归档", "rail.archiveGroupDescription": "将归档“{name}”下的 {count} 个会话。归档后可以在“设置 → 已归档”中恢复。", "rail.archiveGroupPending": "正在归档整组会话…", "rail.archiveGroupFailed": "部分会话归档失败：{message}", "rail.archiveGroupClose": "关闭", "rail.archiveGroupCancel": "取消", "rail.empty": "还没有频道会话。先在设置 → IM助理 里连接渠道，并给机器人发一条消息。", "rail.noTasks": "暂无网页任务", "rail.ungrouped": "未分组", "rail.tabsAria": "工作区分类", "rail.tasks": "任务", "rail.channels": "频道",
         "time.now": "刚刚", "time.minutes": "{n}分钟", "time.hours": "{n}小时", "time.days": "{n}天", "time.months": "{n}个月", "time.years": "{n}年", "time.ago": "{t}前",
         "copy": "复制", "hover.copied": "已复制",
         "server.unknownChannel": "未知渠道", "server.channelUnconfigured": "渠道未配置", "server.sessionMissing": "会话不存在", "server.accountMissing": "账号不存在", "server.accountConnectFailed": "账号连接失败，请查看本机日志", "server.accountReconnectFailed": "重新连接失败，请查看本机日志", "server.selectAccountSettings": "请选择提供商、模型、工作区或权限", "server.selectModel": "请选择提供商和模型", "server.selectWorkspace": "请选择工作区", "server.selectPermission": "请选择权限", "server.missingCredentials": "凭据不足，无法启动渠道", "server.qrUnsupported": "该渠道不支持扫码绑定", "server.qrExpired": "二维码已过期", "server.qrIncomplete": "扫码未完成", "server.accessDenied": "未授权：请管理员在设置 → IM助理 中批准你的访问。",
@@ -222,20 +261,21 @@ window.__ModuleLoader__.load({
         "connection.title": "Status check result", "connection.scope": "Checks local channel runtime only. Platform credentials and message delivery have not been verified.", "connection.checkedAt": "Checked at", "connection.receiveOn": "Receiving is enabled", "connection.receiveOff": "Receiving is disabled. Enable it in the account list before sending messages.", "connection.checking": "Checking…",
         "connection.next.connected": "Send a message in the original chat to verify delivery. Private chats still follow access settings.", "connection.next.connecting": "Check again shortly. Complete confirmation on your phone if a QR scan is pending.", "connection.next.reconnecting": "The channel is attempting to recover. Check again shortly.", "connection.next.disconnected": "Reconnect the account. QR channels may need to be added again.", "connection.next.stopped": "Select Reconnect to start the account.", "connection.next.error": "Try reconnecting. If the issue persists, check the local logs.", "connection.next.unknown": "The current state could not be confirmed. Check again later or inspect the local logs.",
         "settings.label": "IM Assistant", "settings.title": "IM Assistant", "settings.description": "Manage accounts across channels. Each account has its own workspace, model, and permission settings, stored only on this machine.", "settings.viewProject": "GitHub", "settings.feedback": "Issues",
-        "settings.aria": "IM Assistant", "settings.selectAccountTitle": "Select an account", "settings.selectAccountDescription": "Choose an account on the left to view and edit its workspace, model, and permissions.", "settings.noAccountsTitle": "No accounts connected", "settings.noAccountsDescription": "Choose a channel on the left, then select Add account.", "settings.publicChatNotice": "Unapproved users can start chats, but they cannot approve tool calls.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
-        "account.agentPreset": "Agent preset", "account.presetUnavailable": "Preset unavailable", "account.presetNote": "Changes start a new session; previous sessions are kept.", "action.settings": "Settings", "command.title": "Command permissions", "command.note": "Existing access rules apply first. Disabling commands still allows conversations, attachments, and approval responses.", "command.dm": "DM commands", "command.group": "Group commands", "command.enabled": "Commands enabled", "command.disabled": "Conversation only", "command.user": "Platform user ID", "command.add": "Add user override", "command.remove": "Remove", "command.save": "Save command permissions", "command.invalid": "Enter valid, unique user IDs.",
+        "settings.aria": "IM Assistant", "settings.publicChatNotice": "Unapproved users can start chats, but they cannot approve tool calls.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
+        "account.agentPreset": "Agent preset", "account.presetUnavailable": "Preset unavailable", "account.presetNote": "Changes start a new session; previous sessions are kept.", "action.settings": "Settings", "command.dm": "DM commands", "command.group": "Group commands", "command.enabled": "Commands enabled", "command.disabled": "Conversation only",
         "account.workspace": "Workspace", "account.currentWorkspace": "Current workspace", "account.selectWorkspace": "Select a workspace", "account.selectModel": "Select a model", "account.selectPermission": "Select a permission", "account.privateAccess": "Private chat access", "account.privateApproved": "Approved users only", "account.privateAll": "Allow all DM users", "account.autoNameNote": "The account name is generated automatically after setup.", "account.defaultName": "{channel} account {count}",
-        "account.count": "{count} accounts", "account.countZero": "0 accounts", "account.countOnline": "{online} / {total} online", "account.countOffline": "{total} / {total} offline", "account.statusProcessing": "Processing…", "account.statusOnline": "Online", "account.statusOffline": "Offline", "account.statusRunning": "Running normally", "account.statusNotConnected": "Not connected", "account.receive": "Receive messages", "account.receiveDescription": "Turn this off to keep the account settings without receiving new messages", "account.removeConfirm": "Remove this account? Its saved settings and credentials will also be deleted.",
+        "account.count": "{count} accounts", "account.statusProcessing": "Processing…", "account.statusNotConnected": "Not connected", "account.receive": "Receive messages", "account.receiveDescription": "Turn this off to keep the account settings without receiving new messages", "account.removeConfirm": "Remove this account? Its saved settings and credentials will also be deleted.",
         "action.addAccount": "Add account", "action.generateQr": "Generate QR code", "action.checkConnection": "Diagnose connection", "action.reconnectAccount": "Reconnect", "action.removeAccount": "Remove", "status.saving": "Saving…", "status.saved": "Saved",
         "channel.dingtalk": "DingTalk", "channel.feishu": "Feishu", "channel.lark": "Lark", "channel.weixin": "WeChat", "channel.wecom": "WeCom", "channel.qq": "QQ", "channel.telegram": "Telegram",
         "field.dingtalk.clientId": "Client ID (formerly AppKey)", "field.dingtalk.clientSecret": "Client Secret (formerly AppSecret)",
+        "field.wecom.botId": "Bot ID", "field.wecom.secret": "Secret", "field.qq.appId": "AppID", "field.qq.appSecret": "AppSecret", "field.telegram.token": "Bot Token",
         "bind.title": "Set up {channel}", "bind.close": "Close", "bind.quick": "Quick setup (recommended)", "bind.manual": "Manual setup", "bind.saving": "Saving account…", "bind.success": "Connected successfully", "bind.newIdentity": "A new account identity was detected and a new account was created", "bind.qrAlt": "{channel} setup QR code", "bind.generating": "Generating…", "bind.expire": "QR code expires in {time}", "bind.scanned": "Scanned. Confirm on your phone.", "bind.retry": "Generate a new QR code", "bind.refresh": "Generate a new QR code", "action.saving": "Saving…", "action.confirm": "Confirm",
         "qr.weixin": "Scan the QR code with WeChat to connect", "qr.feishu": "Scan with Feishu; a bot will be created automatically", "qr.lark": "Scan with Lark to pair", "qr.wecom": "Scan with WeCom to quickly connect a bot", "qr.dingtalk": "Scan with DingTalk; a bot will be created automatically", "qr.qq": "Scan with mobile QQ to create an Open Platform bot", "qr.default": "Scan the QR code with the corresponding app",
-        "status.unconfigured": "Not configured", "status.connected": "Connected", "status.connecting": "Connecting…", "action.configure": "Configure", "action.more": "More options for {channel}", "action.reconnect": "Reconnect", "action.disconnect": "Disconnect", "action.removeConfig": "Remove configuration", "action.receive": "Receive messages",
+        "status.connected": "Connected", "action.more": "More options for {channel}",
         "error.loadAssistant": "Could not load account settings", "error.noModels": "No models are available in the Host. Configure a provider in the web app first.", "error.save": "Could not save", "error.chooseWorkspace": "Choose a workspace directory", "error.workspaceUnavailable": "This Host cannot create workspaces", "error.addWorkspace": "Could not add workspace", "error.load": "Could not load", "error.connection": "Could not connect to the local IM Assistant API", "error.request": "Request failed", "error.action": "Action failed", "error.qr": "Could not generate a QR code", "error.detailsInLog": "The operation failed. Check the server logs for details.",
-        "composer.aria": "Global session settings", "composer.project": "Select project", "composer.projectAria": "Project", "composer.noWorkspaces": "No workspaces", "composer.addWorkspace": "Add workspace…", "composer.permission": "Permission", "composer.noModels": "No models", "composer.workspacePath": "Workspace path", "action.cancel": "Cancel", "action.adding": "Adding…",
+        "composer.noWorkspaces": "No workspaces", "composer.addWorkspace": "Add workspace…", "composer.permission": "Permission", "composer.noModels": "No models", "composer.workspacePath": "Workspace path", "action.cancel": "Cancel", "action.adding": "Adding…",
         "permission.readOnly": "Read Only", "permission.workspaceWrite": "Workspace Write", "permission.fullAccess": "Full access",
-        "rail.workspace": "Workspaces", "rail.search": "Search", "rail.searchPlaceholder": "Search sessions...", "rail.clearSearch": "Clear search", "rail.filter": "Filter", "rail.group": "Group by", "rail.byWorkspace": "By workspace", "rail.list": "Single list", "rail.sort": "Sort by", "rail.manual": "Manual", "rail.recent": "Recently updated", "rail.running": "Running", "rail.idle": "Idle", "rail.renameAria": "Rename session", "rail.rename": "Rename", "rail.fork": "Fork session", "rail.archive": "Archive session", "rail.archiveFailed": "Archive failed. The session was kept. Retry or check the Host logs.", "rail.deleteSession": "Delete session", "rail.deleteSessionConfirm": "Delete session", "rail.deleteSessionDescription": "This permanently deletes session “{name}”, its child agents (including any that are still running), and all of its records (conversation, stats, cache). This cannot be undone.", "rail.deleteSessionPending": "Deleting session…", "rail.deleteSessionFailed": "Could not delete the session: {message}", "rail.deleteSessionClose": "Close", "rail.deleteSessionCancel": "Cancel", "rail.groupActions": "Actions for {name}", "rail.channelSettings": "Channel settings", "rail.archiveGroup": "Archive all conversations", "rail.archiveGroupConfirm": "Archive all", "rail.archiveGroupDescription": "Archive all {count} conversations for “{name}”. You can restore them later in Settings → Archived.", "rail.archiveGroupPending": "Archiving conversations…", "rail.archiveGroupFailed": "Some conversations could not be archived: {message}", "rail.archiveGroupClose": "Close", "rail.archiveGroupCancel": "Cancel", "rail.empty": "No channel sessions yet. Connect a channel in Settings → IM Assistant, then send the bot a message.", "rail.noTasks": "No web tasks", "rail.ungrouped": "Ungrouped", "rail.tabsAria": "Workspace categories", "rail.tasks": "Tasks", "rail.channels": "Channels",
+        "rail.workspace": "Workspaces", "rail.sessions": "Sessions", "rail.search": "Search", "rail.searchPlaceholder": "Search sessions...", "rail.clearSearch": "Clear search", "rail.filter": "Filter", "rail.group": "Group by", "rail.byWorkspace": "By workspace", "rail.list": "Single list", "rail.sort": "Sort by", "rail.recent": "Recently updated", "rail.showArchived": "Show archived", "rail.onlyArchived": "Archived only", "rail.hideArchived": "Hide archived", "rail.running": "Running", "rail.idle": "Idle", "rail.renameAria": "Rename session", "rail.rename": "Rename", "rail.fork": "Fork session", "rail.pin": "Pin session", "rail.unpin": "Unpin session", "rail.archive": "Archive session", "rail.unarchive": "Restore session", "rail.stopArchive": "Stop and archive", "rail.stopArchiveDescription": "Session “{name}” is still running. Stop it before archiving.", "rail.stopArchiveConfirm": "Stop and archive", "rail.stopArchivePending": "Stopping and archiving…", "rail.stopArchiveGroupDescription": "Some conversations in “{name}” are still running. Stop them before archiving the group.", "rail.archiveFailed": "Archive failed. The session was kept. Retry or check the Host logs.", "rail.deleteSession": "Delete session", "rail.deleteSessionConfirm": "Delete session", "rail.deleteSessionDescription": "This permanently deletes session “{name}”, its child agents (including any that are still running), and all of its records (conversation, stats, cache). This cannot be undone.", "rail.deleteSessionPending": "Deleting session…", "rail.deleteSessionFailed": "Could not delete the session: {message}", "rail.deleteSessionClose": "Close", "rail.deleteSessionCancel": "Cancel", "rail.groupActions": "Actions for {name}", "rail.channelSettings": "Channel settings", "rail.archiveGroup": "Archive all conversations", "rail.archiveGroupConfirm": "Archive all", "rail.archiveGroupDescription": "Archive all {count} conversations for “{name}”. You can restore them later in Settings → Archived.", "rail.archiveGroupPending": "Archiving conversations…", "rail.archiveGroupFailed": "Some conversations could not be archived: {message}", "rail.archiveGroupClose": "Close", "rail.archiveGroupCancel": "Cancel", "rail.empty": "No channel sessions yet. Connect a channel in Settings → IM Assistant, then send the bot a message.", "rail.noTasks": "No web tasks", "rail.ungrouped": "Ungrouped", "rail.tabsAria": "Workspace categories", "rail.tasks": "Tasks", "rail.channels": "Channels",
         "time.now": "now", "time.minutes": "{n}min", "time.hours": "{n}h", "time.days": "{n}d", "time.months": "{n}mo", "time.years": "{n}y", "time.ago": "{t} ago",
         "copy": "Copy", "hover.copied": "Copied",
         "server.unknownChannel": "Unknown channel", "server.channelUnconfigured": "Channel is not configured", "server.sessionMissing": "Session does not exist", "server.accountMissing": "Account does not exist", "server.accountConnectFailed": "Could not connect the account. Check the local logs.", "server.accountReconnectFailed": "Could not reconnect the account. Check the local logs.", "server.selectAccountSettings": "Select a provider, model, workspace, or permission setting", "server.selectModel": "Select a provider and model", "server.selectWorkspace": "Select a workspace", "server.selectPermission": "Select a permission", "server.missingCredentials": "The channel cannot start because credentials are missing", "server.qrUnsupported": "This channel does not support QR setup", "server.qrExpired": "QR code has expired", "server.qrIncomplete": "QR setup was not completed", "server.accessDenied": "Access denied: ask an administrator to approve you in Settings → IM Assistant.",
@@ -244,79 +284,57 @@ window.__ModuleLoader__.load({
     };
     const fallbackT = (key) => key;
     const h = React.createElement;
+    function currentUiLang() {
+      try {
+        if (typeof document !== "undefined" && document.documentElement && document.documentElement.lang) {
+          if (/^en/i.test(document.documentElement.lang)) return "en";
+          if (/^zh/i.test(document.documentElement.lang)) return "zh";
+        }
+      } catch { /* ignore */ }
+      return "zh";
+    }
+    function hostIsDark() {
+      if (typeof document === "undefined") return false;
+      return document.documentElement.hasAttribute("data-ds-dark-theme")
+        || (document.body && document.body.hasAttribute("data-ds-dark-theme") === true);
+    }
+    function useHostDark() {
+      const [dark, setDark] = useState(hostIsDark);
+      useEffect(() => {
+        const update = () => setDark(hostIsDark());
+        update();
+        const observer = new MutationObserver(update);
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
+        if (document.body) observer.observe(document.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
+        return () => observer.disconnect();
+      }, []);
+      return dark;
+    }
+    function AntdProvider({ children, locale }) {
+      const dark = useHostDark();
+      const lang = locale || currentUiLang();
+      return h(ConfigProvider, {
+        locale: lang === "en" ? antdEn : antdZh,
+        theme: {
+          algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+          token: { fontFamily: "inherit" },
+          components: { Button: { borderRadius: 8 } },
+        },
+        button: { autoInsertSpace: false },
+      }, children);
+    }
 
     const CSS = `
-.ima-page{--ima-text:var(--dsw-alias-label-primary,var(--dsh-text,#e6edf3));--ima-muted:var(--dsw-alias-label-tertiary,var(--dsh-text-muted,#8b949e));--ima-line:var(--dsw-alias-border-l2,var(--dsh-border,rgba(255,255,255,.1)));--ima-card:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));--ima-card-hover:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));--ima-ok:var(--dsw-alias-state-success-primary,#3fb950);--ima-warning:var(--dsw-alias-state-warning-primary,#d29922);--ima-danger:var(--dsw-alias-state-error-primary,#f85149);--ima-accent:var(--dsw-alias-brand-primary,#4b7cff);box-sizing:border-box;max-width:none;width:100%;margin:0;padding:0 0 32px;color:var(--ima-text)}
-.ima-deco{display:flex;justify-content:center;align-items:flex-end;gap:10px;min-height:56px;margin:8px 0 14px}
-.ima-bubble{font-size:12px;line-height:1.4;padding:6px 10px;border-radius:12px;max-width:220px;border:1px solid var(--ima-line)}
-.ima-bubble.left{background:rgba(46,160,67,.14);color:#7ee787}
-.ima-bubble.right{background:rgba(255,255,255,.05);color:var(--ima-muted)}
-.ima-avatars{display:flex;align-items:center}
-.ima-avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;border:2px solid #111}
-.ima-avatar.bot{background:#123524;margin-right:-8px;z-index:1}
-.ima-avatar.user{background:#3d3428}
-.ima-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.ima-title{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.4px;white-space:nowrap;text-align:left}
-.ima-sub{margin:12px 0 0;max-width:42em;color:var(--ima-muted);font-size:14px;line-height:22px;text-align:left}
-.ima-chip{position:relative;min-width:0;z-index:1}
-.ima-chip.is-open{z-index:30}
-.ima-chip-btn{display:inline-flex;align-items:center;gap:6px;min-height:28px;height:28px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:var(--ima-muted);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer}
-.ima-chip-btn:hover,.ima-chip.is-open .ima-chip-btn{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08));color:var(--ima-text)}
-.ima-chip-label{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.ima-chip-btn em{width:6px;height:6px;margin-left:2px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.55;flex:none}
-.ima-chip-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:260px;max-height:280px;overflow:auto;padding:6px;border:1px solid var(--ima-line);border-radius:14px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2,#fff));box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,.18))}
-.ima-chip-menu.is-end{left:auto;right:0}
-.ima-chip-row{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:8px 10px;border:0;border-radius:10px;background:transparent;color:inherit;text-align:left;cursor:pointer;font-size:13px}
-.ima-workspace-picker .ima-chip-row{display:grid;grid-template-columns:minmax(0,1fr) 16px;gap:4px 8px;position:relative;padding:10px 12px}.ima-workspace-picker .ima-chip-row-main{grid-column:1;min-width:0}.ima-workspace-picker .ima-chip-row-main>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ima-workspace-picker .ima-chip-row-main>svg{flex:none}.ima-workspace-picker .ima-chip-row-side{grid-column:1;min-width:0;padding-left:24px}.ima-workspace-picker .ima-chip-row-side>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ima-workspace-picker .ima-chip-tick{position:absolute;right:12px;top:16px}.ima-workspace-picker .ima-chip-row-side:empty{display:none}
-.ima-chip-row:hover,.ima-chip-row.is-on{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
-.ima-chip-row-main{display:inline-flex;align-items:center;gap:8px;min-width:0}
-.ima-chip-tick{width:6px;height:12px;border-right:1.6px solid var(--ima-accent);border-bottom:1.6px solid var(--ima-accent);transform:rotate(45deg) translateY(-2px);flex:none}
-.ima-chip-empty{padding:14px 12px;color:var(--ima-muted);font-size:12px;text-align:center}
-.ima-chip svg{flex:none}
-.ima-chip-row.is-kv .ima-chip-row-main{flex:none}
-.ima-chip-row-side{display:inline-flex;align-items:center;gap:8px;color:var(--ima-muted);font-size:12px;min-width:0}
-.ima-chip-next{width:7px;height:7px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(-45deg);opacity:.55;flex:none}
-.ima-chip-split{height:1px;margin:6px 8px;background:var(--ima-line)}
-.ima-chip-effort{color:var(--ima-muted);font-weight:500}
-.ima-model-select .ima-chip-btn{border-radius:24px;gap:4px}
-.ima-model-select .ima-chip-menu{width:max-content;min-width:min(240px,calc(100vw - 32px));max-width:calc(100vw - 32px);box-sizing:border-box;max-height:min(360px,calc(100vh - 96px));padding:4px;border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-base,#fff))}
-.ima-model-select .ima-chip-row{min-height:40px;padding:0 10px;font-size:14px}
-.ima-model-select .ima-chip-row-side>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ima-model-select .ima-chip-row-side{font-size:13px;color:var(--dsw-alias-label-tertiary,var(--ima-muted))}
-.ima-model-group+.ima-model-group{margin-top:4px}
-.ima-model-group-title{position:sticky;top:0;z-index:1;padding:5px 8px 3px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-base,#fff));color:var(--dsw-alias-label-tertiary,var(--ima-muted));font-size:12px;font-weight:500;line-height:18px}
-.ima-model-option{display:flex;width:100%;min-height:38px;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,var(--ima-text));text-align:left;cursor:pointer}
-.ima-model-option:hover,.ima-model-option:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08));outline:none}
-.ima-model-option-copy{display:flex;min-width:0;flex:1;flex-direction:column}.ima-model-name{overflow:hidden;font-size:14px;font-weight:500;line-height:20px;text-overflow:ellipsis;white-space:nowrap}.ima-model-description{overflow:hidden;color:var(--dsw-alias-label-tertiary,var(--ima-muted));font-size:12px;line-height:18px;text-overflow:ellipsis;white-space:nowrap}.ima-model-check{display:grid;flex:0 0 18px;place-items:center;color:var(--dsw-alias-label-primary,var(--ima-text))}
-.ima-chip-dialog{margin-top:10px;padding:12px;border:1px solid var(--ima-line);border-radius:12px;background:var(--dsw-alias-bg-layer-3,transparent)}
-.ima-chip-dialog strong{display:block;margin:0 0 8px;font-size:13px}
-.ima-chip-dialog input{width:100%;min-height:36px;padding:8px 10px;border-radius:8px;border:1px solid var(--ima-line);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill,transparent));color:var(--ima-text);box-sizing:border-box}
-.ima-chip-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
-
-.ima-list{display:flex;flex-direction:column;gap:10px}
-.ima-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:52px;padding:13px 16px;border:1px solid var(--ima-line);border-radius:12px;background:var(--ima-card)}
-.ima-card:hover{background:var(--ima-card-hover)}
-.ima-card-main{min-width:0}
-.ima-name-row{display:flex;align-items:center;gap:10px;min-height:28px}
-.ima-status{margin-left:auto;color:var(--ima-muted);font-size:12px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%}
-.ima-name{font-size:15px;font-weight:650}
-.ima-badge{font-size:11px;line-height:18px;padding:0 7px;border-radius:8px;background:rgba(46,160,67,.16);color:var(--ima-ok)}
-.ima-desc,.ima-meta{margin-top:3px;margin-left:38px;color:var(--ima-muted);font-size:12px;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:17px}
-.ima-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:36px;position:relative}
-.ima-btn{appearance:none;border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.16));background:transparent;color:var(--dsw-alias-label-primary,inherit);border-radius:8px;min-width:72px;min-height:32px;padding:0 12px;font:inherit;font-size:13px;cursor:pointer}
-.ima-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
-.ima-btn:focus-visible,.ima-more:focus-visible,.ima-switch:focus-visible,.ima-link:focus-visible,.ima-x:focus-visible{outline:2px solid var(--ima-accent);outline-offset:2px}
-.ima-btn:disabled{opacity:.5;cursor:not-allowed}
-.ima-btn.primary{background:var(--dsw-alias-button-primary-fill,var(--ima-accent));border-color:transparent;color:var(--dsw-alias-label-primary-foreground,#fff)}
-.ima-more{width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:var(--ima-text);cursor:pointer;font-size:18px;line-height:1}
-.ima-more:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
-.ima-menu{position:absolute;right:0;top:36px;min-width:128px;padding:6px;border:1px solid var(--ima-line);border-radius:10px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2,#fff));z-index:5;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.18))}
-.ima-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--ima-text);padding:8px 10px;border-radius:6px;cursor:pointer;min-height:36px}
-.ima-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
-.ima-switch{width:40px;height:22px;border-radius:11px;border:0;background:var(--ima-ok);position:relative;cursor:pointer;flex:none}
-.ima-switch.off{background:var(--dsw-alias-label-tertiary,#8b8f98)}
-.ima-switch i{position:absolute;top:2px;left:20px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .16s ease}
-.ima-switch.off i{left:2px}
+.ima-page,.ima-account-modal,.ima-bind-modal,.ima-inspector{--ima-text:var(--dsw-alias-label-primary,var(--dsh-text,#e6edf3));--ima-muted:var(--dsw-alias-label-tertiary,var(--dsh-text-muted,#8b949e));--ima-line:var(--dsw-alias-border-l2,var(--dsh-border,rgba(255,255,255,.1)));--ima-card:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));--ima-card-hover:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));--ima-ok:var(--dsw-alias-state-success-primary,#3fb950);--ima-warning:var(--dsw-alias-state-warning-primary,#d29922);--ima-danger:var(--dsw-alias-state-error-primary,#f85149);--ima-accent:var(--dsw-alias-brand-primary,#4b7cff)}
+.ima-page{box-sizing:border-box;max-width:none;width:100%;margin:0;padding:0 0 32px;color:var(--ima-text)}
+.ima-head{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin-bottom:12px}
+.ima-heading h2,.ima-title{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.4px;white-space:nowrap;text-align:left}
+.ima-title-row{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.ima-title-links{display:inline-flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.ima-title-links .ant-btn{flex:none}
+.ima-sub{margin:12px 0 0;max-width:none;color:var(--ima-muted);font-size:14px;line-height:22px;text-align:left}
 .ima-error{color:var(--ima-danger);font-size:12px;margin:0 0 12px}
-.ima-pending{margin:0 0 14px;padding:10px 12px;border:1px solid rgba(210,153,34,.35);border-radius:12px}
+.ima-pending,.ima-page>.ant-alert,.ima-inspector .ant-alert{margin:0 0 12px}
 .ima-pending-row{display:flex;gap:8px;align-items:center;margin-top:8px}
 .ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}.ima-official-tree{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}.ima-native.ima-rail,.ima-rail.dcu-wb{box-sizing:border-box;overflow:hidden}
 .ima-tabs{display:flex;gap:18px;padding:4px 12px 0;border-bottom:1px solid var(--ima-line)}
@@ -324,17 +342,6 @@ window.__ModuleLoader__.load({
 .ima-tab.on{color:var(--ima-text);box-shadow:inset 0 -2px 0 currentColor}
 .ima-tabs{flex:none}
 .ima-rail{flex:1 1 auto;min-height:180px;overflow:auto}
-.ima-item{display:flex;align-items:center;gap:6px;padding:0 8px 0 18px;border-radius:8px;cursor:pointer;font-size:13px;min-height:32px;position:relative}
-.ima-item-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ima-item:hover,.ima-item.on{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
-.ima-sess-actions{display:none;flex:none;align-items:center;gap:2px}
-.ima-item:hover .ima-sess-actions,.ima-item.menu-on .ima-sess-actions{display:flex}
-.ima-sess-btn{width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;font-size:16px;line-height:1}
-.ima-sess-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
-.ima-sess-menu{position:absolute;right:8px;top:30px;min-width:132px;padding:6px;border:1px solid var(--ima-line);border-radius:10px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2,#fff));z-index:8;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.18))}
-.ima-sess-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--ima-text);padding:7px 10px;border-radius:6px;cursor:pointer}
-.ima-sess-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.08))}
-.ima-sess-menu button.danger{color:var(--ima-danger)}
 .ima-rename{flex:1;min-width:0;min-height:28px;padding:2px 8px;border-radius:6px;border:1px solid var(--ima-line);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill,transparent));color:var(--ima-text);font-size:13px}
 .ima-empty{color:var(--ima-muted);font-size:12px;padding:12px 8px}
 .ima-logo{width:28px;height:28px;flex:none;display:block;line-height:0;background:transparent}
@@ -343,57 +350,46 @@ window.__ModuleLoader__.load({
 .ima-logo.sm svg{width:16px;height:16px;transform:none}
 .ima-logo[data-brand="wecom"]{border-radius:6px;box-shadow:inset 0 0 0 1px rgba(15,23,42,.12);overflow:hidden;background:#fff}
 .ima-logo.sm[data-brand="wecom"]{border-radius:4px;box-shadow:none;background:transparent}
-.ima-mask{position:fixed;inset:0;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.45));backdrop-filter:var(--dsw-mask-blur,blur(8px));display:grid;place-items:center;z-index:80;padding:24px}
-.ima-modal{width:min(440px,100%);background:var(--dsw-alias-bg-layer-2,#fff);color:var(--ima-text);border:1px solid var(--ima-line);border-radius:16px;padding:20px 22px 22px;text-align:left;box-shadow:var(--dsw-shadow-lv3,0 16px 48px rgba(0,0,0,.18))}
-.ima-modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.ima-modal-h h2{margin:0;font-size:16px;font-weight:650}
-.ima-x{border:0;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:var(--ima-muted);width:32px;height:32px}
-.ima-seg{display:flex;gap:0;border-bottom:1px solid var(--ima-line);margin:0 -22px 16px;padding:0 22px}
-.ima-seg button{flex:1;border:0;background:transparent;padding:10px 0;font-size:13px;color:var(--ima-muted);cursor:pointer}
-.ima-seg button.on{color:var(--ima-accent);box-shadow:inset 0 -2px 0 var(--ima-accent);font-weight:600}
 .ima-qrbox{display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 0 4px}
 .ima-qrbox img{width:200px;height:200px;background:#fff;border:1px solid var(--ima-line);border-radius:12px;object-fit:contain}
-.ima-bind-ready{display:flex;flex-direction:column;align-items:center;gap:14px;padding:12px 0 4px}.ima-bind-ready .ima-btn{min-width:136px}.ima-bind-status{min-height:40px;display:grid;place-items:center;color:var(--ima-muted);font-size:13px;text-align:center}
+.ima-bind-ready{display:flex;flex-direction:column;align-items:center;gap:14px;padding:12px 0 4px}.ima-bind-ready .ant-btn{min-width:136px}.ima-bind-status{min-height:40px;display:grid;place-items:center;color:var(--ima-muted);font-size:13px;text-align:center}
 .ima-hint{margin:0;color:var(--ima-muted);font-size:13px;text-align:center;line-height:1.6}
-.ima-link{border:0;background:transparent;color:var(--ima-accent);cursor:pointer;font-size:13px;min-height:32px}
 .ima-field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:13px}
-.ima-field input{padding:8px 10px;border-radius:8px;border:1px solid var(--ima-line);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill,transparent));color:var(--ima-text);min-height:36px}
-.ima-radio{display:flex;flex-direction:column;gap:8px;margin:8px 0 14px}
-.ima-radio label{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--ima-text)}
-.ima-radio small{display:block;color:var(--ima-muted);margin-top:2px}
-.ima-ok{color:var(--ima-ok);font-size:14px;text-align:center;padding:24px 0}
-.ima-modal .ima-error{color:var(--ima-danger)}
-.ima-page.ima-account-page{container-type:inline-size;min-width:0;max-width:none;padding-bottom:40px}
-.ima-account-shell{display:block;min-height:0;border:0;border-radius:0;overflow:visible;background:transparent}
-.ima-platforms{display:flex;flex-direction:column;gap:12px;padding:0;border:0;background:transparent}
-.ima-platform{border:1px solid color-mix(in srgb,var(--ima-text) 16%,transparent);border-radius:12px;margin:0;overflow:hidden;background:var(--dsw-alias-bg-layer-1,color-mix(in srgb,var(--ima-text) 4%,transparent))}.ima-platform.open{border-color:color-mix(in srgb,var(--ima-text) 24%,transparent)}
-.ima-platform-head{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:10px 18px;border:0;border-radius:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
-.ima-platform:not(.open):not(.empty) .ima-platform-head:hover{background:var(--ima-card-hover)}.ima-platform.empty .ima-platform-head{cursor:default}.ima-platform-title{min-width:0;flex:1;font-size:14px;font-weight:650}.ima-platform-count{color:var(--ima-muted);font-size:12px;white-space:nowrap}.ima-platform-count.online{color:var(--ima-ok)}.ima-platform-count.offline,.ima-platform-count.partial{color:var(--ima-warning)}
-.ima-platform-add{min-height:34px;padding:0 10px;border:1px solid var(--ima-line);border-radius:8px;background:transparent;color:var(--ima-text);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}.ima-platform-add:hover{background:var(--ima-card-hover)}
-.ima-platform-caret{display:grid;width:18px;height:18px;margin:0 1px;place-items:center;color:var(--ima-muted);transition:transform .15s ease}.ima-platform-caret.empty{visibility:hidden}.ima-platform.open .ima-platform-caret{transform:rotate(90deg)}
-.ima-account-list{display:flex;flex-direction:column;gap:8px;padding:0 14px 14px}.ima-account-row{display:grid;grid-template-columns:minmax(0,1fr) 64px 112px 64px;align-items:center;gap:16px;width:100%;min-height:60px;padding:10px 12px;border:0;border-radius:8px;background:color-mix(in srgb,var(--ima-text) 7%,transparent);color:inherit;text-align:left}.ima-account-row:hover{background:var(--ima-card-hover)}
-.ima-platform-head:focus-visible,.ima-platform-add:focus-visible,.ima-account-row:focus-visible{outline:2px solid var(--ima-accent);outline-offset:2px}
-.ima-account-row .ima-logo,.ima-account-row .ima-logo svg{width:38px;height:38px}.ima-account-row .ima-logo{border-radius:9px}.ima-account-copy{min-width:0;flex:1}.ima-account-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600}.ima-account-id{display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ima-muted);font-size:11px}.ima-account-state{font-size:12px;white-space:nowrap;color:var(--ima-muted)}.ima-account-state.online{color:var(--ima-ok)}.ima-account-state.offline{color:var(--ima-warning)}.ima-account-next{display:grid;width:16px;height:16px;place-items:center;color:var(--ima-text);opacity:.8}.ima-dot{width:7px;height:7px;border-radius:50%;background:var(--ima-warning);flex:none}.ima-dot.on{background:var(--ima-ok)}
-.ima-inspector{padding:22px 24px 26px;min-width:0}.ima-inspector-empty{display:grid;min-height:580px;padding:32px;place-items:center;text-align:center}.ima-inspector-empty-copy{max-width:300px}.ima-inspector-empty-title{margin:0;color:var(--ima-text);font-size:16px;font-weight:650;line-height:24px}.ima-inspector-empty-description{margin:8px 0 0;color:var(--ima-muted);font-size:13px;line-height:20px}.ima-inspector-head{display:flex;align-items:flex-start;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--ima-line)}.ima-inspector-head-copy{min-width:0;flex:1}.ima-inspector-title{margin:1px 0 3px;font-size:17px;line-height:24px}.ima-inspector-title-row{display:flex;align-items:center;gap:12px;min-width:0}.ima-inspector-title-row .ima-inspector-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}.ima-inspector-title-row .ima-inspector-status{flex:none;white-space:nowrap;font-size:11px}.ima-inspector-head-copy>.ima-account-id{margin-top:5px}
-.ima-inspector-status{color:var(--ima-muted);font-size:12px}.ima-inspector-status.ok{color:var(--ima-ok)}
-.ima-form{display:flex;flex-direction:column;gap:16px;padding-top:20px}.ima-control{display:flex;flex-direction:column;gap:7px}.ima-control>span{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-control input,.ima-control select{box-sizing:border-box;width:100%;min-height:44px;padding:0 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font:13px inherit;outline:none}.ima-control input:focus,.ima-control select:focus{border-color:var(--ima-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-control option{background:#202124;color:#f2f3f5}
-.ima-command-permissions{min-width:0;margin:12px 0;padding:12px;border:1px solid var(--ima-line);border-radius:8px}.ima-command-scope{display:grid;gap:8px;margin:12px 0}.ima-command-scope label{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.ima-command-user{display:flex;gap:8px;flex-wrap:wrap}.ima-command-user input{flex:1;min-width:120px}.ima-command-permissions select,.ima-command-permissions input{background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);border:1px solid var(--ima-line);border-radius:6px;padding:6px;max-width:100%}
-.ima-switch-row{display:flex;align-items:center;justify-content:space-between;min-height:48px;padding:0 2px}.ima-switch-copy strong{display:block;font-size:13px}.ima-switch-copy small{display:block;margin-top:2px;color:var(--ima-muted);font-size:11px}
-.ima-connection-check{display:grid;gap:6px;padding:12px;border:1px solid var(--ima-line);border-radius:8px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;color:var(--ima-muted)}.ima-connection-check strong{color:var(--ima-text)}.ima-diagnostic-item{padding:8px 0;border-top:1px solid var(--ima-line)}.ima-connection-check .ima-diagnostic-passed{color:var(--ima-ok)}.ima-connection-check .ima-diagnostic-failed{color:var(--ima-danger)}.ima-connection-check .ima-diagnostic-unverified{color:var(--ima-warning)}
-.ima-inspector-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;padding-top:18px;border-top:1px solid var(--ima-line)}.ima-inspector-actions .ima-btn{flex:none;min-width:0;min-height:36px;padding:0 8px;font-size:12px;white-space:nowrap}.ima-inspector-actions .danger{margin-left:auto;color:var(--ima-danger);border-color:color-mix(in srgb,var(--ima-danger) 35%,transparent)}
-.ima-save-note{min-height:18px;color:var(--ima-muted);font-size:11px}.ima-save-note.ok{color:var(--ima-ok)}
-.ima-modal.ima-account-modal{width:min(560px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto}.ima-setup-section{margin:4px 0 14px;padding-bottom:14px;border-bottom:1px solid var(--ima-line)}
-.ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:7px}.ima-picker-field.wide{grid-column:1/-1}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-account-picker{width:100%}.ima-account-picker .ima-chip-btn{width:100%;height:auto;min-height:44px;justify-content:flex-start;padding:8px 12px;border:1px solid var(--ima-line);border-radius:9px;background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));color:var(--ima-text);font-size:13px;text-align:left}.ima-account-picker .ima-chip-btn:hover,.ima-account-picker.is-open .ima-chip-btn{border-color:var(--ima-accent);background:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));box-shadow:0 0 0 2px color-mix(in srgb,var(--ima-accent) 18%,transparent)}.ima-account-picker .ima-chip-label{flex:1}.ima-account-picker .ima-chip-btn em{margin-left:auto}.ima-account-picker .ima-chip-menu{width:100%;min-width:100%;max-height:min(320px,calc(100vh - 120px))}.ima-account-picker.ima-model-select .ima-chip-btn{border-radius:9px}.ima-account-picker.ima-model-select .ima-chip-menu{width:max-content;min-width:min(100%,calc(100vw - 32px));left:auto;right:0}.ima-account-settings .ima-chip-dialog{grid-column:1/-1;margin-top:0}.ima-picker-note{grid-column:1/-1;color:var(--ima-muted);font-size:11px;line-height:1.5}.ima-picker-note.warning{color:var(--ima-warning)}
+.ima-field .ant-input,.ima-field input{width:100%}
+.ima-page.ima-account-page{container-type:inline-size;min-width:0;max-width:1080px;width:100%;margin:0 auto;padding:0 0 32px}
 .ima-account-shell,.ima-account-shell *{box-sizing:border-box}
-.ima-platforms{min-width:0}
- .ima-account-shell{display:block;min-height:0}.ima-platforms{border-right:0}.ima-platform-head{min-height:56px}.ima-account-row{cursor:default}.ima-account-row .ima-account-settings-button{flex:none;min-width:64px}.ima-account-state{display:flex;align-items:center;gap:7px;margin-left:0}.ima-account-receive{display:flex;align-items:center;gap:8px;flex:none;font-size:12px;color:var(--ima-muted)}.ima-command-permissions{margin:0;padding:0;border:0}.ima-command-permissions .ima-switch-row{padding:14px 0;margin:0;border-bottom:1px solid var(--ima-line)}.ima-modal .ima-inspector{padding:0}.ima-modal{box-sizing:border-box;background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-elevation-prominent);border-radius:16px}.ima-mask{z-index:1000;backdrop-filter:var(--dsw-mask-blur,blur(2px))}
-@media(max-width:620px){.ima-account-settings{grid-template-columns:1fr}.ima-picker-field.wide{grid-column:auto}.ima-platform-head{flex-wrap:wrap;gap:8px;padding:12px}.ima-platform-count{margin-left:auto}.ima-account-list{padding:0 12px 12px}.ima-account-row{flex-wrap:wrap;padding:12px}.ima-account-row>.ima-logo{display:none}.ima-account-copy{flex:1;min-width:100px}.ima-mask{padding:12px}.ima-modal.ima-account-modal{max-height:calc(100dvh - 24px);padding:18px}.ima-account-state{font-size:11px}}
-.ima-platform-head>.ima-logo,.ima-platform-head>.ima-logo svg{width:24px;height:24px;flex:none}.ima-account-receive{justify-content:flex-end}.ima-account-settings-button{justify-self:end}.ima-platform-title{font-weight:600}.ima-account-name{font-weight:500}
-@media(max-width:620px){.ima-account-list{padding:0 12px 12px}.ima-account-row{grid-template-columns:minmax(0,1fr) 64px;gap:10px 12px}.ima-account-copy{grid-column:1;grid-row:1}.ima-account-state{grid-column:1;grid-row:2}.ima-account-receive{grid-column:2;grid-row:1;justify-content:flex-end}.ima-account-receive>span{display:none}.ima-account-settings-button{grid-column:2;grid-row:2}.ima-platform-head{flex-wrap:nowrap}.ima-platform-title{flex:1}.ima-platform-count{font-size:11px}.ima-platform-add{padding:0 8px}}
-@media (prefers-reduced-motion:reduce){.ima-switch i{transition:none}}
+.ima-account-shell{display:block;min-height:0;border:0;border-radius:0;overflow:visible;background:transparent}
+.ima-platforms{display:flex;flex-direction:column;gap:12px;padding:0;border:0;background:transparent;min-width:0}
+.ima-platform{border:1px solid color-mix(in srgb,var(--ima-text) 16%,transparent);border-radius:12px;margin:0;overflow:hidden;background:var(--dsw-alias-bg-layer-1,color-mix(in srgb,var(--ima-text) 4%,transparent))}.ima-platform.open{border-color:color-mix(in srgb,var(--ima-text) 24%,transparent)}
+.ima-platform-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;min-height:56px;padding:10px 16px;border:0;border-radius:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.ima-platform:not(.open):not(.empty) .ima-platform-head:hover{background:var(--ima-card-hover)}.ima-platform.empty .ima-platform-head{cursor:default}
+.ima-platform-head>.ima-logo,.ima-platform-head>.ima-logo svg{width:24px;height:24px}
+.ima-platform-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600}
+.ima-platform-meta{display:inline-flex;align-items:center;gap:10px}
+.ima-platform-count{color:var(--ima-muted);font-size:12px;white-space:nowrap}
+.ima-platform-caret{display:grid;width:18px;height:18px;place-items:center;color:var(--ima-muted);transition:transform .15s ease}.ima-platform-caret.empty{visibility:hidden}.ima-platform.open .ima-platform-caret{transform:rotate(90deg)}
+.ima-account-list{display:flex;flex-direction:column;gap:8px;padding:0 14px 14px}
+.ima-account-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center;gap:12px;width:100%;min-height:48px;padding:10px 12px;border:0;border-radius:8px;background:color-mix(in srgb,var(--ima-text) 7%,transparent);color:inherit;text-align:left}
+.ima-account-row:hover{background:var(--ima-card-hover)}
+.ima-platform-head:focus-visible,.ima-account-row:focus-visible{outline:2px solid var(--ima-accent);outline-offset:2px}
+.ima-account-copy{min-width:0}.ima-account-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500}.ima-account-id{display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ima-muted);font-size:11px}.ima-account-row .ant-tag{margin-inline-end:0}
+.ima-account-receive{display:inline-flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap;font-size:12px;color:var(--ima-muted)}
+.ima-inspector{padding:22px 24px 26px;min-width:0}.ima-inspector-head{display:flex;align-items:flex-start;gap:12px;padding-bottom:18px;border-bottom:1px solid var(--ima-line)}.ima-inspector-head-copy{min-width:0;flex:1}.ima-inspector-title{margin:1px 0 3px;font-size:17px;line-height:24px}.ima-inspector-title-row{display:flex;align-items:center;gap:12px;min-width:0}.ima-inspector-title-row .ima-inspector-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0}.ima-inspector-title-row .ima-inspector-status{flex:none;white-space:nowrap;font-size:11px}.ima-inspector-head-copy>.ima-account-id{margin-top:5px}
+.ima-inspector-status{flex:none}
+.ima-form{display:flex;flex-direction:column;gap:16px;padding-top:20px}
+.ima-command-permissions{min-width:0;margin:0;padding:0;border:0}
+.ima-diagnostic-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.ima-inspector-title-row .ant-tag{margin-inline-end:0}.ima-bind-modal .ant-segmented{width:100%;margin:0 0 16px}.ima-bind-modal .ant-alert{margin-bottom:12px}.ima-connection-check{display:grid;gap:6px;padding:12px;border:1px solid var(--ima-line);border-radius:8px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;color:var(--ima-muted)}.ima-connection-check strong{color:var(--ima-text)}.ima-diagnostic-item{padding:8px 0;border-top:1px solid var(--ima-line)}
+.ima-inspector-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;padding-top:18px;border-top:1px solid var(--ima-line)}.ima-inspector-actions .ant-btn{flex:none;white-space:nowrap}.ima-inspector-actions .ant-btn-dangerous{margin-left:auto}
+.ima-account-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}.ima-account-settings.compact{grid-template-columns:1fr}.ima-account-settings .ant-select{width:100%;min-width:0}.ima-account-settings .ant-select-selector{min-height:36px}
+.ima-picker-field{display:flex;min-width:0;flex-direction:column;gap:6px}.ima-picker-field.wide,.ima-picker-note,.ima-model-effort{grid-column:1/-1}.ima-model-effort{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;min-width:0}.ima-account-settings.compact .ima-model-effort{grid-template-columns:1fr}.ima-picker-label{color:var(--ima-muted);font-size:12px;font-weight:550}.ima-picker-note{color:var(--ima-muted);font-size:11px;line-height:1.5}.ima-picker-note.warning{color:var(--ima-warning)}
+.ima-save-note{color:var(--ima-muted);font-size:11px}.ima-save-note.ok{color:var(--ima-ok)}
+.ima-account-modal .ima-inspector,.ima-bind-modal .ima-setup-section{padding:0}.ima-setup-section{margin:0 0 14px;padding-bottom:14px;border-bottom:1px solid var(--ima-line)}
+.ima-account-picker{width:100%}
+@container (max-width:480px){.ima-account-row{grid-template-columns:minmax(0,1fr) auto auto;gap:8px;padding:10px}.ima-account-receive>span{display:none}.ima-platform-head{padding:10px 12px}.ima-account-list{padding:0 12px 12px}}
+
 `;
 
-    const TITLE_LINK_CSS = ".ima-title-row{display:flex;align-items:center;gap:8px 12px;min-width:0;flex-wrap:wrap}.ima-title-links{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.ima-title-link{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap}.ima-title-link:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.ima-title-link:focus-visible{outline:2px solid var(--dsw-alias-state-success-primary);outline-offset:2px}.ima-title-link svg{flex:none}@media(max-width:720px){.ima-title-row{flex-wrap:wrap}}";
+    const TITLE_LINK_CSS = "@media(max-width:720px){.ima-title-row{flex-wrap:wrap}}";
 
     let styleEl = null;
     const ensureStyle = () => {
@@ -638,10 +634,34 @@ window.__ModuleLoader__.load({
       if (uiWorkspace && typeof uiWorkspace.pickDirectory === "function") return uiWorkspace.pickDirectory();
       if (ctx.workspaces && typeof ctx.workspaces.pickDirectory === "function") return ctx.workspaces.pickDirectory();
     }
-    function archiveHostSession(ctx, id) {
-      const uiWorkspace = probeService(ctx, "uiWorkspace");
-      if (uiWorkspace && typeof uiWorkspace.archiveSession === "function") return uiWorkspace.archiveSession(id);
-      if (ctx.workspaces && typeof ctx.workspaces.archiveSession === "function") return ctx.workspaces.archiveSession(id);
+    function activeSessionRefusal(error) {
+      const reason = error && (error.reason || error);
+      if (reason && reason.name === "WorkspaceArchiveError") return true;
+      const rpc = error && (error.rpcError || error);
+      if (rpc && (rpc.code === "workspace/session-active" || (rpc.details && rpc.details.activity))) return true;
+      return /workspace\/session-active|WorkspaceArchiveError|still running|still active/i.test(String((error && error.message) || ""));
+    }
+    function hostWorkspaceApi(ctx) {
+      return probeService(ctx, "uiWorkspace") || ctx.workspaces || {};
+    }
+    function archiveHostSession(ctx, id, options) {
+      const api = hostWorkspaceApi(ctx);
+      if (typeof api.archiveSession !== "function") return;
+      return options ? api.archiveSession(id, options) : api.archiveSession(id);
+    }
+    function unarchiveHostSession(ctx, id) {
+      const api = hostWorkspaceApi(ctx);
+      if (typeof api.unarchiveSession === "function") return api.unarchiveSession(id);
+      if (typeof api.restoreSession === "function") return api.restoreSession(id);
+    }
+    function pinHostSession(ctx, id, pinned) {
+      const api = hostWorkspaceApi(ctx);
+      if (pinned === false) {
+        if (typeof api.unpinSession === "function") return api.unpinSession(id);
+        if (typeof api.pinSession === "function") return api.pinSession(id, false);
+        return;
+      }
+      if (typeof api.pinSession === "function") return api.pinSession(id, true);
     }
     function forkHostSession(ctx, id) {
       const uiWorkspace = probeService(ctx, "uiWorkspace");
@@ -709,12 +729,7 @@ window.__ModuleLoader__.load({
     };
     let channelSkin = "native";
 
-    function AccountModalLayer({ children, ...events }) {
-      // 离开设置侧栏的层叠上下文，同时保留账号表单使用的主题变量。
-      return ReactDOM.createPortal(h("div", { ...events, className: "ima-page ima-mask" }, children), document.body);
-    }
-
-    function BindModal({ ch, onClose, onConnected, catalog, permissions, agentPresets, workspaces, defaults, createWorkspace, pickDirectory, modelT, permissionT, t = fallbackT }) {
+    function BindModal({ ch, onClose, onConnected, catalog, permissions, agentPresets, workspaces, defaults, createWorkspace, pickDirectory, modelT, permissionT, presetT, t = fallbackT }) {
       const hasQr = ch.kind === "qr" || ch.kind === "qr-or-credentials";
       const hasManual = ch.kind === "credentials" || ch.kind === "qr-or-credentials";
       const [tab, setTab] = useState(hasQr ? "qr" : "manual");
@@ -838,127 +853,83 @@ window.__ModuleLoader__.load({
       const src = qrStarted ? qrSrc(pairing) : "";
       const remain = qrStarted && pairing && pairing.remainingSeconds;
 
-      return h(AccountModalLayer, { role: "presentation", onMouseDown: (event) => event.stopPropagation(), onClick: (event) => { event.stopPropagation(); close(); }, onKeyDown: (event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } } },
-        h("div", { className: "ima-modal ima-account-modal", onClick: (e) => e.stopPropagation() },
-          h("div", { className: "ima-modal-h" },
-            h("h2", null, t("bind.title", { channel: channelLabel(ch, t) })),
-            h("button", { className: "ima-x", disabled: saving, onClick: close, "aria-label": t("bind.close") }, "×"),
-          ),
-          hasQr && hasManual && h("div", { className: "ima-seg" },
-            h("button", { className: tab === "qr" ? "on" : "", disabled: saving, onClick: () => switchTab("qr") }, t("bind.quick")),
-            h("button", { className: tab === "manual" ? "on" : "", disabled: saving, onClick: () => switchTab("manual") }, t("bind.manual")),
-          ),
-          error && h("div", { className: "ima-error" }, error),
-          success && h("div", { className: "ima-ok" }, success),
-          h("div", { className: "ima-setup-section" },
-            h(AccountSettingsPicker, {
-              value: settings,
-              onChange: (patch) => setSettings((current) => ({ ...current, ...patch })),
-              catalog,
-              permissions,
-              agentPresets,
-              workspaces,
-              createWorkspace,
-              pickDirectory,
-              modelT,
-              permissionT,
-              showAutoNameNote: true,
-              t,
-            }),
-            h(CommandPermissionSettings, { value: settings.commandPermissions, onSave: commandPermissions => setSettings(current => ({ ...current, commandPermissions })), t }),
-          ),
-          tab === "qr" && hasQr && (
-            status === "success"
-              ? h("div", { className: "ima-ok" }, t("bind.success"))
-              : status === "saving"
-                ? h("div", { className: "ima-bind-status" }, t("bind.saving"))
-              : src
-                ? h("div", { className: "ima-qrbox" },
-                  h("p", { className: "ima-hint" }, hintOf(ch, t)),
-                  h("img", { src, alt: t("bind.qrAlt", { channel: channelLabel(ch, t) }) }),
-                  remain > 0 && h("p", { className: "ima-hint" }, t("bind.expire", { time: Math.floor(remain / 60) + ":" + String(remain % 60).padStart(2, "0") })),
-                  status === "scanned" && h("p", { className: "ima-hint" }, t("bind.scanned")),
-                  (status === "expired" || status === "failed") && h("p", { className: "ima-error" }, serverText(pairing && pairing.error, t) || t("bind.retry")),
-                  h("button", { className: "ima-btn", disabled: busy, onClick: () => startQr(true) }, t("bind.refresh")),
-                )
-                : h("div", { className: "ima-bind-ready" },
-                    h("p", { className: "ima-hint" }, hintOf(ch, t)),
-                    (busy || status === "starting") && h("div", { className: "ima-bind-status" }, t("bind.generating")),
-                    (status === "expired" || status === "failed") && h("div", { className: "ima-error" }, serverText(pairing && pairing.error, t) || t("bind.retry")),
-                    h("button", { className: "ima-btn primary", disabled: busy || !settings.cwd || !settings.provider || !settings.model || !settings.permission, onClick: () => startQr(qrStarted) }, busy ? t("bind.generating") : qrStarted ? t("bind.refresh") : t("action.generateQr")),
-                  )
-          ),
-          tab === "manual" && hasManual && h("div", null,
-            ...ch.fields.map((f) => h("label", { key: f.key, className: "ima-field" },
-              fieldLabel(ch, f, t),
-              h("input", {
-                type: f.secret ? "password" : "text",
-                value: draft[f.key] || "",
-                placeholder: fieldLabel(ch, f, t),
-                onChange: (e) => setDraft({ ...draft, [f.key]: e.target.value }),
-              }),
-            )),
-            h("div", { style: { display: "flex", justifyContent: "flex-end" } },
-              h("button", { className: "ima-btn primary", disabled: busy, onClick: saveManual }, busy ? t("action.saving") : t("action.confirm")),
-            ),
-          ),
-        ),
-      );
-    }
-
-    function ChannelCard({ ch, busy, onAction, onConfigure, t = fallbackT }) {
-      const [menu, setMenu] = useState(false);
-      const menuRoot = useRef(null);
-      useEffect(() => {
-        if (!menu) return undefined;
-        const close = (event) => {
-          if (menuRoot.current && menuRoot.current.contains(event.target)) return;
-          setMenu(false);
-        };
-        const onKey = (event) => {
-          if (event.key === "Escape") setMenu(false);
-        };
-        document.addEventListener("pointerdown", close, true);
-        document.addEventListener("keydown", onKey);
-        return () => {
-          document.removeEventListener("pointerdown", close, true);
-          document.removeEventListener("keydown", onKey);
-        };
-      }, [menu]);
-
-      const configuring = !ch.connected;
-      const meta = configuring ? t("status.unconfigured") : (ch.status && ch.status !== "未连接" ? serverText(ch.status, t) : t("status.connected"));
-      const right = h("div", { className: "ima-actions", ref: menuRoot },
-        configuring
-          ? h("button", { className: "ima-btn", disabled: busy, onClick: onConfigure }, busy ? t("status.connecting") : t("action.configure"))
-          : [
-            h("button", { key: "more", className: "ima-more", "aria-label": t("action.more", { channel: channelLabel(ch, t) }), "aria-expanded": menu, onClick: (event) => { event.stopPropagation(); setMenu(!menu); } }, "…"),
-            menu && h("div", { key: "menu", className: "ima-menu", "data-ima-card-menu": "", onClick: (event) => event.stopPropagation() },
-              h("button", { onClick: () => { setMenu(false); onConfigure(); } }, t("action.reconnect")),
-              h("button", { onClick: () => { setMenu(false); onAction(ch.id, "disconnect"); } }, t("action.disconnect")),
-              h("button", { onClick: () => { setMenu(false); onAction(ch.id, "remove"); } }, t("action.removeConfig")),
-            ),
-            h("button", {
-              key: "sw",
-              className: ch.receiveEnabled ? "ima-switch" : "ima-switch off",
-              role: "switch",
-              "aria-checked": ch.receiveEnabled,
-              "aria-label": t("action.receive"),
-              onClick: () => onAction(ch.id, "receive", { receiveEnabled: !ch.receiveEnabled }),
-            }, h("i")),
+      return h(Modal, {
+        open: true,
+        className: "ima-bind-modal",
+        title: t("bind.title", { channel: channelLabel(ch, t) }),
+        width: 560,
+        zIndex: 1100,
+        destroyOnHidden: true,
+        maskClosable: !saving,
+        keyboard: false,
+        onCancel: close,
+        footer: tab === "manual" && hasManual
+          ? [h(Button, { key: "save", type: "primary", disabled: busy, onClick: saveManual }, busy ? t("action.saving") : t("action.confirm"))]
+          : null,
+      },
+        hasQr && hasManual && h(Segmented, {
+          block: true,
+          value: tab,
+          disabled: saving,
+          options: [
+            { value: "qr", label: t("bind.quick") },
+            { value: "manual", label: t("bind.manual") },
           ],
-      );
-
-      return h("div", { className: "ima-card", title: channelLabel(ch, t) },
-        h("div", { className: "ima-card-main" },
-          h("div", { className: "ima-name-row" },
-            h(Logo, { id: ch.id }),
-            h("span", { className: "ima-name" }, channelLabel(ch, t)),
-            ch.connected && h("span", { className: "ima-badge" }, t("status.connected")),
-            h("span", { className: "ima-status" }, meta),
-          ),
+          onChange: (next) => switchTab(next),
+        }),
+        error && h(Alert, { type: "error", showIcon: true, message: error }),
+        success && h(Alert, { type: "success", showIcon: true, message: success }),
+        h("div", { className: "ima-setup-section" },
+          h(AccountSettingsPicker, {
+            value: settings,
+            onChange: (patch) => setSettings((current) => ({ ...current, ...patch })),
+            catalog,
+            permissions,
+            agentPresets,
+            workspaces,
+            createWorkspace,
+            pickDirectory,
+            modelT,
+            permissionT,
+            presetT,
+            compact: true,
+            showAutoNameNote: true,
+            t,
+          }),
+          h(CommandPermissionSettings, { value: settings.commandPermissions, onSave: commandPermissions => setSettings(current => ({ ...current, commandPermissions })), t }),
         ),
-        right,
+        tab === "qr" && hasQr && (
+          status === "success"
+            ? h(Alert, { type: "success", showIcon: true, message: t("bind.success") })
+            : status === "saving"
+              ? h("div", { className: "ima-bind-status" }, t("bind.saving"))
+            : src
+              ? h("div", { className: "ima-qrbox" },
+                h("p", { className: "ima-hint" }, hintOf(ch, t)),
+                h("img", { src, alt: t("bind.qrAlt", { channel: channelLabel(ch, t) }) }),
+                remain > 0 && h("p", { className: "ima-hint" }, t("bind.expire", { time: Math.floor(remain / 60) + ":" + String(remain % 60).padStart(2, "0") })),
+                status === "scanned" && h("p", { className: "ima-hint" }, t("bind.scanned")),
+                (status === "expired" || status === "failed") && h("p", { className: "ima-error" }, serverText(pairing && pairing.error, t) || t("bind.retry")),
+                h(Button, { disabled: busy, onClick: () => startQr(true) }, t("bind.refresh")),
+              )
+              : h("div", { className: "ima-bind-ready" },
+                  h("p", { className: "ima-hint" }, hintOf(ch, t)),
+                  (busy || status === "starting") && h("div", { className: "ima-bind-status" }, t("bind.generating")),
+                  (status === "expired" || status === "failed") && h("div", { className: "ima-error" }, serverText(pairing && pairing.error, t) || t("bind.retry")),
+                  h(Button, { type: "primary", disabled: busy || !settings.cwd || !settings.provider || !settings.model || !settings.permission, onClick: () => startQr(qrStarted) }, busy ? t("bind.generating") : qrStarted ? t("bind.refresh") : t("action.generateQr")),
+                )
+        ),
+        tab === "manual" && hasManual && h("div", null,
+          ...ch.fields.map((f) => h("label", { key: f.key, className: "ima-field" },
+            fieldLabel(ch, f, t),
+            h(Input, {
+              type: f.secret ? "password" : "text",
+              value: draft[f.key] || "",
+              placeholder: fieldLabel(ch, f, t),
+              onChange: (e) => setDraft({ ...draft, [f.key]: e.target.value }),
+            }),
+          )),
+        ),
       );
     }
 
@@ -972,6 +943,21 @@ window.__ModuleLoader__.load({
       const builtIn = BUILT_IN_PERMISSION_LABELS.get(option.value);
       if (builtIn && (option.name === option.value || option.name === builtIn[1])) return t(builtIn[0]);
       return option.name || option.value;
+    }
+
+    // 与宿主 settings.agentPreset 一致：内置预设没有自报名称时走官方词条。
+    const BUILT_IN_PRESET_KEYS = {
+      standard: { name: "presetStandardName", description: "presetStandardDescription" },
+      ptc: { name: "presetPtcName", description: "presetPtcDescription" },
+      minimal: { name: "presetMinimalName", description: "presetMinimalDescription" },
+      cordis: { name: "presetCordisName", description: "presetCordisDescription" },
+    };
+    function presetDisplayText(preset, presetT) {
+      const keys = BUILT_IN_PRESET_KEYS[preset.id];
+      if (keys && (preset.name === undefined || preset.name === "" || preset.name === preset.id)) {
+        return { name: presetT(keys.name), description: presetT(keys.description) };
+      }
+      return { name: preset.name || preset.id, description: preset.description };
     }
     function FolderIcon() {
       return h("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", "aria-hidden": "true" },
@@ -992,79 +978,12 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function ChipMenu(props) {
-      const root = useRef(null);
-      useEffect(() => {
-        if (!props.open) return undefined;
-        const close = (event) => {
-          if (root.current && root.current.contains(event.target)) return;
-          props.onToggle(false);
-        };
-        document.addEventListener("mousedown", close);
-        return () => document.removeEventListener("mousedown", close);
-      }, [props.open]);
-      return h("div", { className: "ima-chip" + (props.className ? " " + props.className : "") + (props.open ? " is-open" : ""), ref: root },
-        h("button", {
-          type: "button",
-          className: "ima-chip-btn",
-          title: props.title || undefined,
-          "aria-label": props.ariaLabel,
-          "aria-expanded": Boolean(props.open),
-          onMouseDown: (event) => event.stopPropagation(),
-          onClick: () => props.onToggle(!props.open),
-        },
-          props.icon,
-          h("span", { className: "ima-chip-label" }, props.label),
-          props.suffix && h("span", { className: "ima-chip-effort" }, props.suffix),
-          h("em"),
-        ),
-        props.open && h("div", { className: "ima-chip-menu" + (props.menuClassName ? " " + props.menuClassName : "") + (props.align === "end" ? " is-end" : ""), role: "menu", "aria-label": props.menuAria }, props.children),
-      );
-    }
-
-    function ModelChoiceRow(props) {
-      return h("button", {
-        type: "button",
-        className: "ima-model-option",
-        role: "menuitemradio",
-        "aria-checked": props.active,
-        onClick: props.onClick,
-      },
-        h("span", { className: "ima-model-option-copy" },
-          h("span", { className: "ima-model-name" }, props.label),
-          props.description && h("span", { className: "ima-model-description" }, props.description),
-        ),
-        h("span", { className: "ima-model-check" }, props.active && h("i", { className: "ima-chip-tick" })),
-      );
-    }
-
-    function ChipRow(props) {
-      return h("button", {
-        type: "button",
-        className: "ima-chip-row" + (props.active ? " is-on" : "") + (props.kv ? " is-kv" : ""),
-        role: "menuitem",
-        title: props.hint || undefined,
-        onClick: props.onClick,
-      },
-        h("span", { className: "ima-chip-row-main" },
-          props.icon,
-          h("span", null, props.label),
-        ),
-        h("span", { className: "ima-chip-row-side" },
-          props.hint && h("span", null, props.hint),
-          props.active && !props.chevron && h("i", { className: "ima-chip-tick" }),
-          props.chevron && h("i", { className: "ima-chip-next" }),
-        ),
-      );
-    }
-
     function AccountSettingsPicker(props) {
       const t = props.t || fallbackT;
       const modelT = props.modelT || ((key) => key);
       const permissionT = props.permissionT || ((key) => key);
+      const presetT = props.presetT || ((key) => key);
       const value = props.value || {};
-      const [open, setOpen] = useState("");
-      const [modelPane, setModelPane] = useState("root");
       const [adding, setAdding] = useState(false);
       const [addPath, setAddPath] = useState("");
       const [addBusy, setAddBusy] = useState(false);
@@ -1124,12 +1043,10 @@ window.__ModuleLoader__.load({
           update({ cwd: cwdPath });
           setAdding(false);
           setAddPath("");
-          setOpen("");
         }).catch((error) => setHint((error && error.message) || t("error.addWorkspace")))
           .finally(() => setAddBusy(false));
       };
       const onAddWorkspace = () => {
-        setOpen("");
         setHint("");
         setAdding(true);
         setAddPath("");
@@ -1141,7 +1058,6 @@ window.__ModuleLoader__.load({
         }
       };
       const selectPermission = (next) => {
-        setOpen("");
         if (next === permission) return;
         if (next === "danger-full-access") {
           setFullAccessAcknowledged(false);
@@ -1156,147 +1072,135 @@ window.__ModuleLoader__.load({
       );
 
       return h("div", { className: "ima-account-settings" + (props.compact ? " compact" : "") },
-        field("workspace", props.workspaceLabel || t("account.workspace"), h(ChipMenu, {
-          open: open === "workspace",
-          onToggle: (next) => setOpen(next ? "workspace" : ""),
-          icon: h(FolderIcon),
-          label: (workspace && (workspace.title || workspace.path)) || cwd || t("account.selectWorkspace"),
-          ariaLabel: props.workspaceLabel || t("account.workspace"),
+        field("workspace", props.workspaceLabel || t("account.workspace"), h(Select, {
           className: "ima-account-picker ima-workspace-picker",
-        },
-          items.length === 0 && h("div", { className: "ima-chip-empty" }, t("composer.noWorkspaces")),
-          ...items.map((item) => h(ChipRow, {
-            key: item.path,
-            icon: h(FolderIcon),
-            label: item.title || item.path,
-            hint: item.title ? item.path : "",
-            active: item.path === cwd,
-            onClick: () => { update({ cwd: item.path }); setOpen(""); },
-          })),
-          h("div", { className: "ima-chip-split" }),
-          h(ChipRow, { icon: h(PlusIcon), label: t("composer.addWorkspace"), onClick: onAddWorkspace }),
-        ), true),
-        adding && h("div", { className: "ima-chip-dialog" },
-          h("strong", null, t("composer.addWorkspace")),
-          h("input", { autoFocus: true, value: addPath, placeholder: t("composer.workspacePath"), "aria-label": t("composer.workspacePath"), onChange: (event) => setAddPath(event.target.value) }),
-          h("div", { className: "ima-chip-dialog-actions" },
-            h("button", { className: "ima-btn", onClick: () => { setAdding(false); setAddPath(""); } }, t("action.cancel")),
-            h("button", { className: "ima-btn primary", disabled: addBusy || !addPath.trim(), onClick: () => addWorkspace(addPath) }, addBusy ? t("action.adding") : t("action.confirm")),
+          value: cwd || undefined,
+          placeholder: t("account.selectWorkspace"),
+          "aria-label": props.workspaceLabel || t("account.workspace"),
+          popupMatchSelectWidth: false,
+          options: items.map((item) => ({ value: item.path, label: item.title || item.path })),
+          notFoundContent: t("composer.noWorkspaces"),
+          onChange: (next) => update({ cwd: next }),
+          dropdownRender: (menu) => h("div", null,
+            menu,
+            h("div", { style: { height: 1, margin: "6px 8px", background: "var(--dsw-alias-border-l2,rgba(255,255,255,.1))" } }),
+            h(Button, { type: "link", icon: h(PlusIcon), onClick: onAddWorkspace }, t("composer.addWorkspace")),
           ),
+        })),
+        field("agentPreset", presetT("nav"), h(Select, {
+          className: "ima-account-picker",
+          value: value.agentPreset || undefined,
+          "aria-label": presetT("nav"),
+          options: (props.agentPresets || []).map((item) => {
+            const copy = presetDisplayText(item, presetT);
+            return {
+              value: item.id,
+              label: copy.name,
+              disabled: !!item.broken,
+              title: item.broken ? t("account.presetUnavailable") : copy.description,
+            };
+          }),
+          onChange: (next) => update({ agentPreset: next }),
+        })),
+        h("div", { key: "model-effort", className: "ima-model-effort" },
+          field("model", modelT("menu.model"), h(Select, {
+            className: "ima-account-picker ima-model-select",
+            value: currentModel ? currentModel.value : undefined,
+            placeholder: t("account.selectModel"),
+            title: currentModel && currentModel.label,
+            "aria-label": modelT("trigger.selectAria"),
+            popupMatchSelectWidth: false,
+            options: modelGroups.map((group) => ({
+              label: group.name,
+              options: group.models.map((item) => ({ value: item.value, label: item.label })),
+            })),
+            notFoundContent: modelT("empty.models"),
+            onChange: (next) => {
+              const item = models.find((entry) => entry.value === next);
+              if (!item) return;
+              update({ provider: item.provider, model: item.model, reasoningEffort: (item.reasoning && item.reasoning.defaultEffort) || "" });
+            },
+          })),
+          reasoning && field("effort", modelT("menu.effort"), h(Select, {
+            className: "ima-account-picker",
+            value: effectiveEffort,
+            "aria-label": modelT("menu.effort"),
+            options: efforts.map((item) => ({ value: item.id, label: item.name })),
+            onChange: (next) => update({ provider, model, reasoningEffort: next }),
+          })),
         ),
-        field("agentPreset", t("account.agentPreset"), h(ChipMenu, {
-          open: open === "agentPreset",
-          onToggle: next => setOpen(next ? "agentPreset" : ""),
-          label: ((props.agentPresets || []).find(item => item.id === value.agentPreset) || {}).name || value.agentPreset || "standard",
-          ariaLabel: t("account.agentPreset"), className: "ima-account-picker",
-        },
-          ...(props.agentPresets || []).map(item => h(ChipRow, {
-            key: item.id, label: item.name || item.id, hint: item.broken ? t("account.presetUnavailable") : item.description,
-            active: item.id === value.agentPreset,
-            onClick: () => { if (!item.broken) { update({ agentPreset: item.id }); setOpen(""); } },
-          })),
-        )),
-        field("model", modelT("menu.model"), h(ChipMenu, {
-          open: open === "model",
-          onToggle: (next) => { setOpen(next ? "model" : ""); if (next) setModelPane("root"); },
-          icon: null,
-          label: (currentModel && currentModel.label) || t("account.selectModel"),
-          title: currentModel && currentModel.label,
-          suffix: effortLabel,
-          ariaLabel: modelT("trigger.selectAria"),
-          menuAria: modelT("menu.aria"),
-          className: "ima-account-picker ima-model-select",
-          menuClassName: "ima-model-menu",
-        },
-          modelPane === "root" && [
-            h(ChipRow, { key: "model", kv: true, label: modelT("menu.model"), hint: (currentModel && currentModel.label) || t("account.selectModel"), chevron: true, onClick: () => setModelPane("model") }),
-            reasoning && h(ChipRow, { key: "effort", kv: true, label: modelT("menu.effort"), hint: effortLabel || modelT("effort.providerDefault"), chevron: true, onClick: () => setModelPane("effort") }),
+        field("permission", t("composer.permission"), h(Select, {
+          className: "ima-account-picker",
+          value: permission || undefined,
+          placeholder: t("account.selectPermission"),
+          "aria-label": t("composer.permission"),
+          options: permissionOptions.map((item) => ({ value: item.value, label: item.label })),
+          onChange: selectPermission,
+        })),
+        field("private", t("account.privateAccess"), h(Select, {
+          className: "ima-account-picker",
+          value: privateAccess,
+          "aria-label": t("account.privateAccess"),
+          options: [
+            { value: "approved", label: t("account.privateApproved") },
+            { value: "all", label: t("account.privateAll") },
           ],
-          modelPane === "model" && (models.length === 0
-            ? h("div", { className: "ima-chip-empty" }, modelT("empty.models"))
-            : modelGroups.map((group) => h("section", { key: group.id, className: "ima-model-group", role: "group", "aria-label": group.name },
-                h("div", { className: "ima-model-group-title" }, group.name),
-                ...group.models.map((item) => h(ModelChoiceRow, {
-                  key: item.value,
-                  label: item.label,
-                  active: item.provider === provider && item.model === model,
-                  onClick: () => {
-                    const nextEffort = (item.reasoning && item.reasoning.defaultEffort) || "";
-                    update({ provider: item.provider, model: item.model, reasoningEffort: nextEffort });
-                    setOpen("");
-                  },
-                })),
-              ))),
-          modelPane === "effort" && efforts.map((item) => h(ModelChoiceRow, {
-            key: item.id,
-            label: item.name,
-            description: item.description,
-            active: item.id === effectiveEffort,
-            onClick: () => { update({ provider, model, reasoningEffort: item.id }); setOpen(""); },
-          })),
-        )),
-        field("permission", t("composer.permission"), h(ChipMenu, {
-          open: open === "permission",
-          onToggle: (next) => setOpen(next ? "permission" : ""),
-          icon: h(ShieldIcon),
-          label: (currentPermission && currentPermission.label) || t("account.selectPermission"),
-          ariaLabel: t("composer.permission"),
-          className: "ima-account-picker",
-        },
-          ...permissionOptions.map((item) => h(ChipRow, {
-            key: item.value,
-            icon: h(ShieldIcon),
-            label: item.label,
-            active: item.value === permission,
-            onClick: () => selectPermission(item.value),
-          })),
-        )),
-        field("private", t("account.privateAccess"), h(ChipMenu, {
-          open: open === "private",
-          onToggle: (next) => setOpen(next ? "private" : ""),
-          icon: h(ShieldIcon),
-          label: privateAccess === "all" ? t("account.privateAll") : t("account.privateApproved"),
-          ariaLabel: t("account.privateAccess"),
-          className: "ima-account-picker",
-        },
-          h(ChipRow, { icon: h(ShieldIcon), label: t("account.privateApproved"), active: privateAccess === "approved", onClick: () => { update({ privateAccess: "approved" }); setOpen(""); } }),
-          h(ChipRow, { icon: h(ShieldIcon), label: t("account.privateAll"), active: privateAccess === "all", onClick: () => { update({ privateAccess: "all" }); setOpen(""); } }),
-        )),
+          onChange: (next) => update({ privateAccess: next }),
+        })),
         h("div", { className: "ima-picker-note" }, t("account.presetNote")),
         privateAccess === "all" && h("div", { className: "ima-picker-note warning" }, t("settings.publicChatNotice")),
         hint && h("div", { className: "ima-picker-note" }, hint),
         props.showAutoNameNote && h("div", { className: "ima-picker-note" }, t("account.autoNameNote")),
-        h(RiskConfirmation, {
+        h(Modal, {
+          open: adding,
+          title: t("composer.addWorkspace"),
+          onCancel: () => { setAdding(false); setAddPath(""); },
+          onOk: () => addWorkspace(addPath),
+          okButtonProps: { disabled: addBusy || !addPath.trim() },
+          confirmLoading: addBusy,
+          okText: addBusy ? t("action.adding") : t("action.confirm"),
+          cancelText: t("action.cancel"),
+        },
+          h(Input, { autoFocus: true, value: addPath, placeholder: t("composer.workspacePath"), "aria-label": t("composer.workspacePath"), onChange: (event) => setAddPath(event.target.value) }),
+        ),
+        h(Modal, {
           open: confirmingFullAccess,
           title: permissionT("confirm.title"),
-          description: permissionT("confirm.description"),
-          acknowledgeLabel: permissionT("confirm.acknowledge"),
-          cancelLabel: permissionT("confirm.cancel"),
-          confirmLabel: permissionT("confirm.enable"),
-          acknowledged: fullAccessAcknowledged,
-          onAcknowledgedChange: setFullAccessAcknowledged,
+          keyboard: false,
+          maskClosable: false,
+          okText: permissionT("confirm.enable"),
+          cancelText: permissionT("confirm.cancel"),
+          okButtonProps: { disabled: !fullAccessAcknowledged },
           onCancel: () => { setFullAccessAcknowledged(false); setConfirmingFullAccess(false); },
-          onConfirm: () => {
+          onOk: () => {
+            if (!fullAccessAcknowledged) return;
             update({ permission: "danger-full-access" });
             setFullAccessAcknowledged(false);
             setConfirmingFullAccess(false);
           },
-        }),
+        },
+          h("p", null, permissionT("confirm.description")),
+          h(Checkbox, { checked: fullAccessAcknowledged, onChange: (event) => setFullAccessAcknowledged(event.target.checked) }, permissionT("confirm.acknowledge")),
+        ),
       );
     }
 
-    // 与账号配置共用下拉组件，私聊与群聊分别保存。
+    // 与账号配置共用两列网格和 Ant 下拉，私聊与群聊分别保存。
     function CommandPermissionSettings({ value, onSave, t }) {
-      const [open, setOpen] = useState("");
       const policy = value || { dm: { enabled: true, users: [] }, group: { enabled: true, users: [] } };
       return h("div", { className: "ima-command-permissions ima-account-settings" },
         ...["dm", "group"].map(kind => h("div", { key: kind, className: "ima-picker-field" },
           h("span", { className: "ima-picker-label" }, t("command." + kind)),
-          h(ChipMenu, { open: open === kind, onToggle: next => setOpen(next ? kind : ""), label: t(policy[kind].enabled ? "command.enabled" : "command.disabled"), ariaLabel: t("command." + kind), className: "ima-account-picker" },
-            ...[true, false].map(enabled => h(ChipRow, { key: String(enabled), label: t(enabled ? "command.enabled" : "command.disabled"), active: policy[kind].enabled === enabled, onClick: () => {
-              setOpen("");
-              return onSave({ dm: { enabled: policy.dm.enabled, users: [] }, group: { enabled: policy.group.enabled, users: [] }, [kind]: { enabled, users: [] } });
-            } }))))));
+          h(Select, {
+            className: "ima-account-picker",
+            value: policy[kind].enabled ? "on" : "off",
+            "aria-label": t("command." + kind),
+            options: [
+              { value: "on", label: t("command.enabled") },
+              { value: "off", label: t("command.disabled") },
+            ],
+            onChange: (next) => onSave({ dm: { enabled: policy.dm.enabled, users: [] }, group: { enabled: policy.group.enabled, users: [] }, [kind]: { enabled: next === "on", users: [] } }),
+          }))));
     }
 
     function AccountConnectionCheck({ account, t }) {
@@ -1305,7 +1209,10 @@ window.__ModuleLoader__.load({
         h("strong", null, t("diagnostic.title")),
         h("div", null, t("connection.checkedAt") + ": ", h("time", { dateTime: diagnostics.checkedAt }, new Date(diagnostics.checkedAt).toLocaleString(t("settings.label") === "IM Assistant" ? "en-US" : "zh-CN"))),
         diagnostics.checks.map(item => h("div", { className: "ima-diagnostic-item", key: item.id },
-          h("strong", { className: "ima-diagnostic-" + item.status }, t("diagnostic." + item.id) + " · " + t("diagnostic." + item.status)),
+          h("div", { className: "ima-diagnostic-head" },
+            h("strong", null, t("diagnostic." + item.id)),
+            h(Tag, { color: item.status === "passed" ? "success" : item.status === "failed" ? "error" : "warning" }, t("diagnostic." + item.status)),
+          ),
           h("div", null, t("diagnostic." + item.reason)),
           h("small", null, [item.durationMs == null ? null : item.durationMs + " ms", item.httpStatus == null ? null : "HTTP " + item.httpStatus, item.platformCode == null ? null : "Code " + item.platformCode].filter(Boolean).join(" · ")),
         )),
@@ -1314,7 +1221,7 @@ window.__ModuleLoader__.load({
       );
     }
 
-    function AccountInspector({ account, catalog, permissions, agentPresets, workspaces, createWorkspace, pickDirectory, modelT, permissionT, t, onAction, onSave, busy }) {
+    function AccountInspector({ account, catalog, permissions, agentPresets, workspaces, createWorkspace, pickDirectory, modelT, permissionT, presetT, t, onAction, onSave, busy }) {
       const [draft, setDraft] = useState(account);
       const [note, setNote] = useState("");
       const [checkResult, setCheckResult] = useState(null);
@@ -1393,7 +1300,10 @@ window.__ModuleLoader__.load({
           h("div", { className: "ima-inspector-head-copy" },
             h("div", { className: "ima-inspector-title-row" },
             h("h3", { className: "ima-inspector-title" }, accountLabel(account, t)),
-            h("div", { className: account.connectionState === "connected" ? "ima-inspector-status ok" : "ima-inspector-status" }, "● " + t(account.receiveConfigured === false ? "connection.paused" : "connection." + (account.connectionState || "unknown"))),
+            h("div", { className: account.connectionState === "connected" ? "ima-inspector-status ok" : "ima-inspector-status" }, h(Tag, {
+              color: account.receiveConfigured === false ? "warning" : account.connectionState === "connected" ? "success" : "warning",
+              bordered: false,
+            }, t(account.receiveConfigured === false ? "connection.paused" : "connection." + (account.connectionState || "unknown")))),
             ),
             h("div", { className: "ima-account-id" }, account.id),
           ),
@@ -1410,19 +1320,28 @@ window.__ModuleLoader__.load({
             pickDirectory,
             modelT,
             permissionT,
-            compact: false,
+            presetT,
             workspaceLabel: t("account.currentWorkspace"),
             t,
           }),
           h(CommandPermissionSettings, { value: draft.commandPermissions, onSave: commandPermissions => save({ commandPermissions }), t }),
-          h("div", { className: note === "status.saved" ? "ima-save-note ok" : "ima-save-note" }, note && t(note)),
+          note && h("div", { className: note === "status.saved" ? "ima-save-note ok" : "ima-save-note" }, t(note)),
           h("div", { className: "ima-inspector-actions" },
-            h("button", { className: "ima-btn", disabled: Boolean(busy) || checking, onClick: check }, t(checking ? "connection.checking" : "action.checkConnection")),
-            h("button", { className: "ima-btn", disabled: Boolean(busy) || checking, onClick: () => { setCheckResult(null); return onAction(account.id, "reconnect"); } }, t("action.reconnectAccount")),
-            h("button", { className: "ima-btn danger", disabled: Boolean(busy) || checking, onClick: () => { if (window.confirm(t("account.removeConfirm"))) onAction(account.id, "remove"); } }, t("action.removeAccount")),
+            h(Button, { disabled: Boolean(busy) || checking, onClick: check }, t(checking ? "connection.checking" : "action.checkConnection")),
+            h(Button, { disabled: Boolean(busy) || checking, onClick: () => { setCheckResult(null); return onAction(account.id, "reconnect"); } }, t("action.reconnectAccount")),
+            h(Button, { danger: true, disabled: Boolean(busy) || checking, onClick: () => {
+              Modal.confirm({
+                title: t("action.removeAccount"),
+                content: t("account.removeConfirm"),
+                okText: t("action.removeAccount"),
+                cancelText: t("action.cancel"),
+                okButtonProps: { danger: true },
+                onOk: () => onAction(account.id, "remove"),
+              });
+            } }, t("action.removeAccount")),
           ),
           checkResult && h(AccountConnectionCheck, { account: checkResult, t }),
-          checkFailed && h("div", { className: "ima-error", role: "alert" }, t(typeof checkFailed === "string" ? checkFailed : "connection.checkFailed")),
+          checkFailed && h(Alert, { type: "error", showIcon: true, role: "alert", message: t(typeof checkFailed === "string" ? checkFailed : "connection.checkFailed") }),
         ),
       );
     }
@@ -1481,6 +1400,19 @@ window.__ModuleLoader__.load({
       }, [refresh]);
       useEffect(() => { const timer = setInterval(refresh, 4000); return () => clearInterval(timer); }, [refresh]);
       useEffect(() => {
+        if (!settingsAccount) return undefined;
+        const onKey = (event) => {
+          if (event.key !== "Escape") return;
+          if (document.querySelector(".ant-select-dropdown:not(.ant-select-dropdown-hidden), .ant-dropdown:not(.ant-dropdown-hidden)")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+          setSettingsAccount(null);
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [settingsAccount]);
+      useEffect(() => {
         if (typeof window === "undefined") return undefined;
         const onRequest = (event) => {
           const request = parseChannelSettingsRequest(event.detail);
@@ -1536,26 +1468,29 @@ window.__ModuleLoader__.load({
 
       return h("section", { className: "ima-page ima-account-page", "aria-label": t("settings.aria") },
         h("header", { className: "ima-head" },
-          h("div", null,
+          h("div", { className: "ima-heading" },
             h("div", { className: "ima-title-row" },
               h("h2", { className: "ima-title" }, t("settings.title")),
               h("div", { className: "ima-title-links" },
-                h("a", { className: "ima-title-link", href: "https://github.com/MichengAI/dsh-im-connect", target: "_blank", rel: "noreferrer", "aria-label": t("settings.viewProject") }, h(GithubMark16), t("settings.viewProject")),
-                h("a", { className: "ima-title-link", href: "https://github.com/MichengAI/dsh-im-connect/issues", target: "_blank", rel: "noreferrer", "aria-label": t("settings.feedback") }, h(IconListPenOutline16), t("settings.feedback")),
+                h(Button, { size: "small", shape: "default", href: "https://github.com/MichengAI/dsh-im-connect", target: "_blank", rel: "noreferrer", "aria-label": t("settings.viewProject"), icon: h(GithubMark16) }, t("settings.viewProject")),
+                h(Button, { size: "small", shape: "default", href: "https://github.com/MichengAI/dsh-im-connect/issues", target: "_blank", rel: "noreferrer", "aria-label": t("settings.feedback"), icon: h(IconListPenOutline16, { size: 16 }) }, t("settings.feedback")),
               ),
             ),
             h("p", { className: "ima-sub" }, t("settings.description")),
           ),
         ),
-        error && h("div", { className: "ima-error" }, error),
-        pending.length > 0 && h("div", { className: "ima-pending" },
-          h("div", null, t("pending.notice")),
-          ...pending.map((p) => h("div", { key: p.channelId + p.userId, className: "ima-pending-row" },
+        error && h(Alert, { type: "error", showIcon: true, className: "ima-error", message: error }),
+        pending.length > 0 && h(Alert, {
+          type: "warning",
+          showIcon: true,
+          className: "ima-pending",
+          message: t("pending.notice"),
+          description: pending.map((p) => h("div", { key: p.channelId + p.userId, className: "ima-pending-row" },
             h("span", { style: { flex: 1 } }, (p.username || p.userId) + " · " + (accountLabel(allAccounts.find((item) => item.id === p.channelId), t) || p.channelId)),
-            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "approve", { userId: p.userId }) }, t("action.approve")),
-            h("button", { className: "ima-btn", onClick: () => onAction(p.channelId, "deny", { userId: p.userId }) }, t("action.deny")),
+            h(Button, { onClick: () => onAction(p.channelId, "approve", { userId: p.userId }) }, t("action.approve")),
+            h(Button, { onClick: () => onAction(p.channelId, "deny", { userId: p.userId }) }, t("action.deny")),
           )),
-        ),
+        }),
         channels == null
           ? h("div", { className: "ima-empty" }, t("loading"))
           : h("div", { className: "ima-account-shell" },
@@ -1568,28 +1503,41 @@ window.__ModuleLoader__.load({
                     h("div", { className: "ima-platform-head", role: canExpand ? "button" : undefined, tabIndex: canExpand ? 0 : undefined, "aria-expanded": canExpand ? open : undefined, onClick: toggleExpanded, onKeyDown: canExpand ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpanded(); } } : undefined },
                       h(Logo, { id: ch.id }),
                       h("span", { className: "ima-platform-title" }, channelLabel(ch, t)),
-                      h("span", { className: "ima-platform-count" }, t("account.count", { count: ch.total })),
-                      h("button", { className: "ima-platform-add", type: "button", onClick: (e) => { e.stopPropagation(); setEditing(ch.id); } }, "＋ " + t("action.addAccount")),
-                      h("span", { className: canExpand ? "ima-platform-caret" : "ima-platform-caret empty", "aria-hidden": "true" }, canExpand && h(IconChevron)),
+                      h("div", { className: "ima-platform-meta" },
+                        h("span", { className: "ima-platform-count" }, t("account.count", { count: ch.total })),
+                        h(Button, { onClick: (e) => { e.stopPropagation(); setEditing(ch.id); } }, t("action.addAccount")),
+                        h("span", { className: canExpand ? "ima-platform-caret" : "ima-platform-caret empty", "aria-hidden": "true" }, canExpand && h(IconChevron)),
+                      ),
                     ),
                     open && h("div", { className: "ima-account-list" },
                       ...(ch.accounts || []).map((account) => h("div", { key: account.id, className: "ima-account-row" },
                         h("span", { className: "ima-account-copy" }, h("span", { className: "ima-account-name" }, accountLabel(account, t))),
-                        h("span", { className: busy[account.id] ? "ima-account-state" : account.connectionState === "connected" ? "ima-account-state online" : "ima-account-state offline" }, h("span", { className: account.connectionState === "connected" ? "ima-dot on" : "ima-dot", "aria-hidden": true }), busy[account.id] ? t("account.statusProcessing") : t(account.receiveConfigured === false ? "connection.paused" : "connection." + (account.connectionState || "unknown"))),
+                        h(Tag, {
+                          color: busy[account.id] ? "default" : account.receiveConfigured === false ? "warning" : account.connectionState === "connected" ? "success" : "warning",
+                          bordered: false,
+                        }, busy[account.id] ? t("account.statusProcessing") : t(account.receiveConfigured === false ? "connection.paused" : "connection." + (account.connectionState || "unknown"))),
                         h("div", { className: "ima-account-receive", title: t("account.receiveDescription") },
                           h("span", null, t("account.receive")),
-                          h("button", { type: "button", className: (account.receiveConfigured === true) ? "ima-switch" : "ima-switch off", role: "switch", "aria-checked": Boolean(account.receiveConfigured === true), "aria-label": accountLabel(account, t) + " · " + t("account.receive"), title: account.receiveConfigured === undefined ? t("connection.receiveUnknown") : t("account.receive"), disabled: Boolean(busy[account.id]) || account.receiveConfigured === undefined, onClick: () => onAction(account.id, "receive", { receiveEnabled: !(account.receiveConfigured === true) }) }, h("i"))),
-                        h("button", { type: "button", className: "ima-btn ima-account-settings-button", onClick: () => { selectAccount(account.id); setSettingsAccount(account.id); } }, t("action.settings")),
+                          h(Switch, { role: "switch", checked: account.receiveConfigured === true, "aria-checked": Boolean(account.receiveConfigured === true), "aria-label": accountLabel(account, t) + " · " + t("account.receive"), title: account.receiveConfigured === undefined ? t("connection.receiveUnknown") : t("account.receive"), disabled: Boolean(busy[account.id]) || account.receiveConfigured === undefined, onChange: (checked) => onAction(account.id, "receive", { receiveEnabled: checked }) })),
+                        h(Button, { onClick: () => { selectAccount(account.id); setSettingsAccount(account.id); } }, t("action.settings")),
                       )),
                     ),
                   );
                 }),
               ),
             ),
-        selectedAccount && h(AccountModalLayer, { onClick: () => setSettingsAccount(null), onKeyDown: e => { if (e.key === "Escape") { e.stopPropagation(); setSettingsAccount(null); } } },
-          h("div", { className: "ima-modal ima-account-modal", role: "dialog", "aria-modal": true, "aria-label": accountLabel(selectedAccount, t), onClick: e => e.stopPropagation() },
-            h("div", { className: "ima-modal-h" }, h("h2", null, t("action.settings")), h("button", { type: "button", className: "ima-x", "aria-label": t("bind.close"), autoFocus: true, onClick: () => setSettingsAccount(null) }, "×")),
-            h(AccountInspector, {
+        selectedAccount && h(Modal, {
+          open: true,
+          className: "ima-account-modal",
+          title: t("action.settings"),
+          width: 640,
+          zIndex: 1100,
+          destroyOnHidden: true,
+          keyboard: false,
+          onCancel: () => setSettingsAccount(null),
+          footer: null,
+        },
+          h(AccountInspector, {
                     account: selectedAccount,
                     busy: busy[selectedAccount.id],
                     catalog: catalog.providers,
@@ -1600,11 +1548,11 @@ window.__ModuleLoader__.load({
                     pickDirectory: props.pickDirectory,
                     modelT: props.modelT,
                     permissionT: props.permissionT,
+                    presetT: props.presetT,
                     t,
                     onAction,
                     onSave: saveAccount,
             }),
-          ),
         ),
         editing && h(BindModal, {
           ch: (channels || []).find((item) => item.id === editing) || { id: editing, label: editing, kind: "qr", fields: [] },
@@ -1616,6 +1564,7 @@ window.__ModuleLoader__.load({
           pickDirectory: props.pickDirectory,
           modelT: props.modelT,
           permissionT: props.permissionT,
+          presetT: props.presetT,
           defaults: catalog,
           onClose: () => setEditing(null),
           onConnected: () => { setEditing(null); setExpanded((prev) => ({ ...prev, [editing]: true })); refresh(); },
@@ -1623,7 +1572,7 @@ window.__ModuleLoader__.load({
         }),
       );
     }
-    const WB_CSS = `.dcu-wb,.ima-native{--dsh-session-list-edge-inset:var(--dsh-sidebar-inline-padding,12px);--dsh-session-list-scrollbar-width:8px;--dsh-session-list-scrollbar-offset:2px;display:flex;flex:1;min-width:0;min-height:0;flex-direction:column;padding:0;padding-right:var(--dsh-session-list-edge-inset);box-sizing:border-box;overflow:hidden;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-toolbar{box-sizing:border-box;flex:none;height:36px;margin:2px -4px 4px 0;padding-left:4px;display:flex;justify-content:flex-end;align-items:center;gap:4px;overflow:visible;position:relative;z-index:2;color:var(--dsw-alias-label-tertiary,#81858C);border-radius:12px}.ima-n-head-label{white-space:nowrap;min-width:0;max-width:45%;flex:none;line-height:20px;font-size:14px;overflow:hidden;transition:max-width .18s var(--ds-ease-in-out,ease),margin-right .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear}.ima-n-toolbar.is-search .ima-n-head-label{opacity:0;visibility:hidden;max-width:0;margin-right:-4px;transform:translate(-4px);transition-delay:0s,0s,0s,0s,.18s}.ima-n-search-slot{box-sizing:border-box;min-width:28px;max-width:28px;transition:max-width .18s var(--ds-ease-in-out,ease);flex:none;align-items:center;margin-left:auto;display:flex;position:relative;z-index:2}.ima-n-toolbar.is-search .ima-n-search-slot{flex:1;min-width:0;max-width:100%}.ima-n-search{box-sizing:border-box;cursor:text;width:100%;height:28px;color:var(--dsw-alias-label-secondary);transition:width .18s var(--ds-ease-in-out,ease),padding .18s var(--ds-ease-in-out,ease),border-color .18s var(--ds-ease-in-out,ease);background:transparent;border:none;border-radius:50%;flex:none;align-items:center;margin:0;padding:0;display:flex;overflow:hidden}.ima-n-toolbar.is-search .ima-n-search{border:.5px solid var(--dsw-alias-border-l4);width:calc(100% + 4px);height:30px;color:var(--dsw-alias-label-caption);border-radius:10px;margin-inline:-2px;padding:0 4px 0 0}.ima-n-search-btn,.ima-n-head-btn{cursor:pointer;width:28px;height:28px;min-width:28px;min-height:28px;position:relative;z-index:1;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-toolbar.is-search .ima-n-search-btn{width:28px;height:30px}.ima-n-search-btn:hover,.ima-n-head-btn:hover,.ima-n-head-btn.on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,var(--ima-text))}.ima-n-toolbar.is-search .ima-n-search-btn:hover{background:transparent}.ima-n-head-acts{opacity:1;visibility:visible;max-width:32px;transition:max-width .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear;flex:none;align-items:center;gap:4px;display:flex;overflow:visible;position:relative}.ima-n-toolbar.is-search .ima-n-head-acts{opacity:0;visibility:hidden;pointer-events:none;max-width:0;transform:translate(4px);transition-delay:0s,0s,0s,.18s}.ima-n-head-filter{position:relative}.ima-n-search-input{display:none;opacity:0;pointer-events:none;width:0;min-width:0;flex:none;color:var(--dsw-alias-label-primary,var(--ima-text));transition:opacity .12s var(--ds-ease-in-out,ease);background:transparent;border:none;outline:none;flex:1;font-size:13px;line-height:18px}.ima-n-toolbar.is-search .ima-n-search-input{display:block;opacity:1;pointer-events:auto;margin-left:-2px;width:auto;flex:1;min-width:0}.ima-n-search-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-search-clear{cursor:pointer;width:24px;height:24px;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-search-clear:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}@media (prefers-reduced-motion:reduce){.ima-n-head-label,.ima-n-search-slot,.ima-n-search,.ima-n-head-acts,.ima-n-search-input{transition:none}}.ima-n-filter-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:196px;padding:8px 6px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2,#1c2128));box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.36))}.ima-n-filter-label{padding:6px 10px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-filter-split{height:1px;margin:6px 8px;background:var(--dsw-alias-border-l2,rgba(255,255,255,.1))}.ima-n-filter-menu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:36px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:inherit;font:14px/20px inherit;cursor:pointer;text-align:left}.ima-n-filter-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}.ima-n-filter-tick{width:16px;height:16px;flex:none}.ima-n-list-area,.dcu-wb-list-area{min-height:0;margin-left:-4px;margin-right:calc(-1 * var(--dsh-session-list-edge-inset));flex-direction:column;flex:1;padding-left:4px;display:flex;overflow:visible}.ima-native-tree,.dcu-wb-tree{flex:1;min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;user-select:none;margin-left:-4px;margin-right:var(--dsh-session-list-scrollbar-offset);padding-top:0;padding-bottom:16px;padding-left:4px;padding-right:calc(var(--dsh-session-list-edge-inset) - var(--dsh-session-list-scrollbar-width) - var(--dsh-session-list-scrollbar-offset));scrollbar-gutter:stable}.ima-native-project,.dcu-wb-project{position:relative;min-width:0;max-width:100%}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}
+    const WB_CSS = `.dcu-wb,.ima-native{--dsh-session-list-edge-inset:var(--dsh-sidebar-inline-padding,12px);--dsh-session-list-scrollbar-width:8px;--dsh-session-list-scrollbar-offset:2px;display:flex;flex:1;min-width:0;min-height:0;flex-direction:column;padding:0;padding-right:var(--dsh-session-list-edge-inset);box-sizing:border-box;overflow:hidden;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-toolbar{box-sizing:border-box;flex:none;height:36px;margin:2px -4px 4px 0;padding-left:4px;display:flex;justify-content:flex-end;align-items:center;gap:4px;overflow:visible;position:relative;z-index:2;color:var(--dsw-alias-label-tertiary,#81858C);border-radius:12px}.ima-n-head-label{white-space:nowrap;min-width:0;max-width:45%;flex:none;line-height:20px;font-size:14px;overflow:hidden;transition:max-width .18s var(--ds-ease-in-out,ease),margin-right .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear}.ima-n-toolbar.is-search .ima-n-head-label{opacity:0;visibility:hidden;max-width:0;margin-right:-4px;transform:translate(-4px);transition-delay:0s,0s,0s,0s,.18s}.ima-n-search-slot{box-sizing:border-box;min-width:28px;max-width:28px;transition:max-width .18s var(--ds-ease-in-out,ease);flex:none;align-items:center;margin-left:auto;display:flex;position:relative;z-index:2}.ima-n-toolbar.is-search .ima-n-search-slot{flex:1;min-width:0;max-width:100%}.ima-n-search{box-sizing:border-box;cursor:text;width:100%;height:28px;color:var(--dsw-alias-label-secondary);transition:width .18s var(--ds-ease-in-out,ease),padding .18s var(--ds-ease-in-out,ease),border-color .18s var(--ds-ease-in-out,ease);background:transparent;border:none;border-radius:50%;flex:none;align-items:center;margin:0;padding:0;display:flex;overflow:hidden}.ima-n-toolbar.is-search .ima-n-search{border:.5px solid var(--dsw-alias-border-l4);width:calc(100% + 4px);height:30px;color:var(--dsw-alias-label-caption);border-radius:10px;margin-inline:-2px;padding:0 4px 0 0}.ima-n-search-btn,.ima-n-head-btn{cursor:pointer;width:28px;height:28px;min-width:28px;min-height:28px;position:relative;z-index:1;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-toolbar.is-search .ima-n-search-btn{width:28px;height:30px}.ima-n-search-btn:hover,.ima-n-head-btn:hover,.ima-n-head-btn.on,.ima-n-head-btn.is-on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,var(--ima-text))}.ima-n-toolbar.is-search .ima-n-search-btn:hover{background:transparent}.ima-n-head-acts{opacity:1;visibility:visible;max-width:32px;transition:max-width .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear;flex:none;align-items:center;gap:4px;display:flex;overflow:visible;position:relative}.ima-n-toolbar.is-search .ima-n-head-acts{opacity:0;visibility:hidden;pointer-events:none;max-width:0;transform:translate(4px);transition-delay:0s,0s,0s,.18s}.ima-n-head-filter{position:relative}.ima-n-search-input{display:none;opacity:0;pointer-events:none;width:0;min-width:0;flex:none;color:var(--dsw-alias-label-primary,var(--ima-text));transition:opacity .12s var(--ds-ease-in-out,ease);background:transparent;border:none;outline:none;flex:1;font-size:13px;line-height:18px}.ima-n-toolbar.is-search .ima-n-search-input{display:block;opacity:1;pointer-events:auto;margin-left:-2px;width:auto;flex:1;min-width:0}.ima-n-search-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-search-clear{cursor:pointer;width:24px;height:24px;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-search-clear:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}@media (prefers-reduced-motion:reduce){.ima-n-head-label,.ima-n-search-slot,.ima-n-search,.ima-n-head-acts,.ima-n-search-input{transition:none}}.ima-n-filter-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:196px;padding:8px 6px;border:1px solid var(--dsw-alias-border-inverted,rgba(255,255,255,.12));border-radius:12px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2,#1c2128));box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,.36))}.ima-n-filter-label{padding:6px 10px 4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-filter-split{height:1px;margin:6px 8px;background:var(--dsw-alias-border-l2,rgba(255,255,255,.1))}.ima-n-filter-menu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:36px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:inherit;font:14px/20px inherit;cursor:pointer;text-align:left}.ima-n-filter-menu button:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}.ima-n-filter-tick{width:16px;height:16px;flex:none}.ima-n-list-area,.dcu-wb-list-area{min-height:0;margin-left:-4px;margin-right:calc(-1 * var(--dsh-session-list-edge-inset));flex-direction:column;flex:1;padding-left:4px;display:flex;overflow:visible}.ima-native-tree,.dcu-wb-tree{flex:1;min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;user-select:none;margin-left:-4px;margin-right:var(--dsh-session-list-scrollbar-offset);padding-top:0;padding-bottom:16px;padding-left:4px;padding-right:calc(var(--dsh-session-list-edge-inset) - var(--dsh-session-list-scrollbar-width) - var(--dsh-session-list-scrollbar-offset));scrollbar-gutter:stable}.ima-native-project,.dcu-wb-project{position:relative;min-width:0;max-width:100%}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}
 .dcu-wb *,.ima-native *{box-sizing:border-box}
 .dcu-wb-tree,.ima-native-tree{flex:1;min-height:0}
 .dcu-wb-project-head,.ima-native-head,.dcu-wb-session,.ima-native-session{display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:8px;padding:0 8px;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
@@ -1647,16 +1596,11 @@ window.__ModuleLoader__.load({
 .ima-n-sess{height:32px;gap:0;position:relative;appearance:none}
 .ima-n-row:hover,.ima-n-sess:hover,.ima-n-sess.on,.ima-n-sess.is-on,.ima-n-row.menu-on,.ima-n-row.is-menu,.ima-n-sess.menu-on,.ima-n-sess.is-menu{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}
 .ima-n-row.has-current-session .ima-n-folder{color:var(--dsw-alias-state-business-primary,#4c8dff)}
-.ima-n-chevron{display:none;color:var(--dsw-alias-label-caption,#ADB2B8)}
-.ima-n-row:hover .ima-n-chevron{display:inline-flex}
-.ima-n-row:hover .ima-n-folder{display:none}
-.ima-n-arrow{transition:transform .15s var(--ds-ease-in-out,ease)}
-.ima-n-arrow.is-open{transform:rotate(90deg)}
 .ima-n-project-text{flex-direction:column;flex:1;gap:2px;min-width:0;display:flex}
 .ima-n-row .ima-n-acts{height:20px}
 .ima-n-sess.is-flat-idle .ima-n-title{margin-left:0}
 .ima-n-sess:focus{outline:none}.ima-n-sess:focus-visible:not(.is-on){box-shadow:inset 0 0 0 2px var(--dsw-alias-state-business-primary,#4c8dff)}
-.ima-n-slot{flex:none;width:16px;min-width:16px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#81858C)}.ima-run-dot{flex:none;color:var(--dsw-static-deepseek-450,#4c8dff)}.ima-run-dot-cell{fill:currentColor;opacity:.15;animation:ima-run-chase 1s infinite}@keyframes ima-run-chase{0%,12.4%{opacity:1}12.5%,24.9%{opacity:.6}25%,37.4%{opacity:.35}37.5%,100%{opacity:.15}}
+.ima-n-slot{flex:none;width:16px;min-width:16px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#81858C)}
 .ima-n-folder{color:var(--dsw-alias-label-secondary,#9ca39f)}
 .ima-n-lead{color:var(--dsw-alias-label-tertiary,#81858C)}
 .ima-n-corner{color:var(--dsw-alias-label-caption,#ADB2B8);width:8px}
@@ -1688,7 +1632,8 @@ window.__ModuleLoader__.load({
 .ima-n-dialog-status{margin-top:12px;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}
 .ima-n-dialog-error{margin-top:12px;color:var(--dsw-alias-state-error-primary,#f85149);font-size:13px;line-height:20px}
 .ima-n-danger-button{color:var(--dsw-alias-state-error-primary,#f85149)!important}
-.ima-n-danger-button:hover{background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.12))!important}`;
+.ima-n-danger-button:hover{background:var(--dsw-alias-interactive-bg-hover-danger,rgba(248,81,73,.12))!important}
+.ima-n-restore{flex:none;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#c9cdd4);font:12px/16px inherit;padding:2px 4px;cursor:pointer}`;
 
     function NativeSvg(viewBox, size, children) {
       return h("svg", { viewBox, width: size, height: size, fill: "none", xmlns: "http://www.w3.org/2000/svg", "aria-hidden": "true" }, children);
@@ -1699,58 +1644,87 @@ window.__ModuleLoader__.load({
     function IconChevron() {
       return NativeSvg("0 0 14 14", 14, NativePath("M4.25 2.828v8.344c0 .49.592.735.939.389l4.172-4.172a.55.55 0 0 0 0-.778L5.189 2.439c-.347-.347-.939-.101-.939.389Z"));
     }
-    function IconSearchOutline(props) {
+    function IconSearchFallback(props) {
       const size = props && props.size ? props.size : 16;
       return NativeSvg("0 0 16 16", size, [
         NativePath("M11.894845 6.647401C11.894845 3.725463 9.534486 1.356779 6.623219 1.35657C3.711786 1.35657 1.351635 3.725338 1.351635 6.647401C1.351843 9.569296 3.711911 11.938273 6.623219 11.938273C9.534361 11.938064 11.894637 9.569171 11.894845 6.647401ZM13.245462 6.647401C13.245254 10.317935 10.280401 13.293613 6.623219 13.293821C2.965871 13.293821 0.000204 10.31806 0 6.647401C0 2.976574 2.965746 0 6.623219 0C10.280526 0.000205 13.245462 2.9767 13.245462 6.647401Z"),
         NativePath("M16.000417 15.041079L15.044449 16.000433L11.530434 12.473588L12.486298 11.514234L16.000417 15.041079Z"),
       ]);
     }
-    function IconSliders() {
+    function IconSlidersFallback() {
       return NativeSvg("0 0 16 16", 16, NativePath("M2.2 3.4h6.05a1.85 1.85 0 0 0 3.5 0H13.8v1.3H11.75a1.85 1.85 0 0 0-3.5 0H2.2V3.4Zm8.6 1.15A.75.75 0 1 1 10.05 4.55.75.75 0 0 1 10.8 4.55ZM2.2 7.35h2.35a1.85 1.85 0 0 0 3.5 0H13.8v1.3H8.05a1.85 1.85 0 0 0-3.5 0H2.2V7.35Zm4.1 1.15A.75.75 0 1 1 5.55 8.5a.75.75 0 0 1 .75-.75ZM2.2 11.3h7.35a1.85 1.85 0 0 0 3.5 0H13.8v1.3h-.75a1.85 1.85 0 0 0-3.5 0H2.2v-1.3Zm9.9 1.15a.75.75 0 1 1-.75-.75.75.75 0 0 1 .75.75Z"));
     }
-    function IconCloseOutline(props) {
+    function IconCloseOutlineFallback(props) {
       const size = props && props.size ? props.size : 16;
       return NativeSvg("0 0 16 16", size, [
         NativePath("M14.1168 13.197L13.197 14.1167L1.8833 2.80303L2.80309 1.88324L14.1168 13.197Z"),
         NativePath("M13.197 1.88326L14.1168 2.80305L2.80309 14.1168L1.8833 13.197L13.197 1.88326Z"),
       ]);
     }
+    function IconListFallback() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M3 4h10M3 8h10M3 12h10", { fill: "none", stroke: "currentColor", strokeWidth: "1.4", strokeLinecap: "round" }));
+    }
+    function IconArchiveCheckFallback() {
+      return NativeSvg("0 0 16 16", 16, NativePath("M3 6.5h10v6H3v-6Zm1.2-2.5h7.6L13 6.5H3L4.2 4Zm2.3 5.2 1.3 1.3 2.6-2.6", { fill: "none", stroke: "currentColor", strokeWidth: "1.4", strokeLinecap: "round", strokeLinejoin: "round" }));
+    }
+    const IconSearchOutline = hostOrFallback(IconSearchHost, IconSearchFallback);
+    const IconCloseFill = hostOrFallback(IconCloseFillHost, IconCloseOutlineFallback);
+    const IconSlidersTwoOutline = hostOrFallback(IconSlidersHost, IconSlidersFallback);
+    const IconFlatList = hostOrFallback(IconFlatListOutline, IconListFallback);
+    const IconArchiveCheckOutline = hostOrFallback(IconArchiveCheckHost, IconArchiveCheckFallback);
     function IconCheckOutline() {
       return NativeSvg("0 0 16 16", 16, NativePath("M15.0498 3.92579L8.49512 12.3818C8.25774 12.6881 8.04517 12.9645 7.84668 13.1689C7.63957 13.3823 7.38732 13.5841 7.04492 13.6719C6.86373 13.7183 6.6757 13.7346 6.48926 13.7197C6.13666 13.6915 5.8528 13.5355 5.6123 13.3604C5.38201 13.1926 5.12573 12.9567 4.83984 12.6953L1.03125 9.21289L1.96875 8.1875L5.77734 11.6699C6.08684 11.9529 6.27773 12.1249 6.43066 12.2363C6.50183 12.2882 6.54699 12.3135 6.57324 12.3252C6.58525 12.3305 6.59269 12.3322 6.5957 12.333C6.59802 12.3336 6.59961 12.334 6.59961 12.334C6.63317 12.3367 6.66758 12.3335 6.7002 12.3252C6.7002 12.3252 6.70211 12.3251 6.7041 12.3242C6.70698 12.3229 6.71348 12.319 6.72461 12.3115C6.74849 12.2956 6.78843 12.2642 6.84961 12.2012C6.98138 12.0654 7.13957 11.8628 7.39648 11.5313L13.9502 3.07422L15.0498 3.92579Z"));
     }
-    function FilterRow({ label, selected, onSelect }) {
-      return h("button", { type: "button", className: selected ? "on" : undefined, onClick: onSelect },
-        h("span", null, label),
-        selected ? h(IconCheckOutline) : h("span", { className: "ima-n-filter-tick" }),
-      );
-    }
-    function ChannelWorkspaceHead({ query, sort, groupMode, onQuery, onSort, onGroupMode, t = fallbackT }) {
+    function ChannelWorkspaceHead({ query, sort, groupMode, archivedFilter, onQuery, onSort, onGroupMode, onArchivedFilterChange, t = fallbackT }) {
       const [searching, setSearching] = useState(!!query);
-      const [open, setOpen] = useState(false);
+      const [filterOpen, setFilterOpen] = useState(false);
       const searchSize = searching ? 11 : 14;
+      const items = [
+        { type: "label", id: "group-by", text: t("rail.group") },
+        { id: "workspace", label: t("rail.byWorkspace"), icon: h(IconFolderClose, { size: 16 }) },
+        { id: "flat", label: t("rail.list"), icon: h(IconFlatList, { size: 16 }) },
+        { type: "separator", id: "order-by-separator" },
+        { type: "label", id: "order-by", text: t("rail.sort") },
+        { id: "updated", label: t("rail.recent"), icon: h(IconClockOutline, { size: 16 }) },
+        { type: "separator", id: "archived-filter-separator" },
+        { type: "label", id: "filter-by", text: t("rail.filter") },
+        { id: "show-archived", label: t("rail.showArchived"), icon: h(IconArchiveOutline20, { size: 16 }) },
+        { id: "only-archived", label: t("rail.onlyArchived"), icon: h(IconArchiveCheckOutline, { size: 16 }) },
+      ];
+      const selectedIds = [
+        groupMode === "list" ? "flat" : groupMode,
+        "updated",
+        ...(archivedFilter === "show" ? ["show-archived"] : []),
+        ...(archivedFilter === "only" ? ["only-archived"] : []),
+      ];
       return h("div", { className: searching ? "ima-n-toolbar is-search" : "ima-n-toolbar" },
-        h("span", { className: "ima-n-head-label" }, t("rail.workspace")),
+        h("span", { className: "ima-n-head-label" }, groupMode === "list" ? t("rail.sessions") : t("rail.workspace")),
         h("div", { className: "ima-n-search-slot" },
-          h("div", { className: "ima-n-search", onClick: () => { setOpen(false); setSearching(true); } },
-            h("button", { type: "button", className: "ima-n-search-btn", "aria-label": t("rail.search"), "aria-expanded": searching, onClick: () => { setOpen(false); setSearching(true); } }, h(IconSearchOutline, { size: searchSize })),
-            h("input", { className: "ima-n-search-input", value: query, placeholder: t("rail.searchPlaceholder"), "aria-label": t("rail.search"), tabIndex: searching ? 0 : -1, onChange: (e) => onQuery(e.target.value), onKeyDown: (e) => { if (e.key === "Escape") { onQuery(""); setSearching(false); } } }),
-            searching && h("button", { type: "button", className: "ima-n-search-clear", "aria-label": t("rail.clearSearch"), onClick: (e) => { e.stopPropagation(); onQuery(""); setSearching(false); } }, h(IconCloseOutline, { size: 14 })),
+          h("div", { className: "ima-n-search", onClick: () => { setFilterOpen(false); setSearching(true); } },
+            h("button", { type: "button", className: "ima-n-search-btn", "aria-label": t("rail.search"), "aria-expanded": searching, onClick: () => { setFilterOpen(false); setSearching(true); } }, h(IconSearchOutline, { size: searchSize })),
+            h("input", { className: "ima-n-search-input", value: query, placeholder: t("rail.searchPlaceholder"), "aria-label": t("rail.search"), tabIndex: searching ? 0 : -1, "aria-hidden": !searching, onChange: (e) => onQuery(e.target.value), onKeyDown: (e) => { if (e.key === "Escape") { onQuery(""); setSearching(false); } } }),
+            searching && h("button", { type: "button", className: "ima-n-search-clear", "aria-label": t("rail.clearSearch"), onClick: (e) => { e.stopPropagation(); onQuery(""); setSearching(false); } }, h(IconCloseFill, { size: 14 })),
           ),
         ),
         h("div", { className: "ima-n-head-acts" },
-          h("div", { className: "ima-n-head-filter" },
-            h("button", { type: "button", className: open ? "ima-n-head-btn on" : "ima-n-head-btn", "aria-label": t("rail.filter"), onClick: () => setOpen(!open) }, h(IconSliders)),
-            open && h("div", { className: "ima-n-filter-menu" },
-              h("div", { className: "ima-n-filter-label" }, t("rail.group")),
-              h(FilterRow, { label: t("rail.byWorkspace"), selected: groupMode === "workspace", onSelect: () => { onGroupMode("workspace"); setOpen(false); } }),
-              h(FilterRow, { label: t("rail.list"), selected: groupMode === "list", onSelect: () => { onGroupMode("list"); setOpen(false); } }),
-              h("div", { className: "ima-n-filter-split" }),
-              h("div", { className: "ima-n-filter-label" }, t("rail.sort")),
-              h(FilterRow, { label: t("rail.manual"), selected: sort === "manual", onSelect: () => { onSort("manual"); setOpen(false); } }),
-              h(FilterRow, { label: t("rail.recent"), selected: sort === "time", onSelect: () => { onSort("time"); setOpen(false); } }),
-            ),
-          ),
+          h(HostMenu, {
+            open: filterOpen,
+            onClose: () => { setFilterOpen(false); },
+            items,
+            selectedIds,
+            align: "end",
+            dense: true,
+            portal: true,
+            onSelect: (id) => {
+              if (id === "workspace") onGroupMode("workspace");
+              if (id === "flat") onGroupMode("list");
+              if (id === "updated") onSort("time");
+              if (id === "show-archived") onArchivedFilterChange(archivedFilter === "show" ? "default" : "show");
+              if (id === "only-archived") onArchivedFilterChange(archivedFilter === "only" ? "default" : "only");
+              setFilterOpen(false);
+            },
+            anchor: h("button", { type: "button", className: filterOpen ? "ima-n-head-btn is-on" : "ima-n-head-btn", "aria-label": t("rail.filter"), "aria-expanded": filterOpen, onClick: () => setFilterOpen((open) => !open) }, h(IconSlidersTwoOutline, { size: 16 })),
+          }),
         ),
       );
     }
@@ -1768,8 +1742,8 @@ window.__ModuleLoader__.load({
     function ChannelSettingsIcon() {
       return typeof IconSettingsOutline16 === "function" ? h(IconSettingsOutline16, { size: 16 }) : NativeSvg("0 0 16 16", 16, NativePath("M8 2.2a1.2 1.2 0 0 1 1.15.84l.16.5.5.16A1.2 1.2 0 0 1 11.3 5.3l.45.45a1.2 1.2 0 0 1 0 1.7l-.45.45-.16.5A1.2 1.2 0 0 1 10.3 9.7l-.5.16-.16.5A1.2 1.2 0 0 1 8.5 11.8H7.5a1.2 1.2 0 0 1-1.15-.84l-.16-.5-.5-.16A1.2 1.2 0 0 1 4.7 9.7l-.45-.45a1.2 1.2 0 0 1 0-1.7l.45-.45.16-.5A1.2 1.2 0 0 1 5.7 5.3l.5-.16.16-.5A1.2 1.2 0 0 1 7.5 2.2H8Zm0 4.3A1.5 1.5 0 1 0 8 9.5 1.5 1.5 0 0 0 8 6.5Z"));
     }
-    function SessionHoverStatusDot({ running }) {
-      if (typeof StateDot === "function") return h(StateDot, { state: running ? "ongoing" : "done" });
+    function SessionHoverStatusDot({ running, size }) {
+      if (typeof StateDot === "function") return h(StateDot, { state: running ? "ongoing" : "idle", size: size || 10 });
       return h("span", { className: running ? "ima-n-hover-dot is-run" : "ima-n-hover-dot" });
     }
     function SessionHoverContent({ title, time, running, t = fallbackT }) {
@@ -1794,14 +1768,6 @@ window.__ModuleLoader__.load({
         ? Math.max(pad, viewport.height - card.height - pad)
         : Math.max(pad, row.top);
       return { position: "fixed", zIndex: 4100, left: Math.round(left) + "px", top: Math.round(top) + "px" };
-    }
-    const RUN_CELLS = [[0,0],[4,0],[8,0],[8,4],[8,8],[4,8],[0,8],[0,4]];
-    function RunningStateDot() {
-      return h("svg", { className: "ima-run-dot", width: 10, height: 10, viewBox: "0 0 10 10", shapeRendering: "crispEdges", "aria-hidden": "true" },
-        RUN_CELLS.map(function (cell, index) {
-          return h("rect", { key: cell[0] + "-" + cell[1], className: "ima-run-dot-cell", x: cell[0], y: cell[1], width: "2", height: "2", style: { animationDelay: ((index - RUN_CELLS.length) * 125) + "ms" } });
-        })
-      );
     }
     function relativeTimeParts(value, now) {
       const ts = Date.parse(value || "");
@@ -1833,7 +1799,7 @@ window.__ModuleLoader__.load({
     }
 
 
-    function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange, canDelete, onDeleteSession, flat }) {
+    function ChannelSessionRow({ sess, selected, onOpen, onChanged, skin, sessionActions, sessionById, menuOpen, onMenuChange, canDelete, onDeleteSession, flat, renderSlot }) {
       const t = arguments[0].t || fallbackT;
       const menu = !!menuOpen;
       const setMenu = (next) => onMenuChange(!!next);
@@ -1847,6 +1813,7 @@ window.__ModuleLoader__.load({
       const title = sess.title || sess.chatId;
       const native = skin !== "codex";
       const useOfficialHover = native && typeof HoverCard === "function";
+      const archived = !!arguments[0].archived;
       const running = !!(sess.running || (sessionById && sessionById[sess.sessionId] && sessionById[sess.sessionId].running));
       const hoverTitle = (sessionById && sessionById[sess.sessionId] && (sessionById[sess.sessionId].displayTitle || sessionById[sess.sessionId].title)) || title;
       const showHover = () => {
@@ -1878,9 +1845,8 @@ window.__ModuleLoader__.load({
         };
       }, [hoverOpen, menu, title, running]);
       useEffect(() => () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current); }, []);
-      const omitStatusSlot = native && !!flat && !running;
       const rowClass = native
-        ? ("ima-n-sess" + (selected ? " is-on" : "") + (menu ? " is-menu" : "") + (omitStatusSlot ? " is-flat-idle" : ""))
+        ? ("ima-n-sess" + (selected ? " is-on" : "") + (menu ? " is-menu" : "") + (archived ? " is-archived" : ""))
         : ("dcu-wb-session" + (selected ? " dcu-wb-selected" : "") + (menu ? " dcu-wb-menu-open" : ""));
       const syncList = (groups) => { if (groups) onChanged(groups); };
       const run = (action, extra) => {
@@ -1901,8 +1867,24 @@ window.__ModuleLoader__.load({
           Promise.resolve(acts.renameSession(sess.sessionId, (extra && extra.title) || title)).then(afterHost).catch((error) => console.warn("[dsh-im-connect] 重命名失败", error));
           return;
         }
+        if (action === "unarchive") {
+          if (typeof acts.unarchiveSession === "function") {
+            Promise.resolve(acts.unarchiveSession(sess.sessionId)).catch((error) => console.warn("[dsh-im-connect] 恢复失败", error));
+          }
+          return;
+        }
+        if (action === "pin" || action === "unpin") {
+          if (typeof acts.pinSession === "function") {
+            Promise.resolve(acts.pinSession(sess.sessionId, action === "pin")).catch((error) => console.warn("[dsh-im-connect] 置顶失败", error));
+          }
+          return;
+        }
         if (action === "archive") {
           const cleanupMissing = async error => {
+            if (activeSessionRefusal(error) && typeof onStopArchive === "function") {
+              onStopArchive({ id: sess.sessionId, title });
+              return;
+            }
             console.warn("[dsh-im-connect] archive failed", error);
             try {
               const data = await api("/sessions/cleanup-missing", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: sess.sessionId }) });
@@ -1949,12 +1931,28 @@ window.__ModuleLoader__.load({
           }),
         );
       }
-      const menuItems = [
-        { id: "rename", label: t("rail.rename"), icon: h(IconEditOutline16) },
-        { id: "fork", label: t("rail.fork"), icon: h(IconBranchOutline16) },
-        { id: "archive", label: t("rail.archive"), icon: h(IconArchiveOutline20, { size: 16 }) },
-        ...(canDelete ? [{ id: "delete-session", label: t("rail.deleteSession"), icon: h(IconTrashOutline16), danger: true }] : []),
-      ];
+      const pinned = !!arguments[0].pinned;
+      const onStopArchive = arguments[0].onStopArchive;
+      const displayTitle = String(hoverTitle || title).trim() || title;
+      const menuSlot = renderSlot && hostMenuRendersChildren()
+        ? ["rename", "fork", "archive", "archive-manager.delete-session"].map((only) => renderSlot("sidebar.workspaces.session.menu.item", {
+            sessionId: sess.sessionId,
+            displayTitle,
+          }, { hookContext: [menu, (open) => onMenuChange(!!open)], only }))
+        : undefined;
+      const menuItems = menuSlot !== undefined ? [] : (archived
+        ? [
+            { id: "unarchive", label: t("rail.unarchive"), icon: h(IconArchiveOutline20, { size: 16 }) },
+            { id: pinned ? "unpin" : "pin", label: t(pinned ? "rail.unpin" : "rail.pin") },
+            ...(canDelete ? [{ id: "delete-session", label: t("rail.deleteSession"), icon: h(IconTrashOutline16), danger: true }] : []),
+          ]
+        : [
+            { id: "rename", label: t("rail.rename"), icon: h(IconEditOutline16) },
+            { id: "fork", label: t("rail.fork"), icon: h(IconBranchOutline16) },
+            { id: pinned ? "unpin" : "pin", label: t(pinned ? "rail.unpin" : "rail.pin") },
+            { id: "archive", label: t("rail.archive"), icon: h(IconArchiveOutline20, { size: 16 }) },
+            ...(canDelete ? [{ id: "delete-session", label: t("rail.deleteSession"), icon: h(IconTrashOutline16), danger: true }] : []),
+          ]);
       const row = h("div", {
         ref: rowRef,
         className: rowClass,
@@ -1968,19 +1966,27 @@ window.__ModuleLoader__.load({
         onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMenu(false); onOpen(sess.sessionId); } },
         onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); hideHover(); onMenuChange(true); },
       },
-        native && !omitStatusSlot && h("span", { className: "ima-n-slot" }, running ? h(RunningStateDot) : null),
+        native && h("span", { className: "ima-n-slot" }, !archived && running && typeof StateDot === "function" ? h(StateDot, { state: "ongoing", size: 10 }) : null),
         h("span", { className: native ? "ima-n-title" : "dcu-wb-session-title" }, title),
         native && h("span", { className: "ima-n-time" }, timeLabel(sess.updatedAt, t)),
         h("span", { className: native ? "ima-n-acts" : "dcu-wb-actions" },
-          h(Menu, {
+          menuSlot === undefined && archived && h("button", {
+            type: "button",
+            className: "ima-n-restore",
+            onMouseDown: (e) => e.stopPropagation(),
+            onClick: (e) => { e.stopPropagation(); run("unarchive"); },
+          }, t("rail.unarchive")),
+          h(HostMenu, {
             open: menu,
-            onClose: () => onMenuChange(false),
+            onClose: () => { onMenuChange(false); },
             items: menuItems,
             onSelect: (action) => {
               onMenuChange(false);
               if (action === "rename") setRenaming(true);
               if (action === "fork") run("fork");
               if (action === "archive") run("archive");
+              if (action === "unarchive") run("unarchive");
+              if (action === "pin" || action === "unpin") run(action);
               if (action === "delete-session") onDeleteSession && onDeleteSession();
             },
             portal: true,
@@ -1994,7 +2000,8 @@ window.__ModuleLoader__.load({
               onMouseDown: (e) => e.stopPropagation(),
               onClick: (e) => { e.stopPropagation(); hideHover(); onMenuChange(!menu); },
             }, h(IconEllipsisOutline16, { size: 16 })),
-          }),
+          }, menuSlot),
+          renderSlot && renderSlot("sidebar.workspaces.session.row.action", { sessionId: sess.sessionId, displayTitle }, { only: "archive" }),
         ),
         !useOfficialHover && hoverOpen && !menu && native && typeof document !== "undefined" && ReactDOM.createPortal(h(SessionHoverCard, {
           title: hoverTitle,
@@ -2011,8 +2018,9 @@ window.__ModuleLoader__.load({
         return h(HoverCard, {
           anchor: row,
           content: h(SessionHoverContent, { title: hoverTitle, time: hoverTimeLabel(sess.updatedAt, t), running, t }),
+          openDelayMs: 800,
           disabled: menu,
-          copyText: title,
+          copyText: displayTitle,
           copyLabel: t("copy"),
           copiedLabel: t("hover.copied"),
         });
@@ -2037,12 +2045,11 @@ window.__ModuleLoader__.load({
         onClick: onToggle,
       },
         h("span", { className: "ima-n-slot ima-n-folder" }, h(Logo, { id, small: true })),
-        h("span", { className: "ima-n-slot ima-n-chevron" }, h("span", { className: expanded ? "ima-n-arrow is-open" : "ima-n-arrow" }, h(IconChevron))),
         h("span", { className: "ima-n-project-text" }, h("span", { className: "ima-n-title" }, name)),
         h("span", { className: "ima-n-acts" },
-          h(Menu, {
+          h(HostMenu, {
             open: menuOpen,
-            onClose: () => onMenuChange(false),
+            onClose: () => { onMenuChange(false); },
             items,
             onSelect: (action) => {
               onMenuChange(false);
@@ -2075,12 +2082,16 @@ window.__ModuleLoader__.load({
       const archivedIds = typeof props.useWorkspaces === "function"
         ? props.useWorkspaces((state) => (state && state.archivedSessionIds) || [])
         : (props.archivedIds || []);
+      const pinnedIds = typeof props.useWorkspaces === "function"
+        ? props.useWorkspaces((state) => (state && state.pinnedSessionIds) || [])
+        : (props.pinnedIds || []);
       const sessionById = typeof props.useSessions === "function"
         ? props.useSessions((state) => (state && state.byId) || {})
         : {};
       return h(ChannelRailView, Object.assign({}, props, {
         selectedId: selectedId || props.selectedId || null,
         archivedIds,
+        pinnedIds,
         sessionById,
       }));
     }
@@ -2102,8 +2113,13 @@ window.__ModuleLoader__.load({
       const [archiveGroupTarget, setArchiveGroupTarget] = useState();
       const [archiveGroupBusy, setArchiveGroupBusy] = useState(false);
       const [archiveGroupError, setArchiveGroupError] = useState();
+      const [archivedFilter, setArchivedFilter] = useState("default");
+      const [stopArchiveTarget, setStopArchiveTarget] = useState();
+      const [stopArchiveBusy, setStopArchiveBusy] = useState(false);
+      const [stopArchiveError, setStopArchiveError] = useState();
       const selectedId = props.selectedId;
       const archived = new Set(props.archivedIds || []);
+      const pinned = new Set(props.pinnedIds || []);
       const skin = props.skin || channelSkin;
       const native = skin !== "codex";
       const open = (id) => openListedSession(resolveHostSessionId(id, props.sessionById), props.openSession || props.open);
@@ -2150,8 +2166,34 @@ window.__ModuleLoader__.load({
         archiveChannelGroup(target.sessionIds, props.archiveSession)
           .then(() => api("/channels").then((data) => { if (data.ok) setGroups(data.groups || []); }).catch(() => undefined))
           .then(() => { setArchiveGroupTarget(undefined); })
-          .catch((caught) => { setArchiveGroupError(caught instanceof Error ? caught.message : t("error.action")); })
+          .catch((caught) => {
+            if (activeSessionRefusal(caught)) {
+              setArchiveGroupTarget(undefined);
+              setStopArchiveError(undefined);
+              setStopArchiveTarget({ id: target.id, title: target.name, sessionIds: target.sessionIds, group: true });
+              return;
+            }
+            setArchiveGroupError(caught instanceof Error ? caught.message : t("error.action"));
+          })
           .finally(() => { setArchiveGroupBusy(false); });
+      };
+      const confirmStopArchive = () => {
+        if (!stopArchiveTarget || typeof props.archiveSession !== "function" || stopArchiveBusy) return;
+        const target = stopArchiveTarget;
+        setStopArchiveBusy(true);
+        setStopArchiveError(undefined);
+        const work = target.sessionIds
+          ? archiveChannelGroup(target.sessionIds, props.archiveSession, { stopActivity: true })
+          : Promise.resolve(props.archiveSession(target.id, { stopActivity: true })).then(() => api("/sessions/remove", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ sessionId: target.id }),
+          }).then((data) => { if (data.ok && data.groups) setGroups(data.groups); }).catch(() => undefined));
+        work
+          .then(() => target.sessionIds ? api("/channels").then((data) => { if (data.ok) setGroups(data.groups || []); }).catch(() => undefined) : undefined)
+          .then(() => { setStopArchiveTarget(undefined); })
+          .catch((caught) => { setStopArchiveError(caught instanceof Error ? caught.message : t("error.action")); })
+          .finally(() => { setStopArchiveBusy(false); });
       };
       const needle = query.trim().toLowerCase();
       const visibleGroups = groups.map((g) => {
@@ -2161,7 +2203,7 @@ window.__ModuleLoader__.load({
           if (sess.titleSource === "user" || (!sess.titleSource && typeof sess.title === "string" && sess.title.trim())) return sess;
           return host && typeof host.title === "string" && host.title.trim()
             ? Object.assign({}, sess, { title: host.title }) : sess;
-        }).filter((sess) => !archived.has(sess.sessionId));
+        }).filter((sess) => channelSessionVisible(sess.sessionId, archived, archivedFilter));
         if (!needle) return Object.assign({}, g, { sessions });
         const nameHit = String(channelLabel(g, t)).toLowerCase().includes(needle);
         return Object.assign({}, g, { sessions: nameHit ? sessions : sessions.filter((sess) => String(sess.title || sess.chatId || "").toLowerCase().includes(needle)) });
@@ -2180,7 +2222,7 @@ window.__ModuleLoader__.load({
       }
       return h("div", { className: native ? "ima-native ima-rail" : "dcu-wb ima-rail" },
         h("style", null, WB_CSS),
-        h(ChannelWorkspaceHead, { query, sort, groupMode, onQuery: setQuery, onSort: setSort, onGroupMode: setGroupMode, t }),
+        h(ChannelWorkspaceHead, { query, sort, groupMode, archivedFilter, onQuery: setQuery, onSort: setSort, onGroupMode: setGroupMode, onArchivedFilterChange: setArchivedFilter, t }),
         h("div", { className: native ? "ima-n-list-area" : "dcu-wb-list-area" },
         h("div", { className: native ? "ima-native-tree" : "dcu-wb-tree", role: "tree" },
           error && h("div", { className: native ? "ima-native-empty" : "dcu-wb-empty" }, error),
@@ -2248,10 +2290,16 @@ window.__ModuleLoader__.load({
                     title: String((props.sessionById && props.sessionById[sess.sessionId] && (props.sessionById[sess.sessionId].displayTitle || props.sessionById[sess.sessionId].title)) || sess.title || sess.chatId || sess.sessionId),
                   });
                 },
+                archived: archived.has(sess.sessionId),
+                pinned: pinned.has(sess.sessionId) || !!(props.sessionById && props.sessionById[sess.sessionId] && props.sessionById[sess.sessionId].pinned),
+                onStopArchive: (target) => { setStopArchiveError(undefined); setStopArchiveTarget(target); },
+                renderSlot: props.renderSlot,
                 skin,
                 sessionActions: {
                   renameSession: props.renameSession,
                   archiveSession: props.archiveSession,
+                  unarchiveSession: props.unarchiveSession,
+                  pinSession: props.pinSession,
                   deleteSession: props.deleteSession,
                   forkSession: props.forkSession,
                   openPath: props.openPath,
@@ -2262,28 +2310,42 @@ window.__ModuleLoader__.load({
           }),
         ),
         ),
-        h(Modal, {
+        h(HostModal, {
           open: !!archiveGroupTarget,
           onClose: () => { if (!archiveGroupBusy) { setArchiveGroupTarget(undefined); setArchiveGroupError(undefined); } },
           closeLabel: t("rail.archiveGroupClose"),
           title: t("rail.archiveGroup"),
           footer: h("div", { className: "ima-n-dialog-actions" },
-            h(Button, { variant: "outline", disabled: archiveGroupBusy, onClick: () => { setArchiveGroupTarget(undefined); setArchiveGroupError(undefined); } }, t("rail.archiveGroupCancel")),
-            h(Button, { variant: "outline", className: "ima-n-danger-button", disabled: archiveGroupBusy, onClick: confirmArchiveGroup }, t("rail.archiveGroupConfirm")),
+            h(HostButton, { variant: "outline", disabled: archiveGroupBusy, onClick: () => { setArchiveGroupTarget(undefined); setArchiveGroupError(undefined); } }, t("rail.archiveGroupCancel")),
+            h(HostButton, { variant: "outline", className: "ima-n-danger-button", disabled: archiveGroupBusy, onClick: confirmArchiveGroup }, t("rail.archiveGroupConfirm")),
           ),
         },
           h("p", { className: "ima-n-dialog-copy" }, archiveGroupTarget ? t("rail.archiveGroupDescription", { name: archiveGroupTarget.name, count: archiveGroupTarget.sessionIds.length }) : ""),
           archiveGroupBusy && h("div", { className: "ima-n-dialog-status", role: "status" }, t("rail.archiveGroupPending")),
           archiveGroupError && h("div", { className: "ima-n-dialog-error", role: "alert" }, t("rail.archiveGroupFailed", { message: archiveGroupError })),
         ),
-        h(Modal, {
+        h(HostModal, {
+          open: !!stopArchiveTarget,
+          onClose: () => { if (!stopArchiveBusy) { setStopArchiveTarget(undefined); setStopArchiveError(undefined); } },
+          closeLabel: t("action.cancel"),
+          title: t("rail.stopArchive"),
+          footer: h("div", { className: "ima-n-dialog-actions" },
+            h(HostButton, { variant: "outline", disabled: stopArchiveBusy, onClick: () => { setStopArchiveTarget(undefined); setStopArchiveError(undefined); } }, t("action.cancel")),
+            h(HostButton, { variant: "outline", className: "ima-n-danger-button", disabled: stopArchiveBusy, onClick: confirmStopArchive }, t("rail.stopArchiveConfirm")),
+          ),
+        },
+          h("p", { className: "ima-n-dialog-copy" }, stopArchiveTarget ? t(stopArchiveTarget.group ? "rail.stopArchiveGroupDescription" : "rail.stopArchiveDescription", { name: stopArchiveTarget.title }) : ""),
+          stopArchiveBusy && h("div", { className: "ima-n-dialog-status", role: "status" }, t("rail.stopArchivePending")),
+          stopArchiveError && h("div", { className: "ima-n-dialog-error", role: "alert" }, t("rail.archiveFailed")),
+        ),
+        h(HostModal, {
           open: !!deleteTarget,
           onClose: () => { if (!deleteBusy) { setDeleteTarget(undefined); setDeleteError(undefined); } },
           closeLabel: t("rail.deleteSessionClose"),
           title: t("rail.deleteSession"),
           footer: h("div", { className: "ima-n-dialog-actions" },
-            h(Button, { variant: "outline", disabled: deleteBusy, onClick: () => { setDeleteTarget(undefined); setDeleteError(undefined); } }, t("rail.deleteSessionCancel")),
-            h(Button, { variant: "outline", className: "ima-n-danger-button", disabled: deleteBusy, onClick: confirmDelete }, t("rail.deleteSessionConfirm")),
+            h(HostButton, { variant: "outline", disabled: deleteBusy, onClick: () => { setDeleteTarget(undefined); setDeleteError(undefined); } }, t("rail.deleteSessionCancel")),
+            h(HostButton, { variant: "outline", className: "ima-n-danger-button", disabled: deleteBusy, onClick: confirmDelete }, t("rail.deleteSessionConfirm")),
           ),
         },
           h("p", { className: "ima-n-dialog-copy" }, deleteTarget ? t("rail.deleteSessionDescription", { name: deleteTarget.title }) : ""),
@@ -2506,6 +2568,8 @@ window.__ModuleLoader__.load({
         skin: "native",
         renameSession: props.renameSession,
         archiveSession: props.archiveSession,
+        unarchiveSession: props.unarchiveSession,
+        pinSession: props.pinSession,
         deleteSession: props.deleteSession,
         forkSession: props.forkSession,
         openPath: props.openPath,
@@ -2604,6 +2668,7 @@ window.__ModuleLoader__.load({
       }), "im-connect: plugin update ui");
       const permissionT = ctx.locale.bind("permission.access");
       const modelT = ctx.locale.bind("model");
+      const presetT = ctx.locale.bind("settings.agentPreset");
       const subscribeLocale = (listener) => ctx.locale.subscribe(listener);
       const localeSnapshot = () => ctx.locale.getSnapshot();
       const openChannelSettings = (request) => {
@@ -2617,15 +2682,15 @@ window.__ModuleLoader__.load({
       };
       function LocalizedChannelRail(props) {
         useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
-        return h(ChannelRail, Object.assign({}, props, { t, openChannelSettings }));
+        return h(AntdProvider, null, h(ChannelRail, Object.assign({}, props, { t, openChannelSettings })));
       }
       function LocalizedSessionSwitcher(props) {
         useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
-        return h(SessionSwitcher, Object.assign({}, props, { t, officialT: props.t, openChannelSettings }));
+        return h(AntdProvider, null, h(SessionSwitcher, Object.assign({}, props, { t, officialT: props.t, openChannelSettings })));
       }
       function LocalizedSettingsPage(props) {
         useSyncExternalStore(subscribeLocale, localeSnapshot, localeSnapshot);
-        return h(SettingsPage, Object.assign({}, props, { t, permissionT, modelT }));
+        return h(AntdProvider, null, h(SettingsPage, Object.assign({}, props, { t, permissionT, modelT, presetT })));
       }
       openImSession = (id) => {
         try {
@@ -2646,6 +2711,7 @@ window.__ModuleLoader__.load({
           pickDirectory: () => pickHostDirectory(ctx),
           permissionT,
           modelT,
+          presetT,
         }),
       }, LocalizedSettingsPage));
 
@@ -2656,7 +2722,9 @@ window.__ModuleLoader__.load({
         inject: () => ({
           openSession: (id) => { openHostSession(ctx, id); },
           open: (id) => { openHostSession(ctx, id); },
-          archiveSession: (id) => archiveHostSession(ctx, id),
+          archiveSession: (id, options) => archiveHostSession(ctx, id, options),
+          unarchiveSession: (id) => unarchiveHostSession(ctx, id),
+          pinSession: (id, pinned) => pinHostSession(ctx, id, pinned),
           forkSession: (id) => forkHostSession(ctx, id),
           renameSession: (sessionId, title) => renameHostSession(ctx, sessionId, title),
         }),
@@ -2708,7 +2776,12 @@ window.__ModuleLoader__.load({
               label: t("rail.channels"),
               order: 20,
               matchSession: isChannelSession,
-              render: (props) => h(LocalizedChannelRail, Object.assign({}, props, { skin: "native" })),
+              render: (props) => h(LocalizedChannelRail, Object.assign({}, props, {
+                skin: "native",
+                archiveSession: props.archiveSession || ((id, options) => archiveHostSession(ctx, id, options)),
+                unarchiveSession: props.unarchiveSession || ((id) => unarchiveHostSession(ctx, id)),
+                pinSession: props.pinSession || ((id, pinned) => pinHostSession(ctx, id, pinned)),
+              })),
             });
           };
           refreshInsertedTab();

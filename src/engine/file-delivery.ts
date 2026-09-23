@@ -47,14 +47,19 @@ export function filesForReply(events: readonly Event[], closing: Event): { turn:
       const path = mutationPath(data.name, data.arguments)
       if (path && typeof data.callId === 'string') calls.set(data.callId, path)
     } else if (event.type === 'tool/result' && data?.turn === turn && event.surfaceOp === 'append') {
-      const result = data?.message?.content?.[0]
       const path = calls.get(data?.message?.source?.callId)
-      if (path && result && result.isError !== true) paths.add(path)
+      if (path && !toolResultFailed(data)) paths.add(path)
     } else if (event.type === 'deliverables/presented' && data?.turn === turn && Array.isArray(data.files)) {
       for (const file of data.files) if (typeof file?.path === 'string' && file.path.trim()) paths.add(file.path)
     }
   }
   return { turn, paths: [...paths] }
+}
+
+/** V4 把 isError 放到 message 上；旧日志仍在 tool-result 内容块上。 */
+export function toolResultFailed(data: any): boolean {
+  if (data?.message?.isError === true) return true
+  return data?.message?.content?.[0]?.isError === true
 }
 
 /** 复用 Chat 完整文件读取服务，宿主负责路径、文件类型和大小限制。 */
@@ -80,7 +85,6 @@ export class FileDelivery {
       const sent = this.sent.get(key) ?? new Set<string>()
       this.sent.set(key, sent)
       if (this.sent.size > 256) this.sent.delete(this.sent.keys().next().value!)
-      const files = this.host.get('workspaceFiles') as { readAll(scope: { sessionId: string; workspaceRoot: string }, path: string, signal: AbortSignal): Promise<{ data: string; eof: boolean; offset: number }> } | undefined
       for (const path of selected.paths) {
         if (this.lifetime.signal.aborted) { ok = false; return }
         const current = target()
@@ -94,9 +98,7 @@ export class FileDelivery {
           const identity = resolve(cwd, path)
           if (sent.has(identity)) continue
           const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(120_000)])
-          const result = files?.readAll
-            ? await files.readAll({ sessionId: String(session.id), workspaceRoot: cwd }, path, signal)
-            : await readLegacyFile(this.host, cwd, path, signal)
+          const result = await readWorkspaceFile(this.host, String(session.id), cwd, path, signal)
           signal.throwIfAborted()
           if (!result.eof || result.offset !== 0 || typeof result.data !== 'string') throw new Error('incomplete-file')
           const latest = target()
@@ -115,6 +117,37 @@ export class FileDelivery {
       }
     }).then(() => ok).catch(error => { this.log(`[file-delivery] ${error instanceof Error ? error.message : String(error)}`); return false })
   }
+}
+
+type WorkspaceFileBytes = { data: string; eof: boolean; offset: number }
+
+function encodeFileBytes(result: { data: unknown; eof?: boolean; offset?: number }): WorkspaceFileBytes {
+  const offset = result.offset ?? 0
+  const eof = result.eof === true
+  if (typeof result.data === 'string') return { data: result.data, eof, offset }
+  if (result.data instanceof Uint8Array) return { data: Buffer.from(result.data).toString('base64'), eof, offset }
+  throw new Error('incomplete-file')
+}
+
+/** 0.1.5/0.1.6 用 readAll；0.1.7 改为 readBytes({}, 完整文件)；更早宿主走本机 fs。 */
+async function readWorkspaceFile(
+  host: { get(name: string): unknown },
+  sessionId: string,
+  cwd: string,
+  path: string,
+  signal: AbortSignal,
+): Promise<WorkspaceFileBytes> {
+  const files = host.get('workspaceFiles') as {
+    readAll?(scope: { sessionId: string; workspaceRoot: string }, path: string, signal: AbortSignal): Promise<{ data: unknown; eof?: boolean; offset?: number }>
+    readBytes?(scope: { sessionId: string; workspaceRoot: string }, path: string, options: object, signal: AbortSignal): Promise<{ data: unknown; eof?: boolean; offset?: number }>
+  } | undefined
+  if (typeof files?.readAll === 'function') {
+    return encodeFileBytes(await files.readAll({ sessionId, workspaceRoot: cwd }, path, signal))
+  }
+  if (typeof files?.readBytes === 'function') {
+    return encodeFileBytes(await files.readBytes({ sessionId, workspaceRoot: cwd }, path, {}, signal))
+  }
+  return readLegacyFile(host, cwd, path, signal)
 }
 
 /** 旧 Chat 只有本机路径打开；使用宿主 fs，沿用新版完整下载默认 32 MiB 上限。 */

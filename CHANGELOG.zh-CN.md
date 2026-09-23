@@ -6,6 +6,15 @@
 
 ## 未发布
 
+- 新增对 DSH 0.1.7-alpha.1 和 0.1.7-alpha.2 的支持，继续兼容 0.1.2-rc.1、0.1.5-rc.1、0.1.5-rc.2、0.1.6-alpha.1 和 0.1.6-alpha.2。
+- 在 0.1.7 宿主上通过 `workspaceFiles.readBytes` 读取 Chat 文件；旧宿主继续使用 `readAll` 或本机文件系统。
+- 识别 V4 `tool/result` 上的 `message.isError`，避免把失败的写入发到 IM。
+- `settings.get('locale')` 不存在时，从新的设置文档读取命令回复语言。
+- 归档运行中会话走官方「停止并归档」确认；恢复和置顶使用工作区导航接口。
+- 按定时任务插件，用 Ant Design 重做频道会话列表和账号设置。
+- 侧栏分组保留 IM 渠道图标，不再 hover 换成展开箭头；运行中用官方 `StateDot` ongoing 圈，空闲行留空位。
+- 清掉 Chip/ChannelCard 残留样式，绑定、诊断和待审批改用 Ant Segmented/Tag/Alert，补齐凭据字段词条，并按需压缩 Ant Design 客户端包。
+
 ## 0.1.51 - 2026-09-18
 
 - 新增对 DSH 0.1.6-alpha.2 的支持，继续兼容 0.1.2-rc.1、0.1.5-rc.1、0.1.5-rc.2 和 0.1.6-alpha.1。

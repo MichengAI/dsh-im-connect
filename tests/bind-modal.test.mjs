@@ -15,7 +15,8 @@ test('bind modal captures escape before settings', () => {
 test('绑定成功后自动关闭配置弹窗，不连带关设置页', () => {
   assert.match(client, /finish\(800\)/)
   assert.match(client, /finished\.current/)
-  assert.match(client, /onMouseDown: \(event\) => event\.stopPropagation\(\)/)
+  assert.match(client, /className: "ima-bind-modal"/)
+  assert.match(client, /keyboard: false/)
 })
 
 test('账号保存完成前显示保存中，不提前进入绑定成功分支', () => {
@@ -25,6 +26,7 @@ test('账号保存完成前显示保存中，不提前进入绑定成功分支',
   assert.match(client, /"bind\.saving": "Saving account…"/)
   assert.match(client, /if \(finished\.current \|\| saving\) return/)
   assert.match(client, /if \(event\.key !== "Escape"\) return;\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*if \(typeof event\.stopImmediatePropagation === "function"\) event\.stopImmediatePropagation\(\);\s*if \(saving\) return;/)
-  assert.match(client, /disabled: saving, onClick: close/)
-  assert.match(client, /disabled: saving, onClick: \(\) => switchTab\("manual"\)/)
+  assert.match(client, /maskClosable: !saving/)
+  assert.match(client, /onChange: \(next\) => switchTab\(next\)/)
+  assert.match(client, /h\(Segmented,/)
 })
