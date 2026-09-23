@@ -8,17 +8,13 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## 0.1.53 - 2026-09-23
 
-- Publish the changes tagged as v0.1.52. That tag did not reach npm: CI could not install the 0.1.7-alpha.1 session hosts or the 0.1.7 file hosts. Those installs now pin the alpha.1 packages that the contract tests use, and 0.1.7 file hosts use cordis 4.0.4.
-- Add support for DSH 0.1.7-alpha.1, 0.1.7-alpha.2, and npm `latest` 0.1.5-rc.3 while retaining compatibility with 0.1.2-rc.1, 0.1.5-rc.1, 0.1.5-rc.2, 0.1.6-alpha.1 and 0.1.6-alpha.2. The optional `dsh-client-runtime` peer now lists only the versions published on npm (`0.1.1-rc.1` / `0.1.1-rc.2`); later hosts inject their own bundled copy.
-- Read Chat files through `workspaceFiles.readBytes` on 0.1.7 hosts. A call with no byte range is the whole file or a too-large error, so a payload that leaves out `eof`/`offset` still counts as complete; explicit `eof: false` or a non-zero offset is still rejected. 0.1.7-alpha.1 and alpha.2 return literal `offset: 0, eof: true` on that path. Keep `readAll` and the local filesystem fallback on older hosts.
-- Treat V4 tool-result errors on `message.isError` so failed writes are not sent to IM.
-- Read command-reply language from the `locale` settings document (`settings.get` on older hosts, `describe()` filtered by namespace on 0.1.7). Do not treat `ui-theme.preference` as a language.
-- Archive a running session with the official stop-and-archive confirmation; restore uses the workspace navigation APIs.
-- Rebuild the channel session list and account settings with Ant Design, matching the scheduled-tasks plugin.
-- Keep channel logos on the sidebar group rows instead of swapping them for a chevron. Running rows use the official `StateDot` ongoing ring; idle rows keep an empty slot.
-- Drop leftover Chip/ChannelCard chrome, use Ant Segmented/Tag/Alert on bind, diagnostics and pending approvals, fill missing field labels, and tree-shake plus minify the bundled Ant Design client. `antd` and `react-dom` stay in `devDependencies`; `dsh plugin add` no longer installs a second Ant tree.
-- Folder icons fall back through `IconFolderClose16` and `IconFolderClose`. The remove-account confirm follows the host dark theme. Channel session menus do not include pin. The previous release did not offer it either.
-- Channel rows always use the 0.1.7 session list: 5px scrollbar, 10px caption time, 10px action gap, 12px workspace-tree indent, archived caption color, animated title scroll, 800ms hover cards, workspace tree, archived filters, and double-click rename. Older hosts still open menus through the items API those menus actually have. Channel groups still use channel logos. Pin and manual sort stay unavailable.
+- Support DSH 0.1.7, and keep working on 0.1.2, 0.1.5, and 0.1.6.
+- The channel list and account settings follow the current host interface.
+- Channel groups keep their channel icons. A running session shows that it is in progress.
+- The channel list can group by workspace, filter archived sessions, and rename on double-click. A long title scrolls when you hover it. Pin and manual sorting are not available.
+- Archiving a running session asks you to stop it first.
+- A failed tool run is no longer sent out to the channel.
+- Command replies follow the interface language.
 - Restart DSH and refresh the page after upgrading.
 
 ## 0.1.51 - 2026-09-18
