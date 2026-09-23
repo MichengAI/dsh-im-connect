@@ -7,14 +7,17 @@
 ## 未发布
 
 - 新增对 DSH 0.1.7-alpha.1、0.1.7-alpha.2 和 npm `latest` 0.1.5-rc.3 的支持，继续兼容 0.1.2-rc.1、0.1.5-rc.1、0.1.5-rc.2、0.1.6-alpha.1 和 0.1.6-alpha.2。optional `dsh-client-runtime` peer 只声明 npm 已发布的 `0.1.1-rc.1` / `0.1.1-rc.2`；更新宿主注入自己的打包副本。
-- 在 0.1.7 宿主上通过 `workspaceFiles.readBytes` 读取 Chat 文件；省略 `eof`/`offset` 的完整文件仍算读完。旧宿主继续使用 `readAll` 或本机文件系统。
+- 在 0.1.7 宿主上通过 `workspaceFiles.readBytes` 读取 Chat 文件。不带 range 的调用要么是整文件，要么因过大抛错，不返回分片，因此缺 `eof`/`offset` 仍按完整文件处理；显式 `eof: false` 或非零 offset 仍拒绝。0.1.7-alpha.1 / alpha.2 的无 range 分支返回的是字面量 `offset: 0, eof: true`。旧宿主继续使用 `readAll` 或本机文件系统。
 - 识别 V4 `tool/result` 上的 `message.isError`，避免把失败的写入发到 IM。
 - 命令回复语言只读 `locale` 设置文档（旧宿主 `settings.get`，0.1.7 上按命名空间过滤 `describe()`），不能把 `ui-theme.preference` 当成语言。
 - 归档运行中会话走官方「停止并归档」确认；恢复使用工作区导航接口。
 - 按定时任务插件，用 Ant Design 重做频道会话列表和账号设置。
 - 侧栏分组保留 IM 渠道图标，不再 hover 换成展开箭头；运行中用官方 `StateDot` ongoing 圈，空闲行留空位。
 - 清掉 Chip/ChannelCard 残留样式，绑定、诊断和待审批改用 Ant Segmented/Tag/Alert，补齐凭据字段词条，并按需压缩 Ant Design 客户端包。`antd` 和 `react-dom` 留在 `devDependencies`，`dsh plugin add` 不再另装一棵 Ant。
-- 文件夹图标按 `IconFolderClose16`、`IconFolderClose` 回退。删除账号确认框跟随宿主暗色主题。频道会话菜单不提供置顶。
+- 文件夹图标按 `IconFolderClose16`、`IconFolderClose` 回退。删除账号确认框跟随宿主暗色主题。频道会话菜单不提供置顶。上一个已发布版本也没有这项。
+- 在 DSH 0.1.7 上，频道行对齐宿主会话列表：5px 滚动条、10px 说明色时间、10px 操作间距、已归档用说明色，悬停长标题会滚到末尾。更早宿主仍是 8px 滚动条、12px 时间和 12px 操作间距。分组仍用渠道图标，并可以按工作区树查看。悬停状态与定时任务一致。
+- 在 DSH 0.1.6-alpha.2 上，频道行用这一版宿主的列表：工作区树每层缩进 12px，悬停时长标题一次滚到末尾，悬停卡片等 500ms。0.1.7 仍是匀速滚动和 800ms。0.1.6-alpha.1 及更早版本保持 16px 缩进和省略号。
+- 工作区树只在 0.1.6-alpha.2 和 0.1.7 上提供。归档筛选和双击重命名只在 0.1.7 上提供。更早宿主只按工作区或单列表查看，不列出已归档会话，重命名走菜单。
 
 ## 0.1.51 - 2026-09-18
 

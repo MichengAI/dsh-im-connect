@@ -157,7 +157,7 @@ test('0.1.7 用 workspaceFiles.readBytes 读完整文件，data 可以是原始�
   assert.deepEqual(reads[0].options, {})
 })
 
-test('0.1.7 readBytes 只给字节、省略 eof/offset 仍按完整文件回传', async t => {
+test('readBytes 不带 range 时缺 eof/offset 仍按完整文件回传', async t => {
   const f = fixture()
   const sender = new FileDelivery({
     get(name) {

@@ -7,14 +7,17 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 ## Unreleased
 
 - Add support for DSH 0.1.7-alpha.1, 0.1.7-alpha.2, and npm `latest` 0.1.5-rc.3 while retaining compatibility with 0.1.2-rc.1, 0.1.5-rc.1, 0.1.5-rc.2, 0.1.6-alpha.1 and 0.1.6-alpha.2. The optional `dsh-client-runtime` peer now lists only the versions published on npm (`0.1.1-rc.1` / `0.1.1-rc.2`); later hosts inject their own bundled copy.
-- Read Chat files through `workspaceFiles.readBytes` on 0.1.7 hosts; a full-file payload that omits `eof`/`offset` still counts as complete. Keep `readAll` and the local filesystem fallback on older hosts.
+- Read Chat files through `workspaceFiles.readBytes` on 0.1.7 hosts. A call with no byte range is the whole file or a too-large error, so a payload that leaves out `eof`/`offset` still counts as complete; explicit `eof: false` or a non-zero offset is still rejected. 0.1.7-alpha.1 and alpha.2 return literal `offset: 0, eof: true` on that path. Keep `readAll` and the local filesystem fallback on older hosts.
 - Treat V4 tool-result errors on `message.isError` so failed writes are not sent to IM.
 - Read command-reply language from the `locale` settings document (`settings.get` on older hosts, `describe()` filtered by namespace on 0.1.7). Do not treat `ui-theme.preference` as a language.
 - Archive a running session with the official stop-and-archive confirmation; restore uses the workspace navigation APIs.
 - Rebuild the channel session list and account settings with Ant Design, matching the scheduled-tasks plugin.
 - Keep channel logos on the sidebar group rows instead of swapping them for a chevron. Running rows use the official `StateDot` ongoing ring; idle rows keep an empty slot.
 - Drop leftover Chip/ChannelCard chrome, use Ant Segmented/Tag/Alert on bind, diagnostics and pending approvals, fill missing field labels, and tree-shake plus minify the bundled Ant Design client. `antd` and `react-dom` stay in `devDependencies`; `dsh plugin add` no longer installs a second Ant tree.
-- Folder icons fall back through `IconFolderClose16` and `IconFolderClose`. The remove-account confirm follows the host dark theme. Channel session menus do not include pin.
+- Folder icons fall back through `IconFolderClose16` and `IconFolderClose`. The remove-account confirm follows the host dark theme. Channel session menus do not include pin. The previous release did not offer it either.
+- On DSH 0.1.7, channel rows match the host session list: 5px scrollbar, 10px caption time, 10px action gap, archived caption color, and hovering a long title scrolls it. Earlier hosts keep the 8px scrollbar, 12px time, and 12px action gap. Channel groups still use channel logos. Grouping can follow the workspace tree. Hover cards show the same live statuses as scheduled tasks.
+- On DSH 0.1.6-alpha.2, channel rows use that host's list: 12px workspace-tree indent, a long title jumps to its end on hover, and the hover card waits 500ms. 0.1.7 still animates the title and waits 800ms. 0.1.6-alpha.1 and earlier keep the 16px indent and ellipsis titles.
+- Workspace tree is offered only on 0.1.6-alpha.2 and 0.1.7. Archived filters and double-click rename are offered only on 0.1.7. Older hosts keep workspace or list grouping, hide archived sessions, and rename from the menu.
 
 ## 0.1.51 - 2026-09-18
 

@@ -121,6 +121,7 @@ export class FileDelivery {
 
 type WorkspaceFileBytes = { data: string; eof: boolean; offset: number }
 
+/** `readBytes(scope, path, {}, signal)` 不带 range：要么整文件，要么 too-large 抛错，不返回分片。0.1.7-alpha.1/alpha.2 该分支写的是 `offset: 0, eof: true`。缺字段按完整文件处理；显式 `eof: false` 或非零 offset 仍拒绝。 */
 function encodeFileBytes(result: { data: unknown; eof?: boolean; offset?: number }): WorkspaceFileBytes {
   const offset = result.offset ?? 0
   const eof = result.eof !== false
