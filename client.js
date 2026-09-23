@@ -27,18 +27,9 @@ window.__ModuleLoader__.load({
         return node == null ? Fallback(props) : node;
       };
     }
-    // 0.1.7 的 Menu 会渲染 children。同一版才出现不带尺寸的图标名，旧 Menu 只认 items。
+    // 0.1.7 的 Menu 会渲染 children。更早的 Menu 只认 items。样式和列表功能不再按宿主版本分叉。
     function hostMenuRendersChildren() {
       return typeof primitives.IconEllipsisOutlineRegular === "function";
-    }
-    // 0.1.6-alpha.2 才导出 isDarwinDesktop，同时没有 0.1.7 的 Regular 图标。
-    // alpha.1 和 0.1.5 没有 12px 缩进，也不会把长标题滚到末尾。
-    function hostSessionList016() {
-      return typeof primitives.isDarwinDesktop === "function" && !hostMenuRendersChildren();
-    }
-    // 工作区树从 0.1.6-alpha.2 开始。归档筛选和双击重命名只在 0.1.7。
-    function hostHasWorkspaceTree() {
-      return hostSessionList016() || hostMenuRendersChildren();
     }
     const IconListPenOutline16 = pickHostIcon("IconListPenOutlineRegular", "IconListPenOutline16");
     const IconEditOutline16 = pickHostIcon("IconEditOutlineRegular", "IconEditOutline16");
@@ -218,15 +209,6 @@ window.__ModuleLoader__.load({
     function stopSessionTitleMarquee(title, frame) {
       cancelAnimationFrame(frame.id);
       if (title) restSessionTitle(title);
-    }
-    function revealSessionTitle(title, revealed) {
-      if (!title) return;
-      if (revealed) {
-        title.scrollLeft = title.scrollWidth - title.clientWidth;
-        return;
-      }
-      if (typeof title.scrollTo === "function") title.scrollTo({ left: 0, behavior: "instant" });
-      else title.scrollLeft = 0;
     }
     function channelSessionVisible(sessionId, archived, filter) {
       if (!sessionId) return false;
@@ -1724,8 +1706,7 @@ window.__ModuleLoader__.load({
         }),
       );
     }
-    const WB_CSS = `.dcu-wb,.ima-native{--dsh-session-list-edge-inset:var(--dsh-sidebar-inline-padding,12px);--dsh-session-list-scrollbar-width:8px;--dsh-session-list-scrollbar-offset:2px;display:flex;flex:1;min-width:0;min-height:0;flex-direction:column;padding:0;padding-right:var(--dsh-session-list-edge-inset);box-sizing:border-box;overflow:hidden;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-toolbar{box-sizing:border-box;flex:none;height:36px;margin:2px -4px 4px 0;padding-left:4px;display:flex;justify-content:flex-end;align-items:center;gap:4px;overflow:visible;position:relative;z-index:2;color:var(--dsw-alias-label-tertiary,#81858C);border-radius:12px}.ima-n-head-label{white-space:nowrap;min-width:0;max-width:45%;flex:none;line-height:20px;font-size:14px;overflow:hidden;transition:max-width .18s var(--ds-ease-in-out,ease),margin-right .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear}.ima-n-toolbar.is-search .ima-n-head-label{opacity:0;visibility:hidden;max-width:0;margin-right:-4px;transform:translate(-4px);transition-delay:0s,0s,0s,0s,.18s}.ima-n-search-slot{box-sizing:border-box;min-width:28px;max-width:28px;transition:max-width .18s var(--ds-ease-in-out,ease);flex:none;align-items:center;margin-left:auto;display:flex;position:relative;z-index:2}.ima-n-toolbar.is-search .ima-n-search-slot{flex:1;min-width:0;max-width:100%}.ima-n-search{box-sizing:border-box;cursor:text;width:100%;height:28px;color:var(--dsw-alias-label-secondary);transition:width .18s var(--ds-ease-in-out,ease),padding .18s var(--ds-ease-in-out,ease),border-color .18s var(--ds-ease-in-out,ease);background:transparent;border:none;border-radius:50%;flex:none;align-items:center;margin:0;padding:0;display:flex;overflow:hidden}.ima-n-toolbar.is-search .ima-n-search{border:.5px solid var(--dsw-alias-border-l4);width:calc(100% + 4px);height:30px;color:var(--dsw-alias-label-caption);border-radius:10px;margin-inline:-2px;padding:0 4px 0 0}.ima-n-search-btn,.ima-n-head-btn{cursor:pointer;width:28px;height:28px;min-width:28px;min-height:28px;position:relative;z-index:1;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-toolbar.is-search .ima-n-search-btn{width:28px;height:30px}.ima-n-search-btn:hover,.ima-n-head-btn:hover,.ima-n-head-btn.on,.ima-n-head-btn.is-on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,var(--ima-text))}.ima-n-toolbar.is-search .ima-n-search-btn:hover{background:transparent}.ima-n-head-acts{opacity:1;visibility:visible;max-width:32px;transition:max-width .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear;flex:none;align-items:center;gap:4px;display:flex;overflow:visible;position:relative}.ima-n-toolbar.is-search .ima-n-head-acts{opacity:0;visibility:hidden;pointer-events:none;max-width:0;transform:translate(4px);transition-delay:0s,0s,0s,.18s}.ima-n-search-input{display:none;opacity:0;pointer-events:none;width:0;min-width:0;flex:none;color:var(--dsw-alias-label-primary,var(--ima-text));transition:opacity .12s var(--ds-ease-in-out,ease);background:transparent;border:none;outline:none;flex:1;font-size:13px;line-height:18px}.ima-n-toolbar.is-search .ima-n-search-input{display:block;opacity:1;pointer-events:auto;margin-left:-2px;width:auto;flex:1;min-width:0}.ima-n-search-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-search-clear{cursor:pointer;width:24px;height:24px;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-search-clear:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}@media (prefers-reduced-motion:reduce){.ima-n-head-label,.ima-n-search-slot,.ima-n-search,.ima-n-head-acts,.ima-n-search-input{transition:none}}.ima-n-list-area,.dcu-wb-list-area{min-height:0;margin-left:-4px;margin-right:calc(-1 * var(--dsh-session-list-edge-inset));flex-direction:column;flex:1;padding-left:4px;display:flex;overflow:visible}.ima-native-tree,.dcu-wb-tree{flex:1;min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;user-select:none;margin-left:-4px;margin-right:var(--dsh-session-list-scrollbar-offset);padding-top:0;padding-bottom:16px;padding-left:4px;padding-right:calc(var(--dsh-session-list-edge-inset) - var(--dsh-session-list-scrollbar-width) - var(--dsh-session-list-scrollbar-offset));scrollbar-gutter:stable}.ima-native-project,.dcu-wb-project{position:relative;min-width:0;max-width:100%}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}.ima-native.is-017{--dsh-session-list-scrollbar-width:5px}.ima-native.is-017 .ima-n-time{font-size:10px;line-height:16px;color:var(--dsw-alias-label-caption,#ADB2B8)}.ima-native.is-017 .ima-n-acts{gap:10px}.ima-native.is-017 .ima-n-sess.is-archived .ima-n-title,.ima-native.is-017 .ima-n-sess.is-archived .ima-n-time{color:var(--dsw-alias-label-caption,#ADB2B8)}.ima-native.is-017 .ima-n-sess .ima-n-title[data-scrolled]{mask-image:linear-gradient(90deg,#0000,#000 12px)}.ima-native.is-017 .ima-n-sess .ima-n-title[data-clipped]{mask-image:linear-gradient(270deg,#0000,#000 12px)}.ima-native.is-017 .ima-n-sess .ima-n-title[data-scrolled][data-clipped]{mask-image:linear-gradient(90deg,#0000,#000 12px calc(100% - 12px),#0000)}@media (hover:hover){.ima-native.is-017 .ima-n-sess:hover .ima-n-title,.ima-native.is-017 .ima-n-sess.is-menu .ima-n-title{text-overflow:clip}}.ima-native.is-016 .ima-n-sess .ima-n-title{scroll-behavior:smooth}@media (hover:hover){.ima-native.is-016 .ima-n-sess:hover .ima-n-title,.ima-native.is-016 .ima-n-sess.is-menu .ima-n-title{text-overflow:clip}}@media (prefers-reduced-motion:reduce){.ima-native.is-016 .ima-n-sess .ima-n-title{scroll-behavior:auto}}
-.dcu-wb *,.ima-native *{box-sizing:border-box}
+    const WB_CSS = `.dcu-wb,.ima-native{--dsh-session-list-edge-inset:var(--dsh-sidebar-inline-padding,12px);--dsh-session-list-scrollbar-width:5px;--dsh-session-list-scrollbar-offset:2px;display:flex;flex:1;min-width:0;min-height:0;flex-direction:column;padding:0;padding-right:var(--dsh-session-list-edge-inset);box-sizing:border-box;overflow:hidden;color:var(--dsw-alias-label-primary,var(--ima-text));font:14px/20px inherit}.ima-n-toolbar{box-sizing:border-box;flex:none;height:36px;margin:2px -4px 4px 0;padding-left:4px;display:flex;justify-content:flex-end;align-items:center;gap:4px;overflow:visible;position:relative;z-index:2;color:var(--dsw-alias-label-tertiary,#81858C);border-radius:12px}.ima-n-head-label{white-space:nowrap;min-width:0;max-width:45%;flex:none;line-height:20px;font-size:14px;overflow:hidden;transition:max-width .18s var(--ds-ease-in-out,ease),margin-right .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear}.ima-n-toolbar.is-search .ima-n-head-label{opacity:0;visibility:hidden;max-width:0;margin-right:-4px;transform:translate(-4px);transition-delay:0s,0s,0s,0s,.18s}.ima-n-search-slot{box-sizing:border-box;min-width:28px;max-width:28px;transition:max-width .18s var(--ds-ease-in-out,ease);flex:none;align-items:center;margin-left:auto;display:flex;position:relative;z-index:2}.ima-n-toolbar.is-search .ima-n-search-slot{flex:1;min-width:0;max-width:100%}.ima-n-search{box-sizing:border-box;cursor:text;width:100%;height:28px;color:var(--dsw-alias-label-secondary);transition:width .18s var(--ds-ease-in-out,ease),padding .18s var(--ds-ease-in-out,ease),border-color .18s var(--ds-ease-in-out,ease);background:transparent;border:none;border-radius:50%;flex:none;align-items:center;margin:0;padding:0;display:flex;overflow:hidden}.ima-n-toolbar.is-search .ima-n-search{border:.5px solid var(--dsw-alias-border-l4);width:calc(100% + 4px);height:30px;color:var(--dsw-alias-label-caption);border-radius:10px;margin-inline:-2px;padding:0 4px 0 0}.ima-n-search-btn,.ima-n-head-btn{cursor:pointer;width:28px;height:28px;min-width:28px;min-height:28px;position:relative;z-index:1;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-toolbar.is-search .ima-n-search-btn{width:28px;height:30px}.ima-n-search-btn:hover,.ima-n-head-btn:hover,.ima-n-head-btn.on,.ima-n-head-btn.is-on{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));color:var(--dsw-alias-label-primary,var(--ima-text))}.ima-n-toolbar.is-search .ima-n-search-btn:hover{background:transparent}.ima-n-head-acts{opacity:1;visibility:visible;max-width:32px;transition:max-width .18s var(--ds-ease-in-out,ease),opacity .12s var(--ds-ease-in-out,ease),transform .18s var(--ds-ease-in-out,ease),visibility 0s linear;flex:none;align-items:center;gap:4px;display:flex;overflow:visible;position:relative}.ima-n-toolbar.is-search .ima-n-head-acts{opacity:0;visibility:hidden;pointer-events:none;max-width:0;transform:translate(4px);transition-delay:0s,0s,0s,.18s}.ima-n-search-input{display:none;opacity:0;pointer-events:none;width:0;min-width:0;flex:none;color:var(--dsw-alias-label-primary,var(--ima-text));transition:opacity .12s var(--ds-ease-in-out,ease);background:transparent;border:none;outline:none;flex:1;font-size:13px;line-height:18px}.ima-n-toolbar.is-search .ima-n-search-input{display:block;opacity:1;pointer-events:auto;margin-left:-2px;width:auto;flex:1;min-width:0}.ima-n-search-input::placeholder{color:var(--dsw-alias-label-tertiary,#81858C)}.ima-n-search-clear{cursor:pointer;width:24px;height:24px;color:var(--dsw-alias-label-secondary);background:transparent;border:none;border-radius:50%;flex:none;justify-content:center;align-items:center;padding:0;display:inline-flex}.ima-n-search-clear:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}@media (prefers-reduced-motion:reduce){.ima-n-head-label,.ima-n-search-slot,.ima-n-search,.ima-n-head-acts,.ima-n-search-input{transition:none}}.ima-n-list-area,.dcu-wb-list-area{min-height:0;margin-left:-4px;margin-right:calc(-1 * var(--dsh-session-list-edge-inset));flex-direction:column;flex:1;padding-left:4px;display:flex;overflow:visible}.ima-native-tree,.dcu-wb-tree{flex:1;min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;user-select:none;margin-left:-4px;margin-right:var(--dsh-session-list-scrollbar-offset);padding-top:0;padding-bottom:16px;padding-left:4px;padding-right:calc(var(--dsh-session-list-edge-inset) - var(--dsh-session-list-scrollbar-width) - var(--dsh-session-list-scrollbar-offset));scrollbar-gutter:stable}.ima-native-project,.dcu-wb-project{position:relative;min-width:0;max-width:100%}.ima-native-project+.ima-native-project,.dcu-wb-project+.dcu-wb-project{margin-top:4px}.ima-native-project>*+*,.dcu-wb-project>*+*{margin-top:2px}.dcu-wb *,.ima-native *{box-sizing:border-box}
 .dcu-wb-tree,.ima-native-tree{flex:1;min-height:0}
 .dcu-wb-project-head,.ima-native-head,.dcu-wb-session,.ima-native-session{display:flex;align-items:center;gap:6px;width:100%;border:0;border-radius:8px;padding:0 8px;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
 .dcu-wb-project-head,.ima-native-head{height:34px}
@@ -1761,8 +1742,13 @@ window.__ModuleLoader__.load({
 .ima-n-hover-dot.is-run{background:var(--dsw-static-deepseek-450,#4c8dff)}
 .ima-n-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;flex:1;font-weight:400}
 .ima-n-sess .ima-n-title{margin:0 6px 0 4px}
-.ima-n-time{flex:none;font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary,#81858C);white-space:nowrap}
-.ima-n-acts{flex:none;display:none;align-items:center;gap:12px}
+.ima-n-sess .ima-n-title[data-scrolled]{mask-image:linear-gradient(90deg,#0000,#000 12px)}
+.ima-n-sess .ima-n-title[data-clipped]{mask-image:linear-gradient(270deg,#0000,#000 12px)}
+.ima-n-sess .ima-n-title[data-scrolled][data-clipped]{mask-image:linear-gradient(90deg,#0000,#000 12px calc(100% - 12px),#0000)}
+@media (hover:hover){.ima-n-sess:hover .ima-n-title,.ima-n-sess.is-menu .ima-n-title{text-overflow:clip}}
+.ima-n-sess.is-archived .ima-n-title,.ima-n-sess.is-archived .ima-n-time{color:var(--dsw-alias-label-caption,#ADB2B8)}
+.ima-n-time{flex:none;font-size:10px;line-height:16px;color:var(--dsw-alias-label-caption,#ADB2B8);white-space:nowrap}
+.ima-n-acts{flex:none;display:none;align-items:center;gap:10px}
 .ima-n-row:hover .ima-n-acts,.ima-n-sess:hover .ima-n-acts,.ima-n-row.menu-on .ima-n-acts,.ima-n-row.is-menu .ima-n-acts,.ima-n-sess.menu-on .ima-n-acts,.ima-n-sess.is-menu .ima-n-acts{display:inline-flex}
 .ima-n-sess:hover .ima-n-time,.ima-n-sess.menu-on .ima-n-time,.ima-n-sess.is-menu .ima-n-time{display:none}
 .ima-n-ico{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:0;border-radius:4px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-tertiary,#81858C)}
@@ -1830,17 +1816,15 @@ window.__ModuleLoader__.load({
       const items = [
         { type: "label", id: "group-by", text: t("rail.group") },
         { id: "workspace", label: t("rail.byWorkspace"), icon: h(IconFolderClose, { size: 16 }) },
-        ...(hostHasWorkspaceTree() ? [{ id: "workspace-tree", label: t("rail.byWorkspaceTree"), icon: h(IconWorkspaceTree, { size: 16 }) }] : []),
+        { id: "workspace-tree", label: t("rail.byWorkspaceTree"), icon: h(IconWorkspaceTree, { size: 16 }) },
         { id: "flat", label: t("rail.list"), icon: h(IconFlatList, { size: 16 }) },
         { type: "separator", id: "order-by-separator" },
         { type: "label", id: "order-by", text: t("rail.sort") },
         { id: "updated", label: t("rail.recent"), icon: h(IconClockOutline, { size: 16 }) },
-        ...(hostMenuRendersChildren() ? [
-          { type: "separator", id: "archived-filter-separator" },
-          { type: "label", id: "filter-by", text: t("rail.filter") },
-          { id: "show-archived", label: t("rail.showArchived"), icon: h(IconArchiveOutline20, { size: 16 }) },
-          { id: "only-archived", label: t("rail.onlyArchived"), icon: h(IconArchiveCheckOutline, { size: 16 }) },
-        ] : []),
+        { type: "separator", id: "archived-filter-separator" },
+        { type: "label", id: "filter-by", text: t("rail.filter") },
+        { id: "show-archived", label: t("rail.showArchived"), icon: h(IconArchiveOutline20, { size: 16 }) },
+        { id: "only-archived", label: t("rail.onlyArchived"), icon: h(IconArchiveCheckOutline, { size: 16 }) },
       ];
       const selectedIds = [
         groupMode === "list" ? "flat" : groupMode,
@@ -2099,13 +2083,11 @@ window.__ModuleLoader__.load({
         "data-n-menu-root": sess.sessionId,
         onClick: () => { setMenu(false); hideHover(); onOpen(sess.sessionId); },
         onMouseEnter: () => {
-          if (hostMenuRendersChildren()) startSessionTitleMarquee(titleRef.current, titleFrame.current);
-          else if (hostSessionList016()) revealSessionTitle(titleRef.current, true);
+          startSessionTitleMarquee(titleRef.current, titleFrame.current);
           if (!useOfficialHover) showHover();
         },
         onMouseLeave: () => {
-          if (hostMenuRendersChildren()) stopSessionTitleMarquee(titleRef.current, titleFrame.current);
-          else if (hostSessionList016()) revealSessionTitle(titleRef.current, false);
+          stopSessionTitleMarquee(titleRef.current, titleFrame.current);
           if (!useOfficialHover) hideHover();
         },
         onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setMenu(false); onOpen(sess.sessionId); } },
@@ -2115,11 +2097,11 @@ window.__ModuleLoader__.load({
         h("span", {
           ref: native ? titleRef : undefined,
           className: native ? "ima-n-title" : "dcu-wb-session-title",
-          onDoubleClick: hostMenuRendersChildren() ? (e) => {
+          onDoubleClick: (e) => {
             if (!sessionActions || typeof sessionActions.renameSession !== "function") return;
             e.stopPropagation();
             setRenaming(true);
-          } : undefined,
+          },
         }, title),
         native && h("span", { className: "ima-n-time", "aria-hidden": trailing ? true : undefined }, trailing || timeLabel(sess.updatedAt, t)),
         h("span", { className: native ? "ima-n-acts" : "dcu-wb-actions" },
@@ -2171,7 +2153,7 @@ window.__ModuleLoader__.load({
         return h(HoverCard, {
           anchor: row,
           content: h(SessionHoverContent, { title: hoverTitle, time: hoverTimeLabel(sess.updatedAt, t), running, statuses, t }),
-          openDelayMs: hostMenuRendersChildren() ? 800 : 500,
+          openDelayMs: 800,
           disabled: menu,
           copyText: displayTitle,
           copyLabel: t("copy"),
@@ -2363,12 +2345,12 @@ window.__ModuleLoader__.load({
           if (sess.titleSource === "user" || (!sess.titleSource && typeof sess.title === "string" && sess.title.trim())) return sess;
           return host && typeof host.title === "string" && host.title.trim()
             ? Object.assign({}, sess, { title: host.title }) : sess;
-        }).filter((sess) => channelSessionVisible(sess.sessionId, archived, hostMenuRendersChildren() ? archivedFilter : "default")).map((sess) => Object.assign({}, sess, { channelId: g.id }));
+        }).filter((sess) => channelSessionVisible(sess.sessionId, archived, archivedFilter)).map((sess) => Object.assign({}, sess, { channelId: g.id }));
         if (!needle) return Object.assign({}, g, { sessions });
         const nameHit = String(channelLabel(g, t)).toLowerCase().includes(needle);
         return Object.assign({}, g, { sessions: nameHit ? sessions : sessions.filter((sess) => String(sess.title || sess.chatId || "").toLowerCase().includes(needle)) });
       }).filter((g) => (g.sessions || []).length > 0);
-      if (groupMode === "workspace-tree" && hostHasWorkspaceTree()) {
+      if (groupMode === "workspace-tree") {
         const flat = visibleGroups.flatMap((g) => g.sessions || []);
         visibleGroups.splice(0, visibleGroups.length, ...groupChannelSessionsByWorkspaceTree(flat, props.workspaceItems || [], t("rail.ungrouped")));
       } else if (sort === "time") {
@@ -2383,9 +2365,7 @@ window.__ModuleLoader__.load({
         visibleGroups.splice(0, visibleGroups.length);
         if (sessions.length) visibleGroups.push({ id: "__flat__", label: "", sessions });
       }
-      const host017 = hostMenuRendersChildren();
-      const host016 = hostSessionList016();
-      return h("div", { className: (native ? "ima-native ima-rail" : "dcu-wb ima-rail") + (host017 ? " is-017" : host016 ? " is-016" : "") },
+      return h("div", { className: native ? "ima-native ima-rail" : "dcu-wb ima-rail" },
         h("style", null, WB_CSS),
         h(ChannelWorkspaceHead, { query, sort, groupMode, archivedFilter, onQuery: setQuery, onSort: setSort, onGroupMode: setGroupMode, onArchivedFilterChange: setArchivedFilter, t }),
         h("div", { className: native ? "ima-n-list-area" : "dcu-wb-list-area" },
@@ -2398,7 +2378,7 @@ window.__ModuleLoader__.load({
             const hasCurrentSession = typeof selectedId === "string" && visible.some((sess) => isCurrentListedSession(selectedId, sess.sessionId, props.sessionById));
             const depth = g.depth || 0;
             const channelLogo = groupMode !== "workspace-tree" || !!g.channelId;
-            const groupStyle = depth > 0 ? (host017 || host016 ? { "--dsh-workspace-indent": (depth * 12) + "px" } : { paddingLeft: depth * 16 }) : undefined;
+            const groupStyle = depth > 0 ? { "--dsh-workspace-indent": (depth * 12) + "px" } : undefined;
             return h("div", { key: g.id || "ungrouped", className: native ? "ima-native-project" : "dcu-wb-project", style: groupStyle },
             groupMode !== "list" && (g.keep || visible.length > 0) && (native
               ? h(ChannelGroupRow, {

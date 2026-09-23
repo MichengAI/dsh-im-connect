@@ -15,9 +15,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 - Keep channel logos on the sidebar group rows instead of swapping them for a chevron. Running rows use the official `StateDot` ongoing ring; idle rows keep an empty slot.
 - Drop leftover Chip/ChannelCard chrome, use Ant Segmented/Tag/Alert on bind, diagnostics and pending approvals, fill missing field labels, and tree-shake plus minify the bundled Ant Design client. `antd` and `react-dom` stay in `devDependencies`; `dsh plugin add` no longer installs a second Ant tree.
 - Folder icons fall back through `IconFolderClose16` and `IconFolderClose`. The remove-account confirm follows the host dark theme. Channel session menus do not include pin. The previous release did not offer it either.
-- On DSH 0.1.7, channel rows match the host session list: 5px scrollbar, 10px caption time, 10px action gap, archived caption color, and hovering a long title scrolls it. Earlier hosts keep the 8px scrollbar, 12px time, and 12px action gap. Channel groups still use channel logos. Grouping can follow the workspace tree. Hover cards show the same live statuses as scheduled tasks.
-- On DSH 0.1.6-alpha.2, channel rows use that host's list: 12px workspace-tree indent, a long title jumps to its end on hover, and the hover card waits 500ms. 0.1.7 still animates the title and waits 800ms. 0.1.6-alpha.1 and earlier keep the 16px indent and ellipsis titles.
-- Workspace tree is offered only on 0.1.6-alpha.2 and 0.1.7. Archived filters and double-click rename are offered only on 0.1.7. Older hosts keep workspace or list grouping, hide archived sessions, and rename from the menu.
+- Channel rows always use the 0.1.7 session list: 5px scrollbar, 10px caption time, 10px action gap, 12px workspace-tree indent, archived caption color, animated title scroll, 800ms hover cards, workspace tree, archived filters, and double-click rename. Older hosts still open menus through the items API those menus actually have. Channel groups still use channel logos. Pin and manual sort stay unavailable.
 
 ## 0.1.51 - 2026-09-18
 
