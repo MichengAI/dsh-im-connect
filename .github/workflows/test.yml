@@ -81,19 +81,85 @@ jobs:
         run: npm ci
 
       - name: 安装会话、命令、图片与管理认证契约测试宿主（隔离插件依赖）
-        run: >-
-          npm install --prefix "$RUNNER_TEMP/dsh-image-contract" --no-audit --no-fund
-          @deepseek-ai/dsh-api-session-controller@${{ matrix.dsh }}
-          @deepseek-ai/dsh-commands@${{ matrix.dsh }}
-          @deepseek-ai/dsh-attachment-local@${{ matrix.dsh }}
-          @deepseek-ai/dsh-client-connection@${{ matrix.dsh }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${{ matrix.dsh }}"
+          args=(--prefix "$RUNNER_TEMP/dsh-image-contract" --no-audit --no-fund)
+          pkgs=(
+            "@deepseek-ai/dsh-api-session-controller@${ver}"
+            "@deepseek-ai/dsh-commands@${ver}"
+            "@deepseek-ai/dsh-attachment-local@${ver}"
+            "@deepseek-ai/dsh-client-connection@${ver}"
+          )
+          # 0.1.7-alpha.1 的 peer 是 ^0.1.7-alpha.1，npm 会升到 0.1.7-rc.1 并和已钉住的 alpha.1 冲突。
+          # 把当时测过的宿主包钉在 alpha.1，并用 legacy-peer-deps 放过仍指向 rc 的间接 peer。
+          if [[ "$ver" == "0.1.7-alpha.1" ]]; then
+            args+=(--legacy-peer-deps)
+            pkgs+=(
+              "@deepseek-ai/cordis@4.0.4"
+              "@deepseek-ai/dsh-agent@${ver}"
+              "@deepseek-ai/dsh-agent-default-model@${ver}"
+              "@deepseek-ai/dsh-agent-preset-registry@${ver}"
+              "@deepseek-ai/dsh-api-gateway@${ver}"
+              "@deepseek-ai/dsh-app-boot@${ver}"
+              "@deepseek-ai/dsh-attachment@${ver}"
+              "@deepseek-ai/dsh-client-file-upload@${ver}"
+              "@deepseek-ai/dsh-compaction@${ver}"
+              "@deepseek-ai/dsh-config-editor@${ver}"
+              "@deepseek-ai/dsh-file-reference@${ver}"
+              "@deepseek-ai/dsh-fs@${ver}"
+              "@deepseek-ai/dsh-home-paths@${ver}"
+              "@deepseek-ai/dsh-invariants@${ver}"
+              "@deepseek-ai/dsh-launch-environment@${ver}"
+              "@deepseek-ai/dsh-llm@${ver}"
+              "@deepseek-ai/dsh-native-command@${ver}"
+              "@deepseek-ai/dsh-package-manifest@${ver}"
+              "@deepseek-ai/dsh-ptc-runtime@${ver}"
+              "@deepseek-ai/dsh-sandbox@${ver}"
+              "@deepseek-ai/dsh-sandbox-policy@${ver}"
+              "@deepseek-ai/dsh-scope@${ver}"
+              "@deepseek-ai/dsh-session@${ver}"
+              "@deepseek-ai/dsh-session-persistence@${ver}"
+              "@deepseek-ai/dsh-session-projection@${ver}"
+              "@deepseek-ai/dsh-session-query@${ver}"
+              "@deepseek-ai/dsh-session-title@${ver}"
+              "@deepseek-ai/dsh-settings@${ver}"
+              "@deepseek-ai/dsh-skill@${ver}"
+              "@deepseek-ai/dsh-storage@${ver}"
+              "@deepseek-ai/dsh-storage-domain@${ver}"
+              "@deepseek-ai/dsh-subagent@${ver}"
+              "@deepseek-ai/dsh-system-prompt@${ver}"
+              "@deepseek-ai/dsh-tool-todo@${ver}"
+              "@deepseek-ai/dsh-tools@${ver}"
+              "@deepseek-ai/dsh-typert-protocol@${ver}"
+              "@deepseek-ai/dsh-typert-registry@${ver}"
+              "@deepseek-ai/dsh-user-approval@${ver}"
+              "@deepseek-ai/dsh-util-time@${ver}"
+              "@deepseek-ai/dsh-util-values@${ver}"
+              "@deepseek-ai/dsh-util-workspace-path@${ver}"
+              "@deepseek-ai/dsh-workspace@${ver}"
+            )
+          fi
+          npm install "${args[@]}" "${pkgs[@]}"
 
       - name: 安装文件读取契约测试宿主
-        run: >-
-          npm install --prefix "$RUNNER_TEMP/dsh-file-contract" --ignore-scripts --no-audit --no-fund
-          @deepseek-ai/cordis@4.0.2
-          @deepseek-ai/dsh-fs-local@${{ matrix.dsh }}
-          ${{ matrix.dsh != '0.1.2-rc.1' && format('@deepseek-ai/dsh-api-workspace-files@{0}', matrix.dsh) || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${{ matrix.dsh }}"
+          cordis="4.0.2"
+          if [[ "$ver" == 0.1.7-* ]]; then
+            cordis="4.0.4"
+          fi
+          pkgs=(
+            "@deepseek-ai/cordis@${cordis}"
+            "@deepseek-ai/dsh-fs-local@${ver}"
+          )
+          if [[ "$ver" != "0.1.2-rc.1" ]]; then
+            pkgs+=("@deepseek-ai/dsh-api-workspace-files@${ver}")
+          fi
+          npm install --prefix "$RUNNER_TEMP/dsh-file-contract" --ignore-scripts --no-audit --no-fund "${pkgs[@]}"
 
       - name: 编译并测试
         env:

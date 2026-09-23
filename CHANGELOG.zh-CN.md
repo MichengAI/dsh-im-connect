@@ -6,8 +6,9 @@
 
 ## 未发布
 
-## 0.1.52 - 2026-09-23
+## 0.1.53 - 2026-09-23
 
+- 发布 v0.1.52 标签里的改动。那个标签没有发到 npm：CI 装不上 0.1.7-alpha.1 会话宿主和 0.1.7 文件宿主。现在会把契约测试用到的 alpha.1 包钉住，0.1.7 文件宿主改用 cordis 4.0.4。
 - 新增对 DSH 0.1.7-alpha.1、0.1.7-alpha.2 和 npm `latest` 0.1.5-rc.3 的支持，继续兼容 0.1.2-rc.1、0.1.5-rc.1、0.1.5-rc.2、0.1.6-alpha.1 和 0.1.6-alpha.2。optional `dsh-client-runtime` peer 只声明 npm 已发布的 `0.1.1-rc.1` / `0.1.1-rc.2`；更新宿主注入自己的打包副本。
 - 在 0.1.7 宿主上通过 `workspaceFiles.readBytes` 读取 Chat 文件。不带 range 的调用要么是整文件，要么因过大抛错，不返回分片，因此缺 `eof`/`offset` 仍按完整文件处理；显式 `eof: false` 或非零 offset 仍拒绝。0.1.7-alpha.1 / alpha.2 的无 range 分支返回的是字面量 `offset: 0, eof: true`。旧宿主继续使用 `readAll` 或本机文件系统。
 - 识别 V4 `tool/result` 上的 `message.isError`，避免把失败的写入发到 IM。
