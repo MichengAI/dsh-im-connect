@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dsh: [0.1.2-rc.1, 0.1.5-rc.1, 0.1.5-rc.2, 0.1.5-rc.3, 0.1.6-alpha.1, 0.1.6-alpha.2, 0.1.7-alpha.1, 0.1.7-alpha.2]
+        dsh: [0.1.2-rc.1, 0.1.5-rc.1, 0.1.5-rc.2, 0.1.5-rc.3, 0.1.7-rc.1]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -92,55 +92,6 @@ jobs:
             "@deepseek-ai/dsh-attachment-local@${ver}"
             "@deepseek-ai/dsh-client-connection@${ver}"
           )
-          # 0.1.7-alpha.1 的 peer 是 ^0.1.7-alpha.1，npm 会升到 0.1.7-rc.1 并和已钉住的 alpha.1 冲突。
-          # 把当时测过的宿主包钉在 alpha.1，并用 legacy-peer-deps 放过仍指向 rc 的间接 peer。
-          if [[ "$ver" == "0.1.7-alpha.1" ]]; then
-            args+=(--legacy-peer-deps)
-            pkgs+=(
-              "@deepseek-ai/cordis@4.0.4"
-              "@deepseek-ai/dsh-agent@${ver}"
-              "@deepseek-ai/dsh-agent-default-model@${ver}"
-              "@deepseek-ai/dsh-agent-preset-registry@${ver}"
-              "@deepseek-ai/dsh-api-gateway@${ver}"
-              "@deepseek-ai/dsh-app-boot@${ver}"
-              "@deepseek-ai/dsh-attachment@${ver}"
-              "@deepseek-ai/dsh-client-file-upload@${ver}"
-              "@deepseek-ai/dsh-compaction@${ver}"
-              "@deepseek-ai/dsh-config-editor@${ver}"
-              "@deepseek-ai/dsh-file-reference@${ver}"
-              "@deepseek-ai/dsh-fs@${ver}"
-              "@deepseek-ai/dsh-home-paths@${ver}"
-              "@deepseek-ai/dsh-invariants@${ver}"
-              "@deepseek-ai/dsh-launch-environment@${ver}"
-              "@deepseek-ai/dsh-llm@${ver}"
-              "@deepseek-ai/dsh-native-command@${ver}"
-              "@deepseek-ai/dsh-package-manifest@${ver}"
-              "@deepseek-ai/dsh-ptc-runtime@${ver}"
-              "@deepseek-ai/dsh-sandbox@${ver}"
-              "@deepseek-ai/dsh-sandbox-policy@${ver}"
-              "@deepseek-ai/dsh-scope@${ver}"
-              "@deepseek-ai/dsh-session@${ver}"
-              "@deepseek-ai/dsh-session-persistence@${ver}"
-              "@deepseek-ai/dsh-session-projection@${ver}"
-              "@deepseek-ai/dsh-session-query@${ver}"
-              "@deepseek-ai/dsh-session-title@${ver}"
-              "@deepseek-ai/dsh-settings@${ver}"
-              "@deepseek-ai/dsh-skill@${ver}"
-              "@deepseek-ai/dsh-storage@${ver}"
-              "@deepseek-ai/dsh-storage-domain@${ver}"
-              "@deepseek-ai/dsh-subagent@${ver}"
-              "@deepseek-ai/dsh-system-prompt@${ver}"
-              "@deepseek-ai/dsh-tool-todo@${ver}"
-              "@deepseek-ai/dsh-tools@${ver}"
-              "@deepseek-ai/dsh-typert-protocol@${ver}"
-              "@deepseek-ai/dsh-typert-registry@${ver}"
-              "@deepseek-ai/dsh-user-approval@${ver}"
-              "@deepseek-ai/dsh-util-time@${ver}"
-              "@deepseek-ai/dsh-util-values@${ver}"
-              "@deepseek-ai/dsh-util-workspace-path@${ver}"
-              "@deepseek-ai/dsh-workspace@${ver}"
-            )
-          fi
           npm install "${args[@]}" "${pkgs[@]}"
 
       - name: 安装文件读取契约测试宿主

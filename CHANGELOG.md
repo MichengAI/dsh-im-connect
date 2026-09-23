@@ -6,6 +6,8 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## Unreleased
 
+- Support DSH 0.1.7-rc.1. Drop the 0.1.6 and 0.1.7 alpha versions from the supported set. 0.1.2-rc.1 and the 0.1.5 release candidates stay supported.
+
 ## 0.1.53 - 2026-09-23
 
 - Support DSH 0.1.7, and keep working on 0.1.2, 0.1.5, and 0.1.6.

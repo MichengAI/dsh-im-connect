@@ -89,7 +89,7 @@ The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram.
 
 WeChat, WeCom, DingTalk, Feishu, Lark, QQ and Telegram accept ordinary files through Chat’s upload service for the current session. Send PDFs, documents or spreadsheets for the assistant to process. Format support follows web Chat’s models, tools and file capabilities; uploading does not guarantee that every format can be understood directly.
 
-- Requires the file-upload service in DSH `0.1.5-rc.1`, `0.1.5-rc.2`, `0.1.5-rc.3`, `0.1.6-alpha.1`, `0.1.6-alpha.2`, `0.1.7-alpha.1`, or `0.1.7-alpha.2`. On `0.1.2-rc.1`, file input asks you to upgrade; existing text and image support is unchanged.
+- Requires the file-upload service in DSH `0.1.5-rc.1`, `0.1.5-rc.2`, `0.1.5-rc.3`, or `0.1.7-rc.1`. On `0.1.2-rc.1`, file input asks you to upgrade; existing text and image support is unchanged.
 - Up to 4 ordinary files per message, totaling 20 MiB. Channel download limits also apply.
 - Files become standard Chat attachments and are submitted with session-specific receipts, rather than local-path text.
 - Private admission and group mention rules remain in force. File captions such as `/new` or “allow” are content, not commands or approval responses.
@@ -193,7 +193,7 @@ For a desktop workbench, download [DSH Codex Desktop](https://github.com/Micheng
 ## Prerequisites
 
 - A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
-- The current source supports DSH `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2`, `0.1.5-rc.3`, `0.1.6-alpha.1`, `0.1.6-alpha.2`, `0.1.7-alpha.1`, and `0.1.7-alpha.2`; the last is recommended and pinned for development. DSH `0.1.0-rc.8` and `0.1.1-rc.2` lack the authentication and session-control interfaces this plugin requires; upgrade DSH first.
+- The current source supports DSH `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2`, `0.1.5-rc.3`, and `0.1.7-rc.1`; the last is recommended and pinned for development. The `0.1.6` and `0.1.7` alphas are no longer in the supported set. DSH `0.1.0-rc.8` and `0.1.1-rc.2` lack the authentication and session-control interfaces this plugin requires; upgrade DSH first.
 - Examples use the `web` profile; replace it with the target profile.
 - Source installation and development require Node.js 22+. npm installation does not require running `npm install` in an arbitrary directory.
 - After install, restart `dsh web` and hard-refresh the browser before opening **Settings → IM Assistant**.
