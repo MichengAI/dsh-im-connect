@@ -10,10 +10,11 @@
 - 在 0.1.7 宿主上通过 `workspaceFiles.readBytes` 读取 Chat 文件；省略 `eof`/`offset` 的完整文件仍算读完。旧宿主继续使用 `readAll` 或本机文件系统。
 - 识别 V4 `tool/result` 上的 `message.isError`，避免把失败的写入发到 IM。
 - 命令回复语言只读 `locale` 设置文档（旧宿主 `settings.get`，0.1.7 上按命名空间过滤 `describe()`），不能把 `ui-theme.preference` 当成语言。
-- 归档运行中会话走官方「停止并归档」确认；恢复和置顶使用工作区导航接口。
+- 归档运行中会话走官方「停止并归档」确认；恢复使用工作区导航接口。
 - 按定时任务插件，用 Ant Design 重做频道会话列表和账号设置。
 - 侧栏分组保留 IM 渠道图标，不再 hover 换成展开箭头；运行中用官方 `StateDot` ongoing 圈，空闲行留空位。
 - 清掉 Chip/ChannelCard 残留样式，绑定、诊断和待审批改用 Ant Segmented/Tag/Alert，补齐凭据字段词条，并按需压缩 Ant Design 客户端包。`antd` 和 `react-dom` 留在 `devDependencies`，`dsh plugin add` 不再另装一棵 Ant。
+- 文件夹图标按 `IconFolderClose16`、`IconFolderClose` 回退。删除账号确认框跟随宿主暗色主题。频道会话菜单不提供置顶。
 
 ## 0.1.51 - 2026-09-18
 

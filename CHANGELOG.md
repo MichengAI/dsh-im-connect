@@ -10,10 +10,11 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 - Read Chat files through `workspaceFiles.readBytes` on 0.1.7 hosts; a full-file payload that omits `eof`/`offset` still counts as complete. Keep `readAll` and the local filesystem fallback on older hosts.
 - Treat V4 tool-result errors on `message.isError` so failed writes are not sent to IM.
 - Read command-reply language from the `locale` settings document (`settings.get` on older hosts, `describe()` filtered by namespace on 0.1.7). Do not treat `ui-theme.preference` as a language.
-- Archive a running session with the official stop-and-archive confirmation; restore and pin use the workspace navigation APIs.
+- Archive a running session with the official stop-and-archive confirmation; restore uses the workspace navigation APIs.
 - Rebuild the channel session list and account settings with Ant Design, matching the scheduled-tasks plugin.
 - Keep channel logos on the sidebar group rows instead of swapping them for a chevron. Running rows use the official `StateDot` ongoing ring; idle rows keep an empty slot.
 - Drop leftover Chip/ChannelCard chrome, use Ant Segmented/Tag/Alert on bind, diagnostics and pending approvals, fill missing field labels, and tree-shake plus minify the bundled Ant Design client. `antd` and `react-dom` stay in `devDependencies`; `dsh plugin add` no longer installs a second Ant tree.
+- Folder icons fall back through `IconFolderClose16` and `IconFolderClose`. The remove-account confirm follows the host dark theme. Channel session menus do not include pin.
 
 ## 0.1.51 - 2026-09-18
 

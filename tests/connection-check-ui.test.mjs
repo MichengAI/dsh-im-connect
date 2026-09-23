@@ -71,7 +71,7 @@ function fixture(onAction) {
     }
   }
   const h = (type, props, ...children) => typeof type === 'function' ? type(props) : ({ type, props: props || {}, children: children.flat(Infinity).filter(value => value !== null && value !== false) })
-  const Component = new Function('h', 'useState', 'useEffect', 'useRef', 'Logo', 'accountLabel', 'AccountSettingsPicker', 'CommandPermissionSettings', 'Button', 'Modal', 'Tag', 'Alert', componentSource + '; return AccountInspector;')(h, useState, useEffect, useRef, 'Logo', account => account.id, 'Picker', 'Permissions', 'Button', { confirm() {} }, 'Tag', 'Alert')
+  const Component = new Function('h', 'useState', 'useEffect', 'useRef', 'Logo', 'accountLabel', 'AccountSettingsPicker', 'CommandPermissionSettings', 'Button', 'Modal', 'Tag', 'Alert', componentSource + '; return AccountInspector;')(h, useState, useEffect, useRef, 'Logo', account => account.id, 'Picker', 'Permissions', 'Button', { useModal: () => [{ confirm() {} }, null] }, 'Tag', 'Alert')
   const render = (account = { id: 'a', connectionState: 'connected', connected: true, receiveConfigured: true }, lang = 'zh') => {
     cursor = 0
     const tree = Component({ account, onAction, t: key => translations[lang][key] ?? key, onSave: async () => true })

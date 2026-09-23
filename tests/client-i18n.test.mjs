@@ -29,7 +29,7 @@ test('界面 t() 用到的键都在词典里', () => {
 })
 
 test('已下线的 ChannelCard / 空态词条不再占词典', () => {
-  for (const key of ['settings.selectAccountTitle', 'command.user', 'action.configure', 'status.unconfigured', 'composer.project']) {
+  for (const key of ['settings.selectAccountTitle', 'command.user', 'action.configure', 'status.unconfigured', 'composer.project', 'rail.hideArchived', 'account.agentPreset', 'bind.close', 'rail.pin', 'rail.unpin']) {
     assert.equal(IM_LOCALES.zh[key], undefined, key)
   }
 })
