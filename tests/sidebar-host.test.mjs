@@ -264,3 +264,60 @@ test('频道接口不因渠道已连接而返回空文件夹', () => {
   assert.match(manager, /filter\(\(group\) => group\.sessions\.length > 0\)/)
   assert.doesNotMatch(manager, /connected\.has\(group\.id\)/)
 })
+
+test('工作区树、悬停状态和标题滚动按实际结果分组', () => {
+  const code = extractBlock(client, '    function folderPath(path) {', '    async function archiveChannelGroup', '频道列表纯逻辑', [
+    'function groupChannelSessionsByWorkspaceTree(',
+    'function channelSessionHoverStatuses(',
+    'function placeSessionTitle(',
+    'function channelSessionVisible(',
+  ])
+  const api = new Function(code + '; return { groupChannelSessionsByWorkspaceTree, channelSessionHoverStatuses, placeSessionTitle, startSessionTitleMarquee, channelSessionVisible };')()
+  const t = (key, params = {}) => key === 'rail.subagents' ? String(params.n) : key
+  const sessions = [
+    { sessionId: 'a', channelId: 'wecom' },
+    { sessionId: 'b', channelId: 'wecom' },
+    { sessionId: 'c', channelId: 'qq' },
+  ]
+  const workspaces = [
+    { workspaceId: 'root', path: 'D:/repo', title: 'repo', sessionIds: ['a'] },
+    { workspaceId: 'child', path: 'D:/repo/pkg', title: 'pkg', sessionIds: ['b'] },
+  ]
+  const grouped = api.groupChannelSessionsByWorkspaceTree(sessions, workspaces, '未分组')
+  assert.deepEqual(grouped.map((group) => [group.id, group.depth, group.sessions.map((session) => session.sessionId)]), [
+    ['root', 0, ['a']],
+    ['child', 1, ['b']],
+    ['', 0, ['c']],
+  ])
+  const collapsed = api.groupChannelSessionsByWorkspaceTree(sessions, [], '未分组')
+  assert.deepEqual(collapsed.map((group) => [group.id, group.sessions.length]), [['', 3]])
+  const archived = new Set()
+  assert.equal(api.channelSessionVisible('a', archived, 'only'), false)
+  assert.equal(api.channelSessionVisible('a', archived, 'default'), true)
+  assert.equal(api.channelSessionVisible('a', new Set(['a']), 'only'), true)
+  assert.deepEqual(api.channelSessionHoverStatuses({ running: true }, t), [{ state: 'ongoing', label: 'rail.running' }])
+  assert.deepEqual(api.channelSessionHoverStatuses({ archived: true }, t), [{ state: 'archived', label: 'rail.archived' }])
+  assert.deepEqual(api.channelSessionHoverStatuses({ pendingKind: 'approval', runningSubagentCount: 2 }, t), [
+    { state: 'warning', label: 'rail.waitingApproval', trailing: 'rail.compactApproval' },
+    { state: 'ongoing', label: '2' },
+  ])
+  const title = { scrollLeft: -1, dataset: {} }
+  api.placeSessionTitle(title, 12, 40)
+  assert.equal(title.scrollLeft, 12)
+  assert.equal(title.dataset.scrolled, '')
+  assert.equal(title.dataset.clipped, '')
+  api.placeSessionTitle(title, 0, 40)
+  assert.equal('scrolled' in title.dataset, false)
+  api.placeSessionTitle(title, 40, 40)
+  assert.equal('clipped' in title.dataset, false)
+  const marquee = { scrollWidth: 100, clientWidth: 10, scrollLeft: 0, dataset: {} }
+  const previousWindow = globalThis.window
+  globalThis.window = { matchMedia: () => ({ matches: true }) }
+  try {
+    api.startSessionTitleMarquee(marquee, { id: 0 })
+  } finally {
+    globalThis.window = previousWindow
+  }
+  assert.equal(marquee.scrollLeft, 90)
+  assert.equal('clipped' in marquee.dataset, false)
+})

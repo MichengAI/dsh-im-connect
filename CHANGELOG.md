@@ -6,7 +6,9 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## Unreleased
 
-- Support DSH 0.1.7-rc.1. Drop the 0.1.6 and 0.1.7 alpha versions from the supported set. 0.1.2-rc.1 and the 0.1.5 release candidates stay supported.
+- Support DSH 0.1.7-rc.1. The 0.1.6 and 0.1.7 alphas leave the supported set. Published 0.1.53 still says those alphas are supported; upgrading from an alpha host shows a peer-range warning, and the plugin code still runs.
+- 0.1.2-rc.1 and the 0.1.5 release candidates stay. They belong to the published release-candidate line, a different line from the later alphas, which is why an older candidate remains after a newer alpha is dropped.
+- On 0.1.2-rc.1 and the 0.1.5 candidates, a workspace snapshot without `items` or `archivedSessionIds` collapses “Workspace Tree” into one ungrouped group, and “Archived only” becomes an empty list.
 
 ## 0.1.53 - 2026-09-23
 
