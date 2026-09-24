@@ -31,6 +31,25 @@ window.__ModuleLoader__.load({
     function hostMenuRendersChildren() {
       return typeof primitives.IconEllipsisOutlineRegular === "function";
     }
+    /**
+     * 宿主 renderer 对「调用本 entry 未声明的子槽位」是直接抛 SlotOwnershipError 的，抛点在调用瞬间。
+     * sidebar.workspaces.session.menu.item 和 row.action 都是 0.1.7 才声明的子槽位，旧宿主
+     * （0.1.2 / 0.1.5）没有：一旦抛到宿主，宿主的槽位错误边界只会给这块画一个空的 crash div，
+     * 整块会话列表跟着消失（Issue #13）。这里统一兜住，失败只当该槽位没有内容。
+     */
+    const skippedHostSlotKeys = new Set();
+    function renderHostSlot(renderSlot, key, slotProps, options) {
+      if (typeof renderSlot !== "function") return undefined;
+      try {
+        return renderSlot(key, slotProps, options);
+      } catch (error) {
+        if (!skippedHostSlotKeys.has(key)) {
+          skippedHostSlotKeys.add(key);
+          console.warn("[dsh-im-connect] 宿主未声明槽位 " + key + "，已跳过该槽位", error);
+        }
+        return undefined;
+      }
+    }
     const IconListPenOutline16 = pickHostIcon("IconListPenOutlineRegular", "IconListPenOutline16");
     const IconEditOutline16 = pickHostIcon("IconEditOutlineRegular", "IconEditOutline16");
     const IconBranchOutline16 = pickHostIcon("IconBranchOutlineRegular", "IconBranchOutline16");
@@ -2057,12 +2076,14 @@ window.__ModuleLoader__.load({
       }
       const displayTitle = String(hoverTitle || title).trim() || title;
       // 0.1.7 的 Menu 渲染 children。不请求 pin，频道会话不提供置顶。更早版本不渲染 children，仍用下面的 items。
-      const menuSlot = renderSlot && hostMenuRendersChildren()
-        ? ["rename", "fork", "archive", "archive-manager.delete-session"].map((only) => renderSlot("sidebar.workspaces.session.menu.item", {
+      const menuSlotItems = hostMenuRendersChildren()
+        ? ["rename", "fork", "archive", "archive-manager.delete-session"].map((only) => renderHostSlot(renderSlot, "sidebar.workspaces.session.menu.item", {
             sessionId: sess.sessionId,
             displayTitle,
           }, { hookContext: [menu, (open) => onMenuChange(!!open)], only }))
         : undefined;
+      // 宿主槽位被跳过时不能留下一个空菜单，退回本地 items。
+      const menuSlot = menuSlotItems && menuSlotItems.some((node) => node != null) ? menuSlotItems : undefined;
       const menuItems = menuSlot !== undefined ? [] : (archived
         ? [
             { id: "unarchive", label: t("rail.unarchive"), icon: h(IconArchiveOutline20, { size: 16 }) },
@@ -2135,7 +2156,7 @@ window.__ModuleLoader__.load({
               onClick: (e) => { e.stopPropagation(); hideHover(); onMenuChange(!menu); },
             }, h(IconEllipsisOutline16, { size: 16 })),
           }, menuSlot),
-          renderSlot && renderSlot("sidebar.workspaces.session.row.action", { sessionId: sess.sessionId, displayTitle }, { only: "archive" }),
+          renderHostSlot(renderSlot, "sidebar.workspaces.session.row.action", { sessionId: sess.sessionId, displayTitle }, { only: "archive" }),
         ),
         !useOfficialHover && hoverOpen && !menu && native && typeof document !== "undefined" && ReactDOM.createPortal(h(SessionHoverCard, {
           title: hoverTitle,
@@ -2785,6 +2806,32 @@ window.__ModuleLoader__.load({
       return false;
     }
 
+    /**
+     * 侧栏包装兜底（Issue #13）。插件是用自己的一层替换宿主 sidebar.workspaces 的官方会话列表组件的：
+     * 这层只要渲染失败，宿主的槽位错误边界就给这块画一个空的 crash div ——「左侧会话记录不显示」。
+     * 这里接住错误，直接回落到宿主原本的官方组件（用宿主自己传进来的 props），
+     * 宁可少一个频道页签，也不能让会话列表整个消失。
+     */
+    class ImSidebarFallbackBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { failed: false };
+      }
+      static getDerivedStateFromError() {
+        return { failed: true };
+      }
+      componentDidCatch(error) {
+        console.warn("[dsh-im-connect] 侧栏包装渲染失败，已回落到宿主原生会话列表", error);
+      }
+      render() {
+        if (this.state.failed) {
+          const Official = this.props.officialTree;
+          return Official ? h(Official, this.props.hostProps) : null;
+        }
+        return this.props.children;
+      }
+    }
+
     function pickOfficialWorkspaces(ctx) {
       const read = ctx.slots.entriesOfSlot || ctx.slots.entries;
       const entries = (read && read.call(ctx.slots, "sidebar.workspaces")) || [];
@@ -2930,11 +2977,11 @@ window.__ModuleLoader__.load({
               label: t("rail.channels"),
               order: 20,
               matchSession: isChannelSession,
-              render: (props) => h(LocalizedChannelRail, Object.assign({}, props, {
+              render: (props) => h(ImSidebarFallbackBoundary, { officialTree: null, hostProps: props }, h(LocalizedChannelRail, Object.assign({}, props, {
                 skin: "native",
                 archiveSession: props.archiveSession || ((id, options) => archiveHostSession(ctx, id, options)),
                 unarchiveSession: props.unarchiveSession || ((id) => unarchiveHostSession(ctx, id)),
-              })),
+              }))),
             });
           };
           refreshInsertedTab();
@@ -2970,7 +3017,8 @@ window.__ModuleLoader__.load({
             const tree = originalComp;
             attachNativeTabRegistry(official, registry);
             function ImNativeWorkspaceShell(innerProps) {
-              return h(LocalizedSessionSwitcher, Object.assign({}, innerProps, { officialTree: tree, nativeTabs: registry }));
+              return h(ImSidebarFallbackBoundary, { officialTree: tree, hostProps: innerProps },
+                h(LocalizedSessionSwitcher, Object.assign({}, innerProps, { officialTree: tree, nativeTabs: registry })));
             }
             ImNativeWorkspaceShell.displayName = "ImNativeWorkspaceShell";
             ImNativeWorkspaceShell.__imConnectWrapped = true;

@@ -321,3 +321,66 @@ test('工作区树、悬停状态和标题滚动按实际结果分组', () => {
   assert.equal(marquee.scrollLeft, 90)
   assert.equal('clipped' in marquee.dataset, false)
 })
+
+// Issue #13：插件把宿主 sidebar.workspaces 的官方组件换成自己一层，这层一抛错，
+// 宿主只会给槽位画一个空的 crash div，整块会话列表消失。下面两条锁住「不再抛给宿主」和「回落到官方树」。
+test('宿主未声明的子槽位不再抛给宿主，槽位调用统一容错', () => {
+  const code = extractBlock(client, '    const skippedHostSlotKeys = new Set();', '    const IconListPenOutline16 = pickHostIcon', '宿主槽位容错', ['宿主未声明槽位'])
+  const warnings = []
+  const renderHostSlot = new Function('console', `${code}; return renderHostSlot;`)({ warn: (...args) => warnings.push(args) })
+  const calls = []
+  // 旧宿主（0.1.2 / 0.1.5）没有声明 0.1.7 的子槽位，宿主 renderSlot 在调用瞬间抛 SlotOwnershipError。
+  const undeclared = (key, props, options) => {
+    calls.push([key, props, options])
+    const error = new Error(`slot '${key}' is not declared by this entry's children`)
+    error.name = 'SlotOwnershipError'
+    throw error
+  }
+  assert.equal(renderHostSlot(undeclared, 'sidebar.workspaces.session.row.action', { sessionId: 's1' }, { only: 'archive' }), undefined)
+  assert.equal(renderHostSlot(undeclared, 'sidebar.workspaces.session.row.action', { sessionId: 's2' }, { only: 'archive' }), undefined)
+  assert.equal(calls.length, 2)
+  assert.equal(warnings.length, 1, '同一个槽位只提示一次，不刷屏')
+  // 0.1.7：宿主声明了子槽位，正常返回宿主节点。
+  assert.equal(renderHostSlot((key) => 'host-node:' + key, 'sidebar.workspaces.session.menu.item', {}, { only: 'rename' }), 'host-node:sidebar.workspaces.session.menu.item')
+  // 宿主没有提供 renderSlot 时不调用。
+  assert.equal(renderHostSlot(undefined, 'sidebar.workspaces.session.row.action'), undefined)
+  assert.equal(calls.length, 2)
+})
+
+test('侧栏会话行的 0.1.7 专属子槽位只走容错通道，空结果退回本地菜单', () => {
+  assert.match(client, /function renderHostSlot\(renderSlot, key, slotProps, options\)/)
+  assert.doesNotMatch(client, /renderSlot && renderSlot\("sidebar\.workspaces\.session\./)
+  assert.match(client, /renderHostSlot\(renderSlot, "sidebar\.workspaces\.session\.menu\.item"/)
+  assert.match(client, /renderHostSlot\(renderSlot, "sidebar\.workspaces\.session\.row\.action"/)
+  assert.match(client, /const menuSlotItems = hostMenuRendersChildren\(\)/)
+  assert.match(client, /const menuSlot = menuSlotItems && menuSlotItems\.some\(\(node\) => node != null\) \? menuSlotItems : undefined/)
+})
+
+test('侧栏包装渲染失败时回落到宿主官方会话列表', () => {
+  const code = extractBlock(client, '    class ImSidebarFallbackBoundary extends React.Component {', '    function pickOfficialWorkspaces(ctx)', '侧栏兜底边界')
+  const warnings = []
+  const h = (type, props, ...children) => ({ type, props: Object.assign({}, props, { children }) })
+  class Component { constructor(props) { this.props = props } }
+  const Boundary = new Function('React', 'h', 'console', `${code}; return ImSidebarFallbackBoundary;`)({ Component }, h, { warn: (...args) => warnings.push(args) })
+  const OfficialTree = function OfficialTree() {}
+  const hostProps = { useSessions: 'host-hook', t: 'host-t' }
+  const boundary = new Boundary({ officialTree: OfficialTree, hostProps, children: 'plugin-tree' })
+  // 正常时渲染插件自己的子树，不碰官方组件。
+  assert.equal(boundary.render(), 'plugin-tree')
+  assert.deepEqual(Boundary.getDerivedStateFromError(new Error('boom')), { failed: true })
+  boundary.state = { failed: true }
+  const fallback = boundary.render()
+  // 失败后必须用宿主自己的 props 渲染官方组件，等于没装插件时的原生会话列表。
+  assert.equal(fallback.type, OfficialTree)
+  assert.equal(fallback.props.useSessions, 'host-hook')
+  assert.equal(fallback.props.t, 'host-t')
+  // 没有官方组件可回落时只渲染空，同样不把错误抛给宿主。
+  const empty = new Boundary({ officialTree: null, hostProps })
+  empty.state = { failed: true }
+  assert.equal(empty.render(), null)
+})
+
+test('原生侧栏外壳与插入页签都把官方组件作为兜底传入', () => {
+  assert.match(client, /h\(ImSidebarFallbackBoundary, \{ officialTree: tree, hostProps: innerProps \}/)
+  assert.match(client, /h\(ImSidebarFallbackBoundary, \{ officialTree: null, hostProps: props \}/)
+})
