@@ -4,6 +4,12 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.55 - 2026-09-25
+
+- Support DSH 0.1.7-rc.2, and keep 0.1.7-rc.1, 0.1.2-rc.1, and the 0.1.5 release candidates working.
+- Fix the left session list going blank after installing the plugin. On hosts without the 0.1.7 sidebar interfaces (0.1.2, 0.1.5), the plugin no longer asks the host for sidebar slots it does not declare, and if the plugin's own sidebar layer fails it falls back to the host's native session list instead of showing nothing.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.54 - 2026-09-24
 
 - Support DSH 0.1.7-rc.1, and keep 0.1.2-rc.1 and the 0.1.5 release candidates. The 0.1.6 and 0.1.7 preview builds are no longer supported; move to 0.1.7-rc.1.
