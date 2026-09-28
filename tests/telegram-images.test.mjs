@@ -13,7 +13,7 @@ async function receive(message, options = {}) {
   const batches = options.batches ?? [options.messages ?? [message]]
   let finish
   const received = new Promise(resolve => { finish = resolve })
-  const channel = createTelegramChannel({ token: 'fixture-token' }, () => {})
+  const channel = createTelegramChannel({ token: 'fixture-token', host: options.host }, () => {})
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), init })
     const method = String(url).split('/').pop()
@@ -239,4 +239,11 @@ test('Telegram rejects oversized unadmitted album before downloading any picture
   assert.equal(calls.filter(call => call.url.endsWith('/getFile')).length, 0)
   assert.equal(messages.length, 0)
   assert.match(replies[0], /相册图片过多/)
+})
+
+test('英文全局语言下，Telegram 图片接收失败提示为英文', async () => {
+  const host = { get: (name) => name === 'settings' ? { describe: () => [{ ns: 'locale', value: { preference: 'en' } }] } : undefined }
+  const { replies, messages } = await receive({ photo: [{ file_id: 'p', width: 1, height: 1 }] }, { fail: true, host })
+  assert.equal(messages.length, 0)
+  assert.equal(replies[0], 'The image could not be received. Check its format and size, then send the full message again.')
 })

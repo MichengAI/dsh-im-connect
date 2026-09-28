@@ -19,6 +19,9 @@ export interface WeixinChannelConfig {
     botToken?: string;
     /** 登录态刷新或失效时同步回 Host credentials vault。 */
     onBotToken?: (token: string | undefined) => void | Promise<void>;
+    host?: {
+        get(name: string): unknown;
+    };
 }
 /** CDN 基址（官方插件同款）。 */
 export declare const CDN_BASE_URL = "https://novac2c.cdn.weixin.qq.com/c2c";

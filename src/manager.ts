@@ -799,7 +799,7 @@ export class ChannelManager {
             const platform = this.platformOf(accountId, state)
             const resolved = await fileOperation(this.resolveSecrets(platform, accountId, state.config ?? {}), signal)
             signal.throwIfAborted()
-            adapter = createChannelAdapter(platform, resolved, this.log, this.accountStateDir(accountId, platform))
+            adapter = createChannelAdapter(platform, resolved, this.log, this.accountStateDir(accountId, platform), { host: this.ctx })
           } catch (error) {
             signal.throwIfAborted()
             if (error instanceof DiagnosticError) throw error
@@ -988,6 +988,7 @@ export class ChannelManager {
     const adapter = createChannelAdapter(platform, resolved, this.log, accountDir, {
       accountId: id,
       accountLabel: state.name || `${CHANNEL_META[platform].label}账号`,
+      host: this.ctx,
       onWeixinBotToken: async (token) => {
         const ref = credentialRef(id, 'botToken')
         if (token) await this.vault.set(ref, token)

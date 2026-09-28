@@ -1,4 +1,5 @@
 /** QQ 开放平台机器人：官方 WebSocket 网关，不是个人 QQ 号。 */
+import { channelNotice, localizeReason } from '../engine/command-locale.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { timeoutSignal } from '../engine/abort.js'
 import { diagnosticJson, probe, requireDiagnostic } from './diagnostics.js'
@@ -11,6 +12,7 @@ export interface QqChannelConfig {
   appId?: string
   appSecret?: string
   additionalImageHosts?: readonly string[]
+  host?: { get(name: string): unknown }
 }
 
 interface GatewayPayload {
@@ -259,12 +261,12 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
               if (!current()) return
               const reason = channelImageFailureReason(error)
               log(`[qq] 图片下载失败: ${reason} host=${images.slice(0, MAX_CHANNEL_IMAGES).map(image => channelImageDownloadHost(image.url)).join(',')}`)
-              await sendText(chatId, `图片下载失败：${reason}。请重新发送。`).catch(() => log('[qq] 图片提示发送失败'))
+              await sendText(chatId, channelNotice(config.host, '图片下载失败：{0}。请重新发送。', localizeReason(config.host, reason))).catch(() => log('[qq] 图片提示发送失败'))
               return
             }
             if (!current()) return
             if (!text && !media.length) {
-              if (msg.attachments?.length) await sendText(chatId, '暂不支持该文件类型，请发送文字或图片。')
+              if (msg.attachments?.length) await sendText(chatId, channelNotice(config.host, '暂不支持该文件类型，请发送文字或图片。'))
               return
             }
             await handler?.({

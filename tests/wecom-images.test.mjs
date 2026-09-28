@@ -6,14 +6,14 @@ import { network } from './channel-image-fixture.mjs'
 import { createWecomChannel } from '../lib/channels/wecom.js'
 
 const png = Buffer.from('89504e470d0a1a0a0000000049454e44', 'hex')
-function setup(downloadImage = async () => ({ kind: 'image', data: png, mediaType: 'image/png' })) {
+function setup(downloadImage = async () => ({ kind: 'image', data: png, mediaType: 'image/png' }), config = {}) {
   const replies = [], received = [], logs = []
   let sdkClient
   mock.method(WSClient.prototype, 'connect', function () { sdkClient = this; this.emit('authenticated') })
   mock.method(WSClient.prototype, 'disconnect', () => {})
   mock.method(WSClient.prototype, 'replyStream', async (...args) => { replies.push(args) })
   mock.method(WSClient.prototype, 'sendMessage', async () => { throw new Error('must use callback frame') })
-  const channel = createWecomChannel({ botId: 'bot', secret: 'secret' }, line => logs.push(line), { downloadImage })
+  const channel = createWecomChannel({ botId: 'bot', secret: 'secret', ...config }, line => logs.push(line), { downloadImage })
   channel.setMessageHandler(async msg => { received.push(msg); await channel.send(msg.chatId, 'answer') })
   const frame = (id, extra) => ({ headers: { req_id: id }, body: { chattype: 'single', from: { userid: 'u' }, msgid: id, ...extra } })
   return { channel, replies, received, logs, frame, emit: f => sdkClient.emit('message', f) }
@@ -143,5 +143,16 @@ test('企微文件按原始字节解密，不套用图片校验', async () => {
     s.emit(s.frame('file', { msgtype: 'file', file: { url: 'https://example.com/report', aeskey: key.toString('base64'), filename: '报告.pdf' } }))
     await tick()
     assert.equal(s.received[0].media[0].kind, 'file'); assert.deepEqual(s.received[0].media[0].data, data)
+  } finally { await s.channel.stop(); mock.restoreAll() }
+})
+
+test('英文全局语言下，企微图片失败提示为英文', async () => {
+  const host = { get: (name) => name === 'settings' ? { describe: () => [{ ns: 'locale', value: { preference: 'en' } }] } : undefined }
+  const s = setup(async () => { throw Object.assign(new Error('secret'), { code: 'ENOTFOUND' }) }, { host })
+  await s.channel.start()
+  try {
+    s.emit(s.frame('bad', { msgtype: 'image', image: {} }))
+    await tick()
+    assert.equal(s.replies[0][2], 'The image could not be read: DNS lookup failed. Send it again. If it still fails, ask an administrator to check the network and bot configuration.')
   } finally { await s.channel.stop(); mock.restoreAll() }
 })

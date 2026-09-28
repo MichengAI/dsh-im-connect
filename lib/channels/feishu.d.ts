@@ -27,10 +27,13 @@ export declare function resolveFeishuContent(client: ResourceClient, message: Fe
     text: string;
     media: ImMedia[];
 }>;
-export interface FeishuConfig {
+interface FeishuConfig {
     appId?: string;
     appSecret?: string;
     domain?: 'feishu' | 'lark';
+    host?: {
+        get(name: string): unknown;
+    };
 }
 interface FeishuMention {
     key?: string;

@@ -1,4 +1,5 @@
 import { choiceSendError } from '../engine/choice-delivery.js'
+import { notice } from '../engine/command-locale.js'
 import { diagnosticJson, DiagnosticError, probe, requireDiagnostic } from './diagnostics.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { fileForm, fileRequest } from './file-send.js'
@@ -9,6 +10,7 @@ import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-
 export interface TelegramConfig {
   token?: string
   stateDir?: string
+  host?: { get(name: string): unknown }
 }
 
 interface TgUpdate {
@@ -154,7 +156,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
             addressed = album.addressed
             if (++album.count > 20) {
               album.pending = []
-              if (addressed) await api('sendMessage', { chat_id: message.chat.id, text: '相册图片过多，请分批发送。' }).catch(() => undefined)
+              if (addressed) await api('sendMessage', { chat_id: message.chat.id, text: config.host ? notice(config.host, '相册图片过多，请分批发送。') : '相册图片过多，请分批发送。' }).catch(() => undefined)
               continue
             }
             if (!addressed) { album.pending.push(update); continue }
@@ -173,7 +175,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
                 if (stopped) break
                 // Do not expose a token-bearing download URL through error messages.
                 log('[telegram] 图片接收失败')
-                await api('sendMessage', { chat_id: message.chat.id, text: '图片接收失败，请检查图片格式和大小后重新发送完整消息。' }).catch(() => log('[telegram] 图片失败提示发送失败'))
+                await api('sendMessage', { chat_id: message.chat.id, text: config.host ? notice(config.host, '图片接收失败，请检查图片格式和大小后重新发送完整消息。') : '图片接收失败，请检查图片格式和大小后重新发送完整消息。' }).catch(() => log('[telegram] 图片失败提示发送失败'))
                 // A failed image caption must never turn into a text command.
                 continue
               }

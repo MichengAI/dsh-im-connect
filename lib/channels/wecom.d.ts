@@ -3,6 +3,9 @@ export interface WecomConfig {
     botId?: string;
     secret?: string;
     additionalImageHosts?: readonly string[];
+    host?: {
+        get(name: string): unknown;
+    };
 }
 export interface WecomSdkClient {
     readonly isConnected?: boolean;

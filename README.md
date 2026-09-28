@@ -267,7 +267,7 @@ Send commands as separate text messages; image captions remain ordinary input. S
 - Forking: `/fork` requires at least one completed turn. If a fork was created but switching failed, follow the session ID and recovery instructions in the reply.
 - Permissions and export: `/permission` settings survive session restoration. `/export` follows private-chat admission and private/group command permissions. Completion is reported only after the ZIP file is sent.
 
-Command replies support Chinese and English and follow the language explicitly saved in web settings. With no preference or an unavailable language service, they default to Chinese. Dynamic names, paths, user content, and extension results remain unchanged. Tool approvals, interactive questions, and some channel errors are not yet fully localized.
+Command replies, tool approvals, interactive questions, and channel notices sent directly to the user follow the language saved in the host's global settings. With no saved preference or an unavailable language service, they default to Chinese. Dynamic names, paths, user content, and extension results remain unchanged. Connection status on the settings page still uses the interface dictionary.
 
 ## Permissions and security boundaries
 

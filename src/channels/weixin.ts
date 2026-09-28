@@ -10,6 +10,7 @@
  * @module dsh-im-gateway/channels/wechat
  */
 
+import { channelNotice, localizeReason } from '../engine/command-locale.js'
 import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -30,6 +31,7 @@ export interface WeixinChannelConfig {
   botToken?: string
   /** 登录态刷新或失效时同步回 Host credentials vault。 */
   onBotToken?: (token: string | undefined) => void | Promise<void>
+  host?: { get(name: string): unknown }
 }
 
 const BASE_URL = 'https://ilinkai.weixin.qq.com'
@@ -641,7 +643,9 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
             }
             if (mediaFailed) {
               if (!current()) return
-              const feedback = imageFailure ? `图片下载失败：${imageFailure.message}。整条消息未提交，请重新发送。` : '图片或媒体下载失败，请重新发送。'
+              const feedback = imageFailure
+                ? channelNotice(config.host, '图片下载失败：{0}。整条消息未提交，请重新发送。', localizeReason(config.host, imageFailure.message))
+                : channelNotice(config.host, '图片或媒体下载失败，请重新发送。')
               await sendText(parsed.fromUserId, feedback).catch(() => log('[weixin] 媒体提示发送失败'))
               // Never turn an image caption (e.g. /new) into a text-only command.
               continue

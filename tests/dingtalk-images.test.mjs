@@ -5,14 +5,14 @@ import { createDingtalkChannel } from '../lib/channels/dingtalk.js'
 import { network } from './channel-image-fixture.mjs'
 const png = Buffer.from('89504e470d0a1a0a0000000049454e44', 'hex')
 const tick = () => new Promise(resolve => setTimeout(resolve, 20))
-function setup(downloadImage = async () => ({ kind: 'image', data: png, mediaType: 'image/png' })) {
+function setup(downloadImage = async () => ({ kind: 'image', data: png, mediaType: 'image/png' }), config = {}) {
   let callback
   const received = [], replies = [], logs = []
   mock.method(DWClient.prototype, 'connect', async () => {})
   mock.method(DWClient.prototype, 'disconnect', () => {})
   mock.method(DWClient.prototype, 'registerCallbackListener', (_topic, cb) => { callback = cb })
   mock.method(globalThis, 'fetch', async (url, options) => { replies.push({ url: String(url), options }); return Response.json({ errcode: 0, errmsg: 'ok' }) })
-  const channel = createDingtalkChannel({ clientId: 'bot', clientSecret: 'secret' }, line => logs.push(line), { downloadImage })
+  const channel = createDingtalkChannel({ clientId: 'bot', clientSecret: 'secret', ...config }, line => logs.push(line), { downloadImage })
   channel.setMessageHandler(async msg => { received.push(msg); await channel.send(msg.chatId, 'answer') })
   const event = (id, extra) => ({ msgId: id, senderStaffId: 'u', conversationType: '1', sessionWebhook: `https://oapi.dingtalk.com/robot/send?token=${id}`, ...extra })
   return { channel, received, replies, logs, event, emit: payload => callback({ data: JSON.stringify(payload) }) }
@@ -193,5 +193,17 @@ test('钉钉文件通过官方下载码取回二进制，不按图片验证', as
     assert.equal(s.received[0].media[0].data.toString(), 'pdf-content')
     assert.equal(s.received[0].media[0].name, '报告.pdf')
     assert.equal(calls.at(-1).options.headers?.['x-acs-dingtalk-access-token'], undefined)
+  } finally { await s.channel.stop(); mock.restoreAll() }
+})
+
+test('英文全局语言下，钉钉图片失败提示为英文', async () => {
+  const host = { get: (name) => name === 'settings' ? { describe: () => [{ ns: 'locale', value: { preference: 'en' } }] } : undefined }
+  const failures = network(Buffer.from('{}'))
+  const s = setup(async () => { throw Object.assign(new Error('secret'), { code: 'ENOTFOUND' }) }, { host })
+  await s.channel.start()
+  try {
+    s.emit(s.event('bad', { msgtype: 'picture', content: {} }))
+    await tick()
+    assert.equal(JSON.parse(failures[0].body).text.content, 'The image could not be read: DNS lookup failed. Try again. If it still fails, ask an administrator to check the network and the bot file-download permission.')
   } finally { await s.channel.stop(); mock.restoreAll() }
 })

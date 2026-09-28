@@ -3,6 +3,9 @@ export interface DingtalkConfig {
     clientId?: string;
     clientSecret?: string;
     additionalImageHosts?: readonly string[];
+    host?: {
+        get(name: string): unknown;
+    };
 }
 export declare function parseDingtalkCardAction(raw: string, allowed?: ReadonlySet<string>): {
     cardId: string;

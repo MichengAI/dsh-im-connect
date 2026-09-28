@@ -13,26 +13,26 @@ export function createChannelAdapter(
   config: Record<string, string>,
   log: (line: string) => void,
   stateDir: string,
-  options?: { accountId?: string; accountLabel?: string; onWeixinBotToken?: (token: string | undefined) => void | Promise<void> },
+  options?: { accountId?: string; accountLabel?: string; host?: { get(name: string): unknown }; onWeixinBotToken?: (token: string | undefined) => void | Promise<void> },
 ): ChannelAdapter | undefined {
   let adapter: ChannelAdapter | undefined
   const imageOptions = ['qq', 'wecom', 'dingtalk'].includes(id)
     ? { additionalImageHosts: parseAdditionalImageHosts(config.additionalImageHosts) } : {}
   switch (id) {
     case 'telegram':
-      adapter = createTelegramChannel({ token: config.token, stateDir }, log); break
+      adapter = createTelegramChannel({ token: config.token, stateDir, host: options?.host }, log); break
     case 'feishu':
-      adapter = createFeishuChannel('feishu', { appId: config.appId, appSecret: config.appSecret }, log); break
+      adapter = createFeishuChannel('feishu', { appId: config.appId, appSecret: config.appSecret, host: options?.host }, log); break
     case 'lark':
-      adapter = createFeishuChannel('lark', { appId: config.appId, appSecret: config.appSecret, domain: 'lark' }, log); break
+      adapter = createFeishuChannel('lark', { appId: config.appId, appSecret: config.appSecret, domain: 'lark', host: options?.host }, log); break
     case 'weixin':
-      adapter = createWeixinChannel({ enabled: true, stateDir, botToken: config.botToken, onBotToken: options?.onWeixinBotToken }, log, stateDir); break
+      adapter = createWeixinChannel({ enabled: true, stateDir, botToken: config.botToken, onBotToken: options?.onWeixinBotToken, host: options?.host }, log, stateDir); break
     case 'wecom':
-      adapter = createWecomChannel({ botId: config.botId, secret: config.secret, ...imageOptions }, log); break
+      adapter = createWecomChannel({ botId: config.botId, secret: config.secret, ...imageOptions, host: options?.host }, log); break
     case 'dingtalk':
-      adapter = createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret, ...imageOptions }, log); break
+      adapter = createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret, ...imageOptions, host: options?.host }, log); break
     case 'qq':
-      adapter = createQqChannel({ appId: config.appId, appSecret: config.appSecret, ...imageOptions }, log); break
+      adapter = createQqChannel({ appId: config.appId, appSecret: config.appSecret, ...imageOptions, host: options?.host }, log); break
     default:
       return undefined
   }

@@ -119,6 +119,28 @@ for (const mode of ['private-url', 'redirect', 'declared', 'stream', 'empty', 'h
   })
 }
 
+test('英文全局语言下，QQ 图片失败提示为英文', async () => {
+  const prevFetch = globalThis.fetch, prevWs = globalThis.WebSocket
+  let socket
+  const replies = []
+  const host = { get: (name) => name === 'settings' ? { describe: () => [{ ns: 'locale', value: { preference: 'en' } }] } : undefined }
+  globalThis.WebSocket = class { constructor() { socket = this } close() {} }
+  globalThis.fetch = async (url, init) => {
+    if (url.endsWith('/getAppAccessToken')) return Response.json({ access_token: 'secret-token' })
+    if (url.endsWith('/gateway')) return Response.json({ url: 'wss://qq.test' })
+    if (url.includes('/messages')) { replies.push(JSON.parse(init.body)); return Response.json({}) }
+    throw new Error('unexpected media fetch')
+  }
+  const channel = createQqChannel({ appId: 'app', appSecret: 'secret', host }, () => {})
+  channel.setMessageHandler(() => {})
+  try {
+    await channel.start()
+    socket.onmessage({ data: JSON.stringify({ op: 0, t: 'C2C_MESSAGE_CREATE', d: { id: 'm', content: 'caption', author: { user_openid: 'u' }, attachments: [{ content_type: 'image/png', url: 'http://127.0.0.1/secret' }] } }) })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(replies[0].content, 'The image could not be downloaded: The download address was blocked by the safety check. Send it again.')
+  } finally { await channel.stop(); globalThis.fetch = prevFetch; globalThis.WebSocket = prevWs }
+})
+
 for (const stop of [false, true, 'disconnect']) {
   test(`QQ serializes per chat without blocking Hello; late downloads ${stop === 'disconnect' ? 'discard after disconnect' : stop ? 'discard after stop' : 'keep arrival order'}`, async () => {
     const previousFetch = globalThis.fetch, previousWs = globalThis.WebSocket

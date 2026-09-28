@@ -1,7 +1,7 @@
 import { choiceSendError } from '../engine/choice-delivery.js'
 import { randomUUID } from 'node:crypto'
 import { DiagnosticError, platformResult, probe } from './diagnostics.js'
-import { replyText } from '../engine/command-locale.js'
+import { channelNotice, localizeReason } from '../engine/command-locale.js'
 import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
@@ -25,6 +25,7 @@ export interface WecomConfig {
   botId?: string
   secret?: string
   additionalImageHosts?: readonly string[]
+  host?: { get(name: string): unknown }
 }
 
 export interface WecomSdkClient {
@@ -318,7 +319,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
             const reason = channelImageFailureReason(error)
             log(`[wecom] 图片读取失败: ${reason} host=${images.slice(0, MAX_CHANNEL_IMAGES).map(image => channelImageDownloadHost(image.url)).join(',')}`)
             // Reply directly: consuming the broker FIFO here could steal an earlier frame.
-            await client?.replyStream(frame, newStreamId(), `图片读取失败：${reason}。请重新发送；若仍失败请管理员检查网络和机器人配置。`, true)
+            await client?.replyStream(frame, newStreamId(), channelNotice(config.host, '图片读取失败：{0}。请重新发送；若仍失败请管理员检查网络和机器人配置。', localizeReason(config.host, reason)), true)
             return
           }
           if (generation !== startedGeneration) return
@@ -377,7 +378,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       if (fullText.length > 4000) throw new Error('use-text-menu')
       await broker.sendCard(message.chatId, message.messageId, {
         card_type: 'button_interaction', task_id: buttons[0]?.token.split(':')[0],
-        main_title: { title: replyText('按上方完整说明选择操作') },
+        main_title: { title: channelNotice(config.host, '按上方完整说明选择操作') },
         button_list: buttons.map((button, index) => ({ text: String(index + 1), key: button.token, style: 1 })),
       }, fullText).catch(error => { throw choiceSendError(error) })
       const sender = client

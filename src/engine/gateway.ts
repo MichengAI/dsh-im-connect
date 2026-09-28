@@ -3,7 +3,7 @@ import { readDeliveryHistory } from './delivery-history.js'
 import { FileInputError, filePromptParts } from './file-input.js'
 import { ChoiceStore, type Choice } from './choices.js'
 import { MessageProgress, ProgressTracker, type TurnCompletion } from './message-progress.js'
-import { replyText, withReplyLocale } from './command-locale.js'
+import { notice, replyText, withReplyLocale } from './command-locale.js'
 import { FileDelivery, type DeliverySession } from './file-delivery.js'
 import { ChatCommands } from './chat-commands.js'
 import { canExecuteCommand, normalizeCommandPermissions, type CommandPermissions } from './command-permissions.js'
@@ -137,7 +137,7 @@ export class ImEngine {
       void this.inject(channel, merged, this.takeMergedMessages(key, merged)).catch((error) => {
         const detail = error instanceof Error ? error.message : String(error)
         this.log(`[${channelId}] 合并投递失败: ${detail}`)
-        channel.send(merged.chatId, '消息处理失败，请查看本机日志。').catch(() => undefined)
+        channel.send(merged.chatId, notice(this.ctx, '消息处理失败，请查看本机日志。')).catch(() => undefined)
       })
     })
     const on = (this.ctx as unknown as { on: (name: string, fn: (...args: unknown[]) => unknown, opts?: unknown) => () => void }).on
@@ -405,11 +405,11 @@ export class ImEngine {
       if (binding && this.questions.has(binding.sessionId)) {
         const actor = this.questionActors.get(binding.sessionId)
         if ((kind === 'group' && !actor) || (actor && msg.userId !== actor)) {
-          await this.deliver(channel, msg.chatId, '只有发起当前任务的用户可以回答这个问题。')
+          await this.deliver(channel, msg.chatId, notice(this.ctx, '只有发起当前任务的用户可以回答这个问题。'))
           return
         }
         if (!text || (msg.media?.length ?? 0) > 0) {
-          await this.deliver(channel, msg.chatId, '请用文字回答当前问题。')
+          await this.deliver(channel, msg.chatId, notice(this.ctx, '请用文字回答当前问题。'))
           return
         }
         if (this.questions.isReady(binding.sessionId)) this.interactionMessageIds.set(binding.sessionId, msg.messageId)
@@ -417,7 +417,7 @@ export class ImEngine {
         if (result.handled) {
           this.questionSelections.delete(binding.sessionId)
           if (result.waitingPresentation) {
-            await this.deliver(channel, msg.chatId, '问题详情仍在发送，请稍后再回答。')
+            await this.deliver(channel, msg.chatId, notice(this.ctx, '问题详情仍在发送，请稍后再回答。'))
             return
           }
           if (result.next) {
@@ -445,8 +445,8 @@ export class ImEngine {
         if (!canAnswerToolApproval({ userAllowed: this.userAllowed(channelId, msg.userId), kind: msg.kind === 'group' ? 'group' : 'dm' })) {
           if (binding && this.broker.has(binding.sessionId)) {
             const hint = msg.kind === 'group'
-              ? '请在私聊中批准或拒绝工具调用。'
-              : '工具调用审批仅限已批准用户，请在网页端处理。'
+              ? notice(this.ctx, '请在私聊中批准或拒绝工具调用。')
+              : notice(this.ctx, '工具调用审批仅限已批准用户，请在网页端处理。')
             await channel.send(msg.chatId, hint).catch(() => undefined)
             return
           }
@@ -471,7 +471,7 @@ export class ImEngine {
       }
     } catch (error) {
       this.log(`[${channelId}] 处理失败: ${error instanceof Error ? error.message : String(error)}`)
-      await channel.send(msg.chatId, error instanceof FileInputError ? error.message : msg.media?.some(media => media.kind === 'file') ? withReplyLocale(this.ctx, () => replyText('文件输入失败，整条消息未提交。请检查文件大小和格式后重新发送，或在网页 Chat 上传。')) : msg.media?.some(media => media.kind === 'image') ? imageInputFailure(error) : '消息处理失败，请查看本机日志。').catch(() => undefined)
+      await channel.send(msg.chatId, error instanceof FileInputError ? error.message : msg.media?.some(media => media.kind === 'file') ? withReplyLocale(this.ctx, () => replyText('文件输入失败，整条消息未提交。请检查文件大小和格式后重新发送，或在网页 Chat 上传。')) : msg.media?.some(media => media.kind === 'image') ? withReplyLocale(this.ctx, () => imageInputFailure(error)) : notice(this.ctx, '消息处理失败，请查看本机日志。')).catch(() => undefined)
     }
   }
 
@@ -636,7 +636,7 @@ export class ImEngine {
     if (!binding) return false
     if (!this.broker.has(binding.sessionId)) return false
     if (!this.broker.isReady(binding.sessionId)) {
-      await this.channels.get(channelId)?.send(msg.chatId, '审批详情仍在发送，请稍后再回复。').catch(() => undefined)
+      await this.channels.get(channelId)?.send(msg.chatId, notice(this.ctx, '审批详情仍在发送，请稍后再回复。')).catch(() => undefined)
       return true
     }
     this.interactionMessageIds.set(binding.sessionId, msg.messageId)
@@ -664,17 +664,17 @@ export class ImEngine {
       const channel = binding ? this.channels.get(binding.channelId) : undefined
       if (!binding || !channel) return DELEGATE_INTERACTION
       if (binding.kind === 'group') {
-        await this.deliver(channel, binding.chatId, '当前工具审批不能在群聊中处理，请在网页端批准或拒绝。')
+        await this.deliver(channel, binding.chatId, notice(this.ctx, '当前工具审批不能在群聊中处理，请在网页端批准或拒绝。'))
         return DELEGATE_INTERACTION
       }
       const actor = this.sessionActors.get(sessionId) ?? binding.chatId
       if (!actor || !this.userAllowed(binding.channelId, actor)) {
-        await this.deliver(channel, binding.chatId, '当前用户可以私聊，但工具调用审批仅限已批准用户；请在网页端处理。')
+        await this.deliver(channel, binding.chatId, notice(this.ctx, '当前用户可以私聊，但工具调用审批仅限已批准用户；请在网页端处理。'))
         return DELEGATE_INTERACTION
       }
       const prompt = await withReplyLocale(this.ctx, () => this.approvalPrompt(req))
       if (!prompt) {
-        await this.deliver(channel, binding.chatId, '该操作需要审批，但无法在 IM 中完整展示；请在网页端处理。')
+        await this.deliver(channel, binding.chatId, notice(this.ctx, '该操作需要审批，但无法在 IM 中完整展示；请在网页端处理。'))
         return DELEGATE_INTERACTION
       }
       const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
@@ -983,7 +983,7 @@ export class ImEngine {
       if (reason?.kind === 'error' && !trackedEnd) {
         const detail = reason.error?.message || '模型调用失败'
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
-        const failed = '助手没有生成回复，请查看本机日志。'
+        const failed = notice(this.ctx, '助手没有生成回复，请查看本机日志。')
         const taken = await this.streams.take(streamKey)
         let failureDelivered: boolean
         if (taken.stream) {
@@ -1143,7 +1143,7 @@ export class ImEngine {
   }
 
   private async announceInteractionCancelled(channel: ChannelAdapter, chatId: string, kind: '审批' | '问题'): Promise<void> {
-    await this.deliver(channel, chatId, `该${kind}已取消，无需回复。`)
+    await this.deliver(channel, chatId, notice(this.ctx, kind === '审批' ? '该审批已取消，无需回复。' : '该问题已取消，无需回复。'))
   }
 
   /** 交互提示必须完整送达；任一分片失败或取消就不能继续在 IM 中收集决定。 */

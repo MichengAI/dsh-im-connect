@@ -42,3 +42,26 @@ export function replyText(key: keyof typeof commandEnglish, ...values: unknown[]
   // 一次替换，用户内容中的占位符、命令和路径不再次解析。
   return template.replace(/\{(\d+)\}/g, (token, index: string) => Number(index) < values.length ? String(values[Number(index)]) : token)
 }
+
+/** 按宿主已保存的全局语言取一条用户可见提示。 */
+export function notice(host: { get(name: string): unknown }, key: keyof typeof commandEnglish, ...values: unknown[]): string {
+  return withReplyLocale(host, () => replyText(key, ...values))
+}
+
+/** 渠道没有宿主时保持中文，避免测试夹具改变既有文案。 */
+export function channelNotice(host: { get(name: string): unknown } | undefined, key: keyof typeof commandEnglish, ...values: unknown[]): string {
+  return host ? notice(host, key, ...values) : replyText(key, ...values)
+}
+
+function isNoticeKey(value: string): value is keyof typeof commandEnglish {
+  return Object.prototype.hasOwnProperty.call(commandEnglish, value)
+}
+
+/** 渠道失败分类是用户可见文案；动态 HTTP 状态单独套模板，未知分类保持原样以免丢信息。 */
+export function localizeReason(host: { get(name: string): unknown } | undefined, reason: string): string {
+  const http = /^下载服务器返回 HTTP (\d+)$/.exec(reason)
+  if (http) return channelNotice(host, '下载服务器返回 HTTP {0}', http[1])
+  const unavailable = /^下载服务器暂时不可用（HTTP (\d+)）$/.exec(reason)
+  if (unavailable) return channelNotice(host, '下载服务器暂时不可用（HTTP {0}）', unavailable[1])
+  return isNoticeKey(reason) ? channelNotice(host, reason) : reason
+}

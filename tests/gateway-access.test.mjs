@@ -777,6 +777,28 @@ test('群聊问题只接受冻结的任务发起者回答', async (t) => {
   }
 })
 
+test('英文全局语言下，非发起者回答问题会收到英文提示', async (t) => {
+  const services = { settings: { describe: () => [{ ns: 'locale', value: { preference: 'en' } }] } }
+  const { engine, inbound, sent, handlers, groupSessionId } = makeEngine(t, undefined, undefined, services)
+  const pending = handlers['user-questions/request']
+  try {
+    inbound({ chatId: 'chat-9', userId: 'user-1', text: '启动任务!!', kind: 'group', addressed: true, messageId: 'group-start-en' })
+    await sleep(30)
+    const waiting = handlers['user-questions/request']({
+      agent: { id: groupSessionId, session: { id: groupSessionId, events: [] } },
+      questions: [{ id: 'group', question: '谁来回答？' }],
+    }, async () => assert.fail('有发起者的群聊问题不应转交网页端'))
+    waiting.catch(() => undefined)
+    await waitFor(() => sent.some((item) => item.text.includes('谁来回答')))
+    inbound({ chatId: 'chat-9', userId: 'user-2', text: '冒名回答', kind: 'group', addressed: true, messageId: 'wrong-actor-en' })
+    await waitFor(() => sent.some((item) => /Only the person who started this task/.test(item.text)))
+    assert.equal(sent.some((item) => item.text.includes('只有发起当前任务的用户')), false)
+  } finally {
+    engine.dispose()
+  }
+  assert.equal(typeof pending, 'function')
+})
+
 test('待回答时禁止切换会话，取消信号会结束问题等待', async (t) => {
   const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t)
   const controller = new AbortController()

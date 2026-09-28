@@ -40,6 +40,22 @@ for (const id of ['feishu', 'lark']) test(`${id} rejects excess image count befo
   } finally { await channel.stop() }
 })
 
+test('英文全局语言下，飞书图片失败提示为英文', async () => {
+  let callback
+  const replies = []
+  const host = { get: (name) => name === 'settings' ? { describe: () => [{ ns: 'locale', value: { preference: 'en' } }] } : undefined }
+  const sdk = { defaultHttpInstance: {}, Client: class {
+    request = async () => ({ bot: { open_id: 'bot' } })
+    im = { message: { create: async m => replies.push(m) } }
+  }, EventDispatcher: class { register(events) { callback = events['im.message.receive_v1']; return this } }, WSClient: class { async start() {} close() {} } }
+  const channel = feishu.createFeishuChannel('feishu', { appId: 'app', appSecret: 'secret', host }, () => {}, async () => sdk)
+  try {
+    await channel.start()
+    await callback({ message: { chat_id: 'c', chat_type: 'p2p', message_id: 'm', message_type: 'image', content: '{}' } })
+    assert.equal(JSON.parse(replies[0].data.content).text, 'The image or message could not be read. Send the image or text again.')
+  } finally { await channel.stop() }
+})
+
 for (const declared of [false, true]) test(`Feishu enforces whole-message byte budget (declared=${declared})`, async () => {
   let downloads = 0
   const streams = []

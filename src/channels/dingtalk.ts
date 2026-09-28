@@ -1,3 +1,4 @@
+import { channelNotice, localizeReason } from '../engine/command-locale.js'
 import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/types.js'
 import { randomUUID } from 'node:crypto'
 import { diagnosticJson, probe, requireDiagnostic } from './diagnostics.js'
@@ -55,6 +56,7 @@ export interface DingtalkConfig {
   clientId?: string
   clientSecret?: string
   additionalImageHosts?: readonly string[]
+  host?: { get(name: string): unknown }
 }
 
 /** 先核对回调身份，再用原卡片的令牌集合解析业务动作。 */
@@ -243,7 +245,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
               if (!payload.sessionWebhook) throw new Error('没有可回复的图片回调 webhook')
               await requestChannelBytes(payload.sessionWebhook, {
                 method: 'POST', headers: { 'content-type': 'application/json' }, maxBytes: 64 * 1024, signal,
-                body: JSON.stringify({ msgtype: 'text', text: { content: `图片读取失败：${reason}。请重试；若仍失败请管理员检查网络和机器人文件下载权限。` } }),
+                body: JSON.stringify({ msgtype: 'text', text: { content: channelNotice(config.host, '图片读取失败：{0}。请重试；若仍失败请管理员检查网络和机器人文件下载权限。', localizeReason(config.host, reason)) } }),
               })
               return
             }
