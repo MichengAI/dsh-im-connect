@@ -1,6 +1,6 @@
 import type { Choice } from './choices.js'
 import { exportSession } from './session-export.js'
-import { replyText, withReplyLocale } from './command-locale.js'
+import { replyText, withReplyLocale, localizeStatus } from './command-locale.js'
 /** IM 对 Chat 的薄适配：控制操作走 Host Controller，斜杠命令走同一注册表。 */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
@@ -464,7 +464,7 @@ export class ChatCommands {
         replyText('状态：{0}', row?.running === true ? replyText('运行中') : row?.running === false ? replyText('空闲') : replyText('暂时无法读取')),
         replyText('工作区：{0}', row?.cwd || replyText('暂时无法读取')),
         model ? replyText('模型：{0}/{1}；推理：{2}', model.provider, model.model, model.reasoningEffort || replyText('默认')) : replyText('模型：暂时无法读取'),
-        ...details, replyText('渠道：{0}（{1}）', channel.label, channel.status()), replyText('会话 ID：{0}', sessionId),
+        ...details, replyText('渠道：{0}（{1}）', channel.label, localizeStatus(this.host, channel.status())), replyText('会话 ID：{0}', sessionId),
         ].join('\n') + related(...(row?.running === true ? [replyText('补充要求：/steer 补充内容')] : []),
           ...actions.slice(0, 3).map(action => replyText('{0}：{1}', action.label, action.value)))
     }

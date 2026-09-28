@@ -37,5 +37,9 @@ test('英文全局语言下，渠道失败分类也会翻译', () => {
   const host = { get: (name) => name === 'settings' ? { describe: () => [{ ns: 'locale', value: { preference: 'en' } }] } : undefined }
   assert.equal(localizeReason(host, 'DNS 解析失败'), 'DNS lookup failed')
   assert.equal(localizeReason(host, '下载服务器返回 HTTP 403'), 'The download server returned HTTP 403')
+  assert.equal(localizeReason(host, '图片数量或大小超过接收限制'), 'The image count or size exceeds the receive limit')
+  assert.equal(localizeReason(host, '不支持的图片格式'), 'The image format is not supported')
+  assert.equal(localizeReason(host, '服务器返回了空图片'), 'The server returned an empty image')
+  assert.equal(localizeReason(host, '下载地址被安全校验拦截'), 'The download address was blocked by the safety check')
   assert.equal(localizeReason(undefined, 'DNS 解析失败'), 'DNS 解析失败')
 })

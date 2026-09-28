@@ -80,6 +80,7 @@ export class WecomReplyBroker {
     private readonly log: (line: string) => void,
     private readonly newStreamId: () => string = () => `stream_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
     private readonly ttlMs = 120_000,
+    private readonly host?: { get(name: string): unknown },
   ) {
     this.sweepTimer = setInterval(() => this.pruneAll(), Math.max(1000, Math.min(ttlMs, 30_000)))
     this.sweepTimer.unref?.()
@@ -118,11 +119,15 @@ export class WecomReplyBroker {
     return item
   }
 
+  private thinkingText(): string {
+    return channelNotice(this.host, '正在思考中…')
+  }
+
   async startThinking(chatId: string): Promise<void> {
     this.prune(chatId)
     for (const item of this.pending.get(chatId) ?? []) {
       if (item.started) continue
-      await this.client.replyStream(item.frame, item.streamId, '正在思考中…', false)
+      await this.client.replyStream(item.frame, item.streamId, this.thinkingText(), false)
       item.started = true
     }
   }
@@ -204,7 +209,7 @@ export class WecomReplyBroker {
     const item = this.shift(chatId)
     if (!item) throw new Error('wecom: 没有待回复的回调帧')
     if (!item.started) {
-      await this.client.replyStream(item.frame, item.streamId, '正在思考中…', false)
+      await this.client.replyStream(item.frame, item.streamId, this.thinkingText(), false)
       item.started = true
     }
     return {
@@ -264,7 +269,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       const newStreamId = sdk.generateReqId
         ? () => sdk.generateReqId!('stream')
         : () => `stream_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`
-      broker = new WecomReplyBroker(client, log, newStreamId)
+      broker = new WecomReplyBroker(client, log, newStreamId, undefined, config.host)
       client.on('event.template_card_event', (frame) => {
         if (generation !== startedGeneration) return
         const body = frameBody(frame) as any

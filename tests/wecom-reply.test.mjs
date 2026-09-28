@@ -303,3 +303,18 @@ test('单个企业微信聊天的待回复帧有硬上限', () => {
     broker.dispose()
   }
 })
+
+test('英文全局语言下，企微思考占位为英文', async () => {
+  const client = fakeClient()
+  const host = { get: (name) => name === 'settings' ? { describe: () => [{ ns: 'locale', value: { preference: 'en' } }] } : undefined }
+  const broker = new WecomReplyBroker(client, () => undefined, () => 'stream-en', undefined, host)
+  try {
+    broker.remember('user-en', { headers: { req_id: 'req-en' } })
+    const stream = await broker.beginReply('user-en')
+    await stream.finish('done')
+    assert.equal(client.calls[0].content, 'Thinking…')
+    assert.equal(client.calls[0].finish, false)
+  } finally {
+    broker.dispose()
+  }
+})

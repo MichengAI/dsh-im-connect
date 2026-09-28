@@ -15,4 +15,8 @@ export declare function channelNotice(host: {
 export declare function localizeReason(host: {
     get(name: string): unknown;
 } | undefined, reason: string): string;
+/** 渠道 status() 仍返回中文，供设置页映射；机器人回复时再按已保存语言翻译。未知状态保持原文。 */
+export declare function localizeStatus(host: {
+    get(name: string): unknown;
+} | undefined, status: string): string;
 //# sourceMappingURL=command-locale.d.ts.map

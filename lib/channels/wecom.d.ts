@@ -40,15 +40,19 @@ export declare class WecomReplyBroker {
     private readonly log;
     private readonly newStreamId;
     private readonly ttlMs;
+    private readonly host?;
     private readonly pending;
     private readonly lifetime;
     private readonly replied;
     private readonly sweepTimer;
-    constructor(client: Pick<WecomSdkClient, 'replyStream' | 'sendMessage' | 'uploadMedia' | 'replyMedia'>, log: (line: string) => void, newStreamId?: () => string, ttlMs?: number);
+    constructor(client: Pick<WecomSdkClient, 'replyStream' | 'sendMessage' | 'uploadMedia' | 'replyMedia'>, log: (line: string) => void, newStreamId?: () => string, ttlMs?: number, host?: {
+        get(name: string): unknown;
+    } | undefined);
     private prune;
     private pruneAll;
     remember(chatId: string, frame: unknown): string;
     private shift;
+    private thinkingText;
     startThinking(chatId: string): Promise<void>;
     pendingCount(): number;
     dispose(): void;

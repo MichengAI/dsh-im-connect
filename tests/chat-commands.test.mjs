@@ -37,7 +37,10 @@ function fixture(options = {}) {
     async bind(...args) { calls.push(['bind', ...args]); current = { sessionId: args[3] } },
     rename(...args) { calls.push(['rename', ...args]) },
   }
-  const runner = new ChatCommands({ get: (name) => services[name] }, router, () => false, undefined, options.showChoices)
+  const host = options.locale
+    ? { get: (name) => name === 'settings' ? { describe: () => [{ ns: 'locale', value: { preference: options.locale } }] } : services[name] }
+    : { get: (name) => services[name] }
+  const runner = new ChatCommands(host, router, () => false, undefined, options.showChoices)
   const run = (text, extra = {}) => runner.execute({ id: 'bot', label: '机器人', status: () => '在线', ...options.channel }, { chatId: 'chat', userId: 'u', kind: 'dm', text, ...extra }, new AbortController().signal)
   return { calls, run, rows, services, runner, router }
 }
@@ -409,6 +412,17 @@ test('状态使用真实投影；可选数据失败保留可读取字段', async
   assert.match(await f.run('/status'), /模型：暂时无法读取/)
   assert.match(await f.run('/models'), /可用模型/)
   assert.match(await f.run('/new'), /已开启新会话/)
+})
+
+test('英文全局语言下，状态里的渠道状态也会翻译', async () => {
+  let statusText = '轮询中'
+  const f = fixture({ locale: 'en', channel: { label: 'Telegram', status: () => statusText } })
+  assert.match(await f.run('/status'), /Channel: Telegram \(Polling\)/)
+  statusText = '已断开（code 1006）'
+  assert.match(await f.run('/status'), /Channel: Telegram \(Disconnected \(code 1006\)\)/)
+  statusText = '尚未命名的新状态'
+  assert.match(await f.run('/status'), /Channel: Telegram \(尚未命名的新状态\)/)
+  assert.match(await fixture({ channel: { label: 'Telegram', status: () => '轮询中' } }).run('/status'), /渠道：Telegram（轮询中）/)
 })
 
 test('新建缺少元数据仍明确显示字段，运行拦截按原命令提示', async () => {

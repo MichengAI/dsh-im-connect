@@ -65,3 +65,10 @@ export function localizeReason(host: { get(name: string): unknown } | undefined,
   if (unavailable) return channelNotice(host, '下载服务器暂时不可用（HTTP {0}）', unavailable[1])
   return isNoticeKey(reason) ? channelNotice(host, reason) : reason
 }
+
+/** 渠道 status() 仍返回中文，供设置页映射；机器人回复时再按已保存语言翻译。未知状态保持原文。 */
+export function localizeStatus(host: { get(name: string): unknown } | undefined, status: string): string {
+  const disconnected = /^已断开（code (\d+)）$/.exec(status)
+  if (disconnected) return channelNotice(host, '已断开（code {0}）', disconnected[1])
+  return isNoticeKey(status) ? channelNotice(host, status) : status
+}

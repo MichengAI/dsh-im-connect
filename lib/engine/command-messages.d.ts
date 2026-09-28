@@ -360,5 +360,28 @@ export declare const commandEnglish: {
     readonly 图片解密失败或解密信息无效: "The image could not be decrypted, or the decryption details are invalid";
     readonly 图片下载安全校验失败: "The image download failed the safety check";
     readonly 图片保存失败: "The image could not be saved";
+    readonly "\u6B63\u5728\u601D\u8003\u4E2D\u2026": "Thinking…";
+    readonly 已断开: "Disconnected";
+    readonly "\u5DF2\u65AD\u5F00\uFF08code {0}\uFF09": "Disconnected (code {0})";
+    readonly 重连失败: "Reconnect failed";
+    readonly 连接中: "Connecting";
+    readonly 等待网关握手: "Waiting for gateway handshake";
+    readonly 鉴权中: "Authenticating";
+    readonly 已连接: "Connected";
+    readonly 重连中: "Reconnecting";
+    readonly 连接错误: "Connection error";
+    readonly 连接失败: "Connection failed";
+    readonly "\u8FDE\u63A5\u5931\u8D25\uFF0C\u8BF7\u67E5\u770B\u672C\u673A\u65E5\u5FD7": "Connection failed. Check the local logs.";
+    readonly "Stream \u5DF2\u8FDE\u63A5": "Stream connected";
+    readonly 已停止: "Stopped";
+    readonly 长连接已建立: "Long connection established";
+    readonly 轮询中: "Polling";
+    readonly "\u8F6E\u8BE2\u5F02\u5E38\uFF08\u8BE6\u60C5\u89C1\u672C\u673A\u65E5\u5FD7\uFF09": "Polling failed. Details are in the local logs.";
+    readonly 未登录: "Not signed in";
+    readonly 未连接: "Not connected";
+    readonly 等待扫码: "Waiting for scan";
+    readonly 已登录: "Signed in";
+    readonly "\u5DF2\u767B\u5F55\uFF08\u81EA\u52A8\u6062\u590D\uFF09": "Signed in (restored)";
+    readonly 登录中: "Signing in";
 };
 //# sourceMappingURL=command-messages.d.ts.map
