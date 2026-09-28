@@ -27,20 +27,21 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
   const dshPackages = [
     '@deepseek-ai/dsh-agent',
     '@deepseek-ai/dsh-client-locale',
-    '@deepseek-ai/dsh-client-runtime',
     '@deepseek-ai/dsh-client-ui-primitives',
     '@deepseek-ai/dsh-client-ui-settings',
     '@deepseek-ai/dsh-client-ui-slots',
     '@deepseek-ai/dsh-host-webserver',
   ]
-  const developmentPackages = dshPackages.filter((packageName) => packageName !== '@deepseek-ai/dsh-client-runtime')
   const hostUnion = '0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.5-rc.3 || 0.1.7-rc.1 || 0.1.7-rc.2 || 0.2.0-rc.1'
-  for (const packageName of developmentPackages) {
+  for (const packageName of dshPackages) {
     assert.equal(manifest.peerDependencies[packageName], hostUnion)
     assert.equal(manifest.devDependencies[packageName], '0.2.0-rc.1')
   }
-  assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-client-runtime'], hostUnion)
-  assert.equal(manifest.peerDependenciesMeta['@deepseek-ai/dsh-client-runtime'].optional, true)
+  assert.equal(
+    manifest.peerDependencies['@deepseek-ai/dsh-client-runtime'],
+    undefined,
+    '上游已停更该包，客户端也不再 require 它，不得保留这条 peer',
+  )
   assert.equal(manifest.dependencies?.antd, undefined)
   assert.equal(manifest.dependencies?.['react-dom'], undefined)
   assert.equal(manifest.devDependencies.antd, '^6.6.5')
