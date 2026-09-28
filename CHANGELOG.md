@@ -4,6 +4,14 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.56 - 2026-09-28
+
+- Bot shell text follows the global language saved in Settings. Commands, menus, approvals, questions, image failure notices, the WeCom thinking placeholder, and the channel status in `/status` use English when English is saved.
+- If a language has never been saved, the bot stays in Chinese. A page that only looks English because of the browser does not change the bot.
+- Assistant replies are written by the model and are not translated by this plugin.
+- Still supports DSH 0.1.7-rc.2, 0.1.7-rc.1, 0.1.2-rc.1, and the 0.1.5 release candidates.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.55 - 2026-09-25
 
 - Support DSH 0.1.7-rc.2, and keep 0.1.7-rc.1, 0.1.2-rc.1, and the 0.1.5 release candidates working.
