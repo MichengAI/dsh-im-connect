@@ -26,7 +26,7 @@ for (const mode of ['count', 'declared-total', 'stream-total']) test(`QQ rejects
     assert.equal(received.length, 0)
     assert.equal(replies.length, 1)
     assert.equal(replies[0].msg_id, 'm')
-    assert.match(replies[0].content, /失败/)
+    assert.match(replies[0].markdown.content, /失败/)
   } finally { mock.restoreAll(); await channel.stop(); globalThis.fetch = previousFetch; globalThis.WebSocket = previousWs }
 })
 
@@ -110,11 +110,11 @@ for (const mode of ['private-url', 'redirect', 'declared', 'stream', 'empty', 'h
       await new Promise(resolve => setImmediate(resolve))
       assert.equal(received.length, 0)
       assert.equal(replies.length, 1)
-      assert.match(replies[0].content, /图片下载失败/)
+      assert.match(replies[0].markdown.content, /图片下载失败/)
       assert.equal(replies[0].msg_id, 'm')
       assert.ok(logs.every(s => !s.includes('SECRET_URL')))
-      if (mode === 'http') assert.match(replies[0].content, /HTTP 403/)
-      if (mode === 'private-url') assert.match(replies[0].content, /安全校验拦截/)
+      if (mode === 'http') assert.match(replies[0].markdown.content, /HTTP 403/)
+      if (mode === 'private-url') assert.match(replies[0].markdown.content, /安全校验拦截/)
     } finally { mock.restoreAll(); await channel.stop(); globalThis.fetch = prevFetch; globalThis.WebSocket = prevWs }
   })
 }
@@ -137,7 +137,7 @@ test('英文全局语言下，QQ 图片失败提示为英文', async () => {
     await channel.start()
     socket.onmessage({ data: JSON.stringify({ op: 0, t: 'C2C_MESSAGE_CREATE', d: { id: 'm', content: 'caption', author: { user_openid: 'u' }, attachments: [{ content_type: 'image/png', url: 'http://127.0.0.1/secret' }] } }) })
     await new Promise(resolve => setImmediate(resolve))
-    assert.equal(replies[0].content, 'The image could not be downloaded: The download address was blocked by the safety check. Send it again.')
+    assert.equal(replies[0].markdown.content, 'The image could not be downloaded: The download address was blocked by the safety check. Send it again.')
   } finally { await channel.stop(); globalThis.fetch = prevFetch; globalThis.WebSocket = prevWs }
 })
 

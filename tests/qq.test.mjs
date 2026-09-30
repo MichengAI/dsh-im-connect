@@ -130,7 +130,8 @@ test('QQ Bot 映射私聊和群 @，并只在收尾发送一条回复', async ()
     await stream.finish('完整答案')
     assert.equal(posts.length, 1)
     assert.match(posts[0].url, /\/v2\/users\/user-openid\/messages/)
-    assert.equal(posts[0].body.content, '完整答案')
+    assert.equal(posts[0].body.markdown.content, '完整答案')
+    assert.equal(posts[0].body.msg_type, 2)
     assert.equal(posts[0].body.msg_id, 'c2c-message')
   } finally {
     await channel.stop()
@@ -290,7 +291,7 @@ test('QQ 文件缺少下载地址时明确失败，不静默丢弃', async () =>
     await waitForImmediate()
     assert.equal(posts.length, 1)
     assert.match(posts[0].url, /\/v2\/groups\/group-openid\/messages$/)
-    assert.match(posts[0].body.content, /失败/)
+    assert.match(posts[0].body.markdown.content, /失败/)
     assert.equal(posts[0].body.msg_id, 'media-message')
     await channel.stop()
   } finally {
@@ -338,7 +339,7 @@ test('QQ 出站：含 markdown 的回复按官方协议走 msg_type=2，表格�
   }
 })
 
-test('QQ 出站：纯文本回复仍走 msg_type=0 且内容不变', async () => {
+test('QQ 出站：纯文本也走 msg_type=2，不因没有标记改回纯文本', async () => {
   const originalFetch = globalThis.fetch
   const posts = []
 
@@ -352,38 +353,78 @@ test('QQ 出站：纯文本回复仍走 msg_type=0 且内容不变', async () =>
     const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
     await channel.send('user-1', '今天已推送，仅供参考')
     assert.equal(posts.length, 1)
-    assert.equal(posts[0].body.msg_type, 0)
-    assert.equal(posts[0].body.content, '今天已推送，仅供参考')
-    assert.equal(posts[0].body.markdown, undefined)
+    assert.equal(posts[0].body.msg_type, 2)
+    assert.equal(posts[0].body.markdown.content, '今天已推送，仅供参考')
+    assert.equal(posts[0].body.content, undefined)
   } finally {
     globalThis.fetch = originalFetch
   }
 })
 
-test('QQ 出站：平台拒绝 markdown 时回退纯文本并递增 msg_seq', async () => {
+test('QQ 出站：50056 回退纯文本并递增 msg_seq，之后不再尝试 markdown', async () => {
   const originalFetch = globalThis.fetch
   const posts = []
-  let rejectMarkdown = true
 
   globalThis.fetch = async (input, init) => {
     const url = String(input)
     if (url.endsWith('/app/getAppAccessToken')) return Response.json({ access_token: 't', expires_in: 7200 })
     const body = JSON.parse(String(init.body))
     posts.push({ url, body })
-    if (body.msg_type === 2 && rejectMarkdown) {
-      rejectMarkdown = false
-      return new Response('markdown not allowed', { status: 400 })
-    }
+    if (body.msg_type === 2) return Response.json({ err_code: 50056, message: '不允许发送 markdown content' }, { status: 400 })
     return Response.json({})
   }
   try {
     const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
     await channel.send('user-1', '**加粗**')
-    assert.equal(posts.length, 2)
+    await channel.send('user-1', '**再次**')
+    assert.equal(posts.length, 3)
     assert.equal(posts[0].body.msg_type, 2)
     assert.equal(posts[1].body.msg_type, 0)
     assert.equal(posts[1].body.content, '加粗')
     assert.equal(posts[1].body.msg_seq, posts[0].body.msg_seq + 1)
+    assert.equal(posts[2].body.msg_type, 0)
+    assert.equal(posts[2].body.content, '再次')
+    assert.equal(posts[2].body.msg_seq, posts[1].body.msg_seq + 1)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('QQ 出站：没有 err_code 的 HTTP 错误不回退', async () => {
+  const originalFetch = globalThis.fetch
+  const posts = []
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input)
+    if (url.endsWith('/app/getAppAccessToken')) return Response.json({ access_token: 't', expires_in: 7200 })
+    posts.push({ url, body: JSON.parse(String(init.body)) })
+    return new Response('markdown not allowed', { status: 400 })
+  }
+  try {
+    const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
+    await assert.rejects(channel.send('user-1', '**加粗**'), /HTTP 400/)
+    assert.equal(posts.length, 1)
+    assert.equal(posts[0].body.msg_type, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('QQ 出站：超时不回退，避免「消息其实已送达却被重发」', async () => {
+  const originalFetch = globalThis.fetch
+  const posts = []
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input)
+    if (url.endsWith('/app/getAppAccessToken')) return Response.json({ access_token: 't', expires_in: 7200 })
+    posts.push({ url, body: JSON.parse(String(init.body)) })
+    throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+  }
+  try {
+    const channel = createQqChannel({ appId: 'app', appSecret: 'secret' }, () => {})
+    await assert.rejects(channel.send('user-1', '**加粗**'), /timeout/i)
+    assert.equal(posts.length, 1)
+    assert.equal(posts[0].body.msg_type, 2)
   } finally {
     globalThis.fetch = originalFetch
   }
