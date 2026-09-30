@@ -2,6 +2,7 @@ import type { ChannelAdapter } from '../engine/types.js'
 import type { ChannelId } from '../engine/session-id.js'
 import { createDingtalkChannel } from './dingtalk.js'
 import { createFeishuChannel } from './feishu.js'
+import { createDiscordChannel } from './discord.js'
 import { createTelegramChannel } from './telegram.js'
 import { createWecomChannel } from './wecom.js'
 import { createWeixinChannel } from './weixin.js'
@@ -21,6 +22,8 @@ export function createChannelAdapter(
   switch (id) {
     case 'telegram':
       adapter = createTelegramChannel({ token: config.token, stateDir, host: options?.host }, log); break
+    case 'discord':
+      adapter = createDiscordChannel({ token: config.token, stateDir, host: options?.host }, log); break
     case 'feishu':
       adapter = createFeishuChannel('feishu', { appId: config.appId, appSecret: config.appSecret, host: options?.host }, log); break
     case 'lark':

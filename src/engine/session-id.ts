@@ -2,7 +2,7 @@
 export const IM_ORIGIN = 'im'
 export const IM_SESSION_PREFIX = 'im:'
 
-export type ChannelId = 'dingtalk' | 'feishu' | 'lark' | 'weixin' | 'wecom' | 'qq' | 'telegram'
+export type ChannelId = 'dingtalk' | 'feishu' | 'lark' | 'weixin' | 'wecom' | 'qq' | 'telegram' | 'discord'
 /** 运行实例 ID。旧版首个账号仍可直接使用渠道 ID，新账号使用 `<channel>_<stable>`。 */
 export type ChannelInstanceId = string
 export type ChatKind = 'dm' | 'group'
@@ -40,7 +40,7 @@ export function isImSessionId(sessionId: string): boolean {
   return sessionId.startsWith(IM_SESSION_PREFIX)
 }
 
-const CHANNEL_IDS: readonly ChannelId[] = ['dingtalk', 'feishu', 'lark', 'weixin', 'wecom', 'qq', 'telegram']
+const CHANNEL_IDS: readonly ChannelId[] = ['dingtalk', 'feishu', 'lark', 'weixin', 'wecom', 'qq', 'telegram', 'discord']
 const STAMP_RE = /^\d{13,}$/
 
 export function parseImSessionId(sessionId: string): { channel: ChannelInstanceId; kind: ChatKind; chatId: string } | undefined {

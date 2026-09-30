@@ -25,6 +25,7 @@ export const CHANNEL_ORDER: ChannelId[] = [
   'lark',
   'dingtalk',
   'telegram',
+  'discord',
 ]
 
 export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
@@ -84,6 +85,15 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
     id: 'telegram',
     label: 'Telegram',
     description: '通过 Telegram 机器人接收并回复用户消息',
+    kind: 'credentials',
+    fields: [
+      { key: 'token', label: 'Bot Token', secret: true },
+    ],
+  },
+  discord: {
+    id: 'discord',
+    label: 'Discord',
+    description: '通过 Discord 机器人接收并回复用户消息',
     kind: 'credentials',
     fields: [
       { key: 'token', label: 'Bot Token', secret: true },

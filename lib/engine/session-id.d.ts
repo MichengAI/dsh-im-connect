@@ -1,7 +1,7 @@
 /** IM 会话标识：与网页任务分列。DSH 会话头不能写 origin=im，只靠 id 前缀。 */
 export declare const IM_ORIGIN = "im";
 export declare const IM_SESSION_PREFIX = "im:";
-export type ChannelId = 'dingtalk' | 'feishu' | 'lark' | 'weixin' | 'wecom' | 'qq' | 'telegram';
+export type ChannelId = 'dingtalk' | 'feishu' | 'lark' | 'weixin' | 'wecom' | 'qq' | 'telegram' | 'discord';
 /** 运行实例 ID。旧版首个账号仍可直接使用渠道 ID，新账号使用 `<channel>_<stable>`。 */
 export type ChannelInstanceId = string;
 export type ChatKind = 'dm' | 'group';
