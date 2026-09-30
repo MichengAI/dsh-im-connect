@@ -4,6 +4,23 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.60 - 2026-10-01
+
+- Added Discord. Connect with a Developer Portal Bot Token. Direct messages are answered in place; the first mention in a guild text or announcement channel continues in a thread. Text commands, buttons, files, and streamed replies follow the existing channels.
+- Enable the Message Content Intent and grant Send Messages, Create Public Threads, Send Messages in Threads, Read Message History, and Attach Files. Do not configure an Interactions Endpoint URL.
+- Discord keeps retrying on recoverable gateway closes (4000, 1006, and similar) instead of stopping the account; only an invalid token or missing intents stop it.
+- Discord has no Markdown tables, so pipe tables become a vertical block per row (first two columns as a bold title, remaining columns as `header: value`), which avoids the mobile code-block border and horizontal overflow. Headings and other text are sent verbatim; tables inside code fences stay as they are.
+- Long replies now split with structure awareness: table chunks repeat the header and separator, code fences are re-closed per chunk, and the `(n/m)` marker only prefixes prose chunks instead of cutting tables or code blocks in half.
+- Telegram replies use Rich Messages with Markdown so headings, bold text, and tables render; the channel falls back to plain text when that method is unavailable and remembers the result instead of retrying.
+- Feishu normal replies use card Markdown so headings and tables render, split so no card holds more than five tables, with a plain-text fallback.
+- QQ replies keep Markdown tables instead of downgrading them to lists; the engine splitter repeats the header across chunks, and plain text is only used when the platform rejects markdown.
+- `/help` reorganised into getting around / sessions and workspaces / models and reasoning / tasks and delivery, with 24 commands and no duplicates: one entry per feature (/sessions lists, /session continues directly), the repeated model-switch line removed, and the numbering hint rewritten as the channel-neutral "tap a button or reply with the number". `/export` is now documented and `/delivery` is grouped. Group titles are bold so they are easier to scan on a phone, and the extension section no longer repeats commands already listed in the base help nor the command name inside its descriptions.
+- Telegram rich Markdown now hardens plain prose line breaks so command lists are no longer joined into one run-on line; lists, headings, quotes, tables, and code fences are left untouched. Telegram parses a single newline as a CommonMark soft break.
+- Tool approvals no longer fall back to the web because of DM admission, the allowlist, or an incomplete prompt. Approvals stay in the chat that started the task; groups accept only the task initiator, and a failed prompt is treated as a denial instead of being silently allowed.
+- Channel copy and command errors now follow the host language everywhere: the DingTalk AI Card placeholder and empty-reply fallback, and the engine errors shown through "command failed" all use the Chinese/English table, and Discord slash-command descriptions carry zh-CN and en-US localizations.
+- Continue to support DSH 0.2.0-rc.2, 0.2.0-rc.1, 0.1.7-rc.2, 0.1.7-rc.1, 0.1.2-rc.1, and the 0.1.5 release candidates.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.59 - 2026-09-30
 
 - QQ replies now show headings, bold text, and links instead of the raw markers. Tables are sent as lists.
