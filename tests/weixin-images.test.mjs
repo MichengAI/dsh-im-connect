@@ -113,3 +113,40 @@ test('微信文件解密后提交字节，不把缓存路径当作文件输入',
     assert.equal(received[0].media[0].kind, 'file'); assert.deepEqual(received[0].media[0].data, file); assert.equal(received[0].media[0].path, undefined)
   } finally { await channel.stop(); globalThis.fetch = original; rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('微信同一聊天的 sendmessage 串行，正文未完成时不发送交互提示', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'weixin-serial-'))
+  persistWeixinLogin(dir, { allowedUserId: 'user' })
+  const original = globalThis.fetch
+  let active = 0
+  let maxActive = 0
+  const order = []
+  let releaseFirst
+  const firstHeld = new Promise(resolve => { releaseFirst = resolve })
+  globalThis.fetch = async (url, init) => {
+    if (!url.includes('/sendmessage')) throw new Error('Unexpected request')
+    const text = JSON.parse(init.body).msg.item_list[0].text_item.text
+    active += 1
+    maxActive = Math.max(maxActive, active)
+    order.push(`start:${text}`)
+    if (text === '正文') await firstHeld
+    active -= 1
+    order.push(`end:${text}`)
+    return Response.json({ ret: 0 })
+  }
+  const channel = createWeixinChannel({ enabled: true, botToken: 'secret' }, () => {}, dir)
+  try {
+    const body = channel.send('user', '正文')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const prompt = channel.send('user', '问题')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    assert.deepEqual(order, ['start:正文'])
+    releaseFirst()
+    await Promise.all([body, prompt])
+    assert.equal(maxActive, 1)
+    assert.deepEqual(order, ['start:正文', 'end:正文', 'start:问题', 'end:问题'])
+  } finally {
+    globalThis.fetch = original
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

@@ -19,6 +19,7 @@ import { isIP } from 'node:net'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { writePrivateFileSync } from '../engine/secure-file.js'
 import { isAbortError, sleepWithSignal, timeoutSignal } from '../engine/abort.js'
+import { KeyedSerialQueue } from '../engine/keyed-queue.js'
 import { backupCorruptFileSync } from '../engine/atomic-file.js'
 import { diagnosticJson, DiagnosticError, platformResult, probe, requireDiagnostic } from './diagnostics.js'
 
@@ -236,6 +237,8 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   const uin = Buffer.from(String(Math.floor(Math.random() * 0xffffffff)), 'utf8').toString('base64')
   /** typing_ticket 按用户缓存。 */
   const typingTickets = new Map<string, { ticket: string; nextFetchAt: number }>()
+  /** 同一聊天的 sendmessage 必须串行，避免正文和交互提示同时提交被平台拒绝。 */
+  const outbound = new KeyedSerialQueue()
 
   function loadState(): WechatState {
     try {
@@ -670,7 +673,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
 
   async function sendRaw(toUserId: string, item: Json, clientId: string, signal?: AbortSignal): Promise<void> {
     const contextToken = state.contextTokens[toUserId]
-    await request(
+    await outbound.run(toUserId, () => request(
       '/ilink/bot/sendmessage',
       {
         msg: {
@@ -685,7 +688,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
         base_info: { channel_version: '1.0.0' },
       },
       15_000, false, signal,
-    )
+    ))
   }
 
   async function sendText(toUserId: string, text: string): Promise<void> {

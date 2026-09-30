@@ -472,14 +472,17 @@ test('当前审批无法完整展示或提示发送失败时交还下一个安�
       callId: 'call-offline',
     }, async () => 'unavailable')
     assert.equal(outcome, 'unavailable')
+    assert.equal(failed.sent.filter((item) => item.text.includes('DeepSeek Harness 需要你的审批')).length, 2)
   } finally {
     failed.engine.dispose()
   }
 })
 
 test('结构化问题提示发送失败时交还下一个处理器', async (t) => {
-  const { engine, handlers, dmSessionId } = makeEngine(t, undefined, async () => {
-    throw new Error('offline')
+  const sent = []
+  const { engine, handlers, dmSessionId } = makeEngine(t, undefined, async (_chatId, text) => {
+    sent.push(text)
+    if (text.includes('需要你补充信息')) throw new Error('offline')
   })
   try {
     const fallback = { answers: [{ id: 'fallback', selected: [], custom: 'web' }] }
@@ -488,6 +491,28 @@ test('结构化问题提示发送失败时交还下一个处理器', async (t) =
       questions: [{ id: 'answer', question: '请选择' }],
     }, async () => fallback)
     assert.deepEqual(outcome, fallback)
+    assert.equal(sent.filter((text) => text.includes('需要你补充信息')).length, 2)
+  } finally {
+    engine.dispose()
+  }
+})
+
+test('问题提示第一次发送失败后重试成功，仍在聊天里收集答案', async (t) => {
+  let attempts = 0
+  const { engine, inbound, handlers, dmSessionId } = makeEngine(t, undefined, async (_chatId, text) => {
+    if (!text.includes('需要你补充信息')) return
+    attempts += 1
+    if (attempts === 1) throw new Error('prepare failed')
+  })
+  engine.addAllowed('telegram', 'user-1')
+  try {
+    const pending = handlers['user-questions/request']({
+      agent: { id: dmSessionId, session: { id: dmSessionId, events: [] } },
+      questions: [{ id: 'go', question: '是否继续？', options: [{ label: '继续' }, { label: '停止' }] }],
+    }, async () => assert.fail('重试成功后不应交给网页端'))
+    await waitFor(() => attempts === 2)
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '1', kind: 'dm', messageId: 'answer-1' })
+    assert.deepEqual(await pending, { answers: [{ id: 'go', selected: ['继续'] }] })
   } finally {
     engine.dispose()
   }

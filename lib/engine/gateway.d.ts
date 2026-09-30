@@ -102,6 +102,8 @@ export declare class ImEngine {
     private formatQuestion;
     private deliverQuestionInteraction;
     private announceInteractionCancelled;
+    /** 同一条提示失败后再发一次。微信正文和问题撞车时，第一次会失败，排空后的重试仍可在聊天里回答。 */
+    private retryInteraction;
     /** 交互提示必须完整送达；任一分片失败或取消就不能继续在 IM 中收集决定。 */
     private deliverInteraction;
 }

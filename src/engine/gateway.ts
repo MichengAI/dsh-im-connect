@@ -421,13 +421,14 @@ export class ImEngine {
             return
           }
           if (result.next) {
+            const nextQuestion = result.next
             const signal = this.questions.signal(binding.sessionId)
-            const delivery = await this.deliverQuestionInteraction(binding.sessionId, channel, msg.chatId, this.formatQuestion(
-              result.next.question,
-              result.next.index,
-              result.next.total,
+            const delivery = await this.retryInteraction(channel, () => this.deliverQuestionInteraction(binding.sessionId, channel, msg.chatId, this.formatQuestion(
+              nextQuestion.question,
+              nextQuestion.index,
+              nextQuestion.total,
               { requiresMention: kind === 'group' },
-            ), signal)
+            ), signal))
             if (delivery.status === 'aborted') {
               this.questions.cancel(binding.sessionId, signal?.reason ?? new DOMException('Aborted', 'AbortError'))
             } else if (delivery.status === 'failed') {
@@ -680,11 +681,11 @@ export class ImEngine {
       const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
       if (!wait) return DELEGATE_INTERACTION
       const ticket = this.broker.token(sessionId)
-      const delivery = await this.deliverInteraction(channel, binding.chatId, prompt, req.signal, {
+      const delivery = await this.retryInteraction(channel, () => this.deliverInteraction(channel, binding.chatId, prompt, req.signal, {
         sessionId, message: { chatId: binding.chatId, userId: actor, kind: 'dm', text: '', messageId: this.interactionMessageIds.get(sessionId) },
         choices: withReplyLocale(this.ctx, () => [{ label: replyText('批准一次'), value: 'allow' }, { label: replyText('拒绝'), value: 'reject' }]),
         valid: () => this.broker.token(sessionId) === ticket && this.broker.isReady(sessionId),
-      })
+      }))
       if (delivery.status === 'aborted' || req.signal?.aborted) {
         this.broker.cancel(sessionId)
         if (delivery.deliveredAny) await this.announceInteractionCancelled(channel, binding.chatId, '审批')
@@ -742,12 +743,12 @@ export class ImEngine {
       if (actor) this.questionActors.set(sessionId, actor)
       const resume = this.progress.waiting(sessionId, true)
       try {
-        const delivery = await this.deliverQuestionInteraction(sessionId, channel, binding.chatId, this.formatQuestion(
+        const delivery = await this.retryInteraction(channel, () => this.deliverQuestionInteraction(sessionId, channel, binding.chatId, this.formatQuestion(
           typedQuestions[0]!,
           0,
           typedQuestions.length,
           { requiresMention: binding.kind === 'group' },
-        ), req.signal)
+        ), req.signal))
         if (delivery.status === 'aborted' || req.signal?.aborted) {
           throw req.signal?.reason ?? new DOMException('Aborted', 'AbortError')
         }
@@ -1144,6 +1145,14 @@ export class ImEngine {
 
   private async announceInteractionCancelled(channel: ChannelAdapter, chatId: string, kind: '审批' | '问题'): Promise<void> {
     await this.deliver(channel, chatId, notice(this.ctx, kind === '审批' ? '该审批已取消，无需回复。' : '该问题已取消，无需回复。'))
+  }
+
+  /** 同一条提示失败后再发一次。微信正文和问题撞车时，第一次会失败，排空后的重试仍可在聊天里回答。 */
+  private async retryInteraction(channel: ChannelAdapter, deliver: () => Promise<InteractionDeliveryResult>): Promise<InteractionDeliveryResult> {
+    const first = await deliver()
+    if (first.status !== 'failed') return first
+    this.log(`[${channel.id}] 交互提示发送失败，重试一次`)
+    return deliver()
   }
 
   /** 交互提示必须完整送达；任一分片失败或取消就不能继续在 IM 中收集决定。 */
