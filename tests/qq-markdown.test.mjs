@@ -10,7 +10,19 @@ import {
   toQqPlainText,
 } from '../lib/channels/qq-markdown.js'
 
-test('QQ markdown：管道表格降级为列表，代码块内的表格不动', () => {
+test('QQ markdown：正文表格原样保留，代码块内的表格同样保留', () => {
+  const table = [
+    '| name | value | note |',
+    '|---|---|---|',
+    '| alpha | 1 | first |',
+    '| beta | 2 | second |',
+  ].join('\n')
+  assert.equal(prepareQqMarkdown(table), table)
+  const fenced = ['```', '| A | B |', '|---|---|', '| 1 | 2 |', '```'].join('\n')
+  assert.equal(prepareQqMarkdown(fenced), ['| A | B |', '|---|---|', '| 1 | 2 |'].join('\n'))
+})
+
+test('QQ markdown：管道表格降级只用于纯文本兜底', () => {
   const table = [
     '| name | value | note |',
     '|---|---|---|',
@@ -22,8 +34,6 @@ test('QQ markdown：管道表格降级为列表，代码块内的表格不动', 
     '  · alpha（value：1；note：first）',
     '  · beta（value：2；note：second）',
   ].join('\n'))
-  const fenced = ['```', '| A | B |', '|---|---|', '| 1 | 2 |', '```'].join('\n')
-  assert.equal(prepareQqMarkdown(fenced), ['| A | B |', '|---|---|', '| 1 | 2 |'].join('\n'))
 })
 
 test('QQ markdown：无表头分隔行的管道文本与普通文本保持原样', () => {

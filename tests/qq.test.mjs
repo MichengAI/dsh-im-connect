@@ -316,7 +316,7 @@ test('QQ 二维码过期后继续等待刷新，不结束配对', async () => {
   assert.equal(refreshed.qrUrl, 'https://q.qq.com/qr/new')
 })
 
-test('QQ 出站：含 markdown 的回复按官方协议走 msg_type=2，表格降级为列表', async () => {
+test('QQ 出站：含 markdown 的回复按官方协议走 msg_type=2，表格保持原样', async () => {
   const originalFetch = globalThis.fetch
   const posts = []
 
@@ -332,7 +332,7 @@ test('QQ 出站：含 markdown 的回复按官方协议走 msg_type=2，表格�
     assert.equal(posts.length, 1)
     assert.equal(posts[0].body.msg_type, 2)
     assert.match(posts[0].body.markdown.content, /\*\*加粗\*\*/)
-    assert.match(posts[0].body.markdown.content, /· alpha（value：1）/)
+    assert.match(posts[0].body.markdown.content, /\| alpha \| 1 \|/)
     assert.equal(posts[0].body.content, undefined)
   } finally {
     globalThis.fetch = originalFetch

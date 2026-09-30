@@ -13,7 +13,7 @@ test('中英文词条键一致', () => {
 })
 
 test('手动配置字段有中英标签', () => {
-  for (const key of ['field.dingtalk.clientId', 'field.dingtalk.clientSecret', 'field.wecom.botId', 'field.wecom.secret', 'field.qq.appId', 'field.qq.appSecret', 'field.telegram.token']) {
+  for (const key of ['field.dingtalk.clientId', 'field.dingtalk.clientSecret', 'field.wecom.botId', 'field.wecom.secret', 'field.qq.appId', 'field.qq.appSecret', 'field.telegram.token', 'field.discord.token']) {
     assert.equal(typeof IM_LOCALES.zh[key], 'string', key)
     assert.equal(typeof IM_LOCALES.en[key], 'string', key)
   }

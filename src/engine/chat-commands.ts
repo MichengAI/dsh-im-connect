@@ -17,27 +17,37 @@ interface Catalog { default: Selection; groups: Array<{ id: string; models: Mode
 interface Row { sessionId: string; cwd?: string; running?: boolean; origin?: string; projections?: { values?: { title?: string } } }
 interface Workspace { workspaceId: string; title?: string; path: string; sessionIds: string[] }
 interface HistoryEvent { type: string; data?: { message?: { role?: string; content?: Array<{ type: string; text?: string }> }; content?: Array<{ type: string; text?: string }>; source?: { kind?: string } } }
-interface Snapshot { projections?: { values?: { agentPreset?: string | null; permissions?: { currentValue: string; options: Array<{ value: string; name: string }> }; goal?: { goal: { phase: string } } | null; modelSelection?: { next?: Selection; lastUsed?: Selection } } }; records: Array<{ type: string; event?: HistoryEvent }> }
+interface Snapshot { projections?: { values?: { agentPreset?: string | null; permissions?: { currentValue: string; options?: Array<{ value: string; name: string }> }; goal?: { goal: { phase: string } } | null; modelSelection?: { next?: Selection; lastUsed?: Selection } } }; records: Array<{ type: string; event?: HistoryEvent }> }
 interface Preset { id: string; name?: string; description?: string; isDefault?: boolean; broken?: string }
 interface Descriptor { name: string; description: string }
 export interface CommandHost { get(name: string): unknown }
 export const chatControlHelp = () => [
   replyText('IM 助理已连接 DeepSeek Harness。直接发送文字即可开始任务。'), replyText('例如：帮我整理今天的待办。'), '',
-  replyText('/menu 或 /m — 打开操作菜单'), '',
-  replyText('会话与工作区'),
-  replyText('/new — 新开会话（也可用 /clear）；旧会话保留在频道列表'),
-  replyText('/sessions [页码] — 列出会话；/session 序号或ID — 切换会话'),
-  replyText('/workspaces — 列出工作区；/workspace 序号或已有路径 — 切换并新建'),
-  replyText('/history — 最近文字记录；/rename 新名称 — 改名；/fork — 分叉'), '',
-  replyText('模型与推理'),
-  replyText('/model — 当前模型；/models — 可选模型'),
-  replyText('/reasoning — 当前推理等级和可选项'),
-  replyText('/presets — Agent 预设；/preset ID — 使用预设新建会话'), '',
-  replyText('任务控制'),
-  replyText('/status — 当前状态；/stop — 请求停止，保留队列'),
-  replyText('/steer 补充要求 — 提交补充指令；/queue — 查看队列与操作方法'), '',
-  replyText('/delivery — 查看交付记录和补发方法'), '',
-  replyText('切换模型：先发 /models，再发 /model 序号。'),
+  replyText('**入口**'),
+  replyText('/menu（或 /m）— 打开带按钮的操作菜单，和下面的列表命令等价'),
+  replyText('/help — 显示本说明'), '',
+  replyText('**会话与工作区**'),
+  replyText('/new（或 /clear）— 新开会话；旧会话保留在频道列表'),
+  replyText('/sessions — 列出会话，点按钮或回序号接续'),
+  replyText('/session 序号或ID — 直接接续指定会话'),
+  replyText('/workspaces — 列出工作区，点按钮或回序号在其中新建'),
+  replyText('/workspace 序号或路径 — 直接在该工作区新建会话'),
+  replyText('/history — 当前会话最近的文字记录'),
+  replyText('/rename 新名称 — 给当前会话改名'),
+  replyText('/fork — 分叉当前会话'), '',
+  replyText('**模型与推理**'),
+  replyText('/models — 列出可选模型并选择'),
+  replyText('/model — 只看当前模型'),
+  replyText('/reasoning — 列出推理等级并选择'),
+  replyText('/presets — 列出 Agent 预设并选择'),
+  replyText('/preset 序号或ID — 直接用该预设新建会话'), '',
+  replyText('**任务与交付**'),
+  replyText('/status（或 /current）— 当前状态'),
+  replyText('/stop — 请求停止，保留队列'),
+  replyText('/steer 补充要求 — 提交补充指令'),
+  replyText('/queue — 查看队列和操作方法'),
+  replyText('/delivery — 查看交付记录和补发方法'),
+  replyText('/export — 导出当前会话 ZIP 并发送'), '',
   replyText('命令单独发送为文字；图片说明按普通消息处理。'),
 ].join('\n')
 
@@ -68,7 +78,19 @@ export class ChatCommands {
   }
 
   private async presets(): Promise<Preset[]> {
-    return (await this.call<{ presets: Preset[] }>('agentPresets', 'remoteExportList')).presets
+    const listed = await this.call<{ presets?: Preset[] }>('agentPresets', 'remoteExportList')
+    return listed?.presets ?? []
+  }
+
+  private permissionLabel(permissions: { currentValue: string; options?: Array<{ value: string; name: string }> }): string {
+    const named = permissions.options?.find((item) => item.value === permissions.currentValue)?.name
+    if (named) return named
+    const presets = this.host.get('permissionPresets') as { optionOf?: (name: string) => { name?: string } } | undefined
+    try {
+      const option = presets?.optionOf?.(permissions.currentValue)
+      if (option?.name) return option.name
+    } catch { /* 未知预设不能让状态查询失败。 */ }
+    return permissions.currentValue
   }
 
   private async agent(sessionId: string): Promise<unknown> {
@@ -84,9 +106,14 @@ export class ChatCommands {
   }
 
   private async workspaces(signal: AbortSignal): Promise<{ items: Workspace[]; archivedSessionIds: string[] }> {
-    const stream = await this.call<AsyncIterable<{ type: string; value: { items: Workspace[]; archivedSessionIds: string[] } }>>('workspaceController', 'follow', signal)
-    for await (const frame of stream) return frame.value
+    const stream = await this.call<AsyncIterable<{ type: string; value?: { items?: Workspace[]; archivedSessionIds?: string[] } }>>('workspaceController', 'follow', signal)
+    for await (const frame of stream) return { items: frame.value?.items ?? [], archivedSessionIds: frame.value?.archivedSessionIds ?? [] }
     throw new Error(replyText('无法读取工作区。'))
+  }
+
+  private async listSessions(signal: AbortSignal): Promise<Row[]> {
+    const listed = await this.call<{ items?: Row[] }>('sessionController', 'list', {}, signal)
+    return listed?.items ?? []
   }
 
   private remember(key: string, values: string[]): void {
@@ -112,8 +139,8 @@ export class ChatCommands {
   private async idle(sessionId: string | undefined, signal: AbortSignal, command: string): Promise<void> {
     if (!sessionId) return
     if (this.pending(sessionId)) throw new Error(replyText('请先完成当前问题或审批，再执行 /{0}。', command))
-    const list = await this.call<{ items: Row[] }>('sessionController', 'list', {}, signal)
-    if (list.items.find((row) => row.sessionId === sessionId)?.running) throw new Error(replyText('当前任务正在运行，请先 /stop，等待停止后再执行 /{0}。', command))
+    const rows = await this.listSessions(signal)
+    if (rows.find((row) => row.sessionId === sessionId)?.running) throw new Error(replyText('当前任务正在运行，请先 /stop，等待停止后再执行 /{0}。', command))
   }
 
   execute(channel: ChannelAdapter, msg: ImMessage, signal: AbortSignal): Promise<string> {
@@ -177,7 +204,7 @@ export class ChatCommands {
       cwd ? undefined : this.optional((sig) => this.call<{ items: Row[] }>('sessionController', 'list', {}, sig), signal),
     ])
     model = model?.provider && model.model ? model : snapshot?.projections?.values?.modelSelection?.next
-    cwd ||= rows?.items.find((row) => row.sessionId === binding.sessionId)?.cwd
+    cwd ||= rows?.items?.find((row) => row.sessionId === binding.sessionId)?.cwd
     return [replyText('工作区：{0}', cwd || replyText('暂时无法读取')), model ? replyText('模型：{0}/{1} · {2}', model.provider, model.model, model.reasoningEffort || replyText('默认推理')) : replyText('模型：暂时无法读取')].join('\n')
   }
 
@@ -202,7 +229,7 @@ export class ChatCommands {
       let choices: Choice[] = []
       let text = replyText('助手操作菜单')
       if (section === 'sessions') {
-        const rows = (await this.call<{ items: Row[] }>('sessionController', 'list', {}, signal)).items
+        const rows = await this.listSessions(signal)
         const workspaces = await this.workspaces(signal)
         choices = rows.filter(row => !row.origin && !row.running && row.sessionId !== current?.sessionId && !workspaces.archivedSessionIds.includes(row.sessionId)
           && !this.router.isBoundElsewhere?.(row.sessionId, channel.id, kind, msg.chatId)).map(row => ({ label: oneLine(row.projections?.values?.title || row.sessionId), value: `/session ${row.sessionId}` }))
@@ -212,7 +239,7 @@ export class ChatCommands {
         const sessionId = requireCurrent()
         const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
         const selected = (await this.snapshot(sessionId, signal)).projections?.values?.modelSelection?.next || catalog.default
-        const model = catalog.groups.find(group => group.id === selected.provider)?.models.find(item => item.id === selected.model)
+        const model = selected ? catalog.groups?.find(group => group.id === selected.provider)?.models?.find(item => item.id === selected.model) : undefined
         const efforts = model?.reasoning?.efforts || []
         text = replyText('模型：{0}\n当前推理：{1}', oneLine(model?.name || selected.model), selected.reasoningEffort || replyText('默认'))
         choices = efforts.map(item => ({ label: oneLine(item.name || item.id) + (item.id === selected.reasoningEffort ? replyText('〔当前〕') : ''), value: `/reasoning ${this.reasoningChoice(scope, sessionId, selected, item.id)}` }))
@@ -223,7 +250,7 @@ export class ChatCommands {
       } else if (section === 'models') {
         requireCurrent()
         const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
-        choices = catalog.groups.flatMap(group => group.models.map(model => ({ label: oneLine(`${model.name} (${group.id})`), value: `/model ${group.id}/${model.id}` })))
+        choices = (catalog?.groups ?? []).flatMap(group => (group.models ?? []).map(model => ({ label: oneLine(`${model.name} (${group.id})`), value: `/model ${group.id}/${model.id}` })))
       } else {
         if (current) text += '\n' + await this.newDetails(current, signal)
         choices = [
@@ -287,8 +314,12 @@ export class ChatCommands {
         hint = replyText('\n扩展命令暂时无法读取，以上内置帮助仍可使用；稍后重试 /help。')
       }
       const descriptions = extensionHelp()
-      return `${oneLine(channel.label || replyText('机器人'))}\n` + chatControlHelp()
-        + (commands.length ? replyText('\n\n扩展命令：\n') + commands.map((item) => `/${item.name} — ${descriptions[item.name] || oneLine(item.description)}`).join('\n') : '') + hint
+      const help = chatControlHelp()
+      // 基础帮助里已经列过的命令不再在扩展小节重复出现（例如 /export）。
+      const documented = new Set([...help.matchAll(/\/([a-z][a-z0-9_-]*)/gi)].map((match) => match[1]!.toLowerCase()))
+      const extras = commands.filter((item) => !documented.has(item.name.toLowerCase()))
+      return `${oneLine(channel.label || replyText('机器人'))}\n` + help
+        + (extras.length ? replyText('\n\n扩展命令：\n') + extras.map((item) => `/${item.name} — ${descriptions[item.name] || oneLine(item.description)}`).join('\n') : '') + hint
     }
     if (command === 'new' || command === 'clear') {
       if (current && this.host.get('sessionController')) await this.idle(current.sessionId, signal, command)
@@ -298,7 +329,7 @@ export class ChatCommands {
     if (command === 'sessions' || command === 'sessionlist') {
       const page = input ? Number(input) : 1
       if (!Number.isInteger(page) || page < 1) throw new Error(replyText('用法：/sessions [页码]'))
-      const rows = (await this.call<{ items: Row[] }>('sessionController', 'list', {}, signal)).items.filter((row) => !row.origin)
+      const rows = (await this.listSessions(signal)).filter((row) => !row.origin)
       this.remember(scope + ':sessions', rows.map((row) => row.sessionId))
       if (!rows.length) return replyText('暂无可接续会话。') + related(replyText('直接发送消息，或 /new 开始聊天'))
       const pages = Math.ceil(rows.length / 10)
@@ -316,29 +347,29 @@ export class ChatCommands {
     if (command === 'session') {
       if (!input) {
         if (!current) return replyText('当前没有会话。直接发送消息或 /new 开始。')
-        const rows = (await this.call<{ items: Row[] }>('sessionController', 'list', {}, signal)).items
+        const rows = await this.listSessions(signal)
         const row = rows.find((item) => item.sessionId === current.sessionId)
         return replyText('当前会话：{0}\n工作区：{1}\n会话 ID：{2}', oneLine(row?.projections?.values?.title || replyText('未命名会话')), row?.cwd || replyText('暂时无法读取'), current.sessionId) + related(replyText('切换会话：/sessions'), replyText('详细状态：/status'))
       }
       const id = this.resolve(scope + ':sessions', input)
-      const rows = (await this.call<{ items: Row[] }>('sessionController', 'list', {}, signal)).items
+      const rows = await this.listSessions(signal)
       const row = rows.find((item) => item.sessionId === id && !item.origin)
       if (!row) throw new Error(replyText('会话不存在或不是可接入的普通会话。'))
       const workspace = await this.workspaces(signal)
       if (workspace.archivedSessionIds.includes(id)) throw new Error(replyText('请先在 Chat 恢复该归档会话。'))
-      if (workspace.items.filter((item) => item.sessionIds.includes(id)).length !== 1) throw new Error(replyText('会话工作区归属无效。'))
+      if (workspace.items.filter((item) => item.sessionIds?.includes(id)).length !== 1) throw new Error(replyText('会话工作区归属无效。'))
       if (row.running && id !== current?.sessionId) throw new Error(replyText('目标会话正在运行，请在 Chat 停止后再切换。'))
       await this.idle(current?.sessionId, signal, command)
-      await this.router.bind(channel.id, kind, msg.chatId, id, row.projections?.values?.title || id, await this.agent(id), row.cwd || workspace.items.find((item) => item.sessionIds.includes(id))?.path)
-      return replyText('已切换会话：{0}\n工作区：{1}\n接下来的消息会发送到此会话。', oneLine(row.projections?.values?.title || id), row.cwd || workspace.items.find((item) => item.sessionIds.includes(id))?.path || replyText('暂时无法读取')) + related(replyText('最近记录：/history'), replyText('重新开始：/new'))
+      await this.router.bind(channel.id, kind, msg.chatId, id, row.projections?.values?.title || id, await this.agent(id), row.cwd || workspace.items.find((item) => item.sessionIds?.includes(id))?.path)
+      return replyText('已切换会话：{0}\n工作区：{1}\n接下来的消息会发送到此会话。', oneLine(row.projections?.values?.title || id), row.cwd || workspace.items.find((item) => item.sessionIds?.includes(id))?.path || replyText('暂时无法读取')) + related(replyText('最近记录：/history'), replyText('重新开始：/new'))
     }
     if (command === 'workspaces' || command === 'workspacelist' || command === 'workspace') {
       const { items } = await this.workspaces(signal)
       if (command !== 'workspace' || !input) {
         this.remember(scope + ':workspaces', items.map((item) => item.workspaceId))
         const alternative = items.findIndex(
-          (item) => !current || !item.sessionIds.includes(current.sessionId))
-        return items.length ? replyText('工作区列表 · 共 {0} 个\n\n', items.length) + items.map((item, i) => `${i + 1}. ${item.title ? oneLine(item.title) : oneLine(item.path)}${item.title ? `\n${item.path}` : ''}${current && item.sessionIds.includes(current.sessionId) ? replyText('〔当前〕') : ''}`).join('\n') + related(alternative >= 0
+          (item) => !current || !item.sessionIds?.includes(current.sessionId))
+        return items.length ? replyText('工作区列表 · 共 {0} 个\n\n', items.length) + items.map((item, i) => `${i + 1}. ${item.title ? oneLine(item.title) : oneLine(item.path)}${item.title ? `\n${item.path}` : ''}${current && item.sessionIds?.includes(current.sessionId) ? replyText('〔当前〕') : ''}`).join('\n') + related(alternative >= 0
           ? replyText('新建并切换：/workspace {0}', alternative + 1)
           : replyText(
             '当前只有这个工作区。直接发消息继续，或 /new 开启新会话。'), replyText('也可使用已列出的绝对路径；旧会话保留，账号默认目录不变。'), replyText('别名：/workspacelist；序号 15 分钟内有效。')) : replyText('还没有可用工作区。请先在网页添加，再发送 /workspaces。')
@@ -353,7 +384,7 @@ export class ChatCommands {
     }
     if (command === 'models') {
       const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
-      const models = catalog.groups.flatMap((group) => group.models.map((model) => ({ id: `${group.id}/${model.id}`, name: model.name })))
+      const models = (catalog?.groups ?? []).flatMap((group) => (group.models ?? []).map((model) => ({ id: `${group.id}/${model.id}`, name: model.name })))
       let selected: Selection | undefined
       if (current) {
         try { selected = (await this.snapshot(current.sessionId, signal)).projections?.values?.modelSelection?.next }
@@ -387,7 +418,7 @@ export class ChatCommands {
       const preset = followDefault ? presets.find(item => item.isDefault) : presets.find(item => item.id === id)
       if (!preset || preset.broken) throw new Error(replyText('预设不存在或不可用，请发送 /presets 重新选择。'))
       await this.idle(sessionId, signal, 'preset')
-      const matches = (await this.workspaces(signal)).items.filter(item => item.sessionIds.includes(sessionId))
+      const matches = (await this.workspaces(signal)).items.filter(item => item.sessionIds?.includes(sessionId))
       if (matches.length !== 1) throw new Error(replyText('无法确定当前工作区，请先用 /workspace 选择工作区。'))
       const workspace = matches[0]!
       let createdId: string | undefined
@@ -416,7 +447,7 @@ export class ChatCommands {
         for await (const frame of stream) {
           const items = frame.value.queues[sessionId] || []
           if (!items.length) return replyText('当前没有排队消息。') + related(replyText('直接发消息继续'), replyText('查看状态：/status'))
-          return replyText('排队消息 · 共 {0} 条\n\n', items.length) + items.map((item) => replyText('{0}〔{1}〕\n{2}', item.id, item.placement === 'queued' ? replyText('等待执行') : item.placement === 'steer' ? replyText('补充指令') : replyText('排队中'), oneLine(item.message.content.filter((part) => part.type === 'text').map((part) => part.text || '').join('\n')) || replyText('附件消息'))).join('\n\n')
+          return replyText('排队消息 · 共 {0} 条\n\n', items.length) + items.map((item) => replyText('{0}〔{1}〕\n{2}', item.id, item.placement === 'queued' ? replyText('等待执行') : item.placement === 'steer' ? replyText('补充指令') : replyText('排队中'), oneLine((item.message?.content ?? []).filter((part) => part.type === 'text').map((part) => part.text || '').join('\n')) || replyText('附件消息'))).join('\n\n')
             + related(replyText('移除：/queue remove {0}', items[0]!.id), replyText('修改：/queue edit {0} 新内容', items[0]!.id), replyText('改为补充指令：/queue steer {0}', items[0]!.id))
         }
         throw new Error(replyText('无法读取队列。'))
@@ -432,16 +463,16 @@ export class ChatCommands {
         this.snapshot(sessionId, signal),
       ])
       signal.throwIfAborted()
-      const row = results[0].status === 'fulfilled' ? results[0].value.items.find((item) => item.sessionId === sessionId) : undefined
+      const row = results[0].status === 'fulfilled' ? results[0].value.items?.find((item) => item.sessionId === sessionId) : undefined
       const values = results[1].status === 'fulfilled' ? results[1].value.projections?.values : undefined
       const model = values?.modelSelection?.next
       const details: string[] = []
       let queueCount: number | undefined
       if (values?.agentPreset) details.push(replyText('Agent 预设：{0}', oneLine(values.agentPreset)))
-      if (values?.permissions) details.push(replyText('权限：{0}', oneLine(values.permissions.options.find((item) => item.value === values.permissions!.currentValue)?.name || values.permissions.currentValue)))
+      if (values?.permissions?.currentValue) details.push(replyText('权限：{0}', oneLine(this.permissionLabel(values.permissions))))
       if (values && 'goal' in values) {
         const phases: Record<string, string> = { active: replyText('活跃'), paused: replyText('已暂停'), blocked: replyText('受阻'), complete: replyText('已完成') }
-        details.push(replyText('目标：{0}', values.goal ? phases[values.goal.goal.phase] || replyText('暂时无法读取') : replyText('无目标')))
+        details.push(replyText('目标：{0}', values.goal ? phases[values.goal.goal?.phase] || replyText('暂时无法读取') : replyText('无目标')))
       }
       try {
         const stream = await this.call<AsyncIterable<{ value: { queues: Record<string, unknown[]> } }>>('sessionController', 'control', signal)
@@ -449,7 +480,7 @@ export class ChatCommands {
       } catch { signal.throwIfAborted() }
 
       const actions: Choice[] = []
-      const phase = values?.goal?.goal.phase
+      const phase = values?.goal?.goal?.phase
       if (phase === 'active' || phase === 'paused' || phase === 'blocked') {
         const registered = await this.optional(async () => this.call<Descriptor[]>('commands', 'list', await this.agent(sessionId)), signal)
         if (registered?.some((item) => item.name === 'goal')) actions.push(phase === 'active'
@@ -474,11 +505,11 @@ export class ChatCommands {
         if ((error as { code?: string })?.code !== 'session/not-found') throw error
         // 冷会话没有可取消的 Agent；只接受列表明确确认空闲，不为停止而激活它。
         const state = await this.optional((sig) => this.call<{ items: Row[] }>('sessionController', 'list', {}, sig), signal)
-        if (state?.items.find(row => row.sessionId === sessionId)?.running !== false) throw new Error(replyText('暂时无法确认当前会话的运行状态，未能请求停止。请用 /status 查看，或到网页检查会话。'))
+        if (state?.items?.find(row => row.sessionId === sessionId)?.running !== false) throw new Error(replyText('暂时无法确认当前会话的运行状态，未能请求停止。请用 /status 查看，或到网页检查会话。'))
         return replyText('当前没有正在执行的任务。') + related(replyText('确认运行状态：/status'))
       }
       const after = await this.optional((sig) => this.call<{ items: Row[] }>('sessionController', 'list', {}, sig), signal)
-      const idleNow = after?.items.find((row) => row.sessionId === sessionId)?.running === false
+      const idleNow = after?.items?.find((row) => row.sessionId === sessionId)?.running === false
       let goalHint = ''
       try {
         const goals = this.host.get('goals') as | { get(agent: unknown): { phase?: string } | undefined } | undefined
@@ -500,7 +531,7 @@ export class ChatCommands {
     if (command === 'rename') {
       if (!input) throw new Error(replyText('请填写新名称，例如：/rename 九月出行计划'))
       const before = await this.optional((sig) => this.call<{ items: Row[] }>('sessionController', 'list', {}, sig), signal)
-      const oldTitle = before?.items.find((row) => row.sessionId === sessionId)?.projections?.values?.title
+      const oldTitle = before?.items?.find((row) => row.sessionId === sessionId)?.projections?.values?.title
       const result = await this.call<{ title: string }>('sessionController', 'rename', { sessionId, title: input })
       this.router.rename(sessionId, result.title)
       if (oldTitle === result.title)
@@ -510,7 +541,7 @@ export class ChatCommands {
     }
     if (command === 'fork') {
       await this.idle(sessionId, signal, command)
-      const workspace = (await this.workspaces(signal)).items.find((item) => item.sessionIds.includes(sessionId))
+      const workspace = (await this.workspaces(signal)).items.find((item) => item.sessionIds?.includes(sessionId))
       if (!workspace) throw new Error(replyText('当前会话工作区不可用，无法分叉。'))
       let createdId: string | undefined
       try {
@@ -535,10 +566,11 @@ export class ChatCommands {
     if (command === 'model' || command === 'reasoning' || command === 'reasonings' || command === 'reasoninglist') {
       const catalog = await this.call<Catalog>('sessionController', 'modelCatalog')
       const snapshot = await this.snapshot(sessionId, signal)
-      const selected = snapshot.projections?.values?.modelSelection?.next || catalog.default
+      const selected = snapshot.projections?.values?.modelSelection?.next || catalog?.default
+      if (!selected?.provider || !selected.model) throw new Error(replyText('模型：暂时无法读取'))
       if (command === 'model') {
         if (!input) {
-          const name = catalog.groups.find((group) => group.id === selected.provider)?.models.find((item) => item.id === selected.model)?.name
+          const name = catalog.groups?.find((group) => group.id === selected.provider)?.models?.find((item) => item.id === selected.model)?.name
           return replyText('当前模型：{0}\n模型 ID：{1}/{2}\n推理等级：{3}', oneLine(name || selected.model), selected.provider, selected.model, selected.reasoningEffort || replyText('默认')) + related(replyText('选择其他模型：/models'), replyText('查看推理选项：/reasoning'), replyText('切换用法：/model {0}/{1} [推理等级ID]', selected.provider, selected.model))
         }
         if (input.split(/\s+/).length > 2) throw new Error(replyText('参数过多。用法：/model 序号或provider/model [推理等级ID]；可用模型：/models'))
@@ -549,7 +581,7 @@ export class ChatCommands {
         const result = await this.call<{ selected: Selection }>('sessionController', 'selectModel', { sessionId, provider: id.slice(0, slash), model: id.slice(slash + 1), ...(reasoningEffort ? { reasoningEffort } : {}) })
         return replyText('已切换模型：{0}/{1}；推理：{2}\n{3}', result.selected.provider, result.selected.model, result.selected.reasoningEffort || replyText('默认'), modelDefaultHint()) + related(replyText('调整推理：/reasoning'), replyText('查看模型：/models'))
       }
-      const model = catalog.groups.find((group) => group.id === selected.provider)?.models.find((item) => item.id === selected.model)
+      const model = catalog.groups?.find((group) => group.id === selected.provider)?.models?.find((item) => item.id === selected.model)
       const efforts = model?.reasoning?.efforts || []
       if (!input || command !== 'reasoning') {
         this.remember(scope + ':reasoning', efforts.map(item => this.reasoningChoice(scope, sessionId, selected, item.id)))
@@ -570,7 +602,7 @@ export class ChatCommands {
     }
     if (command === 'history') {
       const snapshot = await this.snapshot(sessionId, signal)
-      const history = snapshot.records.flatMap((record) => record.type === 'event' && record.event ? [record.event] : []).filter((record) => record.type === 'assistant/message' || (record.type === 'user/message' && record.data?.source?.kind === 'user'))
+      const history = (snapshot.records ?? []).flatMap((record) => record.type === 'event' && record.event ? [record.event] : []).filter((record) => record.type === 'assistant/message' || (record.type === 'user/message' && record.data?.source?.kind === 'user'))
         .flatMap((record) => {
           const text = (record.data?.message?.content || record.data?.content || []).filter((part) => part.type === 'text').map((part) => part.text || '').join('\n')
           return text.trim() ? [replyText('{0}：{1}', record.type === 'assistant/message' ? replyText('助手') : replyText('用户'), text)] : []

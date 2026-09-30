@@ -6,7 +6,7 @@
 
   # DSH IM Connect
 
-  **Connect Feishu, Lark, DingTalk, WeCom, WeChat, QQ, and Telegram to local DeepSeek Harness**
+  **Connect Feishu, Lark, DingTalk, WeCom, WeChat, QQ, Telegram, and Discord to local DeepSeek Harness**
 
   [简体中文](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE)
 
@@ -15,7 +15,7 @@
   [![npm downloads](https://img.shields.io/npm/dt/%40michengai%2Fdsh-im-connect.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-im-connect)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-im-connect)
   [![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%20or%20later-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
-  [![Channels](https://img.shields.io/badge/channels-7-238636.svg)](#-supported-channels)
+  [![Channels](https://img.shields.io/badge/channels-8-238636.svg)](#-supported-channels)
 </div>
 
 > DSH IM Connect is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
@@ -24,7 +24,7 @@
 
 Send tasks to your local DSH through your usual messenger, even when you are away from the computer. Receive replies, answer questions, and handle tool approvals in the same chat.
 
-- **Connect familiar platforms**: DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram.
+- **Connect familiar platforms**: DingTalk, Feishu, Lark, WeChat, WeCom, QQ, Telegram, and Discord.
 - **Configure accounts separately**: each account has its own workspace, model, reasoning effort, permissions, and private-access mode.
 - **Handle task interactions on your phone**: send work, read replies, and answer single- or multiple-choice questions. Approved users can approve or deny tools in private chats.
 - **Keep chat records separate**: each IM chat has its own session under **Channels** in the web workspace.
@@ -42,9 +42,9 @@ Inbound messages are identified before commands, tool approvals, or injection.
 | DM from the QR scanner | WeChat / Feishu / Lark / QQ scanners are allowlisted automatically |
 | DM from anyone else | Appears on the settings pending list until approved |
 | DM after QR binding that does not return user identity | DingTalk / WeCom QR setup returns bot credentials only, so the scanner still needs settings approval |
-| DM after manual credentials | Telegram, and DingTalk / WeCom / QQ bound manually, require approval for every DM |
+| DM after manual credentials | Telegram, Discord, and DingTalk / WeCom / QQ bound manually, require approval for every DM |
 | DM without a userId | Denied |
-| Tool approval | Only an allowlisted user in a DM can reply `Approve` / `Deny` (or `批准` / `拒绝`); group replies do not grant |
+| Tool approval | Reply `Approve` / `Deny` (or `批准` / `拒绝`) in the chat bound to that session; works in DMs and groups, and never falls back to the web |
 | Interactive choice | Reply with an option number or text in the originating IM conversation; separate multiple choices with commas or add a custom answer; only the initiating user can answer in a group |
 
 WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk immediately. A different WeChat account DMing the bot waits for settings approval.
@@ -58,7 +58,8 @@ WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk 
   <code>💬 WeChat</code>&nbsp;
   <code>🏢 WeCom</code>&nbsp;
   <code>🐧 QQ</code>&nbsp;
-  <code>✈️ Telegram</code>
+  <code>✈️ Telegram</code>&nbsp;
+  <code>🎮 Discord</code>
 </p>
 
 | Channel | Status | How to connect | You need |
@@ -70,14 +71,15 @@ WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk 
 | 🏢 **WeCom** | ✅ Ready | QR (recommended), or Bot ID / Secret | WeCom intelligent bot |
 | 🐧 **QQ** | ✅ Ready | QR, or AppID / AppSecret | QQ Open Platform bot, not a personal QQ account |
 | ✈️ **Telegram** | ✅ Ready | Bot Token only | `@BotFather`; do not enable Webhook on the same bot |
+| 🎮 **Discord** | ✅ Ready | Bot Token only | Official Developer Portal bot. Enable the Message Content Intent. The first mention in a text or announcement channel continues in a thread without another mention |
 
-✅ Ready = text in and out works ｜ *WeChat = official iLink only, no reverse-engineered personal protocol ｜ Groups still require an @ mention
+✅ Ready = text in and out works ｜ *WeChat = official iLink only, no reverse-engineered personal protocol ｜ Groups still require an @ mention. Discord skips repeat mentions only inside a thread the bot created
 
 ## Image input
 
 Image input follows DSH Chat's model-capability and attachment rules rather than guessing vision support from model names:
 
-The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram. See the [image-input verification guide](docs/image-input.md) for protocol forms and live checks.
+The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, Telegram, and Discord. See the [image-input verification guide](docs/image-input.md) for protocol forms and live checks.
 
 - Use the model currently selected for the IM session, not just the global default.
 - When the model declares `image` support, store images as standard DSH attachments and submit image content to the model. Session history keeps image references rather than only local-path text.
@@ -87,7 +89,7 @@ The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram.
 
 ## File input
 
-WeChat, WeCom, DingTalk, Feishu, Lark, QQ and Telegram accept ordinary files through Chat’s upload service for the current session. Send PDFs, documents or spreadsheets for the assistant to process. Format support follows web Chat’s models, tools and file capabilities; uploading does not guarantee that every format can be understood directly.
+WeChat, WeCom, DingTalk, Feishu, Lark, QQ, Telegram, and Discord accept ordinary files through Chat’s upload service for the current session. Send PDFs, documents or spreadsheets for the assistant to process. Format support follows web Chat’s models, tools and file capabilities; uploading does not guarantee that every format can be understood directly.
 
 - Requires the file-upload service in DSH `0.1.5-rc.1`, `0.1.5-rc.2`, `0.1.5-rc.3`, `0.1.7-rc.1`, `0.1.7-rc.2`, `0.2.0-rc.1`, or `0.2.0-rc.2`. On `0.1.2-rc.1`, file input asks you to upgrade; existing text and image support is unchanged.
 - Up to 4 ordinary files per message, totaling 20 MiB. Channel download limits also apply.
@@ -97,7 +99,7 @@ WeChat, WeCom, DingTalk, Feishu, Lark, QQ and Telegram accept ordinary files thr
 
 ## File delivery
 
-WeChat, WeCom, DingTalk, Feishu, Lark, QQ, and Telegram can return files produced by the assistant. For example: “Create a PDF report and send me the file.”
+WeChat, WeCom, DingTalk, Feishu, Lark, QQ, Telegram, and Discord can return files produced by the assistant. For example: “Create a PDF report and send me the file.”
 
 - Files successfully created or edited with Chat's supported file tools are sent after the reply. On hosts with `present`, explicitly presented files are also sent, including existing files.
 - File access follows Chat: files outside the workspace are allowed when the host can read them. The plugin does not extract arbitrary paths from reply text. Files created through shell commands need to be presented explicitly.
@@ -117,9 +119,9 @@ Menus include previous, next and back actions. WeCom menus paginate to fit card 
 
 Common command replies offer related next steps: for example, `/model` → select a model / adjust reasoning → back to menu. Supported channels offer buttons; text replies include the commands to send. Navigation buttons on ordinary result replies do not accept numeric shortcuts, so numbers remain chat input; only selection menus accept numbered replies. Oversized cards fall back to complete text.
 
-DingTalk, Telegram and Feishu/Lark use native buttons. WeCom uses cards when button count and text length fit platform limits. Other cases, QQ and WeChat use numbered text. Explicit rejections and capacity limits fall back to complete text. Uncertain network delivery produces a confirmation notice instead of resending the card. Menus are scoped to the account, chat, operator and session, expire after 15 minutes or restart, and recheck permissions on selection. Used buttons cannot execute again.
+DingTalk, Telegram, Discord, and Feishu/Lark use native buttons. WeCom uses cards when button count and text length fit platform limits. Other cases, QQ and WeChat use numbered text. Explicit rejections and capacity limits fall back to complete text. Uncertain network delivery produces a confirmation notice instead of resending the card. Menus are scoped to the account, chat, operator and session, expire after 15 minutes or restart, and recheck permissions on selection. Used buttons cannot execute again.
 
-Approvals and questions use the same native-button channels: allow once/reject, single-choice selection, and multiple selections followed by submit. Open questions retain text input. If a card cannot show the full prompt or fails to send, text is used without omitting approval details. Existing approval eligibility and requester restrictions apply; disabling commands does not disable pending approvals or questions.
+Approvals and questions use the same native-button channels: allow once/reject, single-choice selection, and multiple selections followed by submit. Open questions retain text input. Approvals always stay in the chat that started the task and never fall back to the web; a failed prompt is treated as a denial. In groups only the task initiator can approve; DMs add no extra restriction beyond chatting. Disabling commands does not disable pending approvals or questions.
 
 
 Agent presets: `/presets` (alias `/presetlist`) lists presets; `/preset` shows the current preset. `/preset number-or-ID` starts and switches to a new session in the current workspace, keeping previous sessions. Use `/preset id:ID` for numeric IDs and `/preset --default` for the default preset. Account defaults remain unchanged; later `/new` commands still use account settings. Native buttons support direct selection; text lists use numbers valid for 15 minutes.
@@ -135,13 +137,14 @@ Regular chat messages follow the actual task state. Commands continue to use tex
 - DingTalk: labels on the original message show queued, thinking, waiting for confirmation, done, failed, or cancelled.
 - Feishu / Lark: reactions indicate processing, done, or failed. Waiting keeps the processing reaction; cancellation removes it.
 - Telegram: 👀 processing, 🤔 waiting for confirmation, 👍 done, and 👎 failed. Cancellation removes the reaction. Typing is refreshed while processing.
+- Discord: uses the same reactions and edits one message as the answer streams. Typing is refreshed while processing. Cancellation removes the reaction.
 - WeChat: typing is refreshed while processing and stopped when finished or waiting for confirmation. WeCom and QQ retain their existing reply behavior.
 
 Done means the turn completed normally and both text and files were delivered. Stopped or failed tasks and later queued messages are not marked done. Channel permissions and network conditions may prevent status updates without blocking chat. Text labels follow the web language setting.
 
 ## Connection diagnostics
 
-Use **Diagnose connection** in account settings to query platform APIs: WeChat configuration, a ping acknowledgement on the existing WeCom connection, DingTalk credentials, Feishu/Lark credentials and bot identity, QQ credentials and gateway, or Telegram bot identity and Webhook conflicts.
+Use **Diagnose connection** in account settings to query platform APIs: WeChat configuration, a ping acknowledgement on the existing WeCom connection, DingTalk credentials, Feishu/Lark credentials and bot identity, QQ credentials and gateway, Telegram bot identity and Webhook conflicts, or Discord bot identity and Gateway URL.
 
 Each check reports passed, failed, or unverified, with timing and a suggested next step. No test messages are sent and no extra message polling is started. Passing one check does not verify all messaging permissions. An older backend prompts you to restart DSH and refresh the page. See the [connection diagnostics API and validation notes (Chinese)](docs/01-当前工作/I015-命令权限与Chat命令/06-账号状态检查.md).
 
@@ -235,7 +238,7 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 
 | Goal | Action | Notes |
 | --- | --- | --- |
-| Add an account | Select **Add account** under a channel, choose the account settings, then scan or enter credentials | The same channel can contain multiple accounts; Feishu / Lark / WeChat are QR-only, while Telegram needs a Bot Token |
+| Add an account | Select **Add account** under a channel, choose the account settings, then scan or enter credentials | The same channel can contain multiple accounts; Feishu / Lark / WeChat are QR-only, while Telegram and Discord need a Bot Token |
 | Change account settings | Expand the channel, select an account, then edit its workspace, model, reasoning effort, permission, or private-access mode in its settings dialog | Changes affect only that account and apply to its subsequent sessions immediately |
 | Pause receiving | Turn off **Receive messages** on the account row | Credentials and settings stay; only new inbound messages for that account pause |
 | Send work from IM | WeChat / Feishu / Lark / QQ QR scanners can DM immediately; DingTalk / WeCom scanners and other users need approval. Groups only need a mention | Each chat has its own channel session |
@@ -257,7 +260,7 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 
 After `/workspace`, `/new` and continuing after archiving the current session keep the selected workspace and use the account model, Agent preset, and permission preset. `/session` and `/fork` preserve the original session configuration.
 
-DingTalk replies prefer official AI Card streaming. If card creation fails, plain text preserves line breaks; code fences and list markers remain literal. QQ replies show headings, bold text, and links; tables are sent as lists. Do not enable Webhook on the same Telegram bot.
+DingTalk replies prefer official AI Card streaming. If card creation fails, plain text preserves line breaks; code fences and list markers remain literal. QQ replies use official markdown and keep headings, bold text, links, and tables; only a platform rejection falls back to plain text (where tables become lists). Telegram replies are sent as Rich Messages with Markdown so headings, bold text, and tables render, falling back to plain text when that method is unavailable; do not enable Webhook on the same bot. Feishu normal replies also use card Markdown, so headings and tables render; cards are split so none holds more than five tables, with a plain-text fallback. Long replies split with structure awareness: table chunks repeat the header, code fences are re-closed, and the `(n/m)` marker only prefixes prose chunks. `/help` is grouped as getting around / sessions and workspaces / models and reasoning / tasks and delivery, with one entry per feature and the usable aliases marked; group titles are bold while the rest of the command copy stays plain text, which keeps them scannable on a phone. Discord renders headings, bold text, code, and lists on the client but has no Markdown tables, and mobile clients cannot scroll horizontally, so pipe tables become a vertical block per row (first two columns as a bold title, remaining columns as `header: value`). Everything else is sent verbatim. Do not configure a Discord Interactions Endpoint URL, or button clicks will not arrive through the Gateway.
 
 Send commands as separate text messages; image captions remain ordinary input. Start with `/help`; individual replies also suggest related actions.
 
@@ -281,7 +284,7 @@ Command permission does not grant DM admission or replace tool approval. Enabled
 | Account state | `channels.json` stores per-account workspace, model, permission, private access, enablement, and credential refs, not raw secrets |
 | Browser payloads | Never include tokens, secrets, App Secrets, or internal error details |
 | WeChat protocol | Official iLink only; no reverse-engineered personal WeChat protocol |
-| Tool approval | Only a user on the current account's allowlist can grant or deny in a DM. Even when all DM users may chat, unapproved users cannot approve tools; approvals cannot cross conversations or come from groups |
+| Tool approval | The task initiator replies in the chat bound to that session. DM admission decides who can chat and no longer gates approvals, and approvals never go back to the web |
 | Interactive questions | Single-choice, multiple-choice, and custom questions return to the originating IM conversation; one conversation handles them in order, and only the initiating user can answer in a group |
 
 Keep the DSH backend listening on loopback. Remote access should use a controlled HTTPS reverse proxy, the actual authority in the Host's `trustedHosts`, and a login through that authority. Do not spoof localhost or remove authentication to bypass 403. Image-download `additionalImageHosts` does not configure management access; see [management authentication](SECURITY.md#管理面). Permission presets use the same host sandbox-policy values as Chat; `danger-full-access` does not wrap a sandbox.
@@ -312,7 +315,7 @@ This repository develops in `src` and builds to `lib`:
 - [src\index.ts](src/index.ts): host entry, config, and lifecycle.
 - [src\manager.ts](src/manager.ts): channel start/stop, authenticated management API, and credential persistence.
 - [src\engine](src/engine): session routing, slash commands, approval, splitting, and outbound push.
-- [src\channels](src/channels): DingTalk, Feishu, Lark, WeChat, WeCom, QQ, and Telegram adapters.
+- [src\channels](src/channels): DingTalk, Feishu, Lark, WeChat, WeCom, QQ, Telegram, and Discord adapters.
 - `client.js`: settings page and workspace channel sidebar.
 - `tests\*.test.mjs`: routing, QR, credentials, QQ, delivery, and sidebar tests.
 
@@ -352,7 +355,7 @@ Sidebar tests read the built `lib/client.js`; run `npm run build` before invokin
 
 Delivery tracking starts with ordinary IM messages received after this feature is enabled. If the original result is saved but sending has not started, its final text and completion status can be recovered after reconnecting or restarting. Questions, tools, approvals, and files are never replayed. Messages handled by earlier plugin versions are not recovered retroactively.
 
-- Telegram, Feishu/Lark, and WeCom can attempt background delivery using a stable chat destination. DingTalk, QQ, and WeChat wait for a new message in the original chat to refresh the reply channel. Connection, expiry, and platform quotas still apply.
+- Telegram, Discord, Feishu/Lark, and WeCom can attempt background delivery using a stable chat destination. DingTalk, QQ, and WeChat wait for a new message in the original chat to refresh the reply channel. Connection, expiry, and platform quotas still apply.
 - When sending was attempted but delivery is unconfirmed, automatic resend pauses. Use `/delivery` to check records, then `/delivery retry <record-ID>` if you want to resend. This may duplicate text you already received. View files in the original session on the web.
 - Records and resend actions are scoped to the original sender in the current chat, subject to admission and command permissions. Disabling an account, changing the session binding, or changing access pauses recovery. Restore the original binding and access before retrying manually.
 - Recovery is available for 7 days per record, with at most 1,000 records. Delivered and definitively rejected records are removed first when capacity is reached; expired records are cleaned up when a new message arrives. Background checks run in batches every 30 seconds. Unreadable history or unfinished tasks remain pending. Recovery does not resume task execution.

@@ -3,7 +3,8 @@
  *
  * 单聊/群聊自定义 markdown 用 `msg_type: 2` + `markdown.content`（官方文档，2026-04-23）。
  * 助手正文直接走这条路径，不再先判断像不像 markdown。发送前只改官方页没有的语法：
- * 表格降成列表，代码围栏去掉，三级及更深标题收成 `##`。
+ * 代码围栏去掉，三级及更深标题收成 `##`；表格保持不变，超长分片由引擎分片器
+ * 重复表头，不再降级成列表。
  *
  * 回退只认 markdown 自身的 `err_code`（50055 / 50056 / 50057）。超时、中止、429、5xx
  * 不能靠 `error.code` 判断：`TimeoutError.code` 是 23，会把已超时的请求再发一次。
@@ -73,7 +74,7 @@ export function prepareQqMarkdown(text: string): string {
   let inCode = false
   const flush = () => {
     if (!prose.length) return
-    out.push(convertQqTables(prose.splice(0).map((line) => line.replace(DEEP_HEADING, '$1##')).join('\n')))
+    out.push(prose.splice(0).map((line) => line.replace(DEEP_HEADING, '$1##')).join('\n'))
   }
   for (const line of lines) {
     if (CODE_FENCE.test(line)) {

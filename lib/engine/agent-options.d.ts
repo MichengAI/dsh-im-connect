@@ -1,4 +1,3 @@
-/** 解析 IM 会话要用的模型，禁止把空字符串传给 agents.create。 */
 export declare function resolveImAgentOptions(input: {
     provider?: string;
     model?: string;

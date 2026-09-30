@@ -6,6 +6,7 @@ import { readHostDefaultModel, resolveImAgentOptions } from './agent-options.js'
 import type { EngineConfig } from './types.js'
 import { KeyedSerialQueue } from './keyed-queue.js'
 import { sameWorkspacePath } from './workspace-path.js'
+import { replyText } from './command-locale.js'
 import { readSessionTitle } from './session-title.js'
 import { readSessionHistory } from './session-history.js'
 
@@ -18,7 +19,7 @@ function storedHeader(item: unknown): StoredHeader {
   const value = item as { header?: unknown } | null
   const header = (value?.header ?? item) as StoredHeader | null
   // 新版返回 stat.header，旧版直接返回 header；未知结构不能充当日志已删除的证据。
-  if (!header || typeof header.id !== 'string' || !header.id) throw new Error('无法识别宿主持久化会话条目')
+  if (!header || typeof header.id !== 'string' || !header.id) throw new Error(replyText('无法识别宿主持久化会话条目'))
   return header
 }
 
@@ -141,7 +142,7 @@ export class SessionRouter {
       }
       const known = await this.knownSessionIds()
       if (known === undefined || known.has(saved.sessionId)) {
-        throw new Error('当前会话暂时无法恢复，已保留原绑定，请稍后重试。')
+        throw new Error(replyText('当前会话暂时无法恢复，已保留原绑定，请稍后重试。'))
       }
       this.log(`[router] 无法恢复会话，轮换 ${saved.sessionId}`)
       return this.rotateNow(channelId, kind, chatId, title)
@@ -170,14 +171,14 @@ export class SessionRouter {
   private async sessionWorkspace(record: SessionRecord): Promise<string | undefined> {
     if (record.cwd) return record.cwd
     const registry = this.ctx.get?.('workspaceRegistry') as WorkspaceLookup | undefined
-    const workspace = registry?.list?.().find(item => item.sessionIds?.includes(record.sessionId))
+    const workspace = registry?.list?.()?.find(item => item.sessionIds?.includes(record.sessionId))
     if (workspace) return workspace.path
-    const controller = this.ctx.get?.('sessionController') as unknown as { list(request: object): Promise<{ items: Array<{ sessionId: string; cwd?: string }> }> } | undefined
+    const controller = this.ctx.get?.('sessionController') as unknown as { list(request: object): Promise<{ items?: Array<{ sessionId: string; cwd?: string }> }> } | undefined
     if (controller?.list) {
-      const row = (await controller.list({})).items.find(item => item.sessionId === record.sessionId)
+      const row = (await controller.list({}))?.items?.find(item => item.sessionId === record.sessionId)
       if (row?.cwd) return row.cwd
     }
-    if (record.adopted) throw new Error('无法确定当前会话工作区，请使用 /workspace 重新选择。')
+    if (record.adopted) throw new Error(replyText('无法确定当前会话工作区，请使用 /workspace 重新选择。'))
     return undefined
   }
 
@@ -199,7 +200,7 @@ export class SessionRouter {
       const key = sessionKeyOf(channelId, kind, chatId)
       signal?.throwIfAborted()
       const other = this.isBoundElsewhere(sessionId, channelId, kind, chatId)
-      if (other) throw Object.assign(new Error('该会话已关联其他聊天，不能重复绑定。'), { code: 'im/session-in-use' })
+      if (other) throw Object.assign(new Error(replyText('该会话已关联其他聊天，不能重复绑定。')), { code: 'im/session-in-use' })
       const old = this.live.get(key)
       const previous = this.store.list().find(item => item.sessionId === sessionId)
       this.store.upsert(key, { ...previous, channel: channelId, kind, chatId, sessionId, title: previous?.titleSource === 'user' ? previous.title : title, ...(cwd ? { cwd } : {}), adopted: true, updatedAt: new Date().toISOString() })
@@ -491,7 +492,7 @@ export class SessionRouter {
 
   private async createHandle(sessionId: string, channelId: string, config: EngineConfig = this.resolveConfig(channelId)) {
     const agents = this.ctx.agents
-    if (!agents?.create) throw new Error('当前 Host 没有 agents 服务，无法创建 IM 会话')
+    if (!agents?.create) throw new Error(replyText('当前 Host 没有 agents 服务，无法创建 IM 会话'))
     // IM 保持普通会话（不设置 subagent origin）；Chat prompt 会拒绝子代理所有权。
     // IM 与任务的区分靠 sessionId 的 im: 前缀。
     // 必须带上当前默认模型，否则 deployment:persona 的 {{model}} 组装会失败。
@@ -610,7 +611,7 @@ export class SessionRouter {
         lastError = error instanceof Error ? error.message : String(error)
       }
     }
-    if (strict) throw new Error(`挂载会话失败 ${sessionId}: ${lastError || '目标工作区不可用'}`)
+    if (strict) throw new Error(replyText('挂载会话失败 {0}：{1}', sessionId, lastError || replyText('目标工作区不可用')))
     this.log(`[router] 挂载会话失败 ${sessionId}: ${lastError}`)
   }
 
@@ -643,7 +644,7 @@ export class SessionRouter {
       if (permission && !preservePermission) {
         try {
           const permissionPresets = ctx.permissionPresets
-          if (!permissionPresets) throw new Error('Host 未提供官方权限预设服务')
+          if (!permissionPresets) throw new Error(replyText('Host 未提供官方权限预设服务'))
           if (agent?.session) permissionPresets.set(agent.session, permission)
         } catch (error) {
           this.log(`[router] 无法应用权限 ${permission}: ${error instanceof Error ? error.message : String(error)}`)

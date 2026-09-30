@@ -353,7 +353,7 @@ export function createDingtalkChannel(config: DingtalkConfig, log: (line: string
       const target = targets.get(chatId)
       if (!target) throw new Error('dingtalk: 还没有卡片投放目标')
       try {
-        return await openDingtalkCardStream(cards, target, log)
+        return await openDingtalkCardStream(cards, target, log, config.host)
       } catch (error) {
         log(`[dingtalk] AI Card 创建失败，回退普通文本: ${error instanceof Error ? error.message : String(error)}`)
         const sendText = async (text: string) => {

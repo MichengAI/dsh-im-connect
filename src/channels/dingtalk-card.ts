@@ -3,6 +3,7 @@ import { ChoiceSendError, choiceSendError } from '../engine/choice-delivery.js'
 import type { ChoiceReceipt } from '../engine/types.js'
 import type { ReplyStream } from '../engine/types.js'
 import { timeoutSignal } from '../engine/abort.js'
+import { channelNotice } from '../engine/command-locale.js'
 
 const API = 'https://api.dingtalk.com/'
 const TEMPLATE_ID = '02fcf2f4-5e02-4a85-b672-46d1f715543e.schema'
@@ -185,8 +186,10 @@ export async function openDingtalkCardStream(
   client: DingtalkCardClient,
   target: CardTarget,
   log: (line: string) => void,
+  host?: { get(name: string): unknown },
 ): Promise<ReplyStream> {
-  const cardInstanceId = await client.create(target, '正在思考…')
+  // 卡片占位和空回复回退都会直接显示在钉钉聊天里，跟随宿主语言。
+  const cardInstanceId = await client.create(target, channelNotice(host, '正在思考中…'))
   let pending: string | null = null
   let timer: NodeJS.Timeout | null = null
   let last = 0
@@ -223,7 +226,7 @@ export async function openDingtalkCardStream(
       try {
         // 在途增量必须结束后再写最终全文，避免旧内容晚到覆盖收口。
         await inflight
-        await client.finish(cardInstanceId, text || '（无文本回复）')
+        await client.finish(cardInstanceId, text || channelNotice(host, '（无文本回复）'))
       } catch (error) {
         log(`[dingtalk] AI Card 收口失败: ${error instanceof Error ? error.message : String(error)}`)
         throw error

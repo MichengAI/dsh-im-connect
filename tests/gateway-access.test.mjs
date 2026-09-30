@@ -216,7 +216,7 @@ test('账号显式允许所有私聊用户时覆盖渠道本地白名单', async
   }
 })
 
-test('允许所有私聊用户不等于允许未批准用户审批工具', async (t) => {
+test('允许所有私聊时审批留在原聊天，不再因未写入白名单而交回网页', async (t) => {
   const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t, undefined, undefined, {}, {
     resolvePrivateAccess: () => 'all',
   })
@@ -224,7 +224,8 @@ test('允许所有私聊用户不等于允许未批准用户审批工具', async
     inbound({ chatId: 'user-1', userId: 'user-1', text: '/help', kind: 'dm', messageId: 'public-help' })
     await waitFor(() => sent.some((item) => item.text.includes('IM 助理已连接')))
 
-    const outcome = await handlers['approval/request']({
+    let settled
+    const pending = handlers['approval/request']({
       agent: {
         id: dmSessionId,
         session: {
@@ -237,11 +238,13 @@ test('允许所有私聊用户不等于允许未批准用户审批工具', async
       },
       toolName: 'bash',
       callId: 'public-tool',
-    }, async () => 'browser-owned')
-
-    assert.equal(outcome, 'browser-owned')
-    assert.equal(sent.some((item) => item.text.includes('工具调用审批仅限已批准用户')), true)
-    assert.equal(sent.some((item) => item.text.includes('操作参数')), false)
+    }, async () => assert.fail('IM 会话不应交回网页'))
+    pending.then((value) => { settled = value })
+    await waitFor(() => sent.some((item) => item.text.includes('操作参数')))
+    assert.equal(sent.some((item) => item.text.includes('网页端')), false)
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'public-approve' })
+    await waitFor(() => settled !== undefined)
+    assert.equal(settled, 'allowed-once')
   } finally {
     engine.dispose()
   }
@@ -336,19 +339,24 @@ for (const eventType of ['tool/code-dispatch-start', 'tool/ptc-dispatch-start'])
   })
 }
 
-test('白名单用户可通过命令；群聊不能批准工具', async (t) => {
+test('白名单用户可通过命令；群聊和私聊都不再交回网页', async (t) => {
   const { engine, inbound, sent, handlers, dmSessionId, groupSessionId } = makeEngine(t)
   engine.addAllowed('telegram', 'user-1')
   try {
     inbound({ chatId: 'user-1', userId: 'user-1', text: '/help', kind: 'dm', messageId: '4' })
     await waitFor(() => sent.some((item) => item.text.includes('IM 助理已连接')))
 
+    let groupSettled
     const groupPending = handlers['approval/request']({
       agent: { id: groupSessionId, session: { id: groupSessionId, events: [] } },
       toolName: 'bash',
-    }, async () => 'browser-owned')
-    assert.equal(await groupPending, 'browser-owned')
-    assert.equal(sent.some((item) => item.chatId === 'chat-9' && item.text.includes('网页端')), true)
+    }, async () => assert.fail('群聊审批不应交回网页'))
+    groupPending.then((value) => { groupSettled = value })
+    await waitFor(() => sent.some((item) => item.chatId === 'chat-9' && item.text.includes('bash')))
+    assert.equal(sent.some((item) => item.text.includes('网页端')), false)
+    inbound({ chatId: 'chat-9', userId: 'user-1', text: '批准', kind: 'group', addressed: true, messageId: 'group-approve' })
+    await waitFor(() => groupSettled !== undefined)
+    assert.equal(groupSettled, 'allowed-once')
 
     let dmSettled
     const dmPending = handlers['approval/request']({
@@ -365,7 +373,7 @@ test('白名单用户可通过命令；群聊不能批准工具', async (t) => {
       toolName: 'bash',
       callId: 'call-1',
       reason: '需要读取当前目录',
-    }, async () => 'browser-owned')
+    }, async () => assert.fail('私聊审批不应交回网页'))
     dmPending.then((value) => { dmSettled = value })
     await waitFor(() => sent.some((item) => item.chatId === 'user-1' && item.text.includes('操作参数')))
 
@@ -375,6 +383,61 @@ test('白名单用户可通过命令；群聊不能批准工具', async (t) => {
   } finally {
     engine.dispose()
   }
+})
+
+test('Discord 式私聊用频道号作 chatId 时，仍按发言人在原聊天审批', async (t) => {
+  const { engine, inbound, sent, handlers, store } = makeEngine(t)
+  const sessionId = 'im:telegram:dm:1700000000001:channel-9'
+  store.upsert('telegram:dm:channel-9', {
+    sessionId,
+    channel: 'telegram',
+    kind: 'dm',
+    chatId: 'channel-9',
+    title: 'Discord DM',
+    updatedAt: '2026-08-18T00:00:00.000Z',
+  })
+  engine.addAllowed('telegram', 'user-1')
+  try {
+    inbound({ chatId: 'channel-9', userId: 'user-1', text: '/help', kind: 'dm', messageId: 'speak' })
+    await waitFor(() => sent.some((item) => item.text.includes('IM 助理已连接')))
+    const pending = handlers['approval/request']({
+      agent: {
+        id: sessionId,
+        session: {
+          id: sessionId,
+          events: [{ type: 'tool/call', data: { callId: 'call-dm', name: 'bash', arguments: JSON.stringify({ command: 'pwd' }) } }],
+        },
+      },
+      toolName: 'bash',
+      callId: 'call-dm',
+    }, async () => 'browser-owned')
+    await waitFor(() => sent.some((item) => item.chatId === 'channel-9' && item.text.includes('操作参数')))
+    assert.equal(sent.some((item) => item.text.includes('网页端')), false)
+    inbound({ chatId: 'channel-9', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'yes' })
+    assert.equal(await pending, 'allowed-once')
+  } finally { engine.dispose() }
+})
+
+test('允许所有私聊时，未写入白名单的当前用户仍在原聊天审批', async (t) => {
+  const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t, undefined, undefined, {}, { resolvePrivateAccess: () => 'all' })
+  try {
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '测试权限审批', kind: 'dm', messageId: 'open' })
+    const pending = handlers['approval/request']({
+      agent: {
+        id: dmSessionId,
+        session: {
+          id: dmSessionId,
+          events: [{ type: 'tool/call', data: { callId: 'call-all', name: 'bash', arguments: JSON.stringify({ command: 'pwd' }) } }],
+        },
+      },
+      toolName: 'bash',
+      callId: 'call-all',
+    }, async () => 'browser-owned')
+    await waitFor(() => sent.some((item) => item.chatId === 'user-1' && item.text.includes('操作参数')))
+    assert.equal(sent.some((item) => item.text.includes('网页端')), false)
+    inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'yes' })
+    assert.equal(await pending, 'allowed-once')
+  } finally { engine.dispose() }
 })
 
 test('旧版审批请求仍返回旧格式', async (t) => {
@@ -414,7 +477,7 @@ test('账号配置重载会显式取消该账号等待中的工具审批', async
     await waitFor(() => sent.some((item) => item.text.includes('操作参数')))
 
     await engine.reloadChannel('telegram')
-    assert.equal(await pending, 'browser-owned')
+    assert.equal(await pending, 'cancelled')
   } finally {
     engine.dispose()
   }
@@ -436,21 +499,27 @@ test('账号配置重载会显式取消该账号等待中的结构化问题', as
   }
 })
 
-test('当前审批无法完整展示或提示发送失败时交还下一个安全处理器', async (t) => {
+test('审批参数读不到时仍在聊天里收决定，不再交回网页', async (t) => {
   const missing = makeEngine(t)
   missing.engine.addAllowed('telegram', 'user-1')
   try {
-    const outcome = await missing.handlers['approval/request']({
+    let settled
+    const pending = missing.handlers['approval/request']({
       agent: { id: missing.dmSessionId, session: { id: missing.dmSessionId, events: [] } },
       toolName: 'bash',
       callId: 'missing-call',
-    }, async () => 'unavailable')
-    assert.equal(outcome, 'unavailable')
-    assert.equal(missing.sent.some((item) => item.text.includes('无法在 IM 中完整展示')), true)
+    }, async () => assert.fail('IM 会话不应交回网页'))
+    pending.then((value) => { settled = value })
+    await waitFor(() => missing.sent.some((item) => item.text.includes('参数暂时无法读取')))
+    missing.inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'missing-approve' })
+    await waitFor(() => settled !== undefined)
+    assert.equal(settled, 'allowed-once')
   } finally {
     missing.engine.dispose()
   }
+})
 
+test('审批提示发送失败时按拒绝处理，不再交回网页', async (t) => {
   const failed = makeEngine(t, undefined, async (_chatId, text, sent) => {
     sent.push({ chatId: 'user-1', text })
     if (text.includes('DeepSeek Harness 需要你的审批')) throw new Error('offline')
@@ -470,27 +539,25 @@ test('当前审批无法完整展示或提示发送失败时交还下一个安�
       },
       toolName: 'bash',
       callId: 'call-offline',
-    }, async () => 'unavailable')
-    assert.equal(outcome, 'unavailable')
+    }, async () => assert.fail('IM 会话不应交回网页'))
+    assert.equal(outcome, 'rejected')
     assert.equal(failed.sent.filter((item) => item.text.includes('DeepSeek Harness 需要你的审批')).length, 2)
   } finally {
     failed.engine.dispose()
   }
 })
 
-test('结构化问题提示发送失败时交还下一个处理器', async (t) => {
+test('结构化问题提示发送失败时直接报错，不再交回网页', async (t) => {
   const sent = []
   const { engine, handlers, dmSessionId } = makeEngine(t, undefined, async (_chatId, text) => {
     sent.push(text)
     if (text.includes('需要你补充信息')) throw new Error('offline')
   })
   try {
-    const fallback = { answers: [{ id: 'fallback', selected: [], custom: 'web' }] }
-    const outcome = await handlers['user-questions/request']({
+    await assert.rejects(handlers['user-questions/request']({
       agent: { id: dmSessionId, session: { id: dmSessionId, events: [] } },
       questions: [{ id: 'answer', question: '请选择' }],
-    }, async () => fallback)
-    assert.deepEqual(outcome, fallback)
+    }, async () => assert.fail('IM 会话不应交回网页')), /未能发送到原聊天/)
     assert.equal(sent.filter((text) => text.includes('需要你补充信息')).length, 2)
   } finally {
     engine.dispose()
@@ -697,13 +764,13 @@ test('并发第二个审批发送失败不会取消第一个审批', async (t) =
     callId,
   })
   try {
-    const first = setup.handlers['approval/request'](request('call-first', 'first-command'), async () => 'first-browser')
+    const first = setup.handlers['approval/request'](request('call-first', 'first-command'), async () => assert.fail('IM 会话不应交回网页'))
     await waitFor(() => setup.sent.some((item) => item.text.includes('first-command')))
-    const second = setup.handlers['approval/request'](request('call-second', 'second-command'), async () => 'second-browser')
+    const second = setup.handlers['approval/request'](request('call-second', 'second-command'), async () => assert.fail('IM 会话不应交回网页'))
 
     setup.inbound({ chatId: 'user-1', userId: 'user-1', text: '批准', kind: 'dm', messageId: 'approve-before-failure' })
     assert.equal(await first, 'allowed-once')
-    assert.equal(await second, 'second-browser')
+    assert.equal(await second, 'rejected')
   } finally {
     setup.engine.dispose()
   }
@@ -767,16 +834,16 @@ test('排队中的问题收到取消信号会立即退出且不影响当前问�
   }
 })
 
-test('群聊问题缺少发起者时保守交还网页端', async (t) => {
-  const { engine, sent, handlers, groupSessionId } = makeEngine(t)
+test('群聊问题缺少发起者时仍发到原聊天，不转交网页端', async (t) => {
+  const { engine, inbound, sent, handlers, groupSessionId } = makeEngine(t)
   try {
-    const fallback = { answers: [{ id: 'web', selected: [], custom: 'browser' }] }
-    const outcome = await handlers['user-questions/request']({
+    const pending = handlers['user-questions/request']({
       agent: { id: groupSessionId, session: { id: groupSessionId, events: [] } },
       questions: [{ id: 'group', question: '群聊问题' }],
-    }, async () => fallback)
-    assert.deepEqual(outcome, fallback)
-    assert.equal(sent.some((item) => item.text.includes('群聊问题')), false)
+    }, async () => assert.fail('已连接的群聊问题不应转交网页端'))
+    await waitFor(() => sent.some((item) => item.text.includes('群聊问题')))
+    inbound({ chatId: 'chat-9', userId: 'user-1', text: '我来回答', kind: 'group', addressed: true, messageId: 'group-answer' })
+    assert.deepEqual(await pending, { answers: [{ id: 'group', selected: [], custom: '我来回答' }] })
   } finally {
     engine.dispose()
   }

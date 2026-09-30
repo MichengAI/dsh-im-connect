@@ -77,7 +77,10 @@ for (const mode of ['normal', 'edit-failed', 'tail-failed']) test(`Telegram 长�
   t.after(() => mock.restoreAll())
   const delivered = []
   mock.method(globalThis, 'fetch', async (url, init) => {
-    const { text } = JSON.parse(init.body)
+    const body = JSON.parse(init.body)
+    const { text } = body
+    // 这组用例验的是纯文本长回复的交付语义，声明富文本方法不存在，走 fallback。
+    if (body.rich_message) return Response.json({ ok: false, error_code: 404, description: 'Not Found' })
     if (text === '…') return Response.json({ ok: true, result: { message_id: 1 } })
     if ((mode === 'edit-failed' && String(url).endsWith('editMessageText')) || (mode === 'tail-failed' && delivered.length === 1)) {
       return Response.json({ ok: false, description: 'mock rejected' })

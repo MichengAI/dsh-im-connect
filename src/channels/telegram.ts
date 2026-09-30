@@ -33,6 +33,48 @@ interface TgUpdate {
 
 const API = 'https://api.telegram.org'
 
+const FENCE_LINE = /^\s{0,3}(?:`{3,}|~{3,})/
+/** 块级语法行：列表、标题、引用、表格都不需要也不应该补硬换行。 */
+const BLOCK_LINE = /^\s{0,3}(?:#{1,6}\s|[-*+]\s|\d{1,9}[.)]\s|>|\|)/
+
+/**
+ * Rich Message 的 Markdown 由 Telegram 服务端解析，单个换行是 CommonMark 软换行，
+ * 会被折成空格。这里给普通正文行补上行尾硬换行标记（两个空格），保留逐行排版；
+ * 代码围栏、列表、标题、引用和表格属于块级语法，保持原样。
+ */
+export function toTelegramHardBreaks(value: string): string {
+  const lines = (value ?? '').split('\n')
+  const out: string[] = []
+  let inCode = false
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? ''
+    if (FENCE_LINE.test(line)) {
+      inCode = !inCode
+      out.push(line)
+      continue
+    }
+    const next = lines[index + 1]
+    const plain = !inCode && line.trim() !== '' && !BLOCK_LINE.test(line)
+    // 已经有硬换行标记（两个空格或行尾反斜杠）的行不重复添加。
+    const marked = / {2,}$/.test(line) || line.endsWith('\\')
+    out.push(plain && !marked && next !== undefined && next.trim() !== '' ? `${line}  ` : line)
+  }
+  return out.join('\n')
+}
+
+/**
+ * Rich message 的 markdown 也会解析 HTML 标签，所以先把实体转义，
+ * 避免模型原样输出被当成 Telegram 标记。围栏不闭合时返回 undefined，
+ * 交给纯文本发送，不把半截代码块当富文本发出去。
+ */
+export function toTelegramRichMarkdown(value: string): string | undefined {
+  const text = (value ?? '').trim()
+  if (!text) return undefined
+  const fences = text.split('\n').filter((line) => FENCE_LINE.test(line)).length
+  if (fences % 2 !== 0) return undefined
+  return toTelegramHardBreaks(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 export function createTelegramChannel(config: TelegramConfig, log: (line: string) => void): ChannelAdapter | undefined {
   const token = config.token?.trim()
   if (!token) return undefined
@@ -50,6 +92,28 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   // Only metadata is buffered until an album member mentions this bot. Scope
   // admission to chat + sender + album, and bound both lifetime and entry count.
   const albumAccess = new Map<string, { expires: number; addressed: boolean; pending: TgUpdate[]; count: number }>()
+
+  // Rich message 是较新的 Bot API 方法；一旦确认不可用就一直走纯文本，避免每条消息都先失败一次。
+  let richDisabled = false
+
+  function richUnsupported(error: unknown): boolean {
+    const status = Number((error as { status?: number } | undefined)?.status)
+    if (status === 404) return true
+    return /not found|unknown method|unsupported/i.test(error instanceof Error ? error.message : '')
+  }
+
+  async function sendMessageText(chatId: string, text: string): Promise<void> {
+    const markdown = richDisabled ? undefined : toTelegramRichMarkdown(text)
+    if (markdown !== undefined) {
+      try {
+        await api('sendRichMessage', { chat_id: Number(chatId), rich_message: { markdown } })
+        return
+      } catch (error) {
+        if (richUnsupported(error)) richDisabled = true
+      }
+    }
+    await api('sendMessage', { chat_id: Number(chatId), text })
+  }
 
   async function api<T>(method: string, body: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
     const res = await fetch(`${API}/bot${token}/${method}`, {
@@ -232,7 +296,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     },
     canDeliverDeferred() { return !stopped },
     async send(chatId, text) {
-      await api('sendMessage', { chat_id: Number(chatId), text })
+      await sendMessageText(chatId, text)
     },
     async sendFile(chatId, file, signal) {
       const form = fileForm(file, 'document')
@@ -277,6 +341,22 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         if (next === last) return
         // last 只在发送成功后更新：失败时保留旧值，finish 才能靠 sendMessage 兜底送出全文
         try {
+          const markdown = richDisabled ? undefined : toTelegramRichMarkdown(next)
+          if (markdown !== undefined) {
+            try {
+              await api('editMessageText', { chat_id: Number(chatId), message_id: first.message_id, rich_message: { markdown } })
+              last = next
+              return
+            } catch (error) {
+              // 富文本被拒就退回纯文本编辑；确认方法不可用后不再重试。
+              if (richUnsupported(error)) richDisabled = true
+              else if (!(error instanceof Error && error.message.includes('message is not modified'))) {
+                await api('editMessageText', { chat_id: Number(chatId), message_id: first.message_id, text: next })
+                last = next
+                return
+              }
+            }
+          }
           await api('editMessageText', { chat_id: Number(chatId), message_id: first.message_id, text: next })
           last = next
         } catch (error) {
@@ -286,7 +366,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
             return
           }
           if (!allowSend) return
-          await api('sendMessage', { chat_id: Number(chatId), text: next })
+          await sendMessageText(chatId, next)
           last = next
         }
       }
@@ -312,7 +392,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           await flush(chars.slice(0, 4000).join(''), true)
           // 首段更新原气泡，剩余正文依次发送；全部确认后上层才将完整正文记为已送达。
           for (let offset = 4000; offset < chars.length; offset += 4000) {
-            await api('sendMessage', { chat_id: Number(chatId), text: chars.slice(offset, offset + 4000).join('') })
+            await sendMessageText(chatId, chars.slice(offset, offset + 4000).join(''))
           }
         },
       }

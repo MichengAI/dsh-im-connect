@@ -26,6 +26,7 @@ export declare class ImEngine {
     private readonly merger;
     private readonly extraAllow;
     private readonly sessionActors;
+    private readonly chatActors;
     private readonly interactionMessageIds;
     private readonly questionActors;
     private readonly questionDeliveries;
@@ -76,6 +77,7 @@ export declare class ImEngine {
     private takeMergedMessages;
     private inject;
     private cancelInputs;
+    private approvalVerdict;
     private answerApproval;
     private onApproval;
     private handleApproval;

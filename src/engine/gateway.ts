@@ -17,7 +17,7 @@ import { SeenStore } from './seen-store.js'
 import { SessionMapStore } from './session-store.js'
 import { readSessionHistory } from './session-history.js'
 import { type ChatKind } from './session-id.js'
-import { canAnswerToolApproval, decideAccess } from './access.js'
+import { decideAccess } from './access.js'
 import { splitText } from './split.js'
 import { ReplyStreamHub, isAssistantTextDelta } from './reply-stream.js'
 import {
@@ -61,7 +61,6 @@ interface InteractionDeliveryResult {
   deliveredAny: boolean
 }
 
-const DELEGATE_INTERACTION = Symbol('delegate-interaction')
 const USER_QUESTION_WRAPPER = Symbol('dsh-im-connect.user-question-wrapper')
 
 export class ImEngine {
@@ -78,6 +77,7 @@ export class ImEngine {
   private readonly merger: SessionMerger
   private readonly extraAllow = new Map<string, Set<string>>()
   private readonly sessionActors = new Map<string, string>()
+  private readonly chatActors = new Map<string, string>()
   private readonly interactionMessageIds = new Map<string, string | undefined>()
   private readonly questionActors = new Map<string, string>()
   private readonly questionDeliveries = new Map<string, Promise<InteractionDeliveryResult>>()
@@ -355,7 +355,9 @@ export class ImEngine {
         addressed: msg.addressed,
       })
       if (decision === 'ignore') return
+      if (msg.userId) this.chatActors.set(`${channelId}:${msg.kind === 'group' ? 'group' : 'dm'}:${msg.chatId}`, msg.userId)
       if (decision === 'deny') {
+        if (!msg.media?.length && await this.answerApproval(channelId, msg, this.approvalVerdict(msg.text))) return
         await this.rejectUnauthorized(channelId, channel, msg)
         return
       }
@@ -403,8 +405,8 @@ export class ImEngine {
         return
       }
       if (binding && this.questions.has(binding.sessionId)) {
-        const actor = this.questionActors.get(binding.sessionId)
-        if ((kind === 'group' && !actor) || (actor && msg.userId !== actor)) {
+        const actor = this.questionActors.get(binding.sessionId) ?? this.sessionActors.get(binding.sessionId)
+        if (actor && msg.userId !== actor) {
           await this.deliver(channel, msg.chatId, notice(this.ctx, '只有发起当前任务的用户可以回答这个问题。'))
           return
         }
@@ -439,22 +441,7 @@ export class ImEngine {
           return
         }
       }
-      const allowWords = ['批准', '同意', 'yes', 'y', 'allow']
-      const denyWords = ['拒绝', '不同意', 'no', 'n', 'reject', 'deny']
-      const verdict = allowWords.includes(text.toLowerCase()) ? true : denyWords.includes(text.toLowerCase()) ? false : undefined
-      if (verdict !== undefined && !msg.media?.length) {
-        if (!canAnswerToolApproval({ userAllowed: this.userAllowed(channelId, msg.userId), kind: msg.kind === 'group' ? 'group' : 'dm' })) {
-          if (binding && this.broker.has(binding.sessionId)) {
-            const hint = msg.kind === 'group'
-              ? notice(this.ctx, '请在私聊中批准或拒绝工具调用。')
-              : notice(this.ctx, '工具调用审批仅限已批准用户，请在网页端处理。')
-            await channel.send(msg.chatId, hint).catch(() => undefined)
-            return
-          }
-        } else if (await this.answerApproval(channelId, msg, verdict)) {
-          return
-        }
-      }
+      if (!msg.media?.length && await this.answerApproval(channelId, msg, this.approvalVerdict(text))) return
       if (msg.media && msg.media.length > 0) {
         await this.inject(channel, msg)
         return
@@ -632,10 +619,26 @@ export class ImEngine {
     this.inputScopes.delete(channelId)
   }
 
-  private async answerApproval(channelId: string, msg: ImMessage, allow: boolean): Promise<boolean> {
+  private approvalVerdict(text: string): boolean | undefined {
+    const value = text.trim().toLowerCase()
+    if (['批准', '同意', 'yes', 'y', 'allow'].includes(value)) return true
+    if (['拒绝', '不同意', 'no', 'n', 'reject', 'deny'].includes(value)) return false
+    return undefined
+  }
+
+  private async answerApproval(channelId: string, msg: ImMessage, allow: boolean | undefined): Promise<boolean> {
+    if (allow === undefined || msg.media?.length) return false
     const binding = this.router.lookup(channelId, msg.kind === 'group' ? 'group' : 'dm', msg.chatId)
     if (!binding) return false
     if (!this.broker.has(binding.sessionId)) return false
+    // 群聊里只让发起当前任务的人批准，其他成员即使能发言也不能替其决定。
+    if (msg.kind === 'group') {
+      const actor = this.sessionActors.get(binding.sessionId)
+      if (actor && msg.userId && msg.userId !== actor) {
+        await this.channels.get(channelId)?.send(msg.chatId, notice(this.ctx, '只有发起当前任务的用户可以批准或拒绝。')).catch(() => undefined)
+        return true
+      }
+    }
     if (!this.broker.isReady(binding.sessionId)) {
       await this.channels.get(channelId)?.send(msg.chatId, notice(this.ctx, '审批详情仍在发送，请稍后再回复。')).catch(() => undefined)
       return true
@@ -658,54 +661,46 @@ export class ImEngine {
     const rawSessionId = req.agent?.session?.id ?? req.agent?.id ?? req.session?.id
     const sessionId = rawSessionId ? String(rawSessionId) : ''
     if (!sessionId || !this.router.bindingForSession(sessionId)) return next()
-    if (req.signal?.aborted) return currentContract ? 'cancelled' : next()
-    const result = await this.runInteraction(sessionId, async () => {
-      if (this.disposed || req.signal?.aborted) return currentContract ? 'cancelled' : DELEGATE_INTERACTION
+    const refused = currentContract ? 'rejected' : { behavior: 'reject' as const }
+    const cancelled = currentContract ? 'cancelled' : { behavior: 'reject' as const }
+    if (req.signal?.aborted) return cancelled
+    return await this.runInteraction(sessionId, async () => {
+      if (this.disposed || req.signal?.aborted) return cancelled
       const binding = this.router.bindingForSession(sessionId)
       const channel = binding ? this.channels.get(binding.channelId) : undefined
-      if (!binding || !channel) return DELEGATE_INTERACTION
-      if (binding.kind === 'group') {
-        await this.deliver(channel, binding.chatId, notice(this.ctx, '当前工具审批不能在群聊中处理，请在网页端批准或拒绝。'))
-        return DELEGATE_INTERACTION
-      }
-      const actor = this.sessionActors.get(sessionId) ?? binding.chatId
-      if (!actor || !this.userAllowed(binding.channelId, actor)) {
-        await this.deliver(channel, binding.chatId, notice(this.ctx, '当前用户可以私聊，但工具调用审批仅限已批准用户；请在网页端处理。'))
-        return DELEGATE_INTERACTION
-      }
+      if (!binding || !channel) return refused
+      // 只记录真实发言人；不能拿 chatId 冒充用户，否则群聊会把发起者判成外人。
+      const knownActor = this.sessionActors.get(sessionId)
+        ?? this.chatActors.get(`${binding.channelId}:${binding.kind}:${binding.chatId}`)
+      if (knownActor) this.sessionActors.set(sessionId, knownActor)
       const prompt = await withReplyLocale(this.ctx, () => this.approvalPrompt(req))
-      if (!prompt) {
-        await this.deliver(channel, binding.chatId, notice(this.ctx, '该操作需要审批，但无法在 IM 中完整展示；请在网页端处理。'))
-        return DELEGATE_INTERACTION
-      }
       const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
-      if (!wait) return DELEGATE_INTERACTION
+      if (!wait) return refused
       const ticket = this.broker.token(sessionId)
       const delivery = await this.retryInteraction(channel, () => this.deliverInteraction(channel, binding.chatId, prompt, req.signal, {
-        sessionId, message: { chatId: binding.chatId, userId: actor, kind: 'dm', text: '', messageId: this.interactionMessageIds.get(sessionId) },
+        sessionId, message: { chatId: binding.chatId, userId: knownActor ?? binding.chatId, kind: binding.kind, text: '', messageId: this.interactionMessageIds.get(sessionId) },
         choices: withReplyLocale(this.ctx, () => [{ label: replyText('批准一次'), value: 'allow' }, { label: replyText('拒绝'), value: 'reject' }]),
         valid: () => this.broker.token(sessionId) === ticket && this.broker.isReady(sessionId),
       }))
       if (delivery.status === 'aborted' || req.signal?.aborted) {
         this.broker.cancel(sessionId)
         if (delivery.deliveredAny) await this.announceInteractionCancelled(channel, binding.chatId, '审批')
-        return currentContract ? 'cancelled' : DELEGATE_INTERACTION
+        return cancelled
       }
       if (delivery.status === 'failed') {
         this.broker.cancel(sessionId)
-        return DELEGATE_INTERACTION
+        return refused
       }
       this.broker.activate(sessionId)
       const verdict = await wait
       if (req.signal?.aborted) {
         if (delivery.deliveredAny) await this.announceInteractionCancelled(channel, binding.chatId, '审批')
-        return currentContract ? 'cancelled' : DELEGATE_INTERACTION
+        return cancelled
       }
       if (verdict === 'allow') return currentContract ? 'allowed-once' : { behavior: 'allow' }
       if (verdict === 'reject') return currentContract ? 'rejected' : { behavior: 'reject' }
-      return DELEGATE_INTERACTION
-    }, req.signal, () => currentContract ? 'cancelled' : DELEGATE_INTERACTION)
-    return result === DELEGATE_INTERACTION ? next() : result
+      return cancelled
+    }, req.signal, () => cancelled)
   }
 
   private async onUserQuestions(
@@ -718,25 +713,25 @@ export class ImEngine {
     const questions = req.questions
     if (!Array.isArray(questions)
       || questions.length === 0
-      || questions.some((question) => !validUserQuestion(question))) return next()
+      || questions.some((question) => !validUserQuestion(question))) {
+      throw new Error('无法在当前聊天展示这个问题')
+    }
     if (req.signal?.aborted) {
       throw req.signal.reason ?? new DOMException('Aborted', 'AbortError')
     }
     const initialBinding = this.router.bindingForSession(sessionId)
-    const actor = this.sessionActors.get(sessionId)
-    if (initialBinding?.kind === 'group' && !actor) return next()
+    const actor = this.sessionActors.get(sessionId) ?? (initialBinding ? this.chatActors.get(`${initialBinding.channelId}:${initialBinding.kind}:${initialBinding.chatId}`) : undefined)
+    if (actor) this.sessionActors.set(sessionId, actor)
     const typedQuestions = questions as UserQuestionItem[]
-    const result = await this.runInteraction(sessionId, async () => {
-      if (this.disposed) return DELEGATE_INTERACTION
-      if (req.signal?.aborted) {
-        throw req.signal.reason ?? new DOMException('Aborted', 'AbortError')
+    return await this.runInteraction(sessionId, async () => {
+      if (this.disposed || req.signal?.aborted) {
+        throw req.signal?.reason ?? new DOMException('Aborted', 'AbortError')
       }
       const binding = this.router.bindingForSession(sessionId)
       const channel = binding ? this.channels.get(binding.channelId) : undefined
-      if (!binding || !channel) return DELEGATE_INTERACTION
-      if (binding.kind === 'group' && !actor) return DELEGATE_INTERACTION
+      if (!binding || !channel) throw new Error('当前聊天已断开，无法在原聊天提问')
       const wait = this.questions.begin(sessionId, typedQuestions, req.signal)
-      if (!wait) return DELEGATE_INTERACTION
+      if (!wait) throw new Error('当前聊天已有未完成的问题')
       // Abort can reject while the prompt send is still in flight; attach the
       // observer now, then await the same promise after presentation completes.
       void wait.catch(() => undefined)
@@ -753,8 +748,8 @@ export class ImEngine {
           throw req.signal?.reason ?? new DOMException('Aborted', 'AbortError')
         }
         if (delivery.status === 'failed') {
-          this.questions.cancel(sessionId)
-          return DELEGATE_INTERACTION
+          this.questions.cancel(sessionId, new Error('交互问题未能发送到原聊天'))
+          throw new Error('交互问题未能发送到原聊天')
         }
         this.questions.activate(sessionId)
         return await wait
@@ -775,7 +770,6 @@ export class ImEngine {
     }, req.signal, () => {
       throw req.signal?.reason ?? new DOMException('Aborted', 'AbortError')
     })
-    return result === DELEGATE_INTERACTION ? next() : result
   }
 
   /**
@@ -887,36 +881,32 @@ export class ImEngine {
     })
   }
 
-  private async approvalPrompt(req: ApprovalRequestLike): Promise<string | undefined> {
-    const toolName = req.toolName?.trim() || (req.session ? '工具操作' : '')
-    if (!toolName) return undefined
+  private async approvalPrompt(req: ApprovalRequestLike): Promise<string> {
+    const toolName = req.toolName?.trim() || '工具操作'
     const lines = [
       replyText('DeepSeek Harness 需要你的审批：'),
       '',
       replyText('工具：{0}', toolName),
     ]
     const callId = req.callId?.trim()
-    if (req.agent && !callId) return undefined
-    if (callId) {
-      const session = req.agent?.session
-      const events = await readSessionHistory(this.ctx, session) ?? []
-      const event = events.findLast((item) => {
-        if (item.type === 'tool/call') return item.data?.callId === callId
-        if (item.type === 'tool/code-dispatch-start' || item.type === 'tool/ptc-dispatch-start') return item.data?.subCallId === callId
-        return false
-      })
-      if (!event) return undefined
-      const name = typeof event.data?.name === 'string' ? event.data.name : toolName
-      if (name !== toolName) return undefined
-      const args = event.data?.arguments
-      let rendered: string
-      try {
-        rendered = typeof args === 'string' ? args : JSON.stringify(args ?? {}, null, 2)
-      } catch {
-        return undefined
-      }
-      if (!rendered.trim() || rendered.length > 6_000) return undefined
+    const session = req.agent?.session
+    const events = callId ? await readSessionHistory(this.ctx, session) ?? [] : []
+    const event = callId ? events.findLast((item) => {
+      if (item.type === 'tool/call') return item.data?.callId === callId
+      if (item.type === 'tool/code-dispatch-start' || item.type === 'tool/ptc-dispatch-start') return item.data?.subCallId === callId
+      return false
+    }) : undefined
+    const args = event?.data?.arguments
+    let rendered = ''
+    try {
+      rendered = typeof args === 'string' ? args : args === undefined ? '' : JSON.stringify(args, null, 2)
+    } catch {
+      rendered = ''
+    }
+    if (rendered.trim() && rendered.length <= 6_000 && (!event?.data?.name || event.data.name === toolName)) {
       lines.push(replyText('操作参数：'), rendered)
+    } else {
+      lines.push(replyText('参数暂时无法读取。仍请在此批准或拒绝，不要到网页处理。'))
     }
     const reason = req.reason?.trim()
     if (reason) lines.push(replyText('原因：{0}', reason))
@@ -1123,7 +1113,7 @@ export class ImEngine {
     let tracked: Promise<InteractionDeliveryResult>
     const current = this.questions.current(sessionId)
     const binding = this.router.bindingForSession(sessionId)
-    const actor = this.questionActors.get(sessionId) ?? this.sessionActors.get(sessionId) ?? (binding?.kind === 'dm' ? chatId : undefined)
+    const actor = this.questionActors.get(sessionId) ?? this.sessionActors.get(sessionId) ?? (binding ? this.chatActors.get(`${binding.channelId}:${binding.kind}:${binding.chatId}`) : undefined) ?? (binding?.kind === 'dm' ? chatId : undefined)
     const selected = this.questionSelections.get(sessionId) ?? new Set<number>()
     const choices: Choice[] = current?.question.options?.map((option, index) => ({
       label: (current.question.multiSelect && selected.has(index) ? '✓ ' : '') + option.label,

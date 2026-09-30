@@ -17,6 +17,14 @@ test('Telegram 长轮询解析入站消息并在分发前持久化 offset', asyn
   let secondPollAborted = false
   const restore = mockFetch(async (url, init) => {
     const method = String(url).split('/').pop()
+    // 这些用例验的是纯文本路径：声明富文本方法不存在，走 fallback。
+    if (method === 'sendRichMessage') return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
+    // 这些用例验的是纯文本路径：声明富文本方法不存在，走 fallback。
+    if (method === 'sendRichMessage') return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
+    // 这些用例验的是纯文本路径：声明富文本方法不存在，走 fallback。
+    if (method === 'sendRichMessage') return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
+    // 这些用例验的是纯文本路径：声明富文本方法不存在，走 fallback。
+    if (method === 'sendRichMessage') return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
     if (method === 'getMe') return { json: async () => ({ ok: true, result: { id: 99, username: 'test_bot', is_bot: true } }) }
     if (method === 'getWebhookInfo') return { json: async () => ({ ok: true, result: { url: '' } }) }
     if (method === 'getUpdates' && pollCount++ === 0) {
@@ -52,6 +60,7 @@ test('Telegram 流式只发一条占位，后续只编辑同一条', async () =>
   const restore = mockFetch(async (url, init) => {
     const method = String(url).split('/').pop()
     const body = JSON.parse(String(init.body))
+    if (body.rich_message) return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
     calls.push({ method, body })
     return { json: async () => ({ ok: true, result: { message_id: 88 } }) }
   })
@@ -79,6 +88,7 @@ test('Telegram 中途编辑失败后收口仍能送达全文', async () => {
   const restore = mockFetch(async (url, init) => {
     const method = String(url).split('/').pop()
     const body = JSON.parse(String(init.body))
+    if (body.rich_message) return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
     calls.push({ method, body })
     if (method === 'editMessageText') {
       return { json: async () => ({ ok: false, description: 'Too Many Requests: retry after 1' }) }
@@ -103,6 +113,7 @@ test('Telegram 中途编辑失败时不补发新消息', async () => {
   const restore = mockFetch(async (url, init) => {
     const method = String(url).split('/').pop()
     const body = JSON.parse(String(init.body))
+    if (body.rich_message) return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
     calls.push({ method, body })
     if (method === 'editMessageText') {
       return { json: async () => ({ ok: false, description: 'Too Many Requests: retry after 1' }) }

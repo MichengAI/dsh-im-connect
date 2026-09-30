@@ -26,5 +26,7 @@ export declare class DingtalkCardClient {
     private accessToken;
     private request;
 }
-export declare function openDingtalkCardStream(client: DingtalkCardClient, target: CardTarget, log: (line: string) => void): Promise<ReplyStream>;
+export declare function openDingtalkCardStream(client: DingtalkCardClient, target: CardTarget, log: (line: string) => void, host?: {
+    get(name: string): unknown;
+}): Promise<ReplyStream>;
 //# sourceMappingURL=dingtalk-card.d.ts.map

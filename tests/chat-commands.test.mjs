@@ -332,6 +332,22 @@ test('扩展列表故障不破坏内置帮助；不支持的参数在动作前�
   assert.equal(f.calls.some((c) => c[0] === 'rotate'), false)
 })
 
+test('基础帮助已列出的命令不再出现在扩展小节', async () => {
+  const f = fixture()
+  f.services.commands.list = () => [
+    { name: 'export', description: '宿主自带的导出说明' },
+    { name: 'compact', description: '压缩较早上下文' },
+    { name: 'custom', description: '会话插件命令' },
+  ]
+  const text = await f.run('/help')
+  const exportLines = text.split('\n').filter((line) => line.startsWith('/export'))
+  assert.equal(exportLines.length, 1, text)
+  assert.equal(exportLines[0], '/export — 导出当前会话 ZIP 并发送')
+  assert.match(text, /\/compact — 压缩较早上下文/)
+  assert.match(text, /\/custom — 会话插件命令/)
+  assert.doesNotMatch(text, /扩展命令：\n\/export/)
+})
+
 test('队列修改回显操作，状态查不到不能误报空闲', async () => {
   const f = fixture()
   assert.match(await f.run('/queue edit q1 新内容'), /已修改.*q1[\s\S]*新内容/)
@@ -405,6 +421,11 @@ test('状态使用真实投影；可选数据失败保留可读取字段', async
   const status = await f.run('/status')
   assert.match(status, /Agent 预设：research/)
   assert.match(status, /权限：Custom/)
+  f.services.sessionController.follow = async function*() {
+    yield { records: [], projections: { values: { permissions: { currentValue: 'workspace-write' } } } }
+  }
+  f.services.permissionPresets = { optionOf: (name) => ({ name: name === 'workspace-write' ? '工作区写入' : name }) }
+  assert.match(await f.run('/status'), /权限：工作区写入/)
   assert.match(status, /目标：已暂停/)
   assert.match(status, /排队消息：1 条/)
   f.services.sessionController.follow = async function*() { throw new Error('snapshot failed') }
@@ -412,6 +433,23 @@ test('状态使用真实投影；可选数据失败保留可读取字段', async
   assert.match(await f.run('/status'), /模型：暂时无法读取/)
   assert.match(await f.run('/models'), /可用模型/)
   assert.match(await f.run('/new'), /已开启新会话/)
+})
+
+test('宿主列表缺少数组时，各命令不因 find 崩溃', async () => {
+  const f = fixture()
+  f.services.sessionController.list = async () => ({})
+  f.services.sessionController.modelCatalog = async () => ({})
+  f.services.sessionController.follow = async function*() {
+    yield { projections: { values: { permissions: { currentValue: 'read-only' }, goal: {} } } }
+  }
+  f.services.workspaceController.follow = async function*() { yield { type: 'baseline', value: {} } }
+  f.services.agentPresets = { remoteExportList: async () => ({}) }
+  for (const command of ['/menu', '/menu sessions', '/menu workspaces', '/menu models', '/menu presets', '/sessions', '/workspaces', '/models', '/presets', '/status', '/history', '/stop', '/new']) {
+    const reply = await f.run(command)
+    assert.doesNotMatch(reply, /reading 'find'/, command)
+  }
+  await assert.rejects(f.run('/model'), /模型：暂时无法读取/)
+  await assert.rejects(f.run('/reasoning'), /模型：暂时无法读取/)
 })
 
 test('英文全局语言下，状态里的渠道状态也会翻译', async () => {
@@ -748,7 +786,13 @@ test('真实宿主 Controller 创建预设会话并在归属失败时保留新 I
 for (const native of [false, true]) test(`所有渠道帮助只返回正文、不发送按钮：${native}`, async () => {
   const f = fixture({ channel: { ...(native ? { sendChoices() {} } : {}), send: async () => { assert.fail('帮助交给统一文字投递') } }, showChoices: async () => { assert.fail('help 不显示按钮') } })
   const text = await f.run('/help')
-  assert.match(text, /\n\n会话与工作区\n/)
+  assert.match(text, /\n\n\*\*入口\*\*\n/)
+  assert.match(text, /\n\n\*\*会话与工作区\*\*\n/)
+  assert.match(text, /\n\n\*\*模型与推理\*\*\n/)
+  assert.match(text, /\n\n\*\*任务与交付\*\*\n/)
+  assert.match(text, /\/help — 显示本说明/)
+  const commands = [...text.matchAll(/\/[a-z][a-z0-9_-]*/gi)].map((match) => match[0].toLowerCase())
+  assert.equal(new Set(commands).size, commands.length, `帮助里的命令不能重复：${commands.join(' ')}`)
   assert.match(text, /\n\n扩展命令：\n/)
   assert.doesNotMatch(text, /帮助导航|接下来可以|返回菜单 —/)
 })

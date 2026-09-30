@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { createDiscordChannel } from '../lib/channels/discord.js'
 import { createTelegramChannel } from '../lib/channels/telegram.js'
 import { createDingtalkChannel } from '../lib/channels/dingtalk.js'
 import { createFeishuChannel } from '../lib/channels/feishu.js'
@@ -20,6 +21,7 @@ test('平台业务码必须是数字或数字字符串，空值和布尔值不�
 
 for (const [name, create, replies, paths] of [
   ['telegram', () => createTelegramChannel({ token: 'secret' }, () => {}), [{ ok: true, result: { id: 1, is_bot: true } }, { ok: true, result: { url: '' } }], ['/getMe', '/getWebhookInfo']],
+  ['discord', () => createDiscordChannel({ token: 'secret' }, () => {}), [{ id: '1', bot: true }, { url: 'wss://gateway.discord.gg' }], ['/users/@me', '/gateway/bot']],
   ['dingtalk', () => createDingtalkChannel({ clientId: 'id', clientSecret: 'secret' }, () => {}), [{ accessToken: 'secret' }], ['/v1.0/oauth2/accessToken']],
   ['feishu', () => createFeishuChannel('feishu', { appId: 'id', appSecret: 'secret' }, () => {}), [{ code: 0, tenant_access_token: 'secret' }, { code: 0, bot: { open_id: 'id' } }], ['/auth/v3/tenant_access_token/internal', '/bot/v3/info']],
   ['lark', () => createFeishuChannel('lark', { appId: 'id', appSecret: 'secret' }, () => {}), [{ code: 0, tenant_access_token: 'secret' }, { code: 0, bot: { open_id: 'id' } }], ['/auth/v3/tenant_access_token/internal', '/bot/v3/info']],

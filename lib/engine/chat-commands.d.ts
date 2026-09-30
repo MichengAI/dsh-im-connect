@@ -19,9 +19,11 @@ export declare class ChatCommands {
     private service;
     private call;
     private presets;
+    private permissionLabel;
     private agent;
     private snapshot;
     private workspaces;
+    private listSessions;
     private remember;
     private reasoningChoice;
     private resolve;

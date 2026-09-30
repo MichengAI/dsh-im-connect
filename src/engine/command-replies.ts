@@ -34,13 +34,12 @@ export function commandNavigation(command: string, hasSession: boolean): Choice[
 }
 
 export const extensionHelp = (): Record<string, string> => ({
-  compact: replyText('压缩较早上下文：/compact'),
-  goal: replyText('管理长期目标：/goal；暂停：/goal pause；恢复：/goal resume'),
-  plan: replyText('进入计划模式：/plan；退出：/plan off'),
-  permission: replyText('查看当前权限及可选项：/permission'),
-  feedback: replyText('记录会话反馈：/feedback 反馈内容'),
-  simplify: replyText('提交代码简化审查：/simplify'),
-  export: replyText('导出当前会话 ZIP 日志并发送文件'),
+  compact: replyText('压缩较早上下文'),
+  goal: replyText('管理长期目标；暂停 /goal pause；恢复 /goal resume'),
+  plan: replyText('进入计划模式；退出 /plan off'),
+  permission: replyText('查看当前权限及可选项'),
+  feedback: replyText('记录会话反馈，后面跟反馈内容'),
+  simplify: replyText('提交代码简化审查'),
 })
 
 export function extensionReply(command: string, result: { kind: string; text?: string }, goal?: { phase?: string; activation?: string }): string {
