@@ -7,6 +7,7 @@ import { diagnosticJson, probe, requireDiagnostic } from './diagnostics.js'
 import { validateAdditionalImageHosts } from './image-host-policy.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
 import { MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost, requestChannelBytes, imageMedia, fileMedia } from './channel-image-download.js'
+import { clampQqMarkdown, convertQqTables, hasQqMarkdownSyntax, isQqMarkdownRejection, toQqPlainText } from './qq-markdown.js'
 
 export interface QqChannelConfig {
   appId?: string
@@ -49,6 +50,11 @@ const MAX_MESSAGE_IMAGE_BYTES = 20 * 1024 * 1024
 
 export function cleanQqText(text: string): string {
   return text.replace(/<@!?\w+>/g, '').replace(/^\s*@\S+\s+/, '').trim()
+}
+
+/** 把 HTTP 状态码/业务 code 挂到错误对象上，让 markdown 回退能做结构化判定（不再靠解析错误文本）。 */
+function qqRequestError(message: string, detail: { status?: number; code?: number | string }): Error {
+  return Object.assign(new Error(message), detail)
 }
 
 export function createQqChannel(config: QqChannelConfig, log: (line: string) => void): ChannelAdapter | undefined {
@@ -136,11 +142,11 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
     }
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      throw new Error(`qq ${path}: HTTP ${res.status} ${body.slice(0, 200)}`)
+      throw qqRequestError(`qq ${path}: HTTP ${res.status} ${body.slice(0, 200)}`, { status: res.status })
     }
     const data = await res.json() as T & { code?: number | string }
     if (data?.code !== undefined && data.code !== 0 && data.code !== '0') {
-      throw new Error(`qq request rejected: code=${data.code}`)
+      throw qqRequestError(`qq request rejected: code=${data.code}`, { code: data.code })
     }
     return data
   }
@@ -315,22 +321,43 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
     const target = targets.get(chatId)
     const kind = target?.kind ?? (chatId.startsWith('g:') ? 'group' : 'dm')
     const openid = kind === 'group' ? chatId.replace(/^g:/, '') : chatId
-    const nextSeq = (target?.seq ?? 0) + 1
+    let nextSeq = (target?.seq ?? 0) + 1
     if (target) target.seq = nextSeq
     else remember(chatId, kind)
-    const body: Record<string, unknown> = { content: text, msg_type: 0, msg_seq: nextSeq }
-    if (target?.lastMsgId) body.msg_id = target.lastMsgId
     const path = kind === 'group'
       ? `/v2/groups/${openid}/messages`
       : `/v2/users/${openid}/messages`
-    try {
-      await qqFetch(path, { method: 'POST', body: JSON.stringify(body) })
-    } catch (error) {
-      if (!target?.lastMsgId) {
-        throw new Error(`QQ 发送失败，当前没有可用的被动回复 msg_id；请让用户重新发送一条消息。${error instanceof Error ? ` ${error.message}` : ''}`, { cause: error })
+    const passiveId = target?.lastMsgId
+    const post = (body: Record<string, unknown>) => qqFetch(path, {
+      method: 'POST',
+      body: JSON.stringify(passiveId ? { ...body, msg_id: passiveId } : body),
+    })
+    const plain = async (content: string) => {
+      try {
+        await post({ content, msg_type: 0, msg_seq: nextSeq })
+      } catch (error) {
+        if (!passiveId) {
+          throw new Error(`QQ 发送失败，当前没有可用的被动回复 msg_id；请让用户重新发送一条消息。${error instanceof Error ? ` ${error.message}` : ''}`, { cause: error })
+        }
+        throw error
       }
-      throw error
     }
+    // 官方 markdown 已对全部机器人开放；只在文本确实含 markdown 结构时才走 msg_type=2。
+    if (hasQqMarkdownSyntax(text)) {
+      try {
+        await post({ msg_type: 2, markdown: { content: clampQqMarkdown(convertQqTables(text)) }, msg_seq: nextSeq })
+        return
+      } catch (error) {
+        // 只有平台明确拒绝才回退；网络类错误原样抛出，避免「消息其实已送达却被重发」。
+        if (!isQqMarkdownRejection(error)) throw error
+        log('[qq] markdown 被平台拒绝，回退纯文本')
+        nextSeq += 1
+        if (target) target.seq = nextSeq
+      }
+      await plain(toQqPlainText(text))
+      return
+    }
+    await plain(text)
   }
 
   return {
