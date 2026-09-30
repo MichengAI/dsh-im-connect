@@ -4,6 +4,11 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.58 - 2026-09-30
+
+- Support DSH 0.2.0-rc.2, and keep 0.2.0-rc.1, 0.1.7-rc.2, 0.1.7-rc.1, 0.1.2-rc.1, and the 0.1.5 release candidates working.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.57 - 2026-09-28
 
 - Support DSH 0.2.0-rc.1, and keep 0.1.7-rc.2, 0.1.7-rc.1, 0.1.2-rc.1, and the 0.1.5 release candidates working.
