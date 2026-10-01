@@ -4,6 +4,13 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.61 - 2026-10-01
+
+- Tool approvals now wait at most 5 minutes on every channel. On expiry the action is canceled, not treated as a user denial, and the original chat is told it did not run. `/stop` or a disconnect still cancels immediately and does not send the timeout notice.
+- While an approval is waiting, other text is not submitted as the next turn; the chat is asked to reply allow or reject. Images and files are still submitted as content and are not treated as the approval reply. Questions have no such timeout.
+- DSH 0.2.0-rc.2, 0.2.0-rc.1, 0.1.7-rc.2, 0.1.7-rc.1, 0.1.2-rc.1, and the 0.1.5 release candidates remain supported.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.60 - 2026-10-01
 
 - Added Discord. Connect with a Developer Portal Bot Token. Direct messages are answered in place; the first mention in a guild text or announcement channel continues in a thread. Text commands, buttons, files, and streamed replies follow the existing channels.
