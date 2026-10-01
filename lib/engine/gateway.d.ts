@@ -91,7 +91,7 @@ export declare class ImEngine {
     private installLegacyUserQuestionService;
     /**
      * 同一会话的人机交互严格串行。队首只有在用户回复、AbortSignal 或会话销毁时释放；
-     * current approval 刻意不设插件超时，避免与 Host 持有的审批生命周期冲突。
+     * 审批等待有上限。到期由插件按取消答复宿主，不和网页审批抢决定；宿主信号或会话销毁仍优先，且不发超时通知。
      */
     private runInteraction;
     private approvalPrompt;
@@ -103,6 +103,7 @@ export declare class ImEngine {
     private deliver;
     private formatQuestion;
     private deliverQuestionInteraction;
+    private announceApprovalTimedOut;
     private announceInteractionCancelled;
     /** 同一条提示失败后再发一次。微信正文和问题撞车时，第一次会失败，排空后的重试仍可在聊天里回答。 */
     private retryInteraction;

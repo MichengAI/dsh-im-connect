@@ -440,6 +440,44 @@ test('允许所有私聊时，未写入白名单的当前用户仍在原聊天�
   } finally { engine.dispose() }
 })
 
+async function flushUntil(check, spins = 40) {
+  for (let i = 0; i < spins; i += 1) {
+    if (check()) return
+    await new Promise((resolve) => setImmediate(resolve))
+  }
+  throw new Error('flushUntil 超时')
+}
+
+test('未答复的审批不会进入下一轮，到期按取消结束', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { engine, inbound, sent, handlers, dmSessionId, ctx } = makeEngine(t)
+  ctx.agents.get = () => ({ followup() { throw new Error('不应把审批期间的消息送进下一轮') } })
+  engine.addAllowed('telegram', 'user-1')
+  try {
+    const pending = handlers['approval/request']({
+      agent: {
+        id: dmSessionId,
+        session: {
+          id: dmSessionId,
+          events: [{ type: 'tool/call', data: { callId: 'wait', name: 'bash', arguments: JSON.stringify({ command: 'pwd' }) } }],
+        },
+      },
+      toolName: 'bash',
+      callId: 'wait',
+    }, async () => assert.fail('超时不应交回网页'))
+    await flushUntil(() => sent.some((item) => item.text.includes('分钟内未回复将取消')))
+    inbound({ chatId: 'user-1', userId: 'user-1', text: 'can you repeat that in English?', kind: 'dm', messageId: 'later' })
+    await flushUntil(() => sent.some((item) => item.text.includes('还有未完成的审批')))
+    assert.equal(sent.some((item) => item.text.includes('消息处理失败')), false)
+    t.mock.timers.tick(5 * 60 * 1000)
+    assert.equal(await pending, 'cancelled')
+    assert.equal(sent.some((item) => item.text.includes('审批已超时，这次未执行')), true)
+    assert.equal(sent.some((item) => item.text.includes('已拒绝')), false)
+  } finally {
+    engine.dispose()
+  }
+})
+
 test('旧版审批请求仍返回旧格式', async (t) => {
   const { engine, inbound, sent, handlers, dmSessionId } = makeEngine(t)
   engine.addAllowed('telegram', 'user-1')

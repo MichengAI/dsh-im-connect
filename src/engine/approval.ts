@@ -1,4 +1,7 @@
-export type ApprovalVerdict = 'allow' | 'reject' | undefined
+export type ApprovalVerdict = 'allow' | 'reject' | 'timeout' | undefined
+
+/** IM 审批等待上限。到期按取消结束，不按用户拒绝。 */
+export const APPROVAL_WAIT_MS = 5 * 60 * 1000
 
 interface Pending {
   resolve: (value: ApprovalVerdict) => void
@@ -29,7 +32,7 @@ export class ApprovalBroker {
       }
       const entry: Pending = { resolve: settle, accepting: false }
       if (timeoutMs !== undefined && timeoutMs > 0) {
-        entry.timer = setTimeout(() => settle(undefined), timeoutMs)
+        entry.timer = setTimeout(() => settle('timeout'), timeoutMs)
         entry.timer.unref?.()
       }
       if (signal) {

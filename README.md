@@ -44,7 +44,7 @@ Inbound messages are identified before commands, tool approvals, or injection.
 | DM after QR binding that does not return user identity | DingTalk / WeCom QR setup returns bot credentials only, so the scanner still needs settings approval |
 | DM after manual credentials | Telegram, Discord, and DingTalk / WeCom / QQ bound manually, require approval for every DM |
 | DM without a userId | Denied |
-| Tool approval | Reply `Approve` / `Deny` (or `批准` / `拒绝`) in the chat bound to that session; works in DMs and groups, and never falls back to the web |
+| Tool approval | Reply `Approve` / `Deny` (or `批准` / `拒绝`) in the chat bound to that session; works in DMs and groups, and never falls back to the web. No reply within 5 minutes cancels the action, and other text is not queued behind it |
 | Interactive choice | Reply with an option number or text in the originating IM conversation; separate multiple choices with commas or add a custom answer; only the initiating user can answer in a group |
 
 WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk immediately. A different WeChat account DMing the bot waits for settings approval.
@@ -121,7 +121,7 @@ Common command replies offer related next steps: for example, `/model` → selec
 
 DingTalk, Telegram, Discord, and Feishu/Lark use native buttons. WeCom uses cards when button count and text length fit platform limits. Other cases, QQ and WeChat use numbered text. Explicit rejections and capacity limits fall back to complete text. Uncertain network delivery produces a confirmation notice instead of resending the card. Menus are scoped to the account, chat, operator and session, expire after 15 minutes or restart, and recheck permissions on selection. Used buttons cannot execute again.
 
-Approvals and questions use the same native-button channels: allow once/reject, single-choice selection, and multiple selections followed by submit. Open questions retain text input. Approvals always stay in the chat that started the task and never fall back to the web; a failed prompt is treated as a denial. In groups only the task initiator can approve; DMs add no extra restriction beyond chatting. Disabling commands does not disable pending approvals or questions.
+Approvals and questions use the same native-button channels: allow once/reject, single-choice selection, and multiple selections followed by submit. Open questions retain text input. Approvals always stay in the chat that started the task and never fall back to the web; a failed prompt is treated as a denial. If nobody approves or rejects within 5 minutes, the action is canceled and the chat is told it did not run. Other text during that wait is reminded to finish the approval and is not submitted as the next turn. Images and files are still submitted as content and are not treated as the approval reply. In groups only the task initiator can approve; DMs add no extra restriction beyond chatting. Disabling commands does not disable pending approvals or questions. Questions have no such timeout; the next text message is still the answer.
 
 
 Agent presets: `/presets` (alias `/presetlist`) lists presets; `/preset` shows the current preset. `/preset number-or-ID` starts and switches to a new session in the current workspace, keeping previous sessions. Use `/preset id:ID` for numeric IDs and `/preset --default` for the default preset. Account defaults remain unchanged; later `/new` commands still use account settings. Native buttons support direct selection; text lists use numbers valid for 15 minutes.
@@ -284,7 +284,7 @@ Command permission does not grant DM admission or replace tool approval. Enabled
 | Account state | `channels.json` stores per-account workspace, model, permission, private access, enablement, and credential refs, not raw secrets |
 | Browser payloads | Never include tokens, secrets, App Secrets, or internal error details |
 | WeChat protocol | Official iLink only; no reverse-engineered personal WeChat protocol |
-| Tool approval | The task initiator replies in the chat bound to that session. DM admission decides who can chat and no longer gates approvals, and approvals never go back to the web |
+| Tool approval | The task initiator replies in the chat bound to that session. DM admission decides who can chat and no longer gates approvals, and approvals never go back to the web. No reply within 5 minutes cancels the action instead of queueing later text |
 | Interactive questions | Single-choice, multiple-choice, and custom questions return to the originating IM conversation; one conversation handles them in order, and only the initiating user can answer in a group |
 
 Keep the DSH backend listening on loopback. Remote access should use a controlled HTTPS reverse proxy, the actual authority in the Host's `trustedHosts`, and a login through that authority. Do not spoof localhost or remove authentication to bypass 403. Image-download `additionalImageHosts` does not configure management access; see [management authentication](SECURITY.md#管理面). Permission presets use the same host sandbox-policy values as Chat; `danger-full-access` does not wrap a sandbox.

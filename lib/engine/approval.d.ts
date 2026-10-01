@@ -1,4 +1,6 @@
-export type ApprovalVerdict = 'allow' | 'reject' | undefined;
+export type ApprovalVerdict = 'allow' | 'reject' | 'timeout' | undefined;
+/** IM 审批等待上限。到期按取消结束，不按用户拒绝。 */
+export declare const APPROVAL_WAIT_MS: number;
 export declare class ApprovalBroker {
     private readonly pending;
     get size(): number;

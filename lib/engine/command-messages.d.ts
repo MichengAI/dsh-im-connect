@@ -73,6 +73,9 @@ export declare const commandEnglish: {
     readonly "\u5DF2\u62D2\u7EDD\u3002": "Rejected.";
     readonly "\u5DF2\u6279\u51C6\u3002": "Approved.";
     readonly "\u8BF7\u7CBE\u51C6\u56DE\u590D\u300C\u6279\u51C6\u300D\u6216\u300C\u62D2\u7EDD\u300D\uFF08\u4E5F\u652F\u6301\uFF1A\u540C\u610F / \u4E0D\u540C\u610F / yes / allow / no / reject\uFF09\u3002": "Reply with allow or reject (yes/no also work).";
+    readonly "{0} \u5206\u949F\u5185\u672A\u56DE\u590D\u5C06\u53D6\u6D88\uFF0C\u8FD9\u6B21\u4E0D\u4F1A\u6267\u884C\u3002": "If there is no reply within {0} minutes, this approval is canceled and the action will not run.";
+    readonly "\u5BA1\u6279\u5DF2\u8D85\u65F6\uFF0C\u8FD9\u6B21\u672A\u6267\u884C\u3002\u8FD8\u8981\u7684\u8BDD\u8BF7\u91CD\u65B0\u8BF4\u660E\u3002": "The approval timed out, so this action was not run. Ask again if you still want it.";
+    readonly "\u8FD8\u6709\u672A\u5B8C\u6210\u7684\u5BA1\u6279\uFF0C\u8BF7\u56DE\u590D\u6279\u51C6\u6216\u62D2\u7EDD\uFF0C\u6216\u70B9\u6309\u94AE\u3002": "An approval is still waiting. Reply allow or reject, or tap a button.";
     readonly "\u539F\u56E0\uFF1A{0}": "Reason: {0}";
     readonly "\u64CD\u4F5C\u53C2\u6570\uFF1A": "Arguments:";
     readonly "\u5DE5\u5177\uFF1A{0}": "Tool: {0}";

@@ -9,7 +9,7 @@ import { ChatCommands } from './chat-commands.js'
 import { canExecuteCommand, normalizeCommandPermissions, type CommandPermissions } from './command-permissions.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { ImageInputError, imageInputFailure, imagePromptPart } from './image-input.js'
-import { ApprovalBroker } from './approval.js'
+import { APPROVAL_WAIT_MS, ApprovalBroker } from './approval.js'
 import { SessionMerger } from './merge.js'
 import { SessionRouter } from './router.js'
 import { initialSessionTitle, readSessionTitle } from './session-title.js'
@@ -442,6 +442,10 @@ export class ImEngine {
         }
       }
       if (!msg.media?.length && await this.answerApproval(channelId, msg, this.approvalVerdict(text))) return
+      if (binding && this.broker.has(binding.sessionId) && !msg.media?.length) {
+        await this.deliver(channel, msg.chatId, notice(this.ctx, '还有未完成的审批，请回复批准或拒绝，或点按钮。'))
+        return
+      }
       if (msg.media && msg.media.length > 0) {
         await this.inject(channel, msg)
         return
@@ -674,7 +678,7 @@ export class ImEngine {
         ?? this.chatActors.get(`${binding.channelId}:${binding.kind}:${binding.chatId}`)
       if (knownActor) this.sessionActors.set(sessionId, knownActor)
       const prompt = await withReplyLocale(this.ctx, () => this.approvalPrompt(req))
-      const wait = this.broker.wait(sessionId, currentContract ? undefined : 120_000, req.signal)
+      const wait = this.broker.wait(sessionId, APPROVAL_WAIT_MS, req.signal)
       if (!wait) return refused
       const ticket = this.broker.token(sessionId)
       const delivery = await this.retryInteraction(channel, () => this.deliverInteraction(channel, binding.chatId, prompt, req.signal, {
@@ -699,6 +703,9 @@ export class ImEngine {
       }
       if (verdict === 'allow') return currentContract ? 'allowed-once' : { behavior: 'allow' }
       if (verdict === 'reject') return currentContract ? 'rejected' : { behavior: 'reject' }
+      if (verdict === 'timeout' && delivery.deliveredAny && !this.disposed) {
+        await this.announceApprovalTimedOut(channel, binding.chatId)
+      }
       return cancelled
     }, req.signal, () => cancelled)
   }
@@ -835,7 +842,7 @@ export class ImEngine {
 
   /**
    * 同一会话的人机交互严格串行。队首只有在用户回复、AbortSignal 或会话销毁时释放；
-   * current approval 刻意不设插件超时，避免与 Host 持有的审批生命周期冲突。
+   * 审批等待有上限。到期由插件按取消答复宿主，不和网页审批抢决定；宿主信号或会话销毁仍优先，且不发超时通知。
    */
   private runInteraction<T>(
     sessionId: string,
@@ -911,6 +918,7 @@ export class ImEngine {
     const reason = req.reason?.trim()
     if (reason) lines.push(replyText('原因：{0}', reason))
     lines.push('', replyText('请精准回复「批准」或「拒绝」（也支持：同意 / 不同意 / yes / allow / no / reject）。'))
+    lines.push(replyText('{0} 分钟内未回复将取消，这次不会执行。', APPROVAL_WAIT_MS / 60_000))
     return lines.join('\n')
   }
 
@@ -1131,6 +1139,10 @@ export class ImEngine {
     })
     this.questionDeliveries.set(sessionId, tracked)
     return tracked
+  }
+
+  private async announceApprovalTimedOut(channel: ChannelAdapter, chatId: string): Promise<void> {
+    await this.deliver(channel, chatId, notice(this.ctx, '审批已超时，这次未执行。还要的话请重新说明。'))
   }
 
   private async announceInteractionCancelled(channel: ChannelAdapter, chatId: string, kind: '审批' | '问题'): Promise<void> {
