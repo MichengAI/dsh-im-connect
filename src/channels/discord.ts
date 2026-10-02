@@ -3,6 +3,7 @@ import { channelNotice } from '../engine/command-locale.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
+import { splitText } from '../engine/split.js'
 import { diagnosticJson, probe, requireDiagnostic } from './diagnostics.js'
 import { fileMedia, imageMedia, requestChannelBytes } from './channel-image-download.js'
 
@@ -826,7 +827,7 @@ export function createDiscordChannel(config: DiscordConfig, log: (line: string) 
     canDeliverDeferred() { return !stopped && statusText === '长连接已建立' },
     async send(chatId, text) {
       const rendered = prepareDiscordMarkdown(text)
-      for (const chunk of codePoints(rendered).length ? splitChunks(rendered, MESSAGE_LIMIT) : ['']) {
+      for (const chunk of splitText(rendered, MESSAGE_LIMIT)) {
         if (chunk) await createMessage(chatId, chunk)
       }
     },
@@ -916,10 +917,10 @@ export function createDiscordChannel(config: DiscordConfig, log: (line: string) 
           if (timer) clearTimeout(timer)
           timer = undefined
           await inflight.catch(() => undefined)
-          const chars = codePoints(prepareDiscordMarkdown(text || pending || last))
-          await flush(chars.slice(0, MESSAGE_LIMIT).join(''), true)
-          for (let offset = MESSAGE_LIMIT; offset < chars.length; offset += MESSAGE_LIMIT) {
-            await createMessage(chatId, chars.slice(offset, offset + MESSAGE_LIMIT).join(''))
+          const parts = splitText(prepareDiscordMarkdown(text || pending || last), MESSAGE_LIMIT)
+          await flush(parts[0] || '…', true)
+          for (const part of parts.slice(1)) {
+            await createMessage(chatId, part)
           }
         },
       }
@@ -939,11 +940,4 @@ export function createDiscordChannel(config: DiscordConfig, log: (line: string) 
     },
     status() { return statusText },
   }
-}
-
-function splitChunks(text: string, limit: number): string[] {
-  const chars = codePoints(text)
-  const chunks: string[] = []
-  for (let offset = 0; offset < chars.length; offset += limit) chunks.push(chars.slice(offset, offset + limit).join(''))
-  return chunks
 }

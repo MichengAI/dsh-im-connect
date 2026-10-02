@@ -7,17 +7,27 @@ function table(name) {
   return [`| 序号 | ${name} |`, '| --- | --- |', '| 1 | 甲 |'].join('\n')
 }
 
-function sdkRecorder(calls, code = 0) {
+function sdkRecorder(calls, code = 0, error) {
   const result = () => ({ code, data: { message_id: 'm', reaction_id: 'r' } })
   return { defaultHttpInstance: {}, Client: class {
     request = async () => ({ bot: { open_id: 'bot' } })
     im = {
-      message: { create: async (input) => { calls.push(input.data); return result() }, patch: async () => result() },
+      message: { create: async (input) => { calls.push(input.data); if (error) throw error; return result() }, patch: async () => result() },
       messageReaction: { create: async () => result(), delete: async () => result() },
       file: { create: async () => ({ file_key: 'f' }) },
     }
   }, EventDispatcher: class { register() { return this } }, WSClient: class { async start() {} close() {} } }
 }
+
+test('飞书卡片结果未知时不重复发送纯文本', async (t) => {
+  const calls = []
+  const error = new Error('connection reset after accepted')
+  const channel = createFeishuChannel('feishu', { appId: 'test', appSecret: 'test' }, () => {}, async () => sdkRecorder(calls, 0, error))
+  t.after(() => channel.stop())
+  await channel.start()
+  await assert.rejects(channel.send('chat', 'hello'), (actual) => actual === error)
+  assert.deepEqual(calls.map((data) => data.msg_type), ['interactive'])
+})
 
 test('飞书按表格数量拆卡，每卡不超过上限且不切开表格', () => {
   const text = Array.from({ length: FEISHU_CARD_MAX_TABLES + 1 }, (_, index) => table(`表${index + 1}`)).join('\n\n')

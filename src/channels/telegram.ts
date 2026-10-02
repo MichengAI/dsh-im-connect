@@ -109,6 +109,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         await api('sendRichMessage', { chat_id: Number(chatId), rich_message: { markdown } })
         return
       } catch (error) {
+        // 响应超时或连接中断时，原消息可能已经送达，不能再发一份。
+        if ((error as { rejected?: boolean })?.rejected !== true) throw error
         if (richUnsupported(error)) richDisabled = true
       }
     }

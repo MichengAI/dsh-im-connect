@@ -2,11 +2,21 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { splitText } from '../lib/engine/split.js'
 
-test('长文本按上限分片并带序号', () => {
+test('极小上限分片不加序号，避免编号超限', () => {
   const parts = splitText('甲'.repeat(10), 4)
   assert.ok(parts.length > 1)
-  assert.ok(parts[0].startsWith('（1/'))
-  assert.equal(parts.at(-1)?.startsWith('（'), true)
+  assert.ok(parts.every((part) => [...part].length <= 4))
+  assert.equal(parts.join(''), '甲'.repeat(10))
+})
+
+test('正文与围栏合并时为最终编号预留空间', () => {
+  for (const max of [100, 2000]) {
+    const text = 'a'.repeat(max - 20) + '\n```\n' + 'b'.repeat(11) + '\n```\n' + 'c'.repeat(max)
+    const parts = splitText(text, max)
+    assert.ok(parts.every((part) => [...part].length <= max), JSON.stringify(parts.map((part) => part.length)))
+    assert.ok(parts[0].startsWith('（1/'))
+    assert.equal(parts.map((part) => part.replace(/^（\d+\/\d+）/, '')).join('').replace(/\n/g, ''), text.replace(/\n/g, ''))
+  }
 })
 
 test('单条消息内放得下的表格原样保留', () => {

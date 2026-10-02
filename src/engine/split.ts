@@ -22,7 +22,7 @@ interface Segment {
 }
 
 const FENCE_MARKER = /^\s{0,3}(`{3,}|~{3,})/
-/** 序号前缀最长形如「（10/10）」，预留出来避免分片后超出渠道上限。 */
+/** 序号前缀的最小预留空间；长文按可能的片数扩展。 */
 const PREFIX_ALLOWANCE = 8
 
 function codePointLength(value: string): number {
@@ -249,9 +249,12 @@ export function markdownTableOffsets(text: string): number[] {
 export function splitText(text: string, max: number): string[] {
   if (max <= 0) return text === '' ? [] : [text]
   if (text === '') return []
-  const budget = max > 64 ? max - PREFIX_ALLOWANCE : max
+  const allowance = Math.max(PREFIX_ALLOWANCE, 2 * String(codePointLength(text)).length + 3)
+  // 极小上限优先保留正文，避免编号本身占满整片。
+  const numbered = max > allowance + 16
+  const budget = numbered ? max - allowance : max
   const segments = toBlocks(text)
-    .flatMap((block) => splitBlock(block, budget))
+    .flatMap((block) => splitBlock(block, block.kind === 'prose' ? budget : max))
     .filter((segment) => segment.text !== '')
 
   const chunks: Segment[][] = []
@@ -259,7 +262,7 @@ export function splitText(text: string, max: number): string[] {
     const last = chunks.at(-1)
     if (last) {
       const merged = [...last.map((item) => item.text), segment.text].join('\n')
-      if (codePointLength(merged) <= max) {
+      if (codePointLength(merged) <= (last[0]!.plain ? budget : max)) {
         last.push(segment)
         continue
       }
@@ -278,5 +281,5 @@ export function splitText(text: string, max: number): string[] {
     .filter((part) => part.text !== '')
   if (parts.length <= 1) return parts.map((part) => part.text)
   const total = parts.length
-  return parts.map((part, index) => (part.plain ? `（${index + 1}/${total}）${part.text}` : part.text))
+  return parts.map((part, index) => (numbered && part.plain ? `（${index + 1}/${total}）${part.text}` : part.text))
 }

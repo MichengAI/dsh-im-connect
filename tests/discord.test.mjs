@@ -10,6 +10,26 @@ const BOT = '42'
 const parent = { id: '10', type: 0 }
 const thread = { id: '99', type: 11, owner_id: BOT, parent_id: '10' }
 
+test('Discord 普通发送和流式收口保持长代码围栏完整', async () => {
+  for (const streaming of [false, true]) {
+    const bodies = []
+    const adapter = createDiscordChannel({ token: 'test', fetchImpl: async (_url, init) => {
+      bodies.push(JSON.parse(init.body))
+      return json({ id: '55' })
+    } }, () => {})
+    const text = '```js\n' + 'x'.repeat(4100) + '\n```'
+    if (streaming) {
+      const stream = await adapter.beginReply('200')
+      bodies.length = 0
+      await stream.finish(text)
+    } else await adapter.send('200', text)
+    assert.ok(bodies.length > 1)
+    assert.ok(bodies.every(({ content }) => [...content].length <= 2000 && content.startsWith('```js\n') && content.endsWith('\n```')))
+    assert.equal(bodies.map(({ content }) => content.slice(6, -4).replace(/\n/g, '')).join(''), 'x'.repeat(4100))
+    assert.ok(bodies.every((body) => body.allowed_mentions.parse.length === 0))
+  }
+})
+
 function message(extra) {
   return {
     id: '99',

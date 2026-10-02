@@ -8,6 +8,21 @@ function mockFetch(handler) {
   return () => { globalThis.fetch = previous }
 }
 
+test('Telegram 富文本结果未知时不重复发送纯文本', async () => {
+  for (const error of [new DOMException('response lost', 'TimeoutError'), new TypeError('connection reset')]) {
+    const calls = []
+    const restore = mockFetch(async (url) => {
+      calls.push(String(url).split('/').pop())
+      throw error
+    })
+    try {
+      const channel = createTelegramChannel({ token: 'test-token' }, () => {})
+      await assert.rejects(channel.send('123', 'hello'), (actual) => actual === error)
+      assert.deepEqual(calls, ['sendRichMessage'])
+    } finally { restore() }
+  }
+})
+
 test('Telegram 富文本给正文行补硬换行，块级语法不动', () => {
   assert.equal(toTelegramHardBreaks('第一行\n第二行'), '第一行  \n第二行')
   assert.equal(toTelegramHardBreaks('第一行\n\n第二段'), '第一行\n\n第二段')
