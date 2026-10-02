@@ -4,6 +4,14 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.62 - 2026-10-02
+
+- Long replies no longer exceed a channel's length limit after the (n/m) marker is added. Tables and code fences still use the full limit and keep their structure; only prose chunks reserve room for the marker.
+- Telegram and Feishu no longer send a second plain-text copy when a rich or card send times out or the connection drops. A plain-text fallback happens only when the platform explicitly rejects the rich message.
+- Discord keeps code fences intact when a long reply is split, including the final streamed message. A chunk that already fits is not split again, so part numbers are not nested. Tables that grow past 2000 characters after vertical formatting are still split.
+- DSH 0.2.0-rc.2, 0.2.0-rc.1, 0.1.7-rc.2, 0.1.7-rc.1, 0.1.2-rc.1, and the 0.1.5 release candidates remain supported.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.61 - 2026-10-01
 
 - Tool approvals now wait at most 5 minutes on every channel. On expiry the action is canceled, not treated as a user denial, and the original chat is told it did not run. `/stop` or a disconnect still cancels immediately and does not send the timeout notice.
