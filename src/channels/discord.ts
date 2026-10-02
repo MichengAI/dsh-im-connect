@@ -827,7 +827,9 @@ export function createDiscordChannel(config: DiscordConfig, log: (line: string) 
     canDeliverDeferred() { return !stopped && statusText === '长连接已建立' },
     async send(chatId, text) {
       const rendered = prepareDiscordMarkdown(text)
-      for (const chunk of splitText(rendered, MESSAGE_LIMIT)) {
+      // 网关已经分片；只有表格转换等让正文超限时才需要再拆。
+      const parts = codePoints(rendered).length <= MESSAGE_LIMIT ? [rendered] : splitText(rendered, MESSAGE_LIMIT)
+      for (const chunk of parts) {
         if (chunk) await createMessage(chatId, chunk)
       }
     },
@@ -888,7 +890,8 @@ export function createDiscordChannel(config: DiscordConfig, log: (line: string) 
       let pending: string | undefined
       let inflight = Promise.resolve()
       const flush = async (text: string, allowSend: boolean) => {
-        const next = clip(prepareDiscordMarkdown(text), MESSAGE_LIMIT) || '…'
+        // flush 只投递：增量调用方裁剪预览，收口调用方已经完成转换和结构分片。
+        const next = text || '…'
         if (next === last) return
         try {
           await request(`channels/${snowflake(chatId, 'channel')}/messages/${snowflake(first?.id, 'message')}`, {
@@ -910,7 +913,7 @@ export function createDiscordChannel(config: DiscordConfig, log: (line: string) 
             timer = undefined
             const next = pending
             pending = undefined
-            if (next !== undefined) inflight = inflight.then(() => flush(next, false))
+            if (next !== undefined) inflight = inflight.then(() => flush(clip(prepareDiscordMarkdown(next), MESSAGE_LIMIT), false))
           }, 400)
         },
         async finish(text) {

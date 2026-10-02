@@ -5,10 +5,45 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createDiscordChannel, normalizeDiscordCommand, prepareDiscordMarkdown, resolveDiscordRoute, routeDiscordMessage } from '../lib/channels/discord.js'
 import { parseImSessionId } from '../lib/engine/session-id.js'
+import { splitText } from '../lib/engine/split.js'
 
 const BOT = '42'
 const parent = { id: '10', type: 0 }
 const thread = { id: '99', type: 11, owner_id: BOT, parent_id: '10' }
+
+test('Discord 保留网关正文分片和已有编号，不二次拆分', async () => {
+  const sent = []
+  const adapter = createDiscordChannel({ token: 'test', fetchImpl: async (_url, init) => {
+    sent.push(JSON.parse(init.body).content)
+    return json({ id: '55' })
+  } }, () => {})
+  const parts = splitText('甲'.repeat(5000), 2000)
+  assert.equal(parts.length, 3)
+  for (const part of parts) await adapter.send('200', part)
+  assert.deepEqual(sent, parts)
+  for (const text of ['乙'.repeat(2000), '😀'.repeat(2000)]) {
+    await adapter.send('200', text)
+    assert.equal(sent.at(-1), text)
+  }
+  assert.equal(sent.length, 5)
+})
+
+test('Discord 表格转换后超限仍会分片，正文完整保留', async () => {
+  const sent = []
+  const adapter = createDiscordChannel({ token: 'test', fetchImpl: async (_url, init) => {
+    sent.push(JSON.parse(init.body).content)
+    return json({ id: '55' })
+  } }, () => {})
+  const text = ['| 序号 | 名称 | ' + '长表头'.repeat(100) + ' |', '| --- | --- | --- |',
+    ...Array.from({ length: 10 }, (_, index) => `| ${index} | 名称 | 内容 |`)].join('\n')
+  const rendered = prepareDiscordMarkdown(text)
+  assert.ok([...text].length <= 2000)
+  assert.ok([...rendered].length > 2000)
+  await adapter.send('200', text)
+  assert.ok(sent.length > 1)
+  assert.ok(sent.every((part) => [...part].length <= 2000))
+  assert.equal(sent.map((part) => part.replace(/^（\d+\/\d+）/, '')).join('').replace(/\n/g, ''), rendered.replace(/\n/g, ''))
+})
 
 test('Discord 普通发送和流式收口保持长代码围栏完整', async () => {
   for (const streaming of [false, true]) {
