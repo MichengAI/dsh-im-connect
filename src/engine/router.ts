@@ -115,6 +115,34 @@ export class SessionRouter {
     ])]
   }
 
+  /** 某个聊天登记过的全部会话记录（含当前绑定），按最近更新排序。 */
+  chatRecords(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): SessionRecord[] {
+    return this.store.list().filter((item) => item.channel === channelId && item.kind === kind && item.chatId === chatId)
+  }
+
+  /** 解除聊天对某会话的登记（删除映射记录），使其不再向该聊天投递输出。 */
+  unbindSession(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, sessionId: string): boolean {
+    const rec = this.store.list().find(
+      (item) => item.sessionId === sessionId && item.channel === channelId && item.kind === kind && item.chatId === chatId)
+    if (!rec) return false
+    this.store.removeSession(sessionId)
+    this.live.delete(sessionKeyOf(channelId, kind, chatId))
+    this.historical.delete(sessionId)
+    return true
+  }
+
+  /** 静音/取消静音：保留登记但不（或恢复）向聊天投递该会话的输出事件。 */
+  setMuted(sessionId: string, muted: boolean): boolean {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (!rec) return false
+    this.store.updateSession({ ...rec, muted })
+    return true
+  }
+
+  isMuted(sessionId: string): boolean {
+    return this.store.list().some((item) => item.sessionId === sessionId && item.muted === true)
+  }
+
   async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
     return this.channelOperations.run(channelId, () => this.getOrCreateNow(channelId, kind, chatId, title))
   }
