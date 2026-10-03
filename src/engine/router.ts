@@ -126,9 +126,21 @@ export class SessionRouter {
       (item) => item.sessionId === sessionId && item.channel === channelId && item.kind === kind && item.chatId === chatId)
     if (!rec) return false
     this.store.removeSession(sessionId)
-    this.live.delete(sessionKeyOf(channelId, kind, chatId))
+    // live 键按聊天而非会话组织：仅当 live 绑定指向被解绑的会话时才清除，避免误删新绑定。
+    const key = sessionKeyOf(channelId, kind, chatId)
+    if (this.live.get(key)?.sessionId === sessionId) this.live.delete(key)
     this.historical.delete(sessionId)
     return true
+  }
+
+  /** 切换绑定后清理：解除本聊天对除 keepSessionId 外全部会话的登记。返回被解除的会话 ID。 */
+  unbindOthersForChat(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, keepSessionId?: string): string[] {
+    const removed: string[] = []
+    for (const item of this.chatRecords(channelId, kind, chatId)) {
+      if (item.sessionId === keepSessionId) continue
+      if (this.unbindSession(channelId, kind, chatId, item.sessionId)) removed.push(item.sessionId)
+    }
+    return removed
   }
 
   /** 静音/取消静音：保留登记但不（或恢复）向聊天投递该会话的输出事件。 */

@@ -186,6 +186,8 @@ export const commandEnglish = {
     'Muted: {0}\nIts output will no longer be pushed to this chat; /unmute {1} to restore.',
   '已恢复推送：{0}': 'Pushes restored: {0}',
   '静音：/mute {0}': 'Mute: /mute {0}',
+  '已解除对 {0} 个旧会话的推送（不影响网页端查看，/mute、/unbind 可手动管理）。':
+    'Stopped pushes from {0} old session(s) (web Chat is unaffected; manage with /mute and /unbind).',
   '/export — 导出当前会话 ZIP 并发送':
     '/export — Export the current session as a ZIP and send it',
   '压缩较早上下文': 'Compact earlier context',

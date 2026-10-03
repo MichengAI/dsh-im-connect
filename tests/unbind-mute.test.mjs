@@ -52,3 +52,19 @@ test('setMuted 切换静音状态并持久化', () => {
     assert.equal(router.setMuted('s-missing', true), false)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('unbindOthersForChat 保留指定会话并解除其余登记', () => {
+  const { router, store, dir } = makeRouter()
+  try {
+    store.upsert('feishu:dm:oc_test', record('s-current'))
+    store.upsert('history:s-old1', record('s-old1'))
+    store.upsert('history:s-old2', record('s-old2'))
+    store.upsert('history:s-other', record('s-other', { chatId: 'oc_other' }))
+    const removed = router.unbindOthersForChat('feishu', 'dm', 'oc_test', 's-current')
+    assert.deepEqual(removed.sort(), ['s-old1', 's-old2'])
+    assert.ok(router.bindingForSession('s-current'))
+    assert.equal(router.bindingForSession('s-old1'), undefined)
+    // 其他聊天不受影响
+    assert.ok(router.bindingForSession('s-other'))
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})

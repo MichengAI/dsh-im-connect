@@ -1120,7 +1120,9 @@ test('workspace → 普通消息回传 → new → 再回传使用同一创建�
     assert.equal(created.length, 2)
     assert.notEqual(created[0].sessionId, created[1].sessionId)
     assert.ok(created.every(opts => opts.meta.cwd === 'D:/chosen' && opts.agentOptions.model === 'm'))
-    assert.ok(f.store.list().some(row => row.sessionId === created[0].sessionId))
+    // /new 自动解除旧会话登记（切换即解绑）：仅新会话保留推送登记。
+    assert.ok(!f.store.list().some(row => row.sessionId === created[0].sessionId))
+    assert.ok(f.store.list().some(row => row.sessionId === created[1].sessionId))
   } finally { f.engine.dispose() }
 })
 

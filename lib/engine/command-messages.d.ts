@@ -158,6 +158,7 @@ export declare const commandEnglish: {
     readonly '\u5DF2\u9759\u97F3\uFF1A{0}\n\u8BE5\u4F1A\u8BDD\u7684\u8F93\u51FA\u4E0D\u518D\u63A8\u9001\u5230\u672C\u804A\u5929\uFF1B/unmute {1} \u6062\u590D\u3002': "Muted: {0}\nIts output will no longer be pushed to this chat; /unmute {1} to restore.";
     readonly '\u5DF2\u6062\u590D\u63A8\u9001\uFF1A{0}': "Pushes restored: {0}";
     readonly '\u9759\u97F3\uFF1A/mute {0}': "Mute: /mute {0}";
+    readonly '\u5DF2\u89E3\u9664\u5BF9 {0} \u4E2A\u65E7\u4F1A\u8BDD\u7684\u63A8\u9001\uFF08\u4E0D\u5F71\u54CD\u7F51\u9875\u7AEF\u67E5\u770B\uFF0C/mute\u3001/unbind \u53EF\u624B\u52A8\u7BA1\u7406\uFF09\u3002': "Stopped pushes from {0} old session(s) (web Chat is unaffected; manage with /mute and /unbind).";
     readonly '/export \u2014 \u5BFC\u51FA\u5F53\u524D\u4F1A\u8BDD ZIP \u5E76\u53D1\u9001': "/export — Export the current session as a ZIP and send it";
     readonly 压缩较早上下文: "Compact earlier context";
     readonly '\u7BA1\u7406\u957F\u671F\u76EE\u6807\uFF1B\u6682\u505C /goal pause\uFF1B\u6062\u590D /goal resume': "Manage the long-term goal; pause with /goal pause, resume with /goal resume";
