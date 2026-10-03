@@ -115,6 +115,46 @@ export class SessionRouter {
     ])]
   }
 
+  /** 某个聊天登记过的全部会话记录（含当前绑定），按最近更新排序。 */
+  chatRecords(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): SessionRecord[] {
+    return this.store.list().filter((item) => item.channel === channelId && item.kind === kind && item.chatId === chatId)
+  }
+
+  /** 解除聊天对某会话的登记（删除映射记录），使其不再向该聊天投递输出。 */
+  unbindSession(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, sessionId: string): boolean {
+    const rec = this.store.list().find(
+      (item) => item.sessionId === sessionId && item.channel === channelId && item.kind === kind && item.chatId === chatId)
+    if (!rec) return false
+    this.store.removeSession(sessionId)
+    // live 键按聊天而非会话组织：仅当 live 绑定指向被解绑的会话时才清除，避免误删新绑定。
+    const key = sessionKeyOf(channelId, kind, chatId)
+    if (this.live.get(key)?.sessionId === sessionId) this.live.delete(key)
+    this.historical.delete(sessionId)
+    return true
+  }
+
+  /** 切换绑定后清理：解除本聊天对除 keepSessionId 外全部会话的登记。返回被解除的会话 ID。 */
+  unbindOthersForChat(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, keepSessionId?: string): string[] {
+    const removed: string[] = []
+    for (const item of this.chatRecords(channelId, kind, chatId)) {
+      if (item.sessionId === keepSessionId) continue
+      if (this.unbindSession(channelId, kind, chatId, item.sessionId)) removed.push(item.sessionId)
+    }
+    return removed
+  }
+
+  /** 静音/取消静音：保留登记但不（或恢复）向聊天投递该会话的输出事件。 */
+  setMuted(sessionId: string, muted: boolean): boolean {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (!rec) return false
+    this.store.updateSession({ ...rec, muted })
+    return true
+  }
+
+  isMuted(sessionId: string): boolean {
+    return this.store.list().some((item) => item.sessionId === sessionId && item.muted === true)
+  }
+
   async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
     return this.channelOperations.run(channelId, () => this.getOrCreateNow(channelId, kind, chatId, title))
   }

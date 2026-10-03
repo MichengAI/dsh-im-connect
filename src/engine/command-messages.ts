@@ -155,6 +155,39 @@ export const commandEnglish = {
   '/queue — 查看队列和操作方法': '/queue — View and manage queued messages',
   '/delivery — 查看交付记录和补发方法':
     '/delivery — Check delivery records and resend options',
+  '/unbind [序号|ID|all] — 解除本聊天对旧会话的登记，不再推送其输出':
+    '/unbind [no|ID|all] — Unbind old sessions from this chat and stop their output pushes',
+  '/mute 序号或ID — 静音指定会话的推送；/unmute 恢复':
+    '/mute no-or-ID — Mute pushes from a session; /unmute restores them',
+  '用法：/{0} 序号或ID。先发送 /unbind 查看本聊天登记的会话。':
+    'Usage: /{0} no-or-ID. Send /unbind first to list sessions registered to this chat.',
+  '本聊天登记的会话 · 共 {0} 个\n\n':
+    'Sessions registered to this chat · {0} total\n\n',
+  '〔已静音〕': '〔muted〕',
+  '解除登记：/unbind 序号或ID；全部解除（当前会话除外）：/unbind all':
+    'Unbind: /unbind no-or-ID; unbind all except the current session: /unbind all',
+  '保留登记但暂停推送：/mute 序号或ID；恢复：/unmute 序号或ID':
+    'Keep the record but pause pushes: /mute no-or-ID; resume: /unmute no-or-ID',
+  '本聊天没有登记任何会话。': 'No sessions are registered to this chat.',
+  '没有需要解除的登记。': 'Nothing to unbind.',
+  '当前会话未受影响。': 'The current session is unaffected.',
+  '不能解除当前会话；请先 /new 或 /session 切换。':
+    'Cannot unbind the current session; switch first with /new or /session.',
+  '本聊天没有登记该会话，请发送 /unbind 查看。':
+    'This chat has no record of that session; send /unbind to list them.',
+  '已解除 {0} 个会话的登记，它们不再向本聊天推送输出。':
+    'Unbound {0} sessions; they will no longer push output to this chat.',
+  '已解除登记：{0}\n该会话不再向本聊天推送输出；历史仍保留在网页 Chat 中。':
+    'Unbound: {0}\nIt will no longer push output to this chat; history stays in web Chat.',
+  '查看登记：/unbind': 'List registrations: /unbind',
+  '会话登记异常，请发送 /unbind 查看。':
+    'Session registration error; send /unbind to list them.',
+  '已静音：{0}\n该会话的输出不再推送到本聊天；/unmute {1} 恢复。':
+    'Muted: {0}\nIts output will no longer be pushed to this chat; /unmute {1} to restore.',
+  '已恢复推送：{0}': 'Pushes restored: {0}',
+  '静音：/mute {0}': 'Mute: /mute {0}',
+  '已解除对 {0} 个旧会话的推送（不影响网页端查看，/mute、/unbind 可手动管理）。':
+    'Stopped pushes from {0} old session(s) (web Chat is unaffected; manage with /mute and /unbind).',
   '/export — 导出当前会话 ZIP 并发送':
     '/export — Export the current session as a ZIP and send it',
   '压缩较早上下文': 'Compact earlier context',

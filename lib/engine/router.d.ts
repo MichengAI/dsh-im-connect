@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
-import type { ChannelInstanceId, ChatKind } from './session-id.js';
+import type { ChannelInstanceId, ChatKind, SessionRecord } from './session-id.js';
 import { SessionMapStore } from './session-store.js';
 import type { EngineConfig } from './types.js';
 export interface ChatBinding {
@@ -88,6 +88,15 @@ export declare class SessionRouter {
     lookup(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined;
     bindingForSession(sessionId: string): ChatBinding | undefined;
     sessionIdsForChannel(channelId: ChannelInstanceId): string[];
+    /** 某个聊天登记过的全部会话记录（含当前绑定），按最近更新排序。 */
+    chatRecords(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): SessionRecord[];
+    /** 解除聊天对某会话的登记（删除映射记录），使其不再向该聊天投递输出。 */
+    unbindSession(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, sessionId: string): boolean;
+    /** 切换绑定后清理：解除本聊天对除 keepSessionId 外全部会话的登记。返回被解除的会话 ID。 */
+    unbindOthersForChat(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, keepSessionId?: string): string[];
+    /** 静音/取消静音：保留登记但不（或恢复）向聊天投递该会话的输出事件。 */
+    setMuted(sessionId: string, muted: boolean): boolean;
+    isMuted(sessionId: string): boolean;
     getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding>;
     private getOrCreateNow;
     rotate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: {
