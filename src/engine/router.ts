@@ -83,7 +83,7 @@ export class SessionRouter {
     const live = this.get(channelId, kind, chatId)
     if (live) return live
     const rec = this.store.get(sessionKeyOf(channelId, kind, chatId))
-    if (!rec) return undefined
+    if (!rec || rec.detached) return undefined
     return {
       key: sessionKeyOf(channelId, kind, chatId),
       channelId,
@@ -94,10 +94,11 @@ export class SessionRouter {
   }
 
   bindingForSession(sessionId: string): ChatBinding | undefined {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (rec?.detached) return undefined
     for (const item of this.live.values()) {
       if (item.sessionId === sessionId) return item
     }
-    const rec = this.store.list().find((item) => item.sessionId === sessionId)
     if (!rec) return undefined
     return {
       key: sessionKeyOf(rec.channel, rec.kind, rec.chatId),
@@ -113,6 +114,50 @@ export class SessionRouter {
       ...[...this.live.values()].filter((item) => item.channelId === channelId).map((item) => item.sessionId),
       ...this.store.list().filter((item) => item.channel === channelId).map((item) => item.sessionId),
     ])]
+  }
+
+  /** 某个聊天登记过的全部会话记录（含当前绑定），按最近更新排序。 */
+  chatRecords(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): SessionRecord[] {
+    return this.store.list().filter((item) => !item.detached && item.channel === channelId && item.kind === kind && item.chatId === chatId)
+  }
+
+  /** 持久化解除投递关系，保留历史及句柄，供网页查看与渠道卸载。 */
+  unbindSession(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, sessionId: string): boolean {
+    const rec = this.store.list().find(
+      (item) => item.sessionId === sessionId && item.channel === channelId && item.kind === kind && item.chatId === chatId)
+    if (!rec || rec.detached) return false
+    this.store.updateSession({ ...rec, detached: true })
+    // live 键按聊天而非会话组织：仅当 live 绑定指向被解绑的会话时才清除，避免误删新绑定。
+    const key = sessionKeyOf(channelId, kind, chatId)
+    if (this.store.get(key)?.sessionId === sessionId) this.store.retain(key)
+    const live = this.live.get(key)
+    if (live?.sessionId === sessionId) {
+      this.historical.set(sessionId, live)
+      this.live.delete(key)
+    }
+    return true
+  }
+
+  /** 切换绑定后清理：解除本聊天对除 keepSessionId 外全部会话的登记。返回被解除的会话 ID。 */
+  unbindOthersForChat(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, keepSessionId?: string): string[] {
+    const removed: string[] = []
+    for (const item of this.chatRecords(channelId, kind, chatId)) {
+      if (item.sessionId === keepSessionId) continue
+      if (this.unbindSession(channelId, kind, chatId, item.sessionId)) removed.push(item.sessionId)
+    }
+    return removed
+  }
+
+  /** 静音/取消静音：保留登记但不（或恢复）向聊天投递该会话的输出事件。 */
+  setMuted(sessionId: string, muted: boolean): boolean {
+    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    if (!rec || rec.detached) return false
+    this.store.updateSession({ ...rec, muted })
+    return true
+  }
+
+  isMuted(sessionId: string): boolean {
+    return this.store.list().some((item) => item.sessionId === sessionId && item.muted === true)
   }
 
   async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {
@@ -165,6 +210,7 @@ export class SessionRouter {
     // dispose 会触发宿主 api-session/removed，导致未刷新的网页拒绝打开历史。
     // 轮换只转入历史，句柄在渠道停用或插件重载时统一释放。
     if (old) this.historical.set(old.sessionId, old)
+    this.unbindOthersForChat(channelId, kind, chatId, next.sessionId)
     return next
   }
 
@@ -191,7 +237,7 @@ export class SessionRouter {
   /** 只返回是否占用，不向列表暴露其他聊天身份。 */
   isBoundElsewhere(sessionId: string, channelId: string, kind: ChatKind, chatId: string): boolean {
     const key = sessionKeyOf(channelId, kind, chatId)
-    return this.store.list().some(item => item.sessionId === sessionId && sessionKeyOf(item.channel, item.kind, item.chatId) !== key)
+    return this.store.list().some(item => !item.detached && item.sessionId === sessionId && sessionKeyOf(item.channel, item.kind, item.chatId) !== key)
   }
 
   /** 显式换绑保留旧历史与运行句柄，不改变 Host 会话的归属或默认配置。 */
@@ -203,11 +249,13 @@ export class SessionRouter {
       if (other) throw Object.assign(new Error(replyText('该会话已关联其他聊天，不能重复绑定。')), { code: 'im/session-in-use' })
       const old = this.live.get(key)
       const previous = this.store.list().find(item => item.sessionId === sessionId)
-      this.store.upsert(key, { ...previous, channel: channelId, kind, chatId, sessionId, title: previous?.titleSource === 'user' ? previous.title : title, ...(cwd ? { cwd } : {}), adopted: true, updatedAt: new Date().toISOString() })
+      this.store.upsert(key, { ...previous, channel: channelId, kind, chatId, sessionId, title: previous?.titleSource === 'user' ? previous.title : title, ...(cwd ? { cwd } : {}), adopted: true, detached: false, muted: false, updatedAt: new Date().toISOString() })
       if (old && old.sessionId !== sessionId) this.historical.set(old.sessionId, old)
       const binding = this.historical.get(sessionId) ?? { key, channelId, kind, chatId, sessionId, handle: { agent, dispose: async () => {} } }
+      Object.assign(binding, { key, channelId, kind, chatId })
       this.historical.delete(sessionId)
       this.live.set(key, binding)
+      this.unbindOthersForChat(channelId, kind, chatId, sessionId)
     })
   }
 

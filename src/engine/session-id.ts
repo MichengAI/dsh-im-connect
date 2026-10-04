@@ -10,6 +10,10 @@ export type ChatKind = 'dm' | 'group'
 export interface SessionRecord {
   /** 已通过 Host 接入的会话；恢复时不能套用机器人默认配置。 */
   adopted?: boolean
+  /** 静音：保留登记但不向聊天投递该会话的输出事件。 */
+  muted?: boolean
+  /** 已解除投递关系；保留历史元数据，防止启动恢复重新登记。 */
+  detached?: boolean
   agentPreset?: string
   /** 创建或接续时的工作区，轮换不跟随账号默认值漂移。 */
   cwd?: string

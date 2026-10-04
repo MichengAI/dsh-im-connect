@@ -10,6 +10,26 @@ import { SeenStore } from '../lib/engine/seen-store.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+test('切换后旧会话不回传，静音保留标题同步且解除静音恢复输出', async t => {
+  const { engine, sent, handlers, store } = makeEngine(t)
+  const old = 'session-before-switch', current = 'session-after-switch'
+  const output = id => handlers['session/event']({ id }, { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: id }] } } })
+  try {
+    await engine.router.bind('telegram', 'dm', 'user-1', old, 'old', {}, '/workspace')
+    await engine.router.bind('telegram', 'dm', 'user-1', current, 'current', {}, '/workspace')
+    const count = sent.length
+    await output(old)
+    engine.router.setMuted(current, true)
+    await output(current)
+    await handlers['session/event']({ id: current }, { type: 'session/title', data: { title: 'muted title', source: { kind: 'provider' } } })
+    assert.equal(sent.length, count)
+    assert.equal(store.list().find(item => item.sessionId === current).title, 'muted title')
+    engine.router.setMuted(current, false)
+    await output(current)
+    await waitFor(() => sent.some(item => item.text === current))
+  } finally { engine.dispose() }
+})
+
 test('先卸载后删除日志时，删除完成事件清理频道残留索引', async t => {
   let stored = []
   const f = makeEngine(t, undefined, undefined, { sessionPersistence: { list: async () => stored } })
@@ -1120,7 +1140,9 @@ test('workspace → 普通消息回传 → new → 再回传使用同一创建�
     assert.equal(created.length, 2)
     assert.notEqual(created[0].sessionId, created[1].sessionId)
     assert.ok(created.every(opts => opts.meta.cwd === 'D:/chosen' && opts.agentOptions.model === 'm'))
-    assert.ok(f.store.list().some(row => row.sessionId === created[0].sessionId))
+    // /new 自动解除旧会话登记（切换即解绑）：仅新会话保留推送登记。
+    assert.ok(f.store.list().find(row => row.sessionId === created[0].sessionId)?.detached)
+    assert.ok(f.store.list().some(row => row.sessionId === created[1].sessionId))
   } finally { f.engine.dispose() }
 })
 

@@ -961,6 +961,8 @@ export class ImEngine {
       if (title) this.router.setTitle(sessionId, title.title, title.source)
       return
     }
+    // 静音会话：保留登记与标题同步，但不向聊天投递任何输出事件。
+    if (this.router.isMuted(sessionId)) return
     const binding = this.router.bindingForSession(sessionId)
     const channel = binding ? this.channels.get(binding.channelId) : undefined
     if (!binding || !channel) return
