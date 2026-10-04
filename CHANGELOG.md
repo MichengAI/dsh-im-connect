@@ -4,6 +4,15 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.63 - 2026-10-04
+
+- Switching through `/new`, `/clear`, `/session`, `/workspace`, `/preset`, or `/fork` stops previous sessions from pushing output to the same chat. Detached registrations persist across restarts without hiding web history, and session handles remain managed until channel teardown.
+- Added `/unbind [number|ID|all]`, `/mute number-or-ID`, and `/unmute number-or-ID`. Invalid numbers point to `/unbind`; explicitly selecting a session restores its output. Mute pauses assistant text and files while approvals, questions, and task status notices remain available.
+- Reply streams track their owning session. Switching or muting the owner discards stale queued updates; clearing other historical registrations does not interrupt the current reply. Session-event routing no longer sorts the full history on each streamed chunk.
+- Channel panels share polling and group sessions once per refresh, avoiding overlapping polling from multiple panels.
+- Added Feishu message-to-reply end-to-end coverage for session switching, mute/unmute, and restart recovery. CI now includes real Host export contracts alongside session, command, image, file, and authentication contracts.
+- Existing registrations from an older installation are cleared on the next session switch; `/unbind all` can clear old registrations immediately while keeping the current session. Already sent partial cards may remain visible. Restart DSH and refresh the page after upgrading.
+
 ## 0.1.62 - 2026-10-02
 
 - Long replies no longer exceed a channel's length limit after the (n/m) marker is added. Tables and code fences still use the full limit and keep their structure; only prose chunks reserve room for the marker.
