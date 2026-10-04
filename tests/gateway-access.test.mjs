@@ -10,6 +10,40 @@ import { SeenStore } from '../lib/engine/seen-store.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+for (const action of ['unbind-all', 'mute-other']) {
+  test(`${action} 清理旧登记不会取消当前回复的排队增量和收口`, async t => {
+    const f = makeEngine(t)
+    const updates = [], finishes = []
+    let release, started
+    const beginning = new Promise(resolve => { started = resolve })
+    f.engine.channels.get('telegram').beginReply = async () => {
+      started()
+      await new Promise(resolve => { release = resolve })
+      return { async update(text) { updates.push(text) }, async finish(text) { finishes.push(text) } }
+    }
+    const emit = (text, final = false) => f.engine.onSessionEvent({ id: 'current' }, final
+      ? { type: 'assistant/message', data: { message: { content: [{ type: 'text', text }] } } }
+      : { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text } } })
+    try {
+      await f.engine.router.bind('telegram', 'dm', 'user-1', 'current', 'current', {}, '/workspace')
+      // 升级保留的历史登记：与当前会话关联同一个聊天。
+      f.store.saveHistory({ sessionId: 'legacy-other', channel: 'telegram', kind: 'dm', chatId: 'user-1', title: 'old', updatedAt: new Date().toISOString() })
+      await emit('current partial')
+      await beginning
+      await emit(' queued')
+      const finish = emit('current final', true)
+      await f.engine.chatCommands.execute(f.engine.channels.get('telegram'), {
+        chatId: 'user-1', userId: 'user-1', kind: 'dm', text: action === 'unbind-all' ? '/unbind all' : '/mute legacy-other',
+      }, new AbortController().signal)
+      release()
+      await finish
+      assert.deepEqual(updates, ['current partial', 'current partial queued'])
+      assert.deepEqual(finishes, ['current final'])
+      assert.equal(f.engine.router.bindingForSession('current').sessionId, 'current')
+    } finally { release?.(); f.engine.dispose() }
+  })
+}
+
 test('切换后网页产生的新输出使用新流，不拼入旧卡片', async t => {
   const f = makeEngine(t)
   const updates = [], finishes = []

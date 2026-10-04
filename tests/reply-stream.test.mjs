@@ -2,6 +2,40 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ReplyStreamHub, isAssistantTextDelta } from '../lib/engine/reply-stream.js'
 
+test('按会话重置只取消实际 owner，包括尚未完成开流的增量', async () => {
+  const hub = new ReplyStreamHub()
+  let release, started
+  const beginning = new Promise(resolve => { started = resolve })
+  const pending = hub.onTextDelta('chat', 'current', async () => {
+    started()
+    await new Promise(resolve => { release = resolve })
+    return { async update() { assert.fail('owner 被取消后不能更新') }, async finish() {} }
+  }, 'owner')
+  await beginning
+  hub.reset('chat', 'other')
+  assert.deepEqual(await hub.take('chat', 'other'), { text: '' })
+  hub.reset('chat', 'owner')
+  release()
+  await pending
+  assert.equal((await hub.take('chat', 'owner')).text, '')
+})
+
+test('不同会话不共用文本、交付去重标记或流收口', async () => {
+  const hub = new ReplyStreamHub()
+  const updates = []
+  const start = tag => async () => ({ async update(text) { updates.push([tag, text]) }, async finish() {} })
+  await hub.onTextDelta('chat', 'old', start('old'), 'old')
+  await hub.onTextDelta('chat', 'new', start('new'), 'new')
+  hub.markDelivered('chat', 'old')
+  assert.equal(hub.consumeDelivered('chat', 'new'), false)
+  assert.equal((await hub.take('chat', 'old')).text, '')
+  assert.equal((await hub.take('chat', 'new')).text, 'new')
+  hub.markDelivered('chat', 'new')
+  assert.equal(hub.consumeDelivered('chat', 'old'), false)
+  assert.equal(hub.consumeDelivered('chat', 'new'), true)
+  assert.deepEqual(updates, [['old', 'old'], ['new', 'new']])
+})
+
 test('旧收口等待期间 reset 不会取走新会话的流', async () => {
   const hub = new ReplyStreamHub()
   let release, started

@@ -123,7 +123,7 @@ export class ImEngine {
     this.choices = new ChoiceStore(log)
     // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
     this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig, {
-      onDeliveryStopped: binding => this.streams.reset(`${binding.channelId}:${binding.chatId}`),
+      onDeliveryStopped: binding => this.streams.reset(`${binding.channelId}:${binding.chatId}`, binding.sessionId),
     })
     this.fileDelivery = new FileDelivery(ctx as unknown as { get(name: string): unknown }, log)
     this.chatCommands = new ChatCommands(ctx as unknown as { get(name: string): unknown }, this.router, id => this.questions.has(id) || this.broker.has(id), (id, msg) => { if (msg.userId) this.sessionActors.set(id, msg.userId) }, (channel, msg, text, choices, session, allowNumber = true) => this.choices.show(channel, msg, text, choices, session, undefined,
@@ -979,7 +979,7 @@ export class ImEngine {
     if (event.type === 'assistant/chunk' && channel.beginReply && isAssistantTextDelta(chunk)) {
       markAttempt()
       // 事件回调不在请求链路里，流式更新失败必须自兜底，避免 unhandled rejection
-      void this.streams.onTextDelta(streamKey, chunk.text, () => channel.beginReply!(binding.chatId).catch(() => undefined))
+      void this.streams.onTextDelta(streamKey, chunk.text, () => channel.beginReply!(binding.chatId).catch(() => undefined), sessionId)
         .catch((error) => {
           this.log(`[${channel.id}] 流式更新失败: ${error instanceof Error ? error.message : String(error)}`)
         })
@@ -992,7 +992,7 @@ export class ImEngine {
         const detail = reason.error?.message || '模型调用失败'
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
         const failed = notice(this.ctx, '助手没有生成回复，请查看本机日志。')
-        const taken = await this.streams.take(streamKey)
+        const taken = await this.streams.take(streamKey, sessionId)
         if (taken.invalidated || !stillDeliverable()) return
         let failureDelivered: boolean
         if (taken.stream) {
@@ -1001,7 +1001,7 @@ export class ImEngine {
           failureDelivered = await this.deliver(channel, binding.chatId, failed)
         }
         // 仅在确已送达时标记，失败后同回合残留的 assistant/message 还有机会补发
-        if (failureDelivered) this.streams.markDelivered(streamKey)
+        if (failureDelivered) this.streams.markDelivered(streamKey, sessionId)
       }
       return
     }
@@ -1013,7 +1013,7 @@ export class ImEngine {
           .map((block) => block.text ?? '')
           .join('\n')
           .trim()
-        const taken = await this.streams.take(streamKey)
+        const taken = await this.streams.take(streamKey, sessionId)
         stopped = !!taken.invalidated || !stillDeliverable()
         if (stopped) return
         if (taken.stream) {
@@ -1029,14 +1029,14 @@ export class ImEngine {
               this.log(`[${channel.id}] 流式收口结果未知，请通过 /delivery 查询: ${error instanceof Error ? error.message : String(error)}`)
               delivered = false
               outcome.ok = false
-              this.streams.markDelivered(streamKey)
+              this.streams.markDelivered(streamKey, sessionId)
             }
             outcome.ok = outcome.ok && delivered
-            if (delivered) this.streams.markDelivered(streamKey)
+            if (delivered) this.streams.markDelivered(streamKey, sessionId)
           }
           return
         }
-        if (this.streams.consumeDelivered(streamKey)) {
+        if (this.streams.consumeDelivered(streamKey, sessionId)) {
           this.log(`[${channel.id}] 忽略重复助手消息 ${sessionId}`)
           return
         }
@@ -1088,7 +1088,7 @@ export class ImEngine {
           this.deferred.patch(entry.id, { status: 'unknown' })
           terminalIds.push(entry.id)
         }
-        const taken = await this.streams.take(`${channel.id}:${message.chatId}`)
+        const taken = await this.streams.take(`${channel.id}:${message.chatId}`, result.sessionId)
         if (!valid()) return
         if (taken.stream) {
           const body = text
