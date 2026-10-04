@@ -91,6 +91,7 @@ jobs:
             "@deepseek-ai/dsh-commands@${ver}"
             "@deepseek-ai/dsh-attachment-local@${ver}"
             "@deepseek-ai/dsh-client-connection@${ver}"
+            "@deepseek-ai/dsh-session-log-export@${ver}"
           )
           npm install "${args[@]}" "${pkgs[@]}"
 
@@ -118,6 +119,7 @@ jobs:
           DSH_CHAT_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-api-session-controller
           DSH_ATTACHMENT_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-attachment-local
           DSH_CONNECTION_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai/dsh-client-connection
+          DSH_EXPORT_CONTRACT_ROOT: ${{ runner.temp }}/dsh-image-contract/node_modules/@deepseek-ai
         run: npm test
 
       - name: 校验发布包
