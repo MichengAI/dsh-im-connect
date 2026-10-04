@@ -81,8 +81,10 @@ export declare class SessionRouter {
     private readonly reloadDisposed;
     private readonly channelOperations;
     private readonly disposeTimeoutMs;
+    private readonly onDeliveryStopped?;
     constructor(ctx: AgentHost, store: SessionMapStore, config: EngineConfig, log: (line: string) => void, resolveConfig?: (channelId: string) => EngineConfig, options?: {
         disposeTimeoutMs?: number;
+        onDeliveryStopped?: (binding: ChatBinding) => void;
     });
     get(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined;
     lookup(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined;

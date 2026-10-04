@@ -134,7 +134,10 @@ export class ChatCommands {
     if (!/^\d+$/.test(value)) return value
     const choice = this.choices.get(key)
     const selected = choice && Date.now() - choice.time < 15 * 60_000 ? choice.values[Number(value) - 1] : undefined
-    if (!selected) throw new Error(replyText('序号无效或已过期，尚未切换。请发送 /{0} 获取新列表。', key.endsWith(':reasoning') ? 'reasoning' : key.endsWith(':presets') ? 'presets' : key.endsWith(':models') ? 'models' : key.endsWith(':workspaces') ? 'workspaces' : 'sessions'))
+    if (!selected) {
+      if (key.endsWith(':unbind')) throw new Error(replyText('序号无效或已过期，本次操作未执行。请发送 /unbind 获取新列表。'))
+      throw new Error(replyText('序号无效或已过期，尚未切换。请发送 /{0} 获取新列表。', key.endsWith(':reasoning') ? 'reasoning' : key.endsWith(':presets') ? 'presets' : key.endsWith(':models') ? 'models' : key.endsWith(':workspaces') ? 'workspaces' : 'sessions'))
+    }
     return selected
   }
 
@@ -376,9 +379,13 @@ export class ChatCommands {
           + records.map((item, i) => `${i + 1}. ${oneLine(item.title || '未命名会话')}${item.sessionId === current?.sessionId ? replyText('〔当前〕') : ''}${item.muted ? replyText('〔已静音〕') : ''}\n${item.sessionId}`).join('\n\n')
           + related(replyText('解除登记：/unbind 序号或ID；全部解除（当前会话除外）：/unbind all'), replyText('保留登记但暂停推送：/mute 序号或ID；恢复：/unmute 序号或ID'))
       }
+      if (!records.length) throw new Error(replyText('本聊天没有登记任何会话。'))
       const target = input!.toLowerCase() === 'all' ? 'all' : this.resolve(scope + ':unbind', input!)
+      const label = (id: string) => {
+        const title = records.find(item => item.sessionId === id)?.title
+        return title && title !== id ? `${oneLine(title)} (${oneLine(id)})` : oneLine(id)
+      }
       if (command === 'unbind') {
-        if (!records.length) throw new Error(replyText('本聊天没有登记任何会话。'))
         if (target === 'all') {
           let removed = 0
           for (const item of records) {
@@ -389,14 +396,14 @@ export class ChatCommands {
         }
         if (target === current?.sessionId) throw new Error(replyText('不能解除当前会话；请先 /new 或 /session 切换。'))
         if (!this.router.unbindSession(channel.id, kind, msg.chatId, target)) throw new Error(replyText('本聊天没有登记该会话，请发送 /unbind 查看。'))
-        return replyText('已解除登记：{0}\n该会话不再向本聊天推送输出；历史仍保留在网页 Chat 中。', oneLine(target)) + related(replyText('查看登记：/unbind'))
+        return replyText('已解除登记：{0}\n该会话不再向本聊天推送输出；历史仍保留在网页 Chat 中。', label(target)) + related(replyText('查看登记：/unbind'))
       }
       const sessionId = this.resolve(scope + ':unbind', input!)
       if (!records.some((item) => item.sessionId === sessionId)) throw new Error(replyText('本聊天没有登记该会话，请发送 /unbind 查看。'))
       if (!this.router.setMuted(sessionId, command === 'mute')) throw new Error(replyText('会话登记异常，请发送 /unbind 查看。'))
       return command === 'mute'
-        ? replyText('已静音：{0}\n该会话的输出不再推送到本聊天；/unmute {1} 恢复。', oneLine(sessionId), input!)
-        : replyText('已恢复推送：{0}', oneLine(sessionId)) + related(replyText('静音：/mute {0}', input!))
+        ? replyText('已静音：{0}\n该会话的输出不再推送到本聊天；/unmute {1} 恢复。', label(sessionId), input!)
+        : replyText('已恢复推送：{0}', label(sessionId)) + related(replyText('静音：/mute {0}', input!))
     }
     if (command === 'workspaces' || command === 'workspacelist' || command === 'workspace') {
       const { items } = await this.workspaces(signal)

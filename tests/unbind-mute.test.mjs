@@ -24,6 +24,21 @@ const record = (sessionId, overrides = {}) => ({
   ...overrides,
 })
 
+test('活跃绑定查询不读取存储，静音和历史查询不排序列表', async () => {
+  const { router, store, dir } = makeRouter()
+  try {
+    await router.bind('feishu', 'dm', 'oc_test', 's-live', 'live', {}, '/workspace')
+    store.upsert('history:s-detached', record('s-detached', { detached: true, muted: true }))
+    store.upsert('history:legacy-copy', record('s-live', { detached: true, muted: true }))
+    store.list = () => { throw new Error('热路径不应排序列表') }
+    assert.equal(router.isMuted('s-detached'), false)
+    assert.equal(router.bindingForSession('s-detached'), undefined)
+    assert.equal(router.isMuted('s-live'), false)
+    store.findSession = () => { throw new Error('live 命中不应访问存储') }
+    assert.equal(router.bindingForSession('s-live').sessionId, 's-live')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
 test('unbindSession 持久化解绑状态且不影响其他聊天', () => {
   const { router, store, dir } = makeRouter()
   try {

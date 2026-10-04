@@ -122,7 +122,9 @@ export class ImEngine {
     }
     this.choices = new ChoiceStore(log)
     // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
-    this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig)
+    this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig, {
+      onDeliveryStopped: binding => this.streams.reset(`${binding.channelId}:${binding.chatId}`),
+    })
     this.fileDelivery = new FileDelivery(ctx as unknown as { get(name: string): unknown }, log)
     this.chatCommands = new ChatCommands(ctx as unknown as { get(name: string): unknown }, this.router, id => this.questions.has(id) || this.broker.has(id), (id, msg) => { if (msg.userId) this.sessionActors.set(id, msg.userId) }, (channel, msg, text, choices, session, allowNumber = true) => this.choices.show(channel, msg, text, choices, session, undefined,
       allowNumber ? undefined : replyText('点击按钮或发送对应命令；按钮 15 分钟内有效，普通文字继续聊天。'), allowNumber))
@@ -967,6 +969,11 @@ export class ImEngine {
     const channel = binding ? this.channels.get(binding.channelId) : undefined
     if (!binding || !channel) return
     const streamKey = `${binding.channelId}:${binding.chatId}`
+    const stillDeliverable = () => {
+      const current = this.router.bindingForSession(sessionId)
+      return !this.disposed && current?.channelId === binding.channelId && current.chatId === binding.chatId
+        && !this.router.isMuted(sessionId) && this.channels.get(binding.channelId) === channel
+    }
     const chunk = event.data?.chunk
     const markAttempt = () => this.deferred.liveStart(sessionId, (event.data as { turn?: number })?.turn ?? this.observedTurns.get(sessionId)!)
     if (event.type === 'assistant/chunk' && channel.beginReply && isAssistantTextDelta(chunk)) {
@@ -986,6 +993,7 @@ export class ImEngine {
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
         const failed = notice(this.ctx, '助手没有生成回复，请查看本机日志。')
         const taken = await this.streams.take(streamKey)
+        if (taken.invalidated || !stillDeliverable()) return
         let failureDelivered: boolean
         if (taken.stream) {
           failureDelivered = await taken.stream.finish([taken.text, failed].filter(Boolean).join('\n\n')).then(() => true).catch(() => this.deliver(channel, binding.chatId, failed))
@@ -998,6 +1006,7 @@ export class ImEngine {
       return
     }
     if (event.type === 'assistant/message') {
+      let stopped = false
       try {
         const text = (event.data?.message?.content ?? [])
           .filter((block) => block.type === 'text' && block.text)
@@ -1005,6 +1014,8 @@ export class ImEngine {
           .join('\n')
           .trim()
         const taken = await this.streams.take(streamKey)
+        stopped = !!taken.invalidated || !stillDeliverable()
+        if (stopped) return
         if (taken.stream) {
           const finalText = text || taken.text
           if (finalText) {
@@ -1040,9 +1051,7 @@ export class ImEngine {
         }
       } finally {
         const filesOk = await this.fileDelivery.deliver(session, event, () => {
-          const current = this.router.bindingForSession(sessionId)
-          return !this.disposed && current?.channelId === binding.channelId && current.chatId === binding.chatId
-            && this.channels.get(binding.channelId) === channel ? { channel, chatId: binding.chatId } : undefined
+          return !stopped && stillDeliverable() ? { channel, chatId: binding.chatId } : undefined
         }, () => { outcome.content = true; markAttempt() })
         outcome.ok = outcome.ok && filesOk
       }

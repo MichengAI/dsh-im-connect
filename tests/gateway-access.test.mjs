@@ -10,6 +10,72 @@ import { SeenStore } from '../lib/engine/seen-store.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+test('切换后网页产生的新输出使用新流，不拼入旧卡片', async t => {
+  const f = makeEngine(t)
+  const updates = [], finishes = []
+  let starts = 0
+  f.engine.channels.get('telegram').beginReply = async () => {
+    const stream = ++starts
+    return { async update(text) { updates.push([stream, text]) }, async finish(text) { finishes.push([stream, text]) } }
+  }
+  const emit = (id, text, final = false) => f.engine.onSessionEvent({ id }, final
+    ? { type: 'assistant/message', data: { message: { content: [{ type: 'text', text }] } } }
+    : { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text } } })
+  try {
+    await f.engine.router.bind('telegram', 'dm', 'user-1', 'old', 'old', {}, '/workspace')
+    await emit('old', 'old partial')
+    await waitFor(() => updates.length === 1)
+    await f.engine.router.bind('telegram', 'dm', 'user-1', 'new', 'new', {}, '/workspace')
+    await emit('old', 'late old')
+    await emit('new', 'new output')
+    await waitFor(() => updates.length === 2)
+    await emit('new', 'new final', true)
+    assert.deepEqual(updates, [[1, 'old partial'], [2, 'new output']])
+    assert.deepEqual(finishes, [[2, 'new final']])
+  } finally { f.engine.dispose() }
+})
+
+for (const action of ['switch', 'mute']) {
+  test(`${action} 丢弃正在开流及排队的旧增量，旧收口不能消耗新流`, async t => {
+    const f = makeEngine(t)
+    const updates = [], finishes = []
+    let release, started, starts = 0
+    const beginning = new Promise(resolve => { started = resolve })
+    f.engine.channels.get('telegram').beginReply = async () => {
+      const stream = ++starts
+      if (stream === 1) {
+        started()
+        await new Promise(resolve => { release = resolve })
+      }
+      return { async update(text) { updates.push([stream, text]) }, async finish(text) { finishes.push([stream, text]) } }
+    }
+    const emit = (id, text, final = false) => f.engine.onSessionEvent({ id }, final
+      ? { type: 'assistant/message', data: { message: { content: [{ type: 'text', text }] } } }
+      : { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text } } })
+    try {
+      await f.engine.router.bind('telegram', 'dm', 'user-1', 'old', 'old', {}, '/workspace')
+      await emit('old', 'old partial')
+      await beginning
+      await emit('old', 'queued old')
+      const oldFinish = emit('old', 'old final', true)
+      const next = action === 'switch' ? 'new' : 'old'
+      if (action === 'switch') await f.engine.router.bind('telegram', 'dm', 'user-1', next, 'new', {}, '/workspace')
+      else {
+        f.engine.router.setMuted('old', true)
+        f.engine.router.setMuted('old', false)
+      }
+      await emit(next, 'new output')
+      await waitFor(() => updates.length === 1)
+      release()
+      await oldFinish
+      await emit(next, 'new final', true)
+      assert.deepEqual(updates, [[2, 'new output']])
+      assert.deepEqual(finishes, [[2, 'new final']])
+      assert.ok(!f.sent.some(item => item.text === 'old final'))
+    } finally { release?.(); f.engine.dispose() }
+  })
+}
+
 test('切换后旧会话不回传，静音保留标题同步且解除静音恢复输出', async t => {
   const { engine, sent, handlers, store } = makeEngine(t)
   const old = 'session-before-switch', current = 'session-after-switch'

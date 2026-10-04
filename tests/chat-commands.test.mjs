@@ -45,6 +45,88 @@ function fixture(options = {}) {
   return { calls, run, rows, services, runner, router }
 }
 
+function deliveryFixture(options = {}) {
+  const f = fixture(options)
+  const records = [{ sessionId: 's1', title: '当前任务' }, { sessionId: 's2', title: '旧任务' }, { sessionId: 's3', title: '另一任务' }]
+  f.router.chatRecords = () => [...records]
+  f.router.unbindSession = (_channel, _kind, _chat, id) => {
+    const index = records.findIndex(item => item.sessionId === id)
+    if (index < 0) return false
+    records.splice(index, 1)
+    return true
+  }
+  f.router.setMuted = (id, muted) => {
+    const record = records.find(item => item.sessionId === id)
+    if (!record) return false
+    record.muted = muted
+    return true
+  }
+  return { ...f, records }
+}
+
+test('解绑列表序号映射会话 ID，确认回显标题与 ID', async () => {
+  const f = deliveryFixture()
+  assert.match(await f.run('/unbind'), /2\. 旧任务/)
+  assert.match(await f.run('/unbind 2'), /旧任务 \(s2\)/)
+  assert.deepEqual(f.records.map(item => item.sessionId), ['s1', 's3'])
+})
+
+test('解绑与静音的越界、过期及跨用户序号均提示 /unbind 且不修改登记', async () => {
+  for (const command of ['unbind', 'mute', 'unmute']) {
+    const f = deliveryFixture()
+    await f.run('/unbind')
+    for (const input of ['0', '99']) {
+      await assert.rejects(f.run(`/${command} ${input}`), error => {
+        assert.match(error.message, /本次操作未执行.*\/unbind/)
+        assert.doesNotMatch(error.message, /\/sessions|尚未切换/)
+        return true
+      })
+    }
+    await assert.rejects(f.run(`/${command} 2`, { userId: 'other' }), /\/unbind 获取新列表/)
+    for (const choice of f.runner.choices.values()) choice.time -= 16 * 60_000
+    await assert.rejects(f.run(`/${command} 2`), /已过期.*\/unbind/)
+    assert.equal(f.records.length, 3)
+    assert.ok(f.records.every(item => !item.muted))
+  }
+})
+
+test('解绑当前会话被拒绝，all 只解除旧会话', async () => {
+  const f = deliveryFixture()
+  await f.run('/unbind')
+  await assert.rejects(f.run('/unbind 1'), /不能解除当前会话/)
+  await assert.rejects(f.run('/unbind s1'), /不能解除当前会话/)
+  assert.match(await f.run('/unbind all'), /已解除 2 个/)
+  assert.deepEqual(f.records.map(item => item.sessionId), ['s1'])
+})
+
+test('静音及恢复支持列表序号和 ID，列表展示状态', async () => {
+  const f = deliveryFixture()
+  await f.run('/unbind')
+  assert.match(await f.run('/mute 2'), /旧任务 \(s2\)/)
+  assert.equal(f.records[1].muted, true)
+  assert.match(await f.run('/unbind'), /旧任务〔已静音〕/)
+  assert.match(await f.run('/unmute s2'), /已恢复推送/)
+  assert.equal(f.records[1].muted, false)
+})
+
+test('未登记目标和空列表报错不影响当前会话', async () => {
+  const f = deliveryFixture()
+  for (const command of ['unbind', 'mute', 'unmute']) {
+    await assert.rejects(f.run(`/${command} unknown`), /本聊天没有登记该会话/)
+  }
+  assert.equal(f.records.length, 3)
+  f.records.length = 0
+  for (const command of ['unbind', 'mute', 'unmute']) {
+    await assert.rejects(f.run(`/${command} 1`), /本聊天没有登记任何会话/)
+  }
+})
+
+test('英文静音序号错误指向 unbind 列表', async () => {
+  const f = deliveryFixture({ locale: 'en-US' })
+  await f.run('/unbind')
+  await assert.rejects(f.run('/mute 99'), /no action was taken.*\/unbind/)
+})
+
 test('企业微信主菜单按容量分页，每页可继续或返回且不漏操作', async () => {
   const shown = []
   const f = fixture({ channel: { choiceLimits: { maxButtons: 6, maxTextLength: 500 } }, showChoices: async (_, __, text, choices) => { shown.push({ text, choices }); return '' } })

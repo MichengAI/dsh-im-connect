@@ -37,8 +37,10 @@ export class ReplyStreamHub {
     return next
   }
 
-  async take(key: string): Promise<{ stream?: ReplyStream; text: string }> {
+  async take(key: string): Promise<{ stream?: ReplyStream; text: string; invalidated?: boolean }> {
+    const generation = this.generations.get(key) ?? 0
     await (this.tails.get(key) ?? Promise.resolve()).catch(() => undefined)
+    if (generation !== (this.generations.get(key) ?? 0)) return { text: '', invalidated: true }
     const stream = this.streams.get(key)
     const text = this.texts.get(key) ?? ''
     this.streams.delete(key)

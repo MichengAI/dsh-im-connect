@@ -63,6 +63,7 @@ export class SessionRouter {
   private readonly reloadDisposed = new Set<string>()
   private readonly channelOperations = new KeyedSerialQueue()
   private readonly disposeTimeoutMs: number
+  private readonly onDeliveryStopped?: (binding: ChatBinding) => void
 
   constructor(
     private readonly ctx: AgentHost,
@@ -70,9 +71,10 @@ export class SessionRouter {
     private readonly config: EngineConfig,
     private readonly log: (line: string) => void,
     private readonly resolveConfig: (channelId: string) => EngineConfig = () => config,
-    options: { disposeTimeoutMs?: number } = {},
+    options: { disposeTimeoutMs?: number; onDeliveryStopped?: (binding: ChatBinding) => void } = {},
   ) {
     this.disposeTimeoutMs = Math.max(1, options.disposeTimeoutMs ?? DEFAULT_DISPOSE_TIMEOUT_MS)
+    this.onDeliveryStopped = options.onDeliveryStopped
   }
 
   get(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined {
@@ -94,12 +96,11 @@ export class SessionRouter {
   }
 
   bindingForSession(sessionId: string): ChatBinding | undefined {
-    const rec = this.store.list().find((item) => item.sessionId === sessionId)
-    if (rec?.detached) return undefined
     for (const item of this.live.values()) {
       if (item.sessionId === sessionId) return item
     }
-    if (!rec) return undefined
+    const rec = this.store.findSession(sessionId)
+    if (!rec || rec.detached) return undefined
     return {
       key: sessionKeyOf(rec.channel, rec.kind, rec.chatId),
       channelId: rec.channel,
@@ -123,9 +124,9 @@ export class SessionRouter {
 
   /** 持久化解除投递关系，保留历史及句柄，供网页查看与渠道卸载。 */
   unbindSession(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, sessionId: string): boolean {
-    const rec = this.store.list().find(
-      (item) => item.sessionId === sessionId && item.channel === channelId && item.kind === kind && item.chatId === chatId)
-    if (!rec || rec.detached) return false
+    const rec = this.store.findSession(sessionId)
+    if (!rec || rec.detached || rec.channel !== channelId || rec.kind !== kind || rec.chatId !== chatId) return false
+    const binding = this.bindingForSession(sessionId)
     this.store.updateSession({ ...rec, detached: true })
     // live 键按聊天而非会话组织：仅当 live 绑定指向被解绑的会话时才清除，避免误删新绑定。
     const key = sessionKeyOf(channelId, kind, chatId)
@@ -135,6 +136,7 @@ export class SessionRouter {
       this.historical.set(sessionId, live)
       this.live.delete(key)
     }
+    if (binding) this.onDeliveryStopped?.(binding)
     return true
   }
 
@@ -150,14 +152,17 @@ export class SessionRouter {
 
   /** 静音/取消静音：保留登记但不（或恢复）向聊天投递该会话的输出事件。 */
   setMuted(sessionId: string, muted: boolean): boolean {
-    const rec = this.store.list().find((item) => item.sessionId === sessionId)
+    const rec = this.store.findSession(sessionId)
     if (!rec || rec.detached) return false
     this.store.updateSession({ ...rec, muted })
+    const binding = this.bindingForSession(sessionId)
+    if (muted && binding) this.onDeliveryStopped?.(binding)
     return true
   }
 
   isMuted(sessionId: string): boolean {
-    return this.store.list().some((item) => item.sessionId === sessionId && item.muted === true)
+    const record = this.store.findSession(sessionId)
+    return !!record && !record.detached && record.muted === true
   }
 
   async getOrCreate(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string): Promise<ChatBinding> {

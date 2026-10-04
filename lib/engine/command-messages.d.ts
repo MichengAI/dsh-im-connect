@@ -1,5 +1,6 @@
 /** IM 命令文案字典。中文原文作为稳定键，插值与用户内容分开处理。 */
 export declare const commandEnglish: {
+    readonly '\u5E8F\u53F7\u65E0\u6548\u6216\u5DF2\u8FC7\u671F\uFF0C\u672C\u6B21\u64CD\u4F5C\u672A\u6267\u884C\u3002\u8BF7\u53D1\u9001 /unbind \u83B7\u53D6\u65B0\u5217\u8868\u3002': "The number is invalid or expired; no action was taken. Send /unbind for a new list.";
     readonly 按上方完整说明选择操作: "Choose an option described above";
     readonly "\u2705\u5DF2\u7ED3\u675F": "✅Finished";
     readonly "\u6682\u672A\u627E\u5230\u53EF\u8865\u53D1\u7684\u7ED3\u679C\uFF0C\u672C\u6B21\u672A\u53D1\u9001\uFF0C\u81EA\u52A8\u8865\u53D1\u72B6\u6001\u672A\u6539\u53D8\u3002\u53EF\u7A0D\u540E\u91CD\u8BD5\uFF0C\u6216\u5728\u7F51\u9875\u67E5\u770B\u539F\u4F1A\u8BDD\u3002": "No result is available to resend right now. Nothing was sent, and automatic recovery remains unchanged. Try again later or open the original session on the web.";

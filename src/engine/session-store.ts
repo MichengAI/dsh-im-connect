@@ -20,6 +20,18 @@ export class SessionMapStore {
     return this.records[key]
   }
 
+  /** 按会话查找不需要列表的更新时间排序。 */
+  findSession(sessionId: string): SessionRecord | undefined {
+    let detached: SessionRecord | undefined
+    for (const key in this.records) {
+      const record = this.records[key]!
+      if (record.sessionId !== sessionId) continue
+      if (!record.detached) return record
+      detached = record
+    }
+    return detached
+  }
+
   upsert(key: string, record: SessionRecord): void {
     const before = { ...this.records }
     const old = this.records[key]

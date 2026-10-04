@@ -2,6 +2,25 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ReplyStreamHub, isAssistantTextDelta } from '../lib/engine/reply-stream.js'
 
+test('旧收口等待期间 reset 不会取走新会话的流', async () => {
+  const hub = new ReplyStreamHub()
+  let release, started
+  const beginning = new Promise(resolve => { started = resolve })
+  const pending = hub.onTextDelta('chat', 'old', async () => {
+    started()
+    await new Promise(resolve => { release = resolve })
+    return { async update() { assert.fail('旧流不应更新') }, async finish() {} }
+  })
+  await beginning
+  const oldTake = hub.take('chat')
+  hub.reset('chat')
+  await hub.onTextDelta('chat', 'new', async () => ({ async update() {}, async finish() {} }))
+  release()
+  await pending
+  assert.equal((await oldTake).invalidated, true)
+  assert.equal((await hub.take('chat')).text, 'new')
+})
+
 test('只收下发文本增量，不收思考或工具增量', () => {
   assert.equal(isAssistantTextDelta({ type: 'text-delta', text: '你' }), true)
   assert.equal(isAssistantTextDelta({ type: 'text', text: '你' }), true)

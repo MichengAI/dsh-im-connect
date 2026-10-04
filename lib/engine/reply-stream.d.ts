@@ -17,6 +17,7 @@ export declare class ReplyStreamHub {
     take(key: string): Promise<{
         stream?: ReplyStream;
         text: string;
+        invalidated?: boolean;
     }>;
     markDelivered(key: string): void;
     consumeDelivered(key: string): boolean;

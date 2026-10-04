@@ -6,6 +6,8 @@ export declare class SessionMapStore {
     constructor(file: string);
     list(): SessionRecord[];
     get(key: string): SessionRecord | undefined;
+    /** 按会话查找不需要列表的更新时间排序。 */
+    findSession(sessionId: string): SessionRecord | undefined;
     upsert(key: string, record: SessionRecord): void;
     retain(key: string): void;
     saveHistory(record: SessionRecord): void;
