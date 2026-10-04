@@ -12,11 +12,5 @@ test('设置页提供私聊准入批准，且不再提供钉钉开放模式', ()
   assert.match(client, /"approve"/)
 })
 
-test('设置页刷新带序号守卫，旧响应不覆盖新状态', () => {
-  assert.match(client, /refreshSeq/)
-})
-
-test('设置页在没有待审批项时也持续刷新，以便新审批自动出现', () => {
-  assert.match(client, /setInterval\(refresh, 4000\)/)
-  assert.doesNotMatch(client, /if \(!\(pending \|\| \[\]\)\.length\) return/)
-})
+// Refresh ordering and new approvals are exercised with real effects and
+// deferred responses in channel-refresh.test.mjs.

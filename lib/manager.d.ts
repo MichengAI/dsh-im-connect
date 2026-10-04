@@ -2,7 +2,7 @@ import { type CommandPermissions } from './engine/command-permissions.js';
 import type { Context } from '@deepseek-ai/cordis';
 import { type ConnectionState } from './channels/connection-state.js';
 import { type DiagnosticCheck } from './channels/diagnostics.js';
-import type { ChannelId } from './engine/session-id.js';
+import type { ChannelId, SessionRecord } from './engine/session-id.js';
 import { type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js';
 import type { EngineConfig } from './engine/types.js';
 export declare const API_CLIENT_HEADER = "x-dsh-im-connect-client";
@@ -118,7 +118,7 @@ export declare class ChannelManager {
     channelSessions(): {
         id: ChannelId;
         label: string;
-        sessions: import("./engine/session-id.js").SessionRecord[];
+        sessions: SessionRecord[];
     }[];
     private archivedSessionIds;
     connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{

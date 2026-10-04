@@ -11,7 +11,7 @@ import { fileOperation } from './engine/abort.js'
 import { parseAdditionalImageHosts } from './channels/image-host-policy.js'
 import { CHANNEL_META, CHANNEL_ORDER, supportsQr } from './channels/meta.js'
 import { PairingHub } from './channels/qr/hub.js'
-import type { ChannelId } from './engine/session-id.js'
+import type { ChannelId, SessionRecord } from './engine/session-id.js'
 import { SessionMapStore } from './engine/session-store.js'
 import { createFileVault, createServiceVault, credentialRef, type CredentialService, type CredentialVault } from './engine/credentials.js'
 import { ImEngine } from './engine/gateway.js'
@@ -324,11 +324,16 @@ export class ChannelManager {
 
   channelSessions() {
     const archived = this.archivedSessionIds()
-    return CHANNEL_ORDER.map((id) => ({
+    const groups = new Map(CHANNEL_ORDER.map(id => [id, {
       id,
       label: CHANNEL_META[id].label,
-      sessions: this.sessions.list().filter((item) => this.platformOf(item.channel, this.store.channels[item.channel]) === id && !archived.has(item.sessionId)),
-    })).filter((group) => group.sessions.length > 0)
+      sessions: [] as SessionRecord[],
+    }]))
+    for (const item of this.sessions.list()) {
+      if (archived.has(item.sessionId)) continue
+      groups.get(this.platformOf(item.channel, this.store.channels[item.channel]))?.sessions.push(item)
+    }
+    return [...groups.values()].filter((group) => group.sessions.length > 0)
   }
 
   private archivedSessionIds(): Set<string> {
