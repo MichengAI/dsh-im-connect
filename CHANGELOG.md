@@ -4,6 +4,12 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## Unreleased
+
+## 0.1.64 - 2026-10-06
+
+- The installed-plugin list shows “IM Connect” and a localized description instead of the package name. Titles and descriptions come from `meta.title` and `meta.description` in `locale/zh.json` and `locale/en.json`.
+
 ## 0.1.63 - 2026-10-04
 
 - Switching through `/new`, `/clear`, `/session`, `/workspace`, `/preset`, or `/fork` stops previous sessions from pushing output to the same chat. Detached registrations persist across restarts without hiding web history, and session handles remain managed until channel teardown.

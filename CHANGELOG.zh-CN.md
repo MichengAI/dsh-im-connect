@@ -4,6 +4,12 @@
 
 以下记录近期发布的版本。Git 标签与 GitHub Release 现已和这些条目同步；历史条目继续保留原始发布提交链接。
 
+## 未发布
+
+## 0.1.64 - 2026-10-06
+
+- 已安装插件列表显示「IM Connect」和中文简介，不再只用包名。显示名来自 `locale/zh.json` 和 `locale/en.json` 的 `meta.title`、`meta.description`。
+
 ## 0.1.63 - 2026-10-04
 
 - 通过 `/new`、`/clear`、`/session`、`/workspace`、`/preset` 或 `/fork` 切换后，旧会话停止向同一聊天推送输出。解绑状态重启后仍保留，不隐藏网页历史；会话句柄仍由渠道卸载流程统一释放。
