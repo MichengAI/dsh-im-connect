@@ -6,6 +6,8 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## Unreleased
 
+- Creating a session from the channels tab returns the sidebar to Tasks. Channels cannot hold a newly created task, and a refresh no longer leaves that task hidden on Channels.
+
 ## 0.1.66 - 2026-10-07
 
 - Each connected account can have a local name remark. Click the account name on the settings row, or edit it in account settings. The remark is display-only. Leaving it blank restores the original automatic number instead of renumbering by the current account count. Remarks longer than 40 characters or containing line breaks are rejected.
