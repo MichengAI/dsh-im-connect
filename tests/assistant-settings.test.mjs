@@ -401,6 +401,24 @@ test('设置标题旁提供项目主页与问题反馈入口', () => {
   assert.match(client, /@media\(max-width:720px\)\{\.ima-title-row\{flex-wrap:wrap\}\}/)
 })
 
+test('设置页账号行和账号设置都能填写名称备注', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /"account\.remark": "名称备注"/)
+  assert.match(client, /"account\.remark": "Name remark"/)
+  assert.match(client, /"account\.remarkNote": "只在本机设置页区分账号，留空恢复自动名称。"/)
+  assert.match(client, /"account\.remarkNote": "Shown only in settings to tell accounts apart\. Leave blank to restore the automatic name\."/)
+  assert.match(client, /\["账号备注不能超过 40 个字符", "server\.remarkTooLong"\]/)
+  assert.match(client, /\["账号备注不能包含换行或控制字符", "server\.remarkControl"\]/)
+  const accountPage = client.slice(client.indexOf('function AccountInspector'), client.indexOf('const CHANNEL_RAIL_CSS'))
+  assert.match(accountPage, /function AccountRemarkEditor/)
+  assert.match(accountPage, /t\("account\.remark"\)/)
+  assert.match(accountPage, /t\("account\.rename"\)/)
+  assert.match(accountPage, /maxLength: 40/)
+  assert.match(accountPage, /onAction\(account\.id, "settings", \{ name \}\)/)
+  assert.match(accountPage, /save\(\{ name \}\)/)
+  assert.doesNotMatch(accountPage, /名称备注|留空恢复自动名称/)
+})
+
 test('Ant 亮暗跟随宿主 html/body 的 data-ds-dark-theme', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(client, /function hostIsDark\(\)/)
@@ -613,6 +631,70 @@ test('只修改账号名称或私聊策略不重载会话', async (t) => {
   assert.deepEqual(reloads, [])
 })
 
+test('清空账号备注后恢复原来的自动序号，不按当前账号数重编', async (t) => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const settings = {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    cwd: 'D:/repo/remark',
+    permission: 'review',
+    privateAccess: 'approved',
+  }
+  const created = []
+  for (let index = 1; index <= 4; index += 1) {
+    const result = await manager.connect('weixin', { allowedUserId: `wx-user-${index}`, bound: '1' }, settings)
+    assert.equal(result.ok, true, result.error)
+    created.push(result.accountId)
+  }
+
+  const renamed = await manager.updateAccount(created[1], { name: '  华东销售-王敏  ' })
+  assert.equal(renamed.ok, true)
+  assert.equal(renamed.account.name, '华东销售-王敏')
+  assert.equal(renamed.account.autoName, false)
+  assert.equal(renamed.account.nameOrdinal, 2)
+  const persisted = JSON.parse(readFileSync(manager.file, 'utf8'))
+  assert.equal(persisted.channels[created[1]].nameOrdinal, 2)
+
+  const extra = await manager.connect('weixin', { allowedUserId: 'wx-user-5', bound: '1' }, settings)
+  assert.equal(extra.ok, true, extra.error)
+  const cleared = await manager.updateAccount(created[1], { name: '   ' })
+  assert.equal(cleared.ok, true)
+  assert.equal(cleared.account.name, '微信账号 2')
+  assert.equal(cleared.account.autoName, true)
+  assert.equal(cleared.account.nameOrdinal, 2)
+  const accounts = manager.list().find((item) => item.id === 'weixin').accounts
+  assert.equal(accounts.find((item) => item.id === created[0]).name, '微信账号 1')
+  assert.equal(accounts.find((item) => item.id === extra.accountId).name, '微信账号 5')
+})
+
+test('过长或含控制字符的账号备注会被拒绝，原名称不变', async (t) => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('weixin', { allowedUserId: 'wx-remark-limit', bound: '1' }, {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    cwd: 'D:/repo/remark-limit',
+    permission: 'review',
+    privateAccess: 'approved',
+  })
+  assert.equal(created.ok, true, created.error)
+
+  const tooLong = await manager.updateAccount(created.accountId, { name: '名'.repeat(41) })
+  assert.equal(tooLong.ok, false)
+  assert.match(tooLong.error, /40/)
+  const newline = await manager.updateAccount(created.accountId, { name: '王敏\n客服' })
+  assert.equal(newline.ok, false)
+  const kept = manager.list().find((item) => item.id === 'weixin').accounts[0]
+  assert.equal(kept.name, '微信账号 1')
+  assert.equal(kept.autoName, true)
+
+  const accepted = await manager.updateAccount(created.accountId, { name: '名'.repeat(40) })
+  assert.equal(accepted.ok, true)
+  assert.equal(accepted.account.name, '名'.repeat(40))
+  assert.equal(accepted.account.autoName, false)
+})
+
 test('启动时清理旧版本为无推理模型残留的推理等级', async (t) => {
   const manager = makeManager(t, {
     get: (name) => name === 'llm'
@@ -672,7 +754,7 @@ test('重复凭据复用账号，Telegram 更换 token 会明确标记新身份'
   assert.equal(accounts[1].nameOrdinal, 2)
   assert.equal(accounts.find((account) => account.id === custom.accountId).name, 'Ops bot')
   assert.equal(accounts.find((account) => account.id === custom.accountId).autoName, false)
-  assert.equal(accounts.find((account) => account.id === custom.accountId).nameOrdinal, undefined)
+  assert.equal(accounts.find((account) => account.id === custom.accountId).nameOrdinal, 3)
   assert.equal(manager.approve('telegram', 'ambiguous-user'), false)
   assert.equal(manager.approve(first.accountId, 'approved-user'), true)
 })

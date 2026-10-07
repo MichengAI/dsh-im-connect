@@ -150,7 +150,7 @@ Each check reports passed, failed, or unverified, with timing and a suggested ne
 
 ## Screenshots
 
-Add accounts under each channel in **Settings → IM Assistant**. Expand a channel, select an account, and configure its workspace, model, permission, and private access independently in its settings dialog. The **Receive messages** switch is on the account row:
+Add accounts under each channel in **Settings → IM Assistant**. Expand a channel and click an account name to add a remark so you can tell users apart; leave it blank to restore the automatic name. The settings button configures workspace, model, permission, and private access, and can edit the same remark. The **Receive messages** switch is on the account row:
 
 ![IM Assistant settings](assets/screenshots/settings-channels.png)
 

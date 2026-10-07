@@ -19,6 +19,8 @@ export interface ChannelState {
     id?: string;
     platform?: ChannelId;
     name?: string;
+    /** 创建时分配的自动序号。自定义备注清空后回到这个序号，不随账号总数重编。 */
+    nameOrdinal?: number;
     enabled?: boolean;
     receiveEnabled?: boolean;
     lastError?: string;
@@ -182,6 +184,7 @@ export declare class ChannelManager {
     private load;
     private migrateAccountSettings;
     private clearUnsupportedReasoningEfforts;
+    private stableNameOrdinal;
     private normalizeAccountSettings;
     private accountIdFor;
     private resolveAccountId;

@@ -6,6 +6,11 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## Unreleased
 
+## 0.1.66 - 2026-10-07
+
+- Each connected account can have a local name remark. Click the account name on the settings row, or edit it in account settings. The remark is display-only. Leaving it blank restores the original automatic number instead of renumbering by the current account count. Remarks longer than 40 characters or containing line breaks are rejected.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.65 - 2026-10-07
 
 - Official Desktop can update this plugin in place. It no longer targets the web profile by mistake.

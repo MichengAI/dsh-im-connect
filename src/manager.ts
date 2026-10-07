@@ -25,6 +25,26 @@ import { sameWorkspacePath } from './engine/workspace-path.js'
 
 export const API_CLIENT_HEADER = 'x-dsh-im-connect-client'
 const MAX_API_BODY_BYTES = 1024 * 1024
+const ACCOUNT_REMARK_LIMIT = 40
+
+function channelAutoPrefix(platform: ChannelId): string {
+  return `${CHANNEL_META[platform].label}账号`
+}
+
+function parseAutoOrdinal(platform: ChannelId, name: string | undefined): number | undefined {
+  const trimmed = String(name ?? '').trim()
+  const prefix = channelAutoPrefix(platform)
+  if (trimmed === prefix) return 1
+  if (!trimmed.startsWith(`${prefix} `)) return undefined
+  const suffix = trimmed.slice(prefix.length + 1)
+  if (!/^\d+$/.test(suffix)) return undefined
+  const ordinal = Number(suffix)
+  return Number.isSafeInteger(ordinal) && ordinal >= 1 ? ordinal : undefined
+}
+
+function autoAccountName(platform: ChannelId, ordinal: number): string {
+  return `${channelAutoPrefix(platform)} ${ordinal}`
+}
 
 interface ApiBodyReadResult {
   body: Record<string, unknown>
@@ -113,6 +133,8 @@ export interface ChannelState {
   id?: string
   platform?: ChannelId
   name?: string
+  /** 创建时分配的自动序号。自定义备注清空后回到这个序号，不随账号总数重编。 */
+  nameOrdinal?: number
   enabled?: boolean
   receiveEnabled?: boolean
   lastError?: string
@@ -296,16 +318,16 @@ export class ChannelManager {
     }
     const runtimeState = connectionState(status)
     const connected = adapter !== undefined && runtimeState === 'connected'
-    const defaultNamePrefix = `${CHANNEL_META[platform].label}账号`
-    const name = String(state.name || defaultNamePrefix).trim()
-    const defaultNameSuffix = name.startsWith(`${defaultNamePrefix} `) ? name.slice(defaultNamePrefix.length + 1) : ''
-    const autoName = name === defaultNamePrefix || /^\d+$/.test(defaultNameSuffix)
+    const nameOrdinal = this.stableNameOrdinal(platform, state)
+    const canonicalName = autoAccountName(platform, nameOrdinal)
+    const name = String(state.name || canonicalName).trim()
+    const autoName = name === canonicalName || name === channelAutoPrefix(platform)
     return {
       id: accountId,
       platform,
       name,
       autoName,
-      ...(autoName ? { nameOrdinal: Number(defaultNameSuffix || 1) } : {}),
+      nameOrdinal,
       connected,
       connectionState: runtimeState,
       receiveConfigured: state.receiveEnabled !== false,
@@ -384,6 +406,7 @@ export class ChannelManager {
       id: accountId,
       platform: id,
       name: normalized.settings.name,
+      nameOrdinal: normalized.settings.nameOrdinal,
       assistant: normalized.settings.assistant,
       cwd: normalized.settings.cwd,
       permission: normalized.settings.permission,
@@ -775,6 +798,7 @@ export class ChannelManager {
         || !sameAssistantModel(state.assistant, normalized.settings.assistant)
         || state.permission !== normalized.settings.permission
       state.name = normalized.settings.name
+      state.nameOrdinal = normalized.settings.nameOrdinal
       state.assistant = normalized.settings.assistant
       state.cwd = normalized.settings.cwd
       state.agentPreset = normalized.settings.agentPreset
@@ -1154,7 +1178,24 @@ export class ChannelManager {
     if (changed) this.flush()
   }
 
-  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all' } } | { ok: false; error: string }> {
+  private stableNameOrdinal(platform: ChannelId, previous: ChannelState): number {
+    if (Number.isInteger(previous.nameOrdinal) && (previous.nameOrdinal ?? 0) >= 1) return previous.nameOrdinal!
+    const parsed = parseAutoOrdinal(platform, previous.name)
+    if (parsed) return parsed
+    const used = new Set<number>()
+    for (const [id, state] of Object.entries(this.store.channels)) {
+      if (state === previous || this.platformOf(id, state) !== platform) continue
+      const ordinal = Number.isInteger(state.nameOrdinal) && (state.nameOrdinal ?? 0) >= 1
+        ? state.nameOrdinal!
+        : parseAutoOrdinal(platform, state.name)
+      if (ordinal) used.add(ordinal)
+    }
+    let ordinal = 1
+    while (used.has(ordinal)) ordinal += 1
+    return ordinal
+  }
+
+  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all' } } | { ok: false; error: string }> {
     const agentPreset = input.agentPreset ?? previous.agentPreset ?? this.engineConfig.agentPreset ?? 'standard'
     if (typeof agentPreset !== 'string' || !agentPreset.trim()) return { ok: false, error: '请选择 Agent 预设' }
     if (input.agentPreset !== undefined) {
@@ -1177,9 +1218,13 @@ export class ChannelManager {
     let commandPermissions: CommandPermissions
     try { commandPermissions = normalizeCommandPermissions(input.commandPermissions === undefined ? previous.commandPermissions : input.commandPermissions) }
     catch { return { ok: false, error: '命令权限配置无效' } }
-    const count = Object.entries(this.store.channels).filter(([id, state]) => this.platformOf(id, state) === platform).length
-    const name = String(input.name ?? previous.name ?? '').trim() || `${CHANNEL_META[platform].label}账号 ${count + 1}`
-    return { ok: true, settings: { name, assistant, agentPreset, cwd, permission, privateAccess, commandPermissions } }
+    const nameOrdinal = this.stableNameOrdinal(platform, previous)
+    const requested = input.name !== undefined ? String(input.name) : String(previous.name ?? '')
+    const trimmed = requested.trim()
+    if ([...trimmed].length > ACCOUNT_REMARK_LIMIT) return { ok: false, error: `账号备注不能超过 ${ACCOUNT_REMARK_LIMIT} 个字符` }
+    if (/[\u0000-\u001F\u007F]/.test(trimmed)) return { ok: false, error: '账号备注不能包含换行或控制字符' }
+    const name = trimmed || autoAccountName(platform, nameOrdinal)
+    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, commandPermissions } }
   }
 
   private accountIdFor(platform: ChannelId, config: Record<string, string>): string {
