@@ -164,3 +164,23 @@ test('响应体不是 JSON 时按网络原因报错，不把响应正文带进�
   const channel = createSlackChannel({ token: 'xoxb-secret', appToken: 'xapp-secret' }, () => {})
   await assert.rejects(() => channel.send('D01ABC', '你好'), (error) => !String(error.message).includes('proxy'))
 })
+
+test('填了 App Credentials 里的值时不发请求，直接说清该填哪个 token', async () => {
+  let calls = 0
+  const impl = async () => { calls += 1; return Response.json({ ok: true }) }
+  // Verification Token 填进了 Bot Token
+  await assert.rejects(
+    () => createSlackChannel({ token: 'woxz9w29iqXUWrsW9SA0GGRC', appToken: 'xapp-1', fetchImpl: impl }, () => {}).start(),
+    /Bot User OAuth Token/)
+  // Client ID 填进了 App Token
+  await assert.rejects(
+    () => createSlackChannel({ token: 'xoxb-1', appToken: '12223273788178.12261333130770', fetchImpl: impl }, () => {}).start(),
+    /App-Level Token/)
+  assert.equal(calls, 0)
+})
+
+test('机器人令牌被 Slack 拒绝时，报错指向 OAuth & Permissions 而不是 invalid_auth', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ ok: false, error: 'invalid_auth' }))
+  const channel = createSlackChannel({ token: 'xoxb-wrong', appToken: 'xapp-wrong' }, () => {})
+  await assert.rejects(() => channel.start(), /Bot User OAuth Token/)
+})

@@ -106,8 +106,8 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
     description: '通过 Slack 应用机器人接收并回复用户消息',
     kind: 'credentials',
     fields: [
-      { key: 'token', label: 'Bot Token', secret: true },
-      { key: 'appToken', label: 'App Token（Socket Mode）', secret: true },
+      { key: 'token', label: 'Bot Token（xoxb- 开头）', secret: true },
+      { key: 'appToken', label: 'App Token（xapp- 开头）', secret: true },
     ],
   },
 }

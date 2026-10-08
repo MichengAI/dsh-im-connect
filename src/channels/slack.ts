@@ -105,6 +105,15 @@ const AUTH_ERRORS = new Set(['invalid_auth', 'not_authed', 'account_inactive', '
 
 const CHANNEL_ID = /^[A-Za-z0-9]{2,32}$/
 const MESSAGE_TS = /^\d{1,20}\.\d{1,10}$/
+/** Bot Token（xoxb-）或用户令牌（xoxp-）；App-Level Token 固定 xapp-。 */
+const BOT_TOKEN_PREFIX = /^xox[bp]-/
+const APP_TOKEN_PREFIX = /^xapp-/
+const BOT_TOKEN_HINT = 'Slack Bot Token 不对：请在 Slack 应用的 OAuth & Permissions 页面安装应用后，复制 Bot User OAuth Token（xoxb- 开头）。App ID、Client ID、Client Secret、Signing Secret、Verification Token 都不是这个字段要填的内容。'
+const APP_TOKEN_HINT = 'Slack App Token 不对：请在 Slack 应用的 Socket Mode 页面点 Generate Token and Scopes 生成 App-Level Token（xapp- 开头，勾 connections:write），它只显示一次。'
+
+function credentialError(message: string): Error {
+  return Object.assign(new Error(message), { rejected: true, code: 'slack-401', status: 401 })
+}
 
 function codePoints(value: string): string[] {
   return [...value]
@@ -538,8 +547,17 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
       seenEvents.clear()
       participatedThreads.clear()
       try {
-        const identity = await api<{ user_id?: string; bot_id?: string }>('auth.test', {}, { timeoutMs: 15_000 })
-        if (typeof identity.user_id !== 'string' || !identity.user_id) throw Object.assign(new Error('slack-identity'), { rejected: true, code: 'slack-401' })
+        // 先按前缀拦一次：Slack 应用页面上那五个 App Credentials 都不是这里要填的东西，
+        // 直接在日志里说清楚，比让 auth.test 回一个 invalid_auth 有用。
+        if (!BOT_TOKEN_PREFIX.test(token)) throw credentialError(BOT_TOKEN_HINT)
+        if (!APP_TOKEN_PREFIX.test(appToken)) throw credentialError(APP_TOKEN_HINT)
+        let identity: { user_id?: string; bot_id?: string }
+        try {
+          identity = await api<{ user_id?: string; bot_id?: string }>('auth.test', {}, { timeoutMs: 15_000 })
+        } catch (error) {
+          throw fatalSlack(error) ? credentialError(BOT_TOKEN_HINT) : error
+        }
+        if (typeof identity.user_id !== 'string' || !identity.user_id) throw credentialError(APP_TOKEN_HINT)
         botUserId = identity.user_id
         botId = typeof identity.bot_id === 'string' ? identity.bot_id : ''
         await connectOnce()
