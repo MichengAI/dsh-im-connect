@@ -1751,7 +1751,7 @@ window.__ModuleLoader__.load({
       const [editing, setEditing] = useState(null);
       const [selected, setSelected] = useState(storedAccountSelection);
       const [settingsAccount, setSettingsAccount] = useState(null);
-      const [expanded, setExpanded] = useState({ weixin: true });
+      const [expanded, setExpanded] = useState({});
       const [channelSettingsRequest, setChannelSettingsRequest] = useState(() => typeof window !== "undefined" ? readChannelSettingsRequest(window.sessionStorage) : undefined);
       const [catalog, setCatalog] = useState({ providers: [], permissions: [], assistant: null, cwd: "", permission: "" });
       const workspaces = props.useWorkspaces ? (props.useWorkspaces((state) => state && state.items || []) || []) : [];

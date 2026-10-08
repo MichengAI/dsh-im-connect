@@ -272,6 +272,8 @@ test('渠道展开状态不叠加 hover，空渠道不可展开', () => {
   assert.match(client, /role: canExpand \? "button" : undefined/)
   assert.match(client, /"aria-expanded": canExpand \? open : undefined/)
   assert.match(client, /canExpand && h\(IconChevron\)/)
+  assert.doesNotMatch(client, /useState\(\{ weixin: true \}\)/)
+  assert.match(client, /const \[expanded, setExpanded\] = useState\(\{\}\)/)
 })
 
 test('渠道分组只显示账号数量，账号子行保留状态和独立操作', () => {

@@ -12,6 +12,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 - Native button choices, emoji status reactions, image and file transfer, `/stop`, approvals, and interactive questions are supported; **Diagnose connection** verifies bot identity.
 - Existing channels are unaffected: Slack uses its own channel id `slack`, and its sessions stay separate from web tasks.
 - Slack and Discord icons now use the official marks instead of hand-drawn single-color versions.
+- Opening IM Assistant no longer expands WeChat by default. Every channel starts collapsed.
 
 ## 0.1.68 - 2026-10-08
 
