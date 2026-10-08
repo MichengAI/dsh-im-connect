@@ -38,7 +38,7 @@ export function createChannelAdapter(
     case 'qq':
       adapter = createQqChannel({ appId: config.appId, appSecret: config.appSecret, ...imageOptions, host: options?.host }, log); break
     case 'slack':
-      adapter = createSlackChannel({ token: config.token, appToken: config.appToken, host: options?.host }, log); break
+      adapter = createSlackChannel({ token: config.token, appToken: config.appToken, stateDir, host: options?.host }, log); break
     default:
       return undefined
   }

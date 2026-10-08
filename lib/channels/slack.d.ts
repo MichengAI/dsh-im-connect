@@ -12,6 +12,8 @@ export interface SlackSocket {
 export interface SlackConfig {
     token?: string;
     appToken?: string;
+    /** 账号状态目录，用于恢复已参与线程；不配置时只保留当前适配器内存记录。 */
+    stateDir?: string;
     host?: {
         get(name: string): unknown;
     };

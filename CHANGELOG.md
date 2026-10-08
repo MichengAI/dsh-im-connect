@@ -7,7 +7,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 ## Unreleased
 
 - New Slack channel. Add a Bot Token and an App Token on the Slack card in **Settings → IM Assistant**; it connects over Socket Mode and needs no public URL.
-- Slack DMs reply directly and still use the DM allowlist. Mentions in public and private channels answer inside that message's thread. After a restart, mention the bot once more in an old thread. Multi-person DMs are not supported.
+- Slack 私聊仍走白名单；频道提及在线程内回复。最近参与的 512 个线程按账号保存，重启后可继续免 @ 追问，更换机器人身份不会继承旧记录；不支持多人私聊。
 - Outgoing text is converted to Slack mrkdwn: headings become bold whole lines, Markdown tables go vertical, `**bold**` becomes `*bold*`, links become `<url|label>`, and code fences stay untouched. Long replies split with structure awareness.
 - Native button choices, emoji status reactions, image and file transfer, `/stop`, approvals, and interactive questions are supported; **Diagnose connection** verifies bot identity.
 - Existing channels are unaffected: Slack uses its own channel id `slack`, and its sessions stay separate from web tasks.
@@ -16,6 +16,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 - Discord and Slack sidebar icons are colored paths, the same way WeCom is drawn. An SVG image does not paint in the 16px slot and was showing up as a gray dot.
 - Slack accepts `!help`, `!m`, and fullwidth `／help` the same way Discord does. An unknown `!hello` stays an ordinary message.
 - A slash command that opens a channel thread counts as participation. A later reply in that thread is delivered without another mention.
+- 修复 Slack 长卡片正文截断、交付未知时自动补发、斜杠命令重复创建线程、POSIX 默认工作区大小写误匹配及 Windows SVG 换行校验问题。
 
 ## 0.1.68 - 2026-10-08
 

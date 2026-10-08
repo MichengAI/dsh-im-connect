@@ -13,6 +13,8 @@ import { DiagnosticError, diagnosticJson, probe, requireDiagnostic } from './dia
 import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES, MAX_CHANNEL_IMAGES, requestChannelBytes } from './channel-image-download.js'
 import { prepareSlackText, slackInboundText, slackMentionsBot } from './slack-markdown.js'
 import { fileForm } from './file-send.js'
+import { JsonStateFile } from '../engine/json-state.js'
+import { join } from 'node:path'
 
 export interface SlackSocketEvent { data?: unknown; code?: number; reason?: string }
 export interface SlackSocket {
@@ -24,6 +26,8 @@ export interface SlackSocket {
 export interface SlackConfig {
   token?: string
   appToken?: string
+  /** 账号状态目录，用于恢复已参与线程；不配置时只保留当前适配器内存记录。 */
+  stateDir?: string
   host?: { get(name: string): unknown }
   fetchImpl?: typeof fetch
   createWebSocket?: (url: string) => SlackSocket
@@ -234,10 +238,14 @@ export function slackActionRoute(payload: SlackInteraction): SlackRoute | undefi
 
 function slackError(method: string, status: number, code?: string): Error {
   const auth = status === 401 || (code !== undefined && AUTH_ERRORS.has(code))
+  // 网关响应缺失或服务器内部错误不能证明请求未执行，不能据此自动补发。
+  const uncertain = new Set(['invalid_response', 'internal_error', 'fatal_error', 'request_timeout', 'service_unavailable'])
+  const rejected = (status >= 400 && status < 500 && status !== 408)
+    || (status >= 200 && status < 300 && code !== undefined && !uncertain.has(code))
   return Object.assign(new Error(`slack-${method}-${code ?? status}`), {
     status,
     ...(code === undefined ? {} : { slackCode: code }),
-    rejected: true,
+    rejected,
     ...(auth ? { code: 'slack-401' } : {}),
   })
 }
@@ -257,8 +265,10 @@ function recoverableSlack(error: unknown): boolean {
 }
 
 /** 带 blocks 的消息只渲染块，纯 text 会退化成通知文案，所以正文必须自己放进 section 块。 */
-function sectionBlock(text: string): unknown {
-  return { type: 'section', text: { type: 'mrkdwn', text: clip(text, SECTION_LIMIT) || '…' } }
+function sectionBlocks(text: string): unknown[] {
+  return splitText(text || '…', SECTION_LIMIT).map((part) => ({
+    type: 'section', text: { type: 'mrkdwn', text: part },
+  }))
 }
 
 function actionBlocks(buttons: Array<{ label: string; token: string }>): unknown[] {
@@ -302,6 +312,22 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
   const seenEvents = new Map<string, number>()
   /** 参与过的线程：后续没被 @ 的线程回复也要继续响应。 */
   const participatedThreads = new Map<string, number>()
+  const threadFile = config.stateDir
+    ? new JsonStateFile<{ botUserId?: string; threads?: unknown }>(join(config.stateDir, 'slack-threads.json'), {})
+    : undefined
+
+  function restoreThreads(identity: string): void {
+    if (botUserId !== identity) participatedThreads.clear()
+    const saved = threadFile?.read()
+    if (saved?.botUserId !== identity || !Array.isArray(saved.threads)) return
+    for (const key of saved.threads.slice(-512)) {
+      if (typeof key !== 'string') continue
+      try {
+        const route = parseSlackChatId(key)
+        if (route.threadTs) participatedThreads.set(key, Number.POSITIVE_INFINITY)
+      } catch { /* 忽略损坏的线程记录，不能扩大免提及范围。 */ }
+    }
+  }
 
   function prune(store: Map<string, number>): void {
     const now = Date.now()
@@ -313,6 +339,10 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
     participatedThreads.delete(key)
     participatedThreads.set(key, Number.POSITIVE_INFINITY)
     while (participatedThreads.size > 512) participatedThreads.delete(participatedThreads.keys().next().value!)
+    if (threadFile) {
+      try { threadFile.write({ botUserId, threads: [...participatedThreads.keys()] }) }
+      catch { log('[slack] 参与线程记录保存失败，重启后可能需要重新 @机器人') }
+    }
   }
 
   function firstSight(store: Map<string, number>, key: string): boolean {
@@ -345,7 +375,7 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
       }
       const payload = await response.json().catch(() => undefined) as { ok?: boolean; error?: string } | undefined
       // 代理返回的 HTML 页面也是 200：没有 JSON 就不能当成功。
-      if (payload === undefined) throw slackError(method, response.status, 'invalid_response')
+      if (!payload || typeof payload !== 'object' || typeof payload.ok !== 'boolean') throw slackError(method, response.status, 'invalid_response')
       if (!response.ok) throw slackError(method, response.status, typeof payload.error === 'string' ? payload.error : undefined)
       if (payload.ok === false) throw slackError(method, response.status, payload.error)
       return payload as T
@@ -476,7 +506,9 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
       const text = `/${command}${payload?.text ? ` ${payload.text}` : ''}`.trim()
       const trigger = typeof payload?.trigger_id === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(payload.trigger_id)
         ? payload.trigger_id
-        : `${channel}:${Date.now()}`
+        : envelope.envelope_id || `${channel}:${Date.now()}`
+      // 必须先去重再发送线程根，网关的去重发生在这些副作用之后。
+      if (!firstSight(seenEvents, `slash:${trigger}`)) return
       let threadTs = kind === 'group' && payload?.thread_ts && MESSAGE_TS.test(payload.thread_ts) ? payload.thread_ts : undefined
       if (kind === 'group' && !threadTs) {
         const opened = await postMessage(slackChatId(channel), text)
@@ -608,7 +640,6 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
       statusText = '连接中'
       lifecycle = new AbortController()
       seenEvents.clear()
-      participatedThreads.clear()
       try {
         // 先按前缀拦一次：Slack 应用页面上那五个 App Credentials 都不是这里要填的东西，
         // 直接在日志里说清楚，比让 auth.test 回一个 invalid_auth 有用。
@@ -621,6 +652,7 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
           throw fatalSlack(error) ? credentialError(BOT_TOKEN_HINT) : error
         }
         if (typeof identity.user_id !== 'string' || !identity.user_id) throw credentialError(APP_TOKEN_HINT)
+        restoreThreads(identity.user_id)
         botUserId = identity.user_id
         botId = typeof identity.bot_id === 'string' ? identity.bot_id : ''
         await connectOnce()
@@ -698,17 +730,17 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
       }
       try {
         const route = parseSlackChatId(message.chatId)
-        const sent = await postMessage(message.chatId, rendered, undefined, [sectionBlock(rendered), ...actionBlocks(buttons)])
+        const sent = await postMessage(message.chatId, rendered, undefined, [...sectionBlocks(rendered), ...actionBlocks(buttons)])
         if (!sent.ts) return
         return {
           close: async (status: string) => {
             // 卡片只能改原消息：去掉按钮块，避免旧按钮被重复点击。
-            const body = clip(`${rendered}\n\n${status}`, MESSAGE_LIMIT)
+            const body = `${rendered}\n\n${status}`
             await api('chat.update', {
               channel: route.channel,
               ts: sent.ts,
               text: body,
-              blocks: [sectionBlock(body)],
+              blocks: sectionBlocks(body),
             })
           },
         }
@@ -746,10 +778,10 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
           last = next
         } catch (error) {
           if (!allowSend) return
-          // 更新失败时不能再改原气泡，只能补发一条完整正文。
+          // 只有平台明确拒绝更新时才能补发；响应丢失时原消息可能已经更新。
+          if (choiceSendError(error).reason === 'delivery-unknown') throw error
           await postMessage(chatId, next)
           last = next
-          if (!(error instanceof Error)) return
         }
       }
 

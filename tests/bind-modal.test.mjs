@@ -5,6 +5,17 @@ import test from 'node:test'
 // 读发布产物 lib/client.js（npm test 先 build 再跑），确保验证的就是上线文件
 const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
 
+test('大小写敏感工作区优先精确匹配，POSIX 路径不忽略大小写', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function selectableWorkspace(')
+  const end = source.indexOf('\n    function ', start + 1)
+  const select = new Function(`${source.slice(start, end)}\nreturn selectableWorkspace;`)()
+  const items = [{ path: '/srv/project' }, { path: '/srv/Project' }]
+  assert.equal(select('/srv/Project', items), '/srv/Project')
+  assert.equal(select('/srv/PROJECT', [{ path: '/srv/Project' }, { path: '/srv/PROJECT' }]), '/srv/PROJECT')
+  assert.equal(select('/srv/Project', [{ path: '/srv/other' }, { path: '/srv/project' }]), '/srv/other')
+})
+
 test('没有已保存工作区时，新增账号默认落在下拉里能选中的工作区', () => {
   const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   const start = source.indexOf('function selectableWorkspace(')

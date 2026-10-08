@@ -1035,7 +1035,12 @@ window.__ModuleLoader__.load({
     }
     function selectableWorkspace(preferred, workspaces) {
       const items = Array.isArray(workspaces) ? workspaces : [];
-      const key = (path) => String(path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      const key = (path) => {
+        const value = String(path || "");
+        const windows = /^[a-z]:[\\/]|^\\\\|^\/\//i.test(value);
+        const normalized = (windows ? value.replace(/\\/g, "/") : value).replace(/\/+$/, "");
+        return windows ? normalized.toLowerCase() : normalized;
+      };
       const wanted = key(preferred);
       const matched = wanted && items.find((item) => item && key(item.path) === wanted);
       if (matched && matched.path) return matched.path;

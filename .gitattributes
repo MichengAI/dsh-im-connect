@@ -3,3 +3,4 @@
 *.jpeg binary
 *.gif binary
 *.webp binary
+*.svg text eol=lf
