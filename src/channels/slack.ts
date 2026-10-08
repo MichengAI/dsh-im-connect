@@ -483,6 +483,7 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
         threadTs = opened.ts && MESSAGE_TS.test(opened.ts) ? opened.ts : undefined
         if (!threadTs) return
       }
+      if (kind === 'group' && threadTs) rememberThread(`${channel}~${threadTs}`)
       await handler?.({
         chatId: slackChatId(channel, threadTs),
         userId,

@@ -15,6 +15,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 - Opening IM Assistant no longer expands WeChat by default. Every channel starts collapsed.
 - Discord and Slack sidebar icons are colored paths, the same way WeCom is drawn. An SVG image does not paint in the 16px slot and was showing up as a gray dot.
 - Slack accepts `!help`, `!m`, and fullwidth `／help` the same way Discord does. An unknown `!hello` stays an ordinary message.
+- A slash command that opens a channel thread counts as participation. A later reply in that thread is delivered without another mention.
 
 ## 0.1.68 - 2026-10-08
 

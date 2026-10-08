@@ -289,6 +289,32 @@ test('频道斜杠命令沿用所在线程，没有线程时先落线程根再�
   assert.equal(sim.posted.at(-1).channel, 'C01DEF')
 })
 
+test('频道斜杠命令开出的线程，后续没 @ 的追问仍然会收到', async (t) => {
+  const sim = await slackSimulator()
+  const { messages } = await startChannel(t, sim)
+  sim.send({
+    type: 'slash_commands', envelope_id: 's5',
+    payload: { channel_id: 'C01GHI', user_id: 'U1', command: '/status', trigger_id: 'trig-5' },
+  })
+  await waitFor(() => messages.length === 1)
+  const threadTs = messages[0].chatId.split('~')[1]
+  assert.match(threadTs, /^\d+\.\d+$/)
+  sim.send({
+    type: 'events_api',
+    envelope_id: 'follow',
+    payload: {
+      event: {
+        type: 'message', channel: 'C01GHI', channel_type: 'channel', user: 'U1',
+        text: '那磁盘呢', ts: '1700000003.000400', thread_ts: threadTs,
+      },
+    },
+  })
+  await waitFor(() => messages.length === 2)
+  assert.equal(messages[1].text, '那磁盘呢')
+  assert.equal(messages[1].chatId, `C01GHI~${threadTs}`)
+  assert.equal(messages[1].addressed, true)
+})
+
 test('link_disabled 停止账号，不再打开新的 Socket Mode 连接', async (t) => {
   const sim = await slackSimulator()
   const { channel } = await startChannel(t, sim)
