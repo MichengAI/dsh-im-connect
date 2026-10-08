@@ -11,6 +11,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 - Outgoing text is converted to Slack mrkdwn: headings become bold whole lines, Markdown tables go vertical, `**bold**` becomes `*bold*`, links become `<url|label>`, and code fences stay untouched. Long replies split with structure awareness.
 - Native button choices, emoji status reactions, image and file transfer, `/stop`, approvals, and interactive questions are supported; **Diagnose connection** verifies bot identity.
 - Existing channels are unaffected: Slack uses its own channel id `slack`, and its sessions stay separate from web tasks.
+- Slack and Discord icons now use the official marks instead of hand-drawn single-color versions.
 
 ## 0.1.68 - 2026-10-08
 

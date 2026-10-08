@@ -1,0 +1,10 @@
+这些文件是官方标原件，不要改色，也不要重绘后替换。
+
+discord-symbol.svg
+Discord 品牌页彩色 Symbol，fill 为官方 Blurple #5865F2。
+https://discord.com/branding
+https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d80db9971f10a9757c99_Symbol.svg
+
+slack-hash.png
+Slack 官网 CDN 上的透明四色标。
+https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png
