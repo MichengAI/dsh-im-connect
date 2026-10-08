@@ -5,6 +5,23 @@ import test from 'node:test'
 // 读发布产物 lib/client.js（npm test 先 build 再跑），确保验证的就是上线文件
 const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
 
+test('没有已保存工作区时，新增账号默认落在下拉里能选中的工作区', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function selectableWorkspace(')
+  const end = source.indexOf('\n    function ', start + 1)
+  assert.ok(start >= 0 && end > start, '新增账号必须用可选工作区收口默认目录')
+  const selectableWorkspace = new Function(`${source.slice(start, end)}\nreturn selectableWorkspace;`)()
+  const listed = [
+    { path: 'D:/Repository/deepseek-harness-plugin/dsh-btw', title: 'dsh-btw' },
+    { path: 'D:/Repository/deepseek-harness-plugin/dsh-codex-ui', title: 'dsh-codex-ui' },
+  ]
+  assert.equal(selectableWorkspace('C:/Users/YUJIYU/.dsh/profiles/desktop', listed), listed[0].path)
+  assert.equal(selectableWorkspace('D:\\Repository\\deepseek-harness-plugin\\dsh-btw\\', listed), listed[0].path)
+  assert.equal(selectableWorkspace('', []), '')
+  const bind = source.slice(source.indexOf('function BindModal'), source.indexOf('function AccountSettingsPicker'))
+  assert.match(bind, /selectableWorkspace\(defaults && defaults\.cwd, workspaces\)/)
+})
+
 test('bind modal captures escape before settings', () => {
   assert.match(client, /function BindModal/)
   assert.match(client, /stopImmediatePropagation/)

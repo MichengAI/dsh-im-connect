@@ -1031,6 +1031,15 @@ window.__ModuleLoader__.load({
       const assistant = defaults && defaults.assistant;
       return assistant && assistant.provider && assistant.model ? assistant : null;
     }
+    function selectableWorkspace(preferred, workspaces) {
+      const items = Array.isArray(workspaces) ? workspaces : [];
+      const key = (path) => String(path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      const wanted = key(preferred);
+      const matched = wanted && items.find((item) => item && key(item.path) === wanted);
+      if (matched && matched.path) return matched.path;
+      const first = items.find((item) => item && item.path);
+      return first ? first.path : "";
+    }
     function BindModal({ ch, onClose, onConnected, catalog, permissions, agentPresets, workspaces, defaults, readMainSessionModel, createWorkspace, pickDirectory, modelT, permissionT, presetT, t = fallbackT }) {
       const hasQr = ch.kind === "qr" || ch.kind === "qr-or-credentials";
       const hasManual = ch.kind === "credentials" || ch.kind === "qr-or-credentials";
@@ -1041,10 +1050,12 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = useState(false);
       const [error, setError] = useState("");
       const [success, setSuccess] = useState("");
+      const modelTouched = useRef(false);
+      const workspaceTouched = useRef(false);
       const [settings, setSettings] = useState(() => {
         const assistant = preferredAssistant(defaults, readMainSessionModel);
         return {
-          cwd: defaults && defaults.cwd || "",
+          cwd: selectableWorkspace(defaults && defaults.cwd, workspaces),
           provider: assistant && assistant.provider || "",
           model: assistant && assistant.model || "",
           reasoningEffort: assistant && assistant.reasoningEffort || "",
@@ -1053,7 +1064,6 @@ window.__ModuleLoader__.load({
           agentPreset: defaults && defaults.agentPreset || "standard",
         };
       });
-      const modelTouched = useRef(false);
       const alive = useRef(true);
       useEffect(() => {
         if (modelTouched.current) return;
@@ -1063,6 +1073,11 @@ window.__ModuleLoader__.load({
           ? current
           : { ...current, provider: assistant.provider, model: assistant.model, reasoningEffort: assistant.reasoningEffort || "" });
       }, [defaults, readMainSessionModel]);
+      useEffect(() => {
+        if (workspaceTouched.current) return;
+        const next = selectableWorkspace(defaults && defaults.cwd, workspaces);
+        setSettings((current) => current.cwd === next ? current : { ...current, cwd: next });
+      }, [defaults, workspaces]);
 
       const startQr = useCallback((refresh) => {
         if (!hasQr) return;
@@ -1197,6 +1212,7 @@ window.__ModuleLoader__.load({
           h(AccountSettingsPicker, {
             value: settings,
             onChange: (patch) => {
+              if (patch && patch.cwd !== undefined) workspaceTouched.current = true;
               if (patch && (patch.provider !== undefined || patch.model !== undefined)) modelTouched.current = true;
               setSettings((current) => ({ ...current, ...patch }));
             },
