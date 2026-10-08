@@ -6,5 +6,9 @@ https://discord.com/branding
 https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/66e3d80db9971f10a9757c99_Symbol.svg
 
 slack-hash.png
-Slack 官网 CDN 上的透明四色标。
+Slack 官网 CDN 上的透明四色标，只作颜色对照，不嵌进侧栏。
 https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png
+
+slack-hash.svg
+Slack 四色标的矢量路径，颜色与品牌规范一致（#E01E5A #36C5F0 #2EB67D #ECB22E）。侧栏和企微一样用这些 path，不用 SVG image。
+https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg
