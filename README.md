@@ -283,7 +283,7 @@ Slack uses a Socket Mode long connection, so no public URL or request URL is req
 
 Notes:
 
-- **回复位置**：私聊直接回复，频道在线程内回复。最近参与的 512 个线程按账号保存在本机，重启后仍可免 @ 追问；更换机器人身份、清理账号状态目录或记录被淘汰后，需要重新 @。不支持多人私聊。
+- **Where replies land**: DMs answer directly. Public and private channels answer inside the thread of the message. The 512 most recently joined threads are saved per account on this machine, so follow-ups still need no mention after a restart. Mention the bot again after switching bot identity, clearing the account state directory, or when a thread record is evicted. Multi-person DMs are not handled.
 - **Commands**: Slack clients treat a halfwidth `/` as a slash command, so `/menu` must be registered in the app. Without that registration, send `!menu` or `!help`, or a fullwidth `／help`, the same way Discord does. An unknown `!hello` stays an ordinary message. DM commands still use the allowlist. A `!` command in a channel does not need a mention and is answered in a thread. Native buttons also work.
 - **Diagnostics**: **Diagnose connection** calls `auth.test` for bot identity and reports Socket Mode state only when a connection already exists; it never opens a new connection for the check.
 - **After changing scopes**, reinstall the app and reconnect the bot; an old Bot Token does not gain new scopes automatically.
