@@ -568,8 +568,12 @@ window.__ModuleLoader__.load({
 
     let styleEl = null;
     const ensureStyle = () => {
-      if (styleEl && styleEl.isConnected) return;
+      if (styleEl && styleEl.isConnected) {
+        styleEl.setAttribute("data-plugin", "@michengai/dsh-im-connect");
+        return;
+      }
       styleEl = document.createElement("style");
+      styleEl.setAttribute("data-plugin", "@michengai/dsh-im-connect");
       styleEl.textContent = CSS + TITLE_LINK_CSS;
       document.head.appendChild(styleEl);
     };

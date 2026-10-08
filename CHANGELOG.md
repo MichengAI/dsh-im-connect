@@ -6,6 +6,11 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## Unreleased
 
+## 0.1.68 - 2026-10-08
+
+- The channel sidebar keeps its layout when another plugin reloads. Its runtime styles now belong to this plugin.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.67 - 2026-10-08
 
 - Creating a session from the channels tab returns the sidebar to Tasks, including the host New session button. Channels cannot hold a newly created task, and a refresh no longer leaves that task hidden on Channels (#23).
