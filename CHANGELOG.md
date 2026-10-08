@@ -4,19 +4,18 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
-## Unreleased
+## 0.1.69 - 2026-10-08
 
 - New Slack channel. Add a Bot Token and an App Token on the Slack card in **Settings → IM Assistant**; it connects over Socket Mode and needs no public URL.
 - Slack DMs still use the allowlist. Mentions in public and private channels answer inside that message's thread. The 512 most recently joined threads are saved per account, so follow-ups still need no mention after a restart. Switching the bot identity does not inherit the old records. Multi-person DMs are not supported.
 - Outgoing text is converted to Slack mrkdwn: headings become bold whole lines, Markdown tables go vertical, `**bold**` becomes `*bold*`, links become `<url|label>`, and code fences stay untouched. Long replies split with structure awareness.
 - Native button choices, emoji status reactions, image and file transfer, `/stop`, approvals, and interactive questions are supported; **Diagnose connection** verifies bot identity.
 - Existing channels are unaffected: Slack uses its own channel id `slack`, and its sessions stay separate from web tasks.
-- Slack and Discord icons now use the official marks instead of hand-drawn single-color versions.
+- Slack and Discord icons now use the official marks instead of a gray dot.
 - Opening IM Assistant no longer expands WeChat by default. Every channel starts collapsed.
-- Discord and Slack sidebar icons are colored paths, the same way WeCom is drawn. An SVG image does not paint in the 16px slot and was showing up as a gray dot.
-- Slack accepts `!help`, `!m`, and fullwidth `／help` the same way Discord does. An unknown `!hello` stays an ordinary message.
-- A slash command that opens a channel thread counts as participation. A later reply in that thread is delivered without another mention.
-- Fixed truncated Slack choice-card text, automatic resends when delivery was unknown, duplicate threads from retried slash commands, case-insensitive POSIX workspace defaults, and Windows SVG line-ending checks.
+- Slack accepts `!help`, `!m`, and fullwidth `／help` the same way Discord does. An unknown `!hello` stays an ordinary message. A slash command that opens a channel thread counts as participation, so a later reply in that thread needs no new mention.
+- Slack choice cards keep the full text and the closed status. If delivery is unknown, the plugin does not send a second copy.
+- Restart DSH and refresh the page after upgrading.
 
 ## 0.1.68 - 2026-10-08
 
