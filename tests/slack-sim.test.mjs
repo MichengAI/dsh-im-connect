@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { EventEmitter } from 'node:events'
 import { createServer } from 'node:http'
-import test from 'node:test'
+import https from 'node:https'
+import dns from 'node:dns'
+import { Readable } from 'node:stream'
+import test, { mock } from 'node:test'
 import { createSlackChannel } from '../lib/channels/slack.js'
 
 const BOT = 'U0BOT'
@@ -239,4 +243,119 @@ test('非 Slack 域名的文件不下载，只提示失败且不驱动 agent', a
   assert.ok(sim.posted[0].text.includes('图片或文件接收失败'))
   assert.ok(!JSON.stringify(sim.posted).includes('xoxb-sim'))
   assert.ok(logs.some((line) => line.includes('文件接收失败')))
+})
+
+test('私聊斜杠命令按私聊准入，每次调用使用独立消息号', async (t) => {
+  const sim = await slackSimulator()
+  const { messages } = await startChannel(t, sim)
+  sim.send({
+    type: 'slash_commands', envelope_id: 's1',
+    payload: { channel_id: 'D01ABC', channel_name: 'directmessage', user_id: 'U1', user_name: 'sim', command: '/menu', text: '', trigger_id: 'trig-1' },
+  })
+  sim.send({
+    type: 'slash_commands', envelope_id: 's2',
+    payload: { channel_id: 'D01ABC', user_id: 'U1', command: '/help', trigger_id: 'trig-2' },
+  })
+  await waitFor(() => messages.length === 2)
+  assert.equal(messages[0].kind, 'dm')
+  assert.equal(messages[0].chatId, 'D01ABC')
+  assert.equal(messages[0].text, '/menu')
+  assert.equal(messages[1].text, '/help')
+  assert.equal(messages[0].messageId, 'slash:trig-1')
+  assert.equal(messages[1].messageId, 'slash:trig-2')
+  assert.notEqual(messages[0].messageId, messages[1].messageId)
+})
+
+test('频道斜杠命令沿用所在线程，没有线程时先落线程根再回复', async (t) => {
+  const sim = await slackSimulator()
+  const { channel, messages } = await startChannel(t, sim)
+  sim.send({
+    type: 'slash_commands', envelope_id: 's3',
+    payload: { channel_id: 'C01ABC', user_id: 'U1', command: '/menu', trigger_id: 'trig-3', thread_ts: '1700000000.000100' },
+  })
+  await waitFor(() => messages.length === 1)
+  assert.equal(messages[0].kind, 'group')
+  assert.equal(messages[0].chatId, 'C01ABC~1700000000.000100')
+
+  sim.send({
+    type: 'slash_commands', envelope_id: 's4',
+    payload: { channel_id: 'C01DEF', user_id: 'U1', command: '/status', trigger_id: 'trig-4' },
+  })
+  await waitFor(() => messages.length === 2)
+  assert.equal(messages[1].kind, 'group')
+  assert.match(messages[1].chatId, /^C01DEF~\d+\.\d+$/)
+  await channel.send(messages[1].chatId, '状态')
+  assert.equal(sim.posted.at(-1).thread_ts, messages[1].chatId.split('~')[1])
+  assert.equal(sim.posted.at(-1).channel, 'C01DEF')
+})
+
+test('link_disabled 停止账号，不再打开新的 Socket Mode 连接', async (t) => {
+  const sim = await slackSimulator()
+  const { channel } = await startChannel(t, sim)
+  assert.equal(sim.opened.length, 1)
+  sim.send({ type: 'disconnect', reason: 'link_disabled', envelope_id: 'd1' })
+  await new Promise((resolve) => setTimeout(resolve, 1_500))
+  assert.equal(sim.opened.length, 1)
+  assert.match(channel.status(), /失败/)
+})
+
+test('files.slack.com 的同源跳转仍能收下图片，外站跳转不跟随', async (t) => {
+  const png = Buffer.from('89504e470d0a1a0a0000000049454e44', 'hex')
+  const calls = []
+  const sim = await slackSimulator()
+  const { messages } = await startChannel(t, sim)
+  const realLookup = dns.lookup
+  const installDownload = (location) => {
+    mock.method(dns, 'lookup', (host, opts, cb) => {
+      if (host === 'files.slack.com') cb(null, [{ address: '8.8.8.8', family: 4 }])
+      else realLookup(host, opts, cb)
+    })
+    mock.method(https, 'request', (url, options, cb) => {
+      const req = new EventEmitter()
+      req.destroy = (error) => queueMicrotask(() => req.emit('error', error))
+      req.end = () => {
+        calls.push(String(url))
+        options.lookup(url.hostname, {}, (error) => {
+          if (error) return req.destroy(error)
+          const sameHost = new URL(location).hostname === 'files.slack.com'
+          const hop = calls.filter((item) => new URL(item).hostname === 'files.slack.com').length
+          const res = Readable.from(hop === 1 || !sameHost ? [Buffer.alloc(0)] : [png])
+          res.statusCode = hop === 1 ? 302 : 200
+          res.headers = hop === 1 ? { location } : { 'content-type': 'image/png' }
+          queueMicrotask(() => cb(res))
+        })
+      }
+      return req
+    })
+  }
+  installDownload('https://files.slack.com/files-pri/T1/F1/file.png')
+  sim.send({
+    type: 'events_api', envelope_id: 'e5',
+    payload: {
+      event: {
+        type: 'message', channel: 'D01ABC', channel_type: 'im', user: 'U1', text: '图', ts: '1700000003.000400',
+        files: [{ id: 'F1', name: 'a.png', mimetype: 'image/png', size: png.length, url_private_download: 'https://files.slack.com/files-pri/T1/F1/download' }],
+      },
+    },
+  })
+  await waitFor(() => messages.length === 1, 4_000)
+  assert.equal(messages[0].media?.[0]?.kind, 'image')
+  assert.equal(calls.length, 2)
+  assert.ok(calls.every((url) => new URL(url).hostname === 'files.slack.com'))
+
+  calls.length = 0
+  installDownload('https://evil.example/secret.png')
+  sim.send({
+    type: 'events_api', envelope_id: 'e6',
+    payload: {
+      event: {
+        type: 'message', channel: 'D01ABC', channel_type: 'im', user: 'U1', text: '坏图', ts: '1700000004.000500',
+        files: [{ id: 'F2', name: 'b.png', mimetype: 'image/png', size: 8, url_private_download: 'https://files.slack.com/files-pri/T1/F2/download' }],
+      },
+    },
+  })
+  await waitFor(() => sim.posted.some((item) => String(item.text).includes('图片或文件接收失败')))
+  assert.equal(messages.length, 1)
+  assert.ok(calls.every((url) => new URL(url).hostname === 'files.slack.com'))
+  mock.restoreAll()
 })

@@ -47,6 +47,15 @@ test('多账号实例 ID 进入独立会话命名空间', () => {
   assert.equal(parseImSessionId('im:unknown_a1:dm:1786881038856:user'), undefined)
 })
 
+test('Slack 会话 id 能恢复，线程号里的波浪线留在 chatId', () => {
+  assert.deepEqual(parseImSessionId('im:slack:dm:1786881038856:D01ABC'), {
+    channel: 'slack', kind: 'dm', chatId: 'D01ABC',
+  })
+  assert.deepEqual(parseImSessionId('im:slack_a1b2c3:group:1786881038856:C01ABC~1700000000.000100'), {
+    channel: 'slack_a1b2c3', kind: 'group', chatId: 'C01ABC~1700000000.000100',
+  })
+})
+
 test('任务列表必须滤掉 IM 会话', () => {
   assert.equal(isTaskSession({ id: 'web-1', origin: 'user' }), true)
   assert.equal(isTaskSession({ id: 'im:wecom:dm:1', origin: 'im' }), false)

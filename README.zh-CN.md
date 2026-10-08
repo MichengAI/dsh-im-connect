@@ -268,7 +268,7 @@ dsh --profile web --dump-config
 Slack 走 Socket Mode 长连接，不需要公网地址，也不用配置请求网址：
 
 1. 打开 <https://api.slack.com/apps>，点 **Create New App → From scratch**，选择工作区。
-2. 左侧 **OAuth & Permissions → Bot Token Scopes**，至少勾选：`chat:write`（回复）、`reactions:write`（状态表情）、`files:read`（接收文件）、`files:write`（回传文件）、`channels:read`、`im:history`（读私聊历史，Socket Mode 接收私聊消息需要）、`channels:history`（读频道消息）。
+2. 左侧 **OAuth & Permissions → Bot Token Scopes**，至少勾选：`chat:write`（回复）、`reactions:write`（状态表情）、`files:read`（接收文件）、`files:write`（回传文件）、`im:history`（接收私聊）、`channels:history`（接收公开频道）、`groups:history`（接收私有频道）、`app_mentions:read`（接收 @）。不要填用户令牌（`xoxp-`）。多人私聊（mpim）这次不支持。
 3. 回到页面顶部点 **Install to Workspace**，复制 **Bot User OAuth Token**（`xoxb-` 开头）。
 4. 左侧 **Socket Mode** 打开开关，再点 **Generate Token and Scopes**，勾选 `connections:write`，复制 **App-Level Token**（`xapp-` 开头，只显示一次）。
 5. 左侧 **Event Subscriptions** 打开订阅，在 **Subscribe to bot events** 添加：`message.im`、`message.channels`、`message.groups`、`app_mention`。
@@ -277,9 +277,9 @@ Slack 走 Socket Mode 长连接，不需要公网地址，也不用配置请求�
 
 配置要点：
 
-- **回复位置**：私聊直接回复；频道和群聊里，机器人在你那条消息的线程内回复，线程内后续消息不必再次 @。
+- **回复位置**：私聊直接回复；公开频道和私有频道里，机器人在你那条消息的线程内回复。进程没重启时，线程内后续消息不必再次 @；重启 DSH 后要再 @ 一次。多人私聊这次不响应。
 - **格式**：Slack 不支持 Markdown 表格和 `#` 标题，正文会转成 Slack 的 mrkdwn：标题变粗体整行，表格竖排成「粗体标题 + 表头：值」，`**粗体**` 变 `*粗体*`，链接变 `<地址|文字>`。
-- **命令**：Slack 客户端会把 `/` 开头的文本当斜杠命令。要用 `/menu` 这类命令，需要在应用里登记同名的 Slash Command（命令名 `menu`、`help`、`status` 等），或者直接用原生按钮选择；普通对话不受影响。
+- **命令**：Slack 客户端会把 `/` 开头的文本当斜杠命令。要用 `/menu` 这类命令，需要在应用里登记同名的 Slash Command（命令名 `menu`、`help`、`status` 等）。私聊里的斜杠命令仍走私聊白名单。频道里的斜杠命令会先落下一条线程根，回复落在线程里。也可以直接用原生按钮；普通对话不受影响。
 - **诊断**：账号里的「诊断连接」会调用 `auth.test` 校验机器人身份；Socket Mode 的连接状态只在已连接时一并回报，未连接过则只报身份，不会为此新开连接。
 - **权限范围变更后**要重新 Install App 并重新连接机器人，旧的 Bot Token 不会自动获得新权限。
 

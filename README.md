@@ -274,7 +274,7 @@ DingTalk replies prefer official AI Card streaming. If card creation fails, plai
 Slack uses a Socket Mode long connection, so no public URL or request URL is required:
 
 1. Open <https://api.slack.com/apps> and choose **Create New App → From scratch**, then pick your workspace.
-2. Under **OAuth & Permissions → Bot Token Scopes**, add at least: `chat:write` (replies), `reactions:write` (status reactions), `files:read` (receive files), `files:write` (return files), `channels:read`, `im:history` (required to receive DM messages over Socket Mode), and `channels:history` (channel messages).
+2. Under **OAuth & Permissions → Bot Token Scopes**, add at least: `chat:write` (replies), `reactions:write` (status reactions), `files:read` (receive files), `files:write` (return files), `im:history` (DMs), `channels:history` (public channels), `groups:history` (private channels), and `app_mentions:read` (@ mentions). Do not paste a user token (`xoxp-`). Multi-person DMs (mpim) are not supported.
 3. Click **Install to Workspace** at the top of the page and copy the **Bot User OAuth Token** (`xoxb-…`).
 4. Open **Socket Mode**, enable it, click **Generate Token and Scopes**, tick `connections:write`, and copy the **App-Level Token** (`xapp-…`, shown once).
 5. Open **Event Subscriptions**, enable events, and under **Subscribe to bot events** add `message.im`, `message.channels`, `message.groups`, and `app_mention`.
@@ -283,8 +283,8 @@ Slack uses a Socket Mode long connection, so no public URL or request URL is req
 
 Notes:
 
-- **Where replies land**: DMs answer directly; in channels the bot answers inside the thread of your message, and later replies in that thread need no new mention.
-- **Commands**: Slack clients treat text starting with `/` as a slash command. To use `/menu` and friends, register matching Slash Commands (names `menu`, `help`, `status`, …) in the app, or use the native buttons instead. Ordinary conversation is unaffected.
+- **Where replies land**: DMs answer directly. Public and private channels answer inside the thread of your message. Later replies in that thread need no new mention until DSH restarts; after a restart, mention the bot once more. Multi-person DMs are not handled.
+- **Commands**: Slack clients treat text starting with `/` as a slash command. To use `/menu` and friends, register matching Slash Commands (names `menu`, `help`, `status`, …). A slash command in a DM still follows the DM allowlist. In a channel, the bot posts a thread root and answers inside that thread instead of the channel timeline. Native buttons also work. Ordinary conversation is unaffected.
 - **Diagnostics**: **Diagnose connection** calls `auth.test` for bot identity and reports Socket Mode state only when a connection already exists; it never opens a new connection for the check.
 - **After changing scopes**, reinstall the app and reconnect the bot; an old Bot Token does not gain new scopes automatically.
 

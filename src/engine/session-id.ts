@@ -44,7 +44,7 @@ export function isImSessionId(sessionId: string): boolean {
   return sessionId.startsWith(IM_SESSION_PREFIX)
 }
 
-const CHANNEL_IDS: readonly ChannelId[] = ['dingtalk', 'feishu', 'lark', 'weixin', 'wecom', 'qq', 'telegram', 'discord']
+const CHANNEL_IDS: readonly ChannelId[] = ['dingtalk', 'feishu', 'lark', 'weixin', 'wecom', 'qq', 'telegram', 'discord', 'slack']
 const STAMP_RE = /^\d{13,}$/
 
 export function parseImSessionId(sessionId: string): { channel: ChannelInstanceId; kind: ChatKind; chatId: string } | undefined {

@@ -158,7 +158,7 @@ const antd = await build({
   },
 })
 
-const client = readFileSync('client.js', 'utf8')
+const client = readFileSync('client.js', 'utf8').replace(/\r\n/g, '\n')
   .replace(/require\s*\(\s*(['"])antd\1\s*\)/g, '__imAntdBundle.antd')
   .replace(/require\s*\(\s*(['"])antd\/locale\/zh_CN\1\s*\)/g, '__imAntdBundle.localeZh')
   .replace(/require\s*\(\s*(['"])antd\/locale\/en_US\1\s*\)/g, '__imAntdBundle.localeEn')

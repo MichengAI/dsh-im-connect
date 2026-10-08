@@ -55,6 +55,7 @@ interface SlackInteraction {
     };
     channel?: {
         id?: string;
+        name?: string;
     };
     message?: {
         ts?: string;
@@ -86,6 +87,7 @@ export declare function parseSlackChatId(chatId: string): {
     channel: string;
     threadTs?: string;
 };
+export declare function slackChatKind(channelId: string, channelName?: string): 'dm' | 'group';
 export declare function slackSocketUrl(value: unknown): string;
 /**
  * 事件 → 收件目标。返回 undefined 表示这条事件不该驱动 agent。

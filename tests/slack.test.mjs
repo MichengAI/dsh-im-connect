@@ -86,8 +86,24 @@ test('卡片按钮回调带回原会话与动作令牌', () => {
   assert.equal(route.chatId, 'C01ABC~1700000000.000100')
   assert.equal(route.actionToken, 'menu:1')
   assert.equal(route.addressed, true)
+  assert.equal(route.kind, 'group')
   assert.equal(route.messageId, 'interaction:1700000001.000200')
   assert.equal(slackActionRoute({ type: 'view_submission', user: { id: 'U1' }, channel: { id: 'C01ABC' } }), undefined)
+})
+
+test('私聊按钮回调仍是私聊，避免群聊准入绕过白名单', () => {
+  const route = slackActionRoute({
+    type: 'block_actions',
+    user: { id: 'U1', username: 'sim' },
+    channel: { id: 'D01ABC', name: 'directmessage' },
+    container: { channel_id: 'D01ABC' },
+    message: { ts: '1700000001.000200' },
+    actions: [{ action_id: 'menu:1' }],
+  })
+  assert.equal(route.kind, 'dm')
+  assert.equal(route.chatId, 'D01ABC')
+  assert.equal(route.addressed, true)
+  assert.equal(route.actionToken, 'menu:1')
 })
 
 function fakeApi(routes) {
@@ -176,6 +192,16 @@ test('填了 App Credentials 里的值时不发请求，直接说清该填哪个
   await assert.rejects(
     () => createSlackChannel({ token: 'xoxb-1', appToken: '12223273788178.12261333130770', fetchImpl: impl }, () => {}).start(),
     /App-Level Token/)
+  assert.equal(calls, 0)
+})
+
+test('用户令牌 xoxp 不能填进 Bot Token，且不会发出请求', async () => {
+  let calls = 0
+  const impl = async () => { calls += 1; return Response.json({ ok: true, user_id: 'U1' }) }
+  await assert.rejects(
+    () => createSlackChannel({ token: 'xoxp-user', appToken: 'xapp-1', fetchImpl: impl }, () => {}).start(),
+    /Bot User OAuth Token/,
+  )
   assert.equal(calls, 0)
 })
 

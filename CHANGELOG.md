@@ -7,7 +7,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 ## Unreleased
 
 - New Slack channel. Add a Bot Token and an App Token on the Slack card in **Settings → IM Assistant**; it connects over Socket Mode and needs no public URL.
-- Slack DMs reply directly; mentions in channels answer inside that message's thread, where later replies need no new mention.
+- Slack DMs reply directly and still use the DM allowlist. Mentions in public and private channels answer inside that message's thread. After a restart, mention the bot once more in an old thread. Multi-person DMs are not supported.
 - Outgoing text is converted to Slack mrkdwn: headings become bold whole lines, Markdown tables go vertical, `**bold**` becomes `*bold*`, links become `<url|label>`, and code fences stay untouched. Long replies split with structure awareness.
 - Native button choices, emoji status reactions, image and file transfer, `/stop`, approvals, and interactive questions are supported; **Diagnose connection** verifies bot identity.
 - Existing channels are unaffected: Slack uses its own channel id `slack`, and its sessions stay separate from web tasks.

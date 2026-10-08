@@ -60,7 +60,7 @@ interface SlackAction { action_id?: string; value?: string }
 interface SlackInteraction {
   type?: string
   user?: { id?: string; username?: string; name?: string }
-  channel?: { id?: string }
+  channel?: { id?: string; name?: string }
   message?: { ts?: string; thread_ts?: string }
   container?: { channel_id?: string; thread_ts?: string }
   actions?: SlackAction[]
@@ -105,8 +105,8 @@ const AUTH_ERRORS = new Set(['invalid_auth', 'not_authed', 'account_inactive', '
 
 const CHANNEL_ID = /^[A-Za-z0-9]{2,32}$/
 const MESSAGE_TS = /^\d{1,20}\.\d{1,10}$/
-/** Bot Token（xoxb-）或用户令牌（xoxp-）；App-Level Token 固定 xapp-。 */
-const BOT_TOKEN_PREFIX = /^xox[bp]-/
+/** Bot Token 必须是 xoxb-。用户令牌 xoxp- 会绕过机器人身份，不接受。App-Level Token 固定 xapp-。 */
+const BOT_TOKEN_PREFIX = /^xoxb-/
 const APP_TOKEN_PREFIX = /^xapp-/
 const BOT_TOKEN_HINT = 'Slack Bot Token 不对：请在 Slack 应用的 OAuth & Permissions 页面安装应用后，复制 Bot User OAuth Token（xoxb- 开头）。App ID、Client ID、Client Secret、Signing Secret、Verification Token 都不是这个字段要填的内容。'
 const APP_TOKEN_HINT = 'Slack App Token 不对：请在 Slack 应用的 Socket Mode 页面点 Generate Token and Scopes 生成 App-Level Token（xapp- 开头，勾 connections:write），它只显示一次。'
@@ -140,6 +140,10 @@ export function parseSlackChatId(chatId: string): { channel: string; threadTs?: 
     throw Object.assign(new Error('slack-invalid-chat'), { rejected: true })
   }
   return threadTs === undefined ? { channel } : { channel, threadTs }
+}
+
+export function slackChatKind(channelId: string, channelName?: string): 'dm' | 'group' {
+  return channelId.startsWith('D') || channelName === 'directmessage' ? 'dm' : 'group'
 }
 
 export function slackSocketUrl(value: unknown): string {
@@ -202,7 +206,7 @@ export function slackActionRoute(payload: SlackInteraction): SlackRoute | undefi
     chatId: slackChatId(channel, threadTs),
     channel,
     ...(threadTs ? { threadTs } : {}),
-    kind: 'group',
+    kind: slackChatKind(channel, payload.channel?.name),
     addressed: true,
     userId,
     ...(payload.user?.username ?? payload.user?.name ? { username: payload.user?.username ?? payload.user?.name } : {}),
@@ -274,6 +278,7 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
   let socket: SlackSocket | undefined
   let generation = 0
   let reconnectAttempt = 0
+  let haltReconnect = false
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined
   let botUserId = ''
   let botId = ''
@@ -286,6 +291,12 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
     const now = Date.now()
     for (const [key, expires] of store) if (expires <= now) store.delete(key)
     while (store.size > 512) store.delete(store.keys().next().value!)
+  }
+
+  function rememberThread(key: string): void {
+    participatedThreads.delete(key)
+    participatedThreads.set(key, Number.POSITIVE_INFINITY)
+    while (participatedThreads.size > 512) participatedThreads.delete(participatedThreads.keys().next().value!)
   }
 
   function firstSight(store: Map<string, number>, key: string): boolean {
@@ -356,7 +367,10 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
         maxBytes,
         timeoutMs: 30_000,
         signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(60_000)]),
+        sameHostRedirects: 3,
       })
+      const head = data.subarray(0, 32).toString('utf8').trimStart().toLowerCase()
+      if (head.startsWith('<!doctype') || head.startsWith('<html')) throw new Error('图片地址不符合安全要求')
       media.push(isImage ? imageMedia(data) : fileMedia(data, file.name ?? 'file.bin'))
     }
     return media
@@ -379,7 +393,7 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
     const route = slackRoute(event, botUserId, participatedThreads)
     if (!route) return
     if (!firstSight(seenEvents, `${route.channel}:${route.messageId}`)) return
-    if (route.threadKey) participatedThreads.set(route.threadKey, Date.now() + SEEN_TTL_MS)
+    if (route.threadKey) rememberThread(route.threadKey)
     let media: ImMedia[] = []
     if (event.files?.length) {
       try {
@@ -428,20 +442,39 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
       return
     }
     if (envelope.type === 'slash_commands') {
-      const payload = envelope.payload as { channel_id?: string; user_id?: string; user_name?: string; command?: string; text?: string } | undefined
+      const payload = envelope.payload as {
+        channel_id?: string
+        channel_name?: string
+        user_id?: string
+        user_name?: string
+        command?: string
+        text?: string
+        trigger_id?: string
+        thread_ts?: string
+      } | undefined
       const channel = payload?.channel_id
       const userId = payload?.user_id
       if (typeof channel !== 'string' || !CHANNEL_ID.test(channel) || typeof userId !== 'string' || !userId || userId === botUserId) return
+      const kind = slackChatKind(channel, payload?.channel_name)
       const command = (payload?.command ?? '').trim().replace(/^\//, '')
       const text = `/${command}${payload?.text ? ` ${payload.text}` : ''}`.trim()
+      const trigger = typeof payload?.trigger_id === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(payload.trigger_id)
+        ? payload.trigger_id
+        : `${channel}:${Date.now()}`
+      let threadTs = kind === 'group' && payload?.thread_ts && MESSAGE_TS.test(payload.thread_ts) ? payload.thread_ts : undefined
+      if (kind === 'group' && !threadTs) {
+        const opened = await postMessage(slackChatId(channel), text)
+        threadTs = opened.ts && MESSAGE_TS.test(opened.ts) ? opened.ts : undefined
+        if (!threadTs) return
+      }
       await handler?.({
-        chatId: slackChatId(channel),
+        chatId: slackChatId(channel, threadTs),
         userId,
         ...(payload?.user_name ? { username: payload.user_name } : {}),
         text,
-        kind: 'group',
+        kind,
         addressed: true,
-        messageId: `slash:${channel}`,
+        messageId: `slash:${trigger}`,
       })
     }
   }
@@ -487,6 +520,14 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
             try { current.close(1000, 'refresh') } catch { /* 已经断开 */ }
             return
           }
+          if (reason === 'link_disabled') {
+            haltReconnect = true
+            statusText = '连接失败，请查看本机日志'
+            log(`[slack] Socket Mode 已断开: ${reason}`)
+            clearTimeout(reconnectTimer)
+            try { current.close(1000, 'disconnect') } catch { /* 已经断开 */ }
+            return
+          }
           statusText = '连接失败，请查看本机日志'
           log(`[slack] Socket Mode 已断开: ${reason || 'unknown'}`)
           try { current.close(1000, 'disconnect') } catch { /* 已经断开 */ }
@@ -499,6 +540,11 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
       current.addEventListener('close', () => {
         if (currentGeneration !== generation) return
         if (socket === current) socket = undefined
+        if (haltReconnect) {
+          statusText = '连接失败，请查看本机日志'
+          finish(new Error('slack-link-disabled'))
+          return
+        }
         if (stopped) {
           finish(Object.assign(new Error('Stopped'), { name: 'AbortError' }))
           return
@@ -518,7 +564,7 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
     const delay = RECONNECT_DELAYS[Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)]!
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
-      if (stopped) return
+      if (stopped || haltReconnect) return
       void openSocket().catch((error) => {
         if (stopped || fatalSlack(error)) return
         log(`[slack] 重连失败: ${errorMessage(error)}`)
@@ -580,6 +626,7 @@ export function createSlackChannel(config: SlackConfig, log: (line: string) => v
     },
     async stop() {
       stopped = true
+      haltReconnect = false
       readyOnce = false
       statusText = '已停止'
       clearTimeout(reconnectTimer)
