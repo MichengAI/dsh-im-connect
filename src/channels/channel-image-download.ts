@@ -68,6 +68,8 @@ const proxyCompatibleHosts = new Set([
   // Exact WeCom AI-bot COS origin observed in authenticated image callbacks.
   // Do not trust arbitrary tenant buckets under myqcloud.com.
   'ww-aibot-img-1258476243.cos.ap-guangzhou.myqcloud.com',
+  // Slack 私有文件下载域名：url_private_download 固定走这里，且必须带 Bot Token。
+  'files.slack.com',
   'api.dingtalk.com', 'oapi.dingtalk.com',
   // Exact image origin returned by DingTalk's authenticated messageFiles API.
   'wukong-file-im-zjk.oss-cn-zhangjiakou.aliyuncs.com',

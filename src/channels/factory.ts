@@ -7,6 +7,7 @@ import { createTelegramChannel } from './telegram.js'
 import { createWecomChannel } from './wecom.js'
 import { createWeixinChannel } from './weixin.js'
 import { createQqChannel } from './qq.js'
+import { createSlackChannel } from './slack.js'
 import { parseAdditionalImageHosts } from './image-host-policy.js'
 
 export function createChannelAdapter(
@@ -36,6 +37,8 @@ export function createChannelAdapter(
       adapter = createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret, ...imageOptions, host: options?.host }, log); break
     case 'qq':
       adapter = createQqChannel({ appId: config.appId, appSecret: config.appSecret, ...imageOptions, host: options?.host }, log); break
+    case 'slack':
+      adapter = createSlackChannel({ token: config.token, appToken: config.appToken, host: options?.host }, log); break
     default:
       return undefined
   }
