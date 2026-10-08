@@ -6,7 +6,10 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 
 ## Unreleased
 
-- Creating a session from the channels tab returns the sidebar to Tasks. Channels cannot hold a newly created task, and a refresh no longer leaves that task hidden on Channels.
+## 0.1.67 - 2026-10-08
+
+- Creating a session from the channels tab returns the sidebar to Tasks, including the host New session button. Channels cannot hold a newly created task, and a refresh no longer leaves that task hidden on Channels (#23).
+- Restart DSH and refresh the page after upgrading.
 
 ## 0.1.66 - 2026-10-07
 

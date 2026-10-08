@@ -610,6 +610,10 @@ window.__ModuleLoader__.load({
       return { ready: true, previousId: currentId, tab: next };
     }
 
+    function isHostNewSessionControl(label) {
+      return /新会话|新建任务|New chat|New session/i.test(String(label || ""));
+    }
+
     const api = (path, opts) => {
       // 管理路由复用宿主登录 Cookie，不缓存账号状态或认证错误。
       const request = Object.assign({}, opts || {}, { credentials: "same-origin", cache: "no-store" });
@@ -2907,7 +2911,9 @@ window.__ModuleLoader__.load({
       const sessionSnap = typeof rawUseSessions === "function"
         ? rawUseSessions((state) => state)
         : undefined;
-      const currentId = sessionSnap ? currentSessionId(sessionSnap) : (props.selectedId || null);
+      const currentId = typeof rawUseSessions === "function"
+        ? rawUseSessions((state) => currentSessionId(state))
+        : (props.selectedId || null);
       const sessionById = (sessionSnap && sessionSnap.byId) || {};
       const useTaskSessions = useCallback((selector, eq) => {
         if (typeof rawUseSessions !== "function") return selector({ ids: [], byId: {}, current: null });
@@ -2919,6 +2925,16 @@ window.__ModuleLoader__.load({
       }, [rawUseSessions, membershipRevision]);
       useEffect(() => { ensureStyle(); }, []);
       useEffect(() => { try { localStorage.setItem(TAB_KEY, tab); } catch { /* ignore */ } }, [tab]);
+      useEffect(() => {
+        const onClick = (event) => {
+          const target = event.target && event.target.closest ? event.target.closest("button") : null;
+          if (!target) return;
+          const label = (target.innerText || "") + " " + (target.getAttribute("aria-label") || "");
+          if (isHostNewSessionControl(label)) setTab("tasks");
+        };
+        document.addEventListener("click", onClick, true);
+        return () => document.removeEventListener("click", onClick, true);
+      }, []);
       const previousCurrentId = useRef(currentId);
       const tabFollowReady = useRef(false);
       useEffect(() => {

@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 const membership = source.slice(source.indexOf('    let channelSessionIds'), source.indexOf('    const api ='))
-const create = new Function(membership + '; return { updateChannelMembership, followSidebarTab };')
+const create = new Function(membership + '; return { updateChannelMembership, followSidebarTab, isHostNewSessionControl };')
 
 test('频道会话切到频道，普通新会话切回任务，定时认领的不抢', () => {
   const f = create()
@@ -19,4 +19,12 @@ test('频道会话切到频道，普通新会话切回任务，定时认领的�
   assert.equal(f.followSidebarTab({ ready: true, previousId: 'session-new' }, 'session-new', []).tab, null)
   assert.equal(f.followSidebarTab({ ready: true, previousId: 'im:weixin:1' }, 'session-scheduled', schedule).tab, null)
   assert.equal(f.followSidebarTab({ ready: true, previousId: 'im:weixin:1' }, 'session-noted', tasks).tab, 'notes')
+  assert.equal(f.isHostNewSessionControl('新会话\nCtrl'), true)
+  assert.equal(f.isHostNewSessionControl('新建任务'), true)
+  assert.equal(f.isHostNewSessionControl('频道'), false)
+})
+
+test('侧栏跟随订阅当前会话 id，而不是整份会话快照', () => {
+  const effect = source.slice(source.indexOf('function SessionSwitcher'), source.indexOf('function sidebarOccupantName'))
+  assert.match(effect, /rawUseSessions\(\(state\) => currentSessionId\(state\)\)/)
 })
