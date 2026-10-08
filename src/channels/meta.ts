@@ -26,6 +26,7 @@ export const CHANNEL_ORDER: ChannelId[] = [
   'dingtalk',
   'telegram',
   'discord',
+  'slack',
 ]
 
 export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
@@ -97,6 +98,16 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
     kind: 'credentials',
     fields: [
       { key: 'token', label: 'Bot Token', secret: true },
+    ],
+  },
+  slack: {
+    id: 'slack',
+    label: 'Slack',
+    description: '通过 Slack 应用机器人接收并回复用户消息',
+    kind: 'credentials',
+    fields: [
+      { key: 'token', label: 'Bot Token（xoxb- 开头）', secret: true },
+      { key: 'appToken', label: 'App Token（xapp- 开头）', secret: true },
     ],
   },
 }

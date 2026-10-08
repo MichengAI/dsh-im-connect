@@ -5,6 +5,7 @@ import { createTelegramChannel } from '../lib/channels/telegram.js'
 import { createDingtalkChannel } from '../lib/channels/dingtalk.js'
 import { createFeishuChannel } from '../lib/channels/feishu.js'
 import { createQqChannel } from '../lib/channels/qq.js'
+import { createSlackChannel } from '../lib/channels/slack.js'
 import { createWeixinChannel } from '../lib/channels/weixin.js'
 import { createWecomChannel } from '../lib/channels/wecom.js'
 import { WSClient } from '@wecom/aibot-node-sdk'
@@ -26,6 +27,8 @@ for (const [name, create, replies, paths] of [
   ['feishu', () => createFeishuChannel('feishu', { appId: 'id', appSecret: 'secret' }, () => {}), [{ code: 0, tenant_access_token: 'secret' }, { code: 0, bot: { open_id: 'id' } }], ['/auth/v3/tenant_access_token/internal', '/bot/v3/info']],
   ['lark', () => createFeishuChannel('lark', { appId: 'id', appSecret: 'secret' }, () => {}), [{ code: 0, tenant_access_token: 'secret' }, { code: 0, bot: { open_id: 'id' } }], ['/auth/v3/tenant_access_token/internal', '/bot/v3/info']],
   ['qq', () => createQqChannel({ appId: 'id', appSecret: 'secret' }, () => {}), [{ access_token: 'secret' }, { url: 'wss://gateway.test' }], ['/app/getAppAccessToken', '/gateway']],
+  // Slack 未建立过 Socket Mode 连接时只验机器人身份，不新开长连接。
+  ['slack', () => createSlackChannel({ token: 'secret', appToken: 'xapp-secret' }, () => {}), [{ ok: true, user_id: 'U1', team: 'T1' }], ['/auth.test']],
 ]) test(`${name} 诊断发起真实请求路径，不启动消息接收、不发送聊天`, async t => {
   const calls = []
   t.mock.method(globalThis, 'fetch', async (url, init) => { calls.push([url, init]); return Response.json(replies[calls.length - 1]) })
