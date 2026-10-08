@@ -12,9 +12,11 @@ test('Slack 和 Discord 使用官方标文件，不手绘、不改色', () => {
   assert.match(discord.toString('utf8'), /fill="#5865F2"/)
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   const brand = client.slice(client.indexOf('function BrandMark'), client.indexOf('function Logo'))
-  assert.equal(brand.includes(discord.toString('base64')), true)
+  const officialPath = discord.toString('utf8').match(/d="([^"]+)"/)[1]
+  assert.equal(brand.includes(officialPath), true)
   assert.equal(brand.includes(slack.toString('base64')), true)
   assert.doesNotMatch(brand, /#4A154B/)
   assert.doesNotMatch(brand, /M20\.317 4\.37/)
-  assert.match(brand, /h\("img"/)
+  assert.doesNotMatch(brand, /h\("img"/)
+  assert.match(client, /\.ima-n-folder>\.ima-logo svg\{width:16px;height:16px/)
 })
