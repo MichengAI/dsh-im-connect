@@ -284,7 +284,7 @@ Slack uses a Socket Mode long connection, so no public URL or request URL is req
 Notes:
 
 - **Where replies land**: DMs answer directly. Public and private channels answer inside the thread of your message. Later replies in that thread need no new mention until DSH restarts; after a restart, mention the bot once more. Multi-person DMs are not handled.
-- **Commands**: Slack clients treat text starting with `/` as a slash command. To use `/menu` and friends, register matching Slash Commands (names `menu`, `help`, `status`, …). A slash command in a DM still follows the DM allowlist. In a channel, the bot posts a thread root and answers inside that thread instead of the channel timeline. Native buttons also work. Ordinary conversation is unaffected.
+- **Commands**: Slack clients treat a halfwidth `/` as a slash command, so `/menu` must be registered in the app. Without that registration, send `!menu` or `!help`, or a fullwidth `／help`, the same way Discord does. An unknown `!hello` stays an ordinary message. DM commands still use the allowlist. A `!` command in a channel does not need a mention and is answered in a thread. Native buttons also work.
 - **Diagnostics**: **Diagnose connection** calls `auth.test` for bot identity and reports Socket Mode state only when a connection already exists; it never opens a new connection for the check.
 - **After changing scopes**, reinstall the app and reconnect the bot; an old Bot Token does not gain new scopes automatically.
 

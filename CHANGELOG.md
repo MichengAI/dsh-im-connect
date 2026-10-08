@@ -14,6 +14,7 @@ Recent published versions are listed below. Git tags and GitHub Releases now mir
 - Slack and Discord icons now use the official marks instead of hand-drawn single-color versions.
 - Opening IM Assistant no longer expands WeChat by default. Every channel starts collapsed.
 - Discord and Slack icons in the channel sidebar use the official marks instead of a gray dot.
+- Slack accepts `!help`, `!m`, and fullwidth `／help` the same way Discord does. An unknown `!hello` stays an ordinary message.
 
 ## 0.1.68 - 2026-10-08
 

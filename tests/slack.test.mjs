@@ -41,6 +41,17 @@ test('私聊直接响应，频道没被 @ 不驱动 agent', () => {
   assert.equal(slackRoute({ type: 'message', channel: 'C01ABC', channel_type: 'channel', user: 'U1', text: '普通聊天', ts: '1700000000.000100' }, BOT), undefined)
 })
 
+test('Slack 私聊和频道都能用 ! 与全角斜杠发送已知命令', () => {
+  const dm = slackRoute({ type: 'message', channel: 'D01ABC', channel_type: 'im', user: 'U1', text: '!m', ts: '1700000000.000100' }, BOT)
+  assert.equal(dm.text, '/menu')
+  assert.equal(slackRoute({ type: 'message', channel: 'D01ABC', channel_type: 'im', user: 'U1', text: '／help 2', ts: '1700000000.000200' }, BOT).text, '/help 2')
+  assert.equal(slackRoute({ type: 'message', channel: 'D01ABC', channel_type: 'im', user: 'U1', text: '!hello', ts: '1700000000.000300' }, BOT).text, '!hello')
+  const channel = slackRoute({ type: 'message', channel: 'C01ABC', channel_type: 'channel', user: 'U1', text: '!help', ts: '1700000000.000400' }, BOT)
+  assert.equal(channel.text, '/help')
+  assert.equal(channel.addressed, true)
+  assert.equal(channel.threadTs, '1700000000.000400')
+})
+
 test('频道被 @ 后在该消息的线程内回复', () => {
   const route = slackRoute({ type: 'app_mention', channel: 'C01ABC', channel_type: 'channel', user: 'U1', text: '<@U0BOT> 跑一下测试', ts: '1700000000.000100' }, BOT)
   assert.equal(route.chatId, 'C01ABC~1700000000.000100')

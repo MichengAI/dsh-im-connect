@@ -89,9 +89,10 @@ export declare function parseSlackChatId(chatId: string): {
 };
 export declare function slackChatKind(channelId: string, channelName?: string): 'dm' | 'group';
 export declare function slackSocketUrl(value: unknown): string;
+export declare function normalizeSlackCommand(text: string): string;
 /**
  * 事件 → 收件目标。返回 undefined 表示这条事件不该驱动 agent。
- * 频道消息仅在「被 @」或「所在线程已经参与过」时算被呼叫。
+ * 频道消息在「被 @」、所在线程已经参与过，或用 ! / 全角斜杠发出已知命令时算被呼叫。
  */
 export declare function slackRoute(event: SlackEvent, botUserId: string, knownThreads?: {
     has(key: string): boolean;
