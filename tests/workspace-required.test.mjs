@@ -56,7 +56,7 @@ test('工作区不在宿主列表中时拒绝保存', async (t) => {
 })
 
 test('选中已有工作区后允许保存', async (t) => {
-  const manager = makeManager(t, [{ path: 'D:\\proj' }])
+  const manager = makeManager(t, [{ path: 'D:/proj' }])
   const result = await manager.connect('telegram', { token: 'listed-workspace' }, { ...settings, cwd: 'D:/proj/' })
   assert.equal(result.ok, true)
   assert.equal(manager.store.channels[result.accountId].cwd, 'D:/proj/')

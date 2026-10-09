@@ -4,7 +4,7 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
-## 0.1.70 - 2026-10-09
+## 0.1.71 - 2026-10-09
 
 - Saving an account now requires a workspace that is already registered in DSH. If there are none, QR setup and manual confirm stay disabled until you add one.
 - A folder that is not in the workspace list, including the Desktop profile data directory, can no longer be saved as the account workspace. That was dropping incoming messages when the session could not be attached.
