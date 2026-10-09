@@ -4,6 +4,13 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.70 - 2026-10-09
+
+- Saving an account now requires a workspace that is already registered in DSH. If there are none, QR setup and manual confirm stay disabled until you add one.
+- A folder that is not in the workspace list, including the Desktop profile data directory, can no longer be saved as the account workspace. That was dropping incoming messages when the session could not be attached.
+- If an existing account is still bound to that default folder, open its settings after upgrading, choose a real project workspace, and save.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.69 - 2026-10-08
 
 - New Slack channel. Add a Bot Token and an App Token on the Slack card in **Settings → IM Assistant**; it connects over Socket Mode and needs no public URL.
