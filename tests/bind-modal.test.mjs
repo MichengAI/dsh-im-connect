@@ -33,6 +33,26 @@ test('没有已保存工作区时，新增账号默认落在下拉里能选中�
   assert.match(bind, /selectableWorkspace\(defaults && defaults\.cwd, workspaces\)/)
 })
 
+test('没有工作区时不能保存，必须先创建', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function workspaceIsListed(')
+    const end = source.indexOf('function BindModal(', start)
+  assert.ok(start >= 0 && end > start, '保存前必须判断工作区是否在列表中')
+  const workspaceIsListed = new Function(`${source.slice(start, end)}\nreturn workspaceIsListed;`)()
+  assert.equal(workspaceIsListed('D:/profile', []), false)
+  assert.equal(workspaceIsListed('', [{ path: 'D:/proj' }]), false)
+    const slash = String.fromCharCode(92)
+    assert.equal(workspaceIsListed(`D:${slash}proj${slash}`, [{ path: 'D:/proj' }]), true)
+  const bind = source.slice(source.indexOf('function BindModal'), source.indexOf('function AccountSettingsPicker'))
+  const picker = source.slice(source.indexOf('function AccountSettingsPicker'), source.indexOf('function CommandPermissionSettings'))
+  assert.match(bind, /disabled: busy \|\| !workspaceIsListed\(settings\.cwd, workspaces\)/)
+  assert.match(bind, /disabled: busy \|\| !workspaceIsListed\(settings\.cwd, workspaces\) \|\| !settings\.provider/)
+  assert.match(picker, /items\.length === 0/)
+  assert.match(picker, /composer\.workspaceRequired/)
+  assert.match(source, /"composer\.workspaceRequired": "请先添加工作区，否则无法保存"/)
+  assert.match(source, /"composer\.workspaceRequired": "Add a workspace before saving\."/)
+})
+
 test('bind modal captures escape before settings', () => {
   assert.match(client, /function BindModal/)
   assert.match(client, /stopImmediatePropagation/)

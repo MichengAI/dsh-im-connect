@@ -618,7 +618,10 @@ export class ChannelManager {
           if (method !== 'POST') { send(405, { ok: false, error: 'method not allowed' }); return }
           const body = await readBody()
           if (action === 'start') {
-            const pairing = await this.pairing.start(id, pairingSettings(body.settings as Record<string, unknown> | undefined))
+            const incoming = body.settings as Record<string, unknown> | undefined
+            const workspaceError = this.workspaceSaveError(normalizeWorkspacePath(incoming?.cwd))
+            if (workspaceError) { send(400, { ok: false, error: workspaceError }); return }
+            const pairing = await this.pairing.start(id, pairingSettings(incoming))
             send(pairing.status === 'failed' ? 400 : 200, { ok: pairing.status !== 'failed', pairing, error: pairing.error })
             return
           }
@@ -912,6 +915,27 @@ export class ChannelManager {
 
   currentWorkspace(): string {
     return this.store.cwd || this.engineConfig.cwd
+  }
+
+  /** 宿主已提供工作区列表时，空列表和未登记路径都不能保存。列表不可用时保持原行为。 */
+  private workspaceSaveError(cwd: string | undefined): string | undefined {
+    const registered = this.registeredWorkspacePaths()
+    if (!registered) return undefined
+    if (registered.length === 0) return '请先添加工作区'
+    if (!cwd || !registered.some(path => sameWorkspacePath(path, cwd))) return '请选择工作区'
+    return undefined
+  }
+
+  private registeredWorkspacePaths(): string[] | undefined {
+    try {
+      const registry = this.ctx.get?.('workspaceRegistry') as { list?: () => Array<{ path?: unknown }> } | undefined
+      if (typeof registry?.list !== 'function') return undefined
+      const items = registry.list()
+      if (!Array.isArray(items)) return undefined
+      return items.flatMap(item => typeof item?.path === 'string' && item.path.trim() ? [item.path] : [])
+    } catch {
+      return undefined
+    }
   }
 
   private applyWorkspace(cwd?: string): void {
@@ -1211,6 +1235,8 @@ export class ChannelManager {
     })
     if (!assistant) return { ok: false, error: '请选择提供商和模型' }
     const cwd = normalizeWorkspacePath(input.cwd ?? previous.cwd ?? this.currentWorkspace())
+    const workspaceError = this.workspaceSaveError(cwd)
+    if (workspaceError) return { ok: false, error: workspaceError }
     if (!cwd) return { ok: false, error: '请选择工作区' }
     const permission = normalizePermission(input.permission ?? previous.permission ?? this.currentPermission(), this.permissionPresets().names)
     if (!permission) return { ok: false, error: '请选择权限' }

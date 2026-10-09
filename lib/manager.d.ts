@@ -170,6 +170,9 @@ export declare class ChannelManager {
     };
     private applyAssistant;
     currentWorkspace(): string;
+    /** 宿主已提供工作区列表时，空列表和未登记路径都不能保存。列表不可用时保持原行为。 */
+    private workspaceSaveError;
+    private registeredWorkspacePaths;
     private applyWorkspace;
     currentPermission(): PermissionPreset;
     private applyPermission;
