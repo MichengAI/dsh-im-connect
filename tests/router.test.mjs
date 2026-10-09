@@ -268,6 +268,7 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
   const created = []
   const createdOptions = []
   const permissionSelections = []
+  const logs = []
   const ctx = {
     permissionPresets: {
       set(session, permission) { permissionSelections.push({ sessionId: session.id, permission }) },
@@ -306,8 +307,8 @@ function makeRouter(t, { archivedIds = [], resumeFails = new Set(), collideIds =
     agentPreset: 'standard',
     mergeTimeoutSecs: 5,
     permissionPreset: 'danger-full-access',
-  }, () => undefined, resolveConfig, { disposeTimeoutMs })
-  return { router, store, created, createdOptions, archivedIds, permissionSelections, ctx }
+  }, line => logs.push(line), resolveConfig, { disposeTimeoutMs })
+  return { router, store, created, createdOptions, archivedIds, permissionSelections, logs, ctx }
 }
 
 test('轮换保留历史句柄，打开历史不换绑，停用统一释放且不重复释放', async t => {
@@ -738,6 +739,21 @@ test('工作区挂载失败或创建中取消不替换当前绑定', async t => 
   f.ctx.agents.create = async opts => { const result = await create(opts); scope.abort(); return result }
   await assert.rejects(f.router.rotate('wecom', 'dm', 'attach', '新', { signal: scope.signal }), { name: 'AbortError' })
   assert.equal(f.store.get('wecom:dm:attach').sessionId, old.sessionId)
+})
+
+test('首选工作区未注册时回退挂载到已注册工作区并写警告日志', async t => {
+  const f = makeRouter(t)
+  const attached = []
+  const get = f.ctx.get
+  f.ctx.get = name => name === 'workspaceRegistry' ? {
+    list: () => [
+      { path: '/registered/first', async attachSession(id) { attached.push(['/registered/first', id]) } },
+      { path: '/registered/second', async attachSession(id) { attached.push(['/registered/second', id]) } },
+    ],
+  } : get(name)
+  const binding = await f.router.getOrCreate('wecom', 'dm', 'fallback', '消息')
+  assert.deepEqual(attached.map(([path]) => path), ['/registered/first'])
+  assert.ok(f.logs.some(line => line.includes('已回退挂到 /registered/first') && line.includes(binding.sessionId)))
 })
 
 test('索引写入失败保留原磁盘映射与内存绑定', async t => {

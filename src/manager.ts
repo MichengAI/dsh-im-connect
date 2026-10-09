@@ -237,6 +237,7 @@ export class ChannelManager {
   private readonly diagnosticJobs = new Map<string, Promise<AccountDiagnosticResult>>()
   private readonly diagnosticAbort = new AbortController()
   private readonly channelOperations = new KeyedSerialQueue()
+  private warnedUnverifiedWorkspace = false
   private apiDisposers: Array<() => void> = []
   // dispose 后阻止 initEnabled/startOne 再拉起渠道，避免插件重载时新旧双实例并存
   private disposed = false
@@ -917,10 +918,16 @@ export class ChannelManager {
     return this.store.cwd || this.engineConfig.cwd
   }
 
-  /** 宿主已提供工作区列表时，空列表和未登记路径都不能保存。列表不可用时保持原行为。 */
+  /** 宿主已提供工作区列表时，空列表和未登记路径都不能保存。列表不可用时保持原行为，仅警告一次。 */
   private workspaceSaveError(cwd: string | undefined): string | undefined {
     const registered = this.registeredWorkspacePaths()
-    if (!registered) return undefined
+    if (!registered) {
+      if (!this.warnedUnverifiedWorkspace) {
+        this.warnedUnverifiedWorkspace = true
+        this.log('[manager] 宿主工作区列表暂不可读，本次保存跳过工作区校验；账号可能记下未注册路径，消息会话将回退挂载到其他工作区')
+      }
+      return undefined
+    }
     if (registered.length === 0) return '请先添加工作区'
     if (!cwd || !registered.some(path => sameWorkspacePath(path, cwd))) return '请选择工作区'
     return undefined

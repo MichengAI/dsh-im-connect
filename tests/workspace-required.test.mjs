@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ChannelManager } from '../lib/manager.js'
 
-function makeManager(t, workspaces) {
+function makeManager(t, workspaces, log = () => undefined) {
   const stateDir = mkdtempSync(join(tmpdir(), 'im-connect-workspace-required-'))
   const manager = new ChannelManager({
     ctx: {
@@ -16,7 +16,7 @@ function makeManager(t, workspaces) {
       },
     },
     stateDir,
-    log: () => undefined,
+    log,
     engineConfig: {
       cwd: 'D:\\DeepSeekHarness\\Data\\profiles\\desktop',
       provider: 'provider',
@@ -60,4 +60,15 @@ test('选中已有工作区后允许保存', async (t) => {
   const result = await manager.connect('telegram', { token: 'listed-workspace' }, { ...settings, cwd: 'D:/proj/' })
   assert.equal(result.ok, true)
   assert.equal(manager.store.channels[result.accountId].cwd, 'D:/proj/')
+})
+
+test('宿主工作区列表不可读时跳过校验并只警告一次', async (t) => {
+  const logs = []
+  const manager = makeManager(t, undefined, (line) => logs.push(line))
+  const first = await manager.connect('telegram', { token: 'unverified-1' }, settings)
+  const second = await manager.connect('telegram', { token: 'unverified-2' }, settings)
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, true)
+  assert.equal(manager.store.channels[first.accountId].cwd, settings.cwd)
+  assert.equal(logs.filter((line) => line.includes('跳过工作区校验')).length, 1)
 })

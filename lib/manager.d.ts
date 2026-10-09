@@ -107,6 +107,7 @@ export declare class ChannelManager {
     private readonly diagnosticJobs;
     private readonly diagnosticAbort;
     private readonly channelOperations;
+    private warnedUnverifiedWorkspace;
     private apiDisposers;
     private disposed;
     constructor(options: {
@@ -170,7 +171,7 @@ export declare class ChannelManager {
     };
     private applyAssistant;
     currentWorkspace(): string;
-    /** 宿主已提供工作区列表时，空列表和未登记路径都不能保存。列表不可用时保持原行为。 */
+    /** 宿主已提供工作区列表时，空列表和未登记路径都不能保存。列表不可用时保持原行为，仅警告一次。 */
     private workspaceSaveError;
     private registeredWorkspacePaths;
     private applyWorkspace;

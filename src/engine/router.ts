@@ -655,10 +655,12 @@ export class SessionRouter {
       return leftHit - rightHit
     })
     let lastError = ''
-    for (const workspace of ordered.filter(item => !cwd || this.samePath(item.path, preferred))) {
+    for (const workspace of ordered) {
       try {
         await workspace.attachSession(sessionId)
-        this.log(`[router] 已把 ${sessionId} 挂到工作区 ${workspace.path}`)
+        // 首选工作区未注册时按宿主列表顺序回退，避免入站消息整体失败；同时写警告日志提示管理员修正账号配置。
+        if (this.samePath(workspace.path, preferred)) this.log(`[router] 已把 ${sessionId} 挂到工作区 ${workspace.path}`)
+        else this.log(`[router] 警告：会话 ${sessionId} 的工作区 ${preferred} 未注册，已回退挂到 ${workspace.path}；请在 设置 → IM助理 中修正该账号的工作区`)
         return
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
