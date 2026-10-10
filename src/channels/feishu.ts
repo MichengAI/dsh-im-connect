@@ -1,5 +1,6 @@
 import { channelNotice } from '../engine/command-locale.js'
 import { choiceSendError, ChoiceSendError } from '../engine/choice-delivery.js'
+import { afterPartialDelivery, DeliveryRejected } from '../engine/deferred-delivery.js'
 import { diagnosticJson, platformResult, probe, requireDiagnostic } from './diagnostics.js'
 import { fileOperation } from './file-send.js'
 import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
@@ -25,6 +26,19 @@ export function splitByTableLimit(text: string, maxTables = FEISHU_CARD_MAX_TABL
   }
   parts.push(value.slice(from))
   return parts.filter((part) => part.trim() !== '')
+}
+
+/** 飞书限流：消息接口 230020 / 11232，通用频控 99991400（HTTP 429，旧接口为 400）。 */
+const FEISHU_THROTTLE_CODES = new Set([230020, 11232, 99991400])
+
+function isThrottleCode(code: unknown): boolean {
+  return FEISHU_THROTTLE_CODES.has(Number(code))
+}
+
+/** SDK 在 HTTP 非 2xx 时抛 AxiosError：429，或响应体带限流码，说明请求被限流、未被受理。 */
+function throttledResponse(error: unknown): boolean {
+  const response = (error as { response?: { status?: number; data?: { code?: unknown } } } | undefined)?.response
+  return response?.status === 429 || isThrottleCode(response?.data?.code)
 }
 
 // 沿用 SDK 允许缺省业务码的响应，同时兼容数字和字符串零码。
@@ -243,24 +257,35 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       if (!client) throw new Error(`${id}: 尚未连接`)
       const sender = client
       // 普通回复也走卡片 markdown，标题、列表和表格才会被渲染；按表格数量拆卡。
+      let delivered = false
       for (const part of splitByTableLimit(text)) {
-        // 网络异常直接交给上层；只有明确业务拒绝才回退，避免重复投递。
-        const card = await sender.im.message.create({
-          params: { receive_id_type: 'chat_id' },
-          data: {
-            receive_id: chatId,
-            msg_type: 'interactive',
-            content: JSON.stringify({ config: { wide_screen_mode: true }, elements: [{ tag: 'markdown', content: part }] }),
-          },
-        }) as { code?: number | string } | undefined
-        if (!isRejectedCode(card?.code)) continue
-        const rejected = card?.code
-        // 卡片被拒（内容过大、接口不支持等）时退回纯文本，不丢正文。
-        const plain = await sender.im.message.create({
-          params: { receive_id_type: 'chat_id' },
-          data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text: part }) },
-        }) as { code?: number | string } | undefined
-        if (isRejectedCode(plain?.code)) throw new Error(`${id}: text-send-rejected code=${plain?.code} card=${String(rejected)}`)
+        try {
+          // 网络异常直接交给上层；只有明确业务拒绝才回退，避免重复投递。
+          const card = await sender.im.message.create({
+            params: { receive_id_type: 'chat_id' },
+            data: {
+              receive_id: chatId,
+              msg_type: 'interactive',
+              content: JSON.stringify({ config: { wide_screen_mode: true }, elements: [{ tag: 'markdown', content: part }] }),
+            },
+          }) as { code?: number | string } | undefined
+          if (!isRejectedCode(card?.code)) { delivered = true; continue }
+          // 被限流时改发纯文本只会再被限流，直接交给上层退避重试。
+          if (isThrottleCode(card?.code)) throw new DeliveryRejected(`${id}: text-send-throttled code=${card?.code}`)
+          const rejected = card?.code
+          // 卡片被拒（内容过大、接口不支持等）时退回纯文本，不丢正文。
+          const plain = await sender.im.message.create({
+            params: { receive_id_type: 'chat_id' },
+            data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text: part }) },
+          }) as { code?: number | string } | undefined
+          if (isThrottleCode(plain?.code)) throw new DeliveryRejected(`${id}: text-send-throttled code=${plain?.code}`)
+          if (isRejectedCode(plain?.code)) throw new Error(`${id}: text-send-rejected code=${plain?.code} card=${String(rejected)}`)
+          delivered = true
+        } catch (error) {
+          const normalized = error instanceof DeliveryRejected || !throttledResponse(error)
+            ? error : new DeliveryRejected(`${id}: text-send-throttled http=${(error as { response?: { status?: number } }).response?.status}`)
+          throw delivered ? afterPartialDelivery(normalized) : normalized
+        }
       }
     },
     async sendChoices(message, text, buttons) {

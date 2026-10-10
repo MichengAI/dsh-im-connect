@@ -1,4 +1,5 @@
 import { choiceSendError } from '../engine/choice-delivery.js'
+import { afterPartialDelivery, DeliveryRejected } from '../engine/deferred-delivery.js'
 import { channelNotice } from '../engine/command-locale.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
 import { JsonStateFile } from '../engine/json-state.js'
@@ -255,7 +256,9 @@ function displayName(message: DiscordMessage): string | undefined {
 }
 
 function discordHttpError(status: number, providerCode?: number): Error {
-  return Object.assign(new Error(`discord-http-${status}`), {
+  const message = `discord-http-${status}`
+  // 429 表示限流、请求未被受理，重发不会重复；其余失败保持结果不明。
+  return Object.assign(status === 429 ? new DeliveryRejected(message) : new Error(message), {
     status,
     rejected: status >= 400 && status < 500,
     ...(providerCode === undefined ? {} : { providerCode }),
@@ -829,8 +832,11 @@ export function createDiscordChannel(config: DiscordConfig, log: (line: string) 
       const rendered = prepareDiscordMarkdown(text)
       // 网关已经分片；只有表格转换等让正文超限时才需要再拆。
       const parts = codePoints(rendered).length <= MESSAGE_LIMIT ? [rendered] : splitText(rendered, MESSAGE_LIMIT)
+      let delivered = false
       for (const chunk of parts) {
-        if (chunk) await createMessage(chatId, chunk)
+        if (!chunk) continue
+        try { await createMessage(chatId, chunk) } catch (error) { throw delivered ? afterPartialDelivery(error) : error }
+        delivered = true
       }
     },
     async sendFile(chatId, file, signal) {

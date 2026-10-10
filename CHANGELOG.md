@@ -4,6 +4,13 @@
 
 Recent published versions are listed below. Git tags and GitHub Releases now mirror these entries; historical sections retain links to their original release commits.
 
+## 0.1.72 - 2026-10-11
+
+- WeChat replies no longer go missing when the platform briefly refuses a send (`ret=-2 prepare failed`). The reply is retried for up to about 30 seconds, and if it still cannot go out it is queued for automatic redelivery instead of being dropped.
+- Telegram, Slack, Discord, Feishu, DingTalk and QQ get the same protection when the platform rate-limits a reply. Only failures where the platform clearly did not accept the message are retried, so a timeout or a dropped connection never produces a duplicate message.
+- A long reply that was already partly delivered is not resent in full, even if a later part is refused.
+- Restart DSH and refresh the page after upgrading.
+
 ## 0.1.71 - 2026-10-09
 
 - Saving an account now requires a workspace that is already registered in DSH. If there are none, QR setup and manual confirm stay disabled until you add one.

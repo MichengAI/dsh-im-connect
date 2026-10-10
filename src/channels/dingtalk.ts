@@ -3,12 +3,16 @@ import type { ChannelAdapter, ImMessage, ImMedia, ReplyStream } from '../engine/
 import { randomUUID } from 'node:crypto'
 import { diagnosticJson, probe, requireDiagnostic } from './diagnostics.js'
 import { ChoiceSendError } from '../engine/choice-delivery.js'
+import { DeliveryRejected } from '../engine/deferred-delivery.js'
 import { fileForm, fileRequest } from './file-send.js'
 import { DingtalkCardClient, openDingtalkCardStream, type CardTarget } from './dingtalk-card.js'
 import { validateAdditionalImageHosts } from './image-host-policy.js'
 import { DingtalkTokenCache } from './dingtalk-token-cache.js'
 import { timeoutSignal } from '../engine/abort.js'
 import { requestChannelBytes, fileMedia, imageMedia, MAX_CHANNEL_IMAGES, channelImageFailureReason, channelImageDownloadHost } from './channel-image-download.js'
+
+/** 自定义机器人每分钟限 20 条：超限返回 130101（send too fast）或 410100，并限流一段时间。 */
+const DINGTALK_THROTTLE_CODES = new Set([130101, 410100])
 
 /** HTTP 成功不代表机器人接受了正文；业务拒绝必须向交付层传播。 */
 async function sendWebhookText(webhook: string, text: string): Promise<void> {
@@ -18,10 +22,17 @@ async function sendWebhookText(webhook: string, text: string): Promise<void> {
     body: JSON.stringify({ msgtype: 'text', text: { content: text } }),
     signal: timeoutSignal(30_000),
   })
-  if (!res.ok) throw new Error(`dingtalk send HTTP ${res.status}`)
+  if (!res.ok) {
+    const message = `dingtalk send HTTP ${res.status}`
+    throw res.status === 429 ? new DeliveryRejected(message) : new Error(message)
+  }
   let result: { errcode?: number | string } | null
   try { result = await res.json() as typeof result } catch { throw new Error('dingtalk text-send-invalid-response') }
-  if (result?.errcode !== 0 && result?.errcode !== '0') throw new Error(`dingtalk text-send-rejected errcode=${result?.errcode ?? 'missing'}`)
+  if (result?.errcode !== 0 && result?.errcode !== '0') {
+    const message = `dingtalk text-send-rejected errcode=${result?.errcode ?? 'missing'}`
+    // 限流表示机器人没有受理该消息，重发不会重复；其余业务拒绝保持原有语义。
+    throw DINGTALK_THROTTLE_CODES.has(Number(result?.errcode)) ? new DeliveryRejected(message) : new Error(message)
+  }
 }
 
 async function postDingtalk(path: string, body: unknown, signal: AbortSignal, headers: Record<string, string> = {}) {

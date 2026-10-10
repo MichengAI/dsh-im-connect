@@ -1,4 +1,5 @@
 import { choiceSendError } from '../engine/choice-delivery.js'
+import { DeliveryRejected } from '../engine/deferred-delivery.js'
 import { notice } from '../engine/command-locale.js'
 import { diagnosticJson, DiagnosticError, probe, requireDiagnostic } from './diagnostics.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
@@ -111,6 +112,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       } catch (error) {
         // 响应超时或连接中断时，原消息可能已经送达，不能再发一份。
         if ((error as { rejected?: boolean })?.rejected !== true) throw error
+        // 限流时再发一次纯文本只会再被限流，直接交给上层退避重试。
+        if (error instanceof DeliveryRejected) throw error
         if (richUnsupported(error)) richDisabled = true
       }
     }
@@ -126,7 +129,9 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     })
     const data = (await res.json()) as { ok: boolean; description?: string; error_code?: number; result: T }
     if (!data.ok) {
-      const error = Object.assign(new Error(`telegram ${method}: ${data.description ?? 'unknown'}`), { status: data.error_code, rejected: true })
+      const message = `telegram ${method}: ${data.description ?? 'unknown'}`
+      // 429 表示平台因限流未受理该请求，重发不会重复。
+      const error = Object.assign(data.error_code === 429 ? new DeliveryRejected(message) : new Error(message), { status: data.error_code, rejected: true })
       if (data.error_code === 401) (error as Error & { code?: string }).code = 'telegram-401'
       throw error
     }

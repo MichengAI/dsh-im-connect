@@ -64,5 +64,10 @@ export declare class DeliveryUnavailable extends Error {
 export declare class DeliveryRejected extends Error {
     name: string;
 }
+/**
+ * 渠道内部分多片发送时，已有分片送达后再被拒收，就不再是「整条未送达」：
+ * 整条重发会让用户看到重复内容，因此退化为结果不明的普通错误。
+ */
+export declare function afterPartialDelivery(error: unknown): unknown;
 export {};
 //# sourceMappingURL=deferred-delivery.d.ts.map
