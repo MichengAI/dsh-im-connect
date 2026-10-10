@@ -27,6 +27,12 @@ export interface TurnCompletion {
     items: MessageProgress[];
     status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed';
 }
+/**
+ * 一次回复投递的收口信号。
+ * `true`=全部送达，`false`=有失败且结果不明，`'rejected'`=一片都没送到、
+ * 且失败全部是平台明确拒绝（可安全自动补发），`undefined`=本回合没有正文。
+ */
+type DeliverySignal = boolean | 'rejected' | undefined;
 /** 以 user/message 的 id 或 source.rpcId 认领回合，不按聊天或 FIFO 猜测任务归属。 */
 export declare class ProgressTracker {
     private readonly onComplete;
@@ -35,7 +41,7 @@ export declare class ProgressTracker {
     private readonly ended;
     private readonly turns;
     private readonly currentTurn;
-    constructor(onComplete?: (result: TurnCompletion) => void, onSettled?: (sessionId: string, turn: number, delivered: boolean) => void);
+    constructor(onComplete?: (result: TurnCompletion) => void, onSettled?: (sessionId: string, turn: number, delivered: boolean, rejected: boolean) => void);
     hasTurn(sessionId: string, turn: number | undefined): boolean;
     hasNewerTurn(sessionId: string, turn: number): boolean;
     begin(sessionId: string, requestId: string, items: MessageProgress[]): () => void;
@@ -59,8 +65,9 @@ export declare class ProgressTracker {
         };
         turn?: number;
     }): void;
-    delivery(sessionId: string, turn: number | undefined, work: Promise<boolean | undefined>): void;
+    delivery(sessionId: string, turn: number | undefined, work: Promise<DeliverySignal>): void;
     waiting(sessionId: string, waiting: boolean): () => void;
     cancel(channelId?: string, sessionId?: string): void;
 }
+export {};
 //# sourceMappingURL=message-progress.d.ts.map

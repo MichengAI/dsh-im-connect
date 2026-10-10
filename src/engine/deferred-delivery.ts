@@ -107,10 +107,17 @@ export class DeferredDelivery {
     for (const id of ids) this.patch(id, { status: 'unknown' })
     return ids
   }
-  complete(sessionId: string, turn: number, ok: boolean): void {
+  /**
+   * 实时投递收口。`ok` 表示全部确认送达；`rejected` 表示一片都没送到、
+   * 且每次失败都是平台明确拒绝（服务端已应答），此时不存在「可能已送达」
+   * 的歧义，直接置为 `ready`，交回 30s 巡检自动补发。
+   * 其余失败保持 `unknown`，不猜测、不自动重发。
+   */
+  complete(sessionId: string, turn: number, ok: boolean, rejected = false): void {
     for (const e of this.entries) if (e.sessionId === sessionId && e.turn === turn && this.active.has(e.id)) {
       // waiting 表示实时路径根本未发送，留给冷读取；unknown 不猜测为失败。
       if (e.status === 'unknown' && ok) this.patch(e.id, { status: 'sent' })
+      else if (e.status === 'unknown' && rejected) this.patch(e.id, { status: 'ready' })
       this.active.delete(e.id)
     }
   }
@@ -167,3 +174,12 @@ export class DeferredDelivery {
   }
 }
 export class DeliveryUnavailable extends Error {}
+
+/**
+ * 渠道显式声明「平台已应答且明确拒收，本次发送没有落地」。
+ * 只有抛出该类型时，引擎才会退避重试并允许自动补发；
+ * 其余错误（超时、网络中断、本地校验或上传失败）一律按「送达未知」处理。
+ */
+export class DeliveryRejected extends Error {
+  override name = 'DeliveryRejected'
+}

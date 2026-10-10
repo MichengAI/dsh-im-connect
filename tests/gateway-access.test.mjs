@@ -264,7 +264,7 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}, options = {}) {
     agentPreset: 'standard',
     mergeTimeoutSecs: 1,
     permissionPreset: 'danger-full-access',
-  }, () => undefined, onUnauthorized, undefined, options.resolvePrivateAccess, options.resolveCommandPermissions)
+  }, () => undefined, onUnauthorized, undefined, options.resolvePrivateAccess, options.resolveCommandPermissions, undefined, [0])
   const sent = []
   let inbound
   engine.register({
