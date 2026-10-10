@@ -20,6 +20,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { writePrivateFileSync } from '../engine/secure-file.js'
 import { isAbortError, sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
+import { DeliveryRejected } from '../engine/deferred-delivery.js'
 import { backupCorruptFileSync } from '../engine/atomic-file.js'
 import { diagnosticJson, DiagnosticError, platformResult, probe, requireDiagnostic } from './diagnostics.js'
 
@@ -38,6 +39,8 @@ export interface WeixinChannelConfig {
 const BASE_URL = 'https://ilinkai.weixin.qq.com'
 /** CDN 基址（官方插件同款）。 */
 export const CDN_BASE_URL = 'https://novac2c.cdn.weixin.qq.com/c2c'
+/** 出站消息接口；只有它的拒收会被标记为 {@link DeliveryRejected}。 */
+const SEND_MESSAGE_PATH = '/ilink/bot/sendmessage'
 export const MAX_WEIXIN_MEDIA_BYTES = 50 * 1024 * 1024
 
 /** 消息 item 类型：1=文本 2=图片 3=语音 4=文件 5=视频。 */
@@ -292,13 +295,19 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       body: JSON.stringify(body),
       signal: AbortSignal.any([timeoutSignal(timeoutMs, lifecycle?.signal), ...(signal ? [signal] : [])]),
     })
-    if (!res.ok) throw new Error(`weixin ${path} http ${res.status}`)
+    if (!res.ok) {
+      const message = `weixin ${path} http ${res.status}`
+      // 429/503 表示平台未受理该请求；其余 5xx 可能已部分处理，不能断言没有送达。
+      throw path === SEND_MESSAGE_PATH && (res.status === 429 || res.status === 503) ? new DeliveryRejected(message) : new Error(message)
+    }
     const data = (await res.json()) as Json
     const ret = Number(data.ret ?? 0)
     const errcode = Number(data.errcode ?? 0)
     if (tolerateRet1 && ret === 1 && errcode === 0) return data
     if (ret !== 0 || errcode !== 0) {
-      throw new Error(`weixin ${path} ret=${ret} errcode=${errcode} ${String(data.errmsg ?? '')}`)
+      const message = `weixin ${path} ret=${ret} errcode=${errcode} ${String(data.errmsg ?? '')}`
+      // ret=-2（prepare failed）是 iLink 间歇性拒收：消息未入队，重发不会重复。
+      throw path === SEND_MESSAGE_PATH && ret === -2 && errcode === 0 ? new DeliveryRejected(message) : new Error(message)
     }
     return data
   }
@@ -674,7 +683,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   async function sendRaw(toUserId: string, item: Json, clientId: string, signal?: AbortSignal): Promise<void> {
     const contextToken = state.contextTokens[toUserId]
     await outbound.run(toUserId, () => request(
-      '/ilink/bot/sendmessage',
+        SEND_MESSAGE_PATH,
       {
         msg: {
           from_user_id: '',

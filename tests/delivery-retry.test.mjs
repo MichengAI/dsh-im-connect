@@ -4,24 +4,69 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ImEngine, isDefiniteSendFailure } from '../lib/engine/gateway.js'
+import { DeliveryRejected } from '../lib/engine/deferred-delivery.js'
 import { SessionMapStore } from '../lib/engine/session-store.js'
 import { SeenStore } from '../lib/engine/seen-store.js'
+import { createWeixinChannel, persistWeixinLogin } from '../lib/channels/weixin.js'
 
 const message = { chatId: 'chat', userId: 'user', kind: 'dm', text: 'question' }
 const REPLY = 'original answer'
-/** 微信上游在拿到响应体之后给出的明确拒绝。 */
-const rejected = () => new Error('weixin /ilink/bot/sendmessage ret=-2 errcode=0 prepare failed')
+/** 渠道显式标记的平台明确拒收（例如微信 ret=-2）。 */
+const rejected = () => new DeliveryRejected('weixin /ilink/bot/sendmessage ret=-2 errcode=0 prepare failed')
 const aborted = () => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
-test('只有平台已应答的失败才算明确拒绝，超时与网络失败一律不算', () => {
+test('只有渠道显式标记的拒收才算明确拒绝，其余错误一律不算', () => {
   assert.equal(isDefiniteSendFailure(rejected()), true)
-  assert.equal(isDefiniteSendFailure(new Error('weixin /ilink/bot/sendmessage http 500')), true)
+  // 普通 Error 可能来自本地校验、上传或媒体处理，不能推断为「平台已拒收」。
+  assert.equal(isDefiniteSendFailure(new Error('weixin /ilink/bot/sendmessage ret=-2 errcode=0 prepare failed')), false)
+  assert.equal(isDefiniteSendFailure(new Error('slack chat.postMessage failed')), false)
   assert.equal(isDefiniteSendFailure(aborted()), false)
   assert.equal(isDefiniteSendFailure(Object.assign(new Error('timed out'), { name: 'TimeoutError' })), false)
   assert.equal(isDefiniteSendFailure(new TypeError('fetch failed')), false)
   assert.equal(isDefiniteSendFailure('boom'), false)
   assert.equal(isDefiniteSendFailure(undefined), false)
+})
+
+/** 用伪造的 fetch 驱动微信 send，返回 send 抛出的错误（成功则为 undefined）。 */
+async function weixinSendError(t, respond) {
+  const dir = mkdtempSync(join(tmpdir(), 'weixin-send-reject-'))
+  persistWeixinLogin(dir, { allowedUserId: 'user' })
+  const previous = globalThis.fetch
+  t.after(() => { globalThis.fetch = previous; rmSync(dir, { recursive: true, force: true }) })
+  globalThis.fetch = async url => {
+    assert.match(String(url), /\/ilink\/bot\/sendmessage$/)
+    return respond()
+  }
+  const channel = createWeixinChannel({ enabled: true, botToken: 'TOKEN' }, () => {}, dir)
+  try { await channel.send('user', 'hi') } catch (error) { return error }
+  return undefined
+}
+
+test('微信 sendmessage：ret=-2 与 HTTP 429/503 标记为明确拒收', async t => {
+  for (const respond of [
+    () => Response.json({ ret: -2, errcode: 0, errmsg: 'prepare failed' }),
+    () => new Response('', { status: 503 }),
+    () => new Response('', { status: 429 }),
+  ]) {
+    const error = await weixinSendError(t, respond)
+    assert.ok(error instanceof DeliveryRejected, String(error))
+    assert.equal(isDefiniteSendFailure(error), true)
+  }
+})
+
+test('微信 sendmessage：其余失败保持结果不明，不触发重试', async t => {
+  for (const respond of [
+    () => Response.json({ ret: -14, errcode: 0 }),
+    () => Response.json({ ret: 0, errcode: -1 }),
+    () => new Response('', { status: 400 }),
+    () => new Response('', { status: 500 }),
+    () => new Response('', { status: 504 }),
+  ]) {
+    const error = await weixinSendError(t, respond)
+    assert.ok(error instanceof Error, '应当抛错')
+    assert.equal(isDefiniteSendFailure(error), false, error.message)
+  }
 })
 
 function fixture(t, delays = [0, 0, 0]) {
@@ -137,4 +182,24 @@ test('退避表可配，槽位数决定最大尝试次数', async t => {
   await f.run()
   assert.equal(f.attempts(REPLY), 5)
   assert.equal(f.status(), 'ready')
+})
+
+test('未标记为拒收的普通错误：不重试，也不自动补发', async t => {
+  const f = fixture(t)
+  f.plan.fail = text => text === REPLY ? new Error('local upload failed') : undefined
+  await f.run()
+  assert.equal(f.attempts(REPLY), 1)
+  assert.equal(f.status(), 'unknown')
+})
+
+test('退避等待中 dispose：立即结束，不再发送', async t => {
+  const f = fixture(t, [0, 60_000])
+  f.plan.fail = text => text === REPLY ? rejected() : undefined
+  const running = f.run()
+  while (f.attempts(REPLY) < 1) await tick()
+  await tick()
+  f.engine.dispose()
+  const timer = new Promise((_, reject) => { const id = setTimeout(() => reject(new Error('dispose 未打断退避等待')), 2_000); id.unref() })
+  await Promise.race([running, timer])
+  assert.equal(f.attempts(REPLY), 1)
 })

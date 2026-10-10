@@ -18,14 +18,13 @@ export interface DeliveryOutcome {
 /**
  * 平台是否已经明确答复「本次发送没有送达」。
  *
- * 渠道是在拿到平台响应体之后才抛错的（例如微信
- * `/ilink/bot/sendmessage ret=-2 errcode=0 prepare failed`，或 HTTP 5xx），
- * 说明请求确实到达了平台并被拒绝，重发不会让用户收到两条。
+ * 只认渠道显式抛出的 {@link DeliveryRejected}（例如微信
+ * `/ilink/bot/sendmessage ret=-2 … prepare failed`、HTTP 429/503）：
+ * 这类响应说明请求到达平台但未被受理，重发不会让用户收到两条。
  *
- * 反过来，超时与网络层失败下请求可能已经落地，重发就是重复消息，
- * 因此 `AbortError`/`TimeoutError`（含 `timeoutSignal`）以及 fetch 的
- * `TypeError('fetch failed')` 一律不算明确拒绝，保持「送达未知」，
- * 只由用户用 `/delivery retry` 决定。
+ * 不按「是不是普通 Error」推断：渠道里的普通错误还可能来自本地校验、
+ * 上传或媒体处理，也可能是平台已部分处理后的 5xx。超时与网络中断下
+ * 请求可能已经落地。这些都保持「送达未知」，只由用户用 `/delivery retry` 决定。
  */
 export declare function isDefiniteSendFailure(error: unknown): boolean;
 export declare class ImEngine {

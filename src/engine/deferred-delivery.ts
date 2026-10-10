@@ -174,3 +174,12 @@ export class DeferredDelivery {
   }
 }
 export class DeliveryUnavailable extends Error {}
+
+/**
+ * 渠道显式声明「平台已应答且明确拒收，本次发送没有落地」。
+ * 只有抛出该类型时，引擎才会退避重试并允许自动补发；
+ * 其余错误（超时、网络中断、本地校验或上传失败）一律按「送达未知」处理。
+ */
+export class DeliveryRejected extends Error {
+  override name = 'DeliveryRejected'
+}
