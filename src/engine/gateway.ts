@@ -1,4 +1,5 @@
 import { DeferredDelivery, DeliveryUnavailable, type DeferredEntry } from './deferred-delivery.js'
+import { isAbortError, sleepWithSignal } from './abort.js'
 import { readDeliveryHistory } from './delivery-history.js'
 import { FileInputError, filePromptParts } from './file-input.js'
 import { ChoiceStore, type Choice } from './choices.js'
@@ -28,6 +29,47 @@ import {
   type UserQuestionItem,
 } from './question.js'
 import type { ChannelAdapter, EngineConfig, ImMessage } from './types.js'
+
+/** 分片发送的退避表（毫秒）：第一次立即，随后 1s/3s/8s/20s，累计约 32s。 */
+const SEND_RETRY_DELAYS_MS = [0, 1_000, 3_000, 8_000, 20_000] as const
+
+/**
+ * 一条回复（含它的所有分片）允许用于等待重试的总时长。
+ * 退避是按分片走的，没有这个上限时一条多分片回复能把回合拖到几分钟。
+ */
+const SEND_RETRY_BUDGET_MS = 30_000
+
+/** 一次回复投递的收口状态，由 {@link Gateway.deliver} 就地填写。 */
+export interface DeliveryOutcome {
+  /** 是否全部送达；任一出现失败即为 false。 */
+  ok: boolean
+  /** 本次是否产生了正文内容。 */
+  content?: boolean
+  /**
+   * 一片都没送到，且每次失败都是平台明确拒绝 —— 可安全自动补发。
+   * 只在这里为 true；任何一次结果不明的失败都会让它保持 false。
+   */
+  definite?: boolean
+}
+
+/**
+ * 平台是否已经明确答复「本次发送没有送达」。
+ *
+ * 渠道是在拿到平台响应体之后才抛错的（例如微信
+ * `/ilink/bot/sendmessage ret=-2 errcode=0 prepare failed`，或 HTTP 5xx），
+ * 说明请求确实到达了平台并被拒绝，重发不会让用户收到两条。
+ *
+ * 反过来，超时与网络层失败下请求可能已经落地，重发就是重复消息，
+ * 因此 `AbortError`/`TimeoutError`（含 `timeoutSignal`）以及 fetch 的
+ * `TypeError('fetch failed')` 一律不算明确拒绝，保持「送达未知」，
+ * 只由用户用 `/delivery retry` 决定。
+ */
+export function isDefiniteSendFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  if (isAbortError(error)) return false
+  if (error instanceof TypeError) return false
+  return true
+}
 
 interface AgentLike {
   id?: string
@@ -93,8 +135,8 @@ export class ImEngine {
   private readonly choices: ChoiceStore
   private readonly progress = new ProgressTracker(result => {
     void this.notifyCompletion(result).catch(() => this.log('[im-progress] 完成通知发送失败，不重试任务'))
-  }, (sessionId, turn, delivered) => {
-    try { this.deferred.complete(sessionId, turn, delivered) }
+  }, (sessionId, turn, delivered, rejected) => {
+    try { this.deferred.complete(sessionId, turn, delivered, rejected) }
     catch { this.log('[im-delivery] 交付确认落盘失败，保留未知状态') }
   })
   private readonly mergedMessages = new Map<string, ImMessage[]>()
@@ -114,6 +156,8 @@ export class ImEngine {
     private readonly resolvePrivateAccess: (channelId: string) => 'approved' | 'all' = () => 'approved',
     private readonly resolveCommandPermissions: (channelId: string) => CommandPermissions = () => normalizeCommandPermissions(undefined),
     deliveryFile?: string,
+    /** 分片发送的退避表（毫秒）；默认 {@link SEND_RETRY_DELAYS_MS}，测试可传 `[0]` 关闭等待。 */
+    private readonly sendRetryDelaysMs: readonly number[] = SEND_RETRY_DELAYS_MS,
   ) {
     this.deferred = new DeferredDelivery(deliveryFile)
     if (deliveryFile) {
@@ -942,10 +986,13 @@ export class ImEngine {
     const skip = (unavailable || invalid) && ['assistant/chunk', 'assistant/message', 'turn/end'].includes(event.type ?? '')
     const trackedEnd = event.type === 'turn/end' && this.progress.hasTurn(id, event.data?.turn)
     this.progress.event(id, event)
-    const outcome = { ok: !skip, content: false }
+    const outcome: DeliveryOutcome = { ok: !skip, content: false }
     const work = skip ? Promise.resolve() : this.processSessionEvent(session, event, outcome, trackedEnd)
     if (event.type === 'assistant/message' && event.surfaceOp === 'append') {
-      this.progress.delivery(id, event.data?.turn, work.then(() => !outcome.ok ? false : outcome.content ? true : undefined, () => false))
+      this.progress.delivery(id, event.data?.turn, work.then(
+        () => !outcome.ok ? (outcome.definite ? 'rejected' as const : false) : outcome.content ? true : undefined,
+        () => false,
+      ))
     }
     return work.catch(error => { this.log(`[im-progress] 会话回复失败: ${error instanceof Error ? error.name : 'Error'}`) })
   }
@@ -953,7 +1000,7 @@ export class ImEngine {
   private async processSessionEvent(
     session: DeliverySession,
     event: { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } },
-    outcome: { ok: boolean; content: boolean },
+    outcome: DeliveryOutcome,
     trackedEnd = false,
   ): Promise<void> {
     const sessionId = session.id ? String(session.id) : ''
@@ -1105,19 +1152,50 @@ export class ImEngine {
   }
 
   /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
-  private async deliver(channel: ChannelAdapter, chatId: string, text: string, outcome?: { ok: boolean }): Promise<boolean> {
+  private async deliver(channel: ChannelAdapter, chatId: string, text: string, outcome?: DeliveryOutcome): Promise<boolean> {
     let deliveredAny = false
+    let ambiguous = false
+    // 重试预算按整条回复共享：钱花在第一个被拒的分片上，窗口一开后面的分片自然跟上。
+    const deadline = Date.now() + SEND_RETRY_BUDGET_MS
     for (const chunk of splitText(text, channel.maxMessageLength)) {
-      try {
-        await channel.send(chatId, chunk)
+      const result = await this.sendChunk(channel, chatId, chunk, deadline)
+      if (result.ok) {
         deliveredAny = true
         this.log(`[${channel.id}] 已投递 ${chatId}，长度 ${chunk.length}`)
-      } catch (error) {
+      } else {
         if (outcome) outcome.ok = false
-        this.log(`[${channel.id}] 回复失败: ${error instanceof Error ? error.message : String(error)}`)
+        if (!isDefiniteSendFailure(result.error)) ambiguous = true
+        this.log(`[${channel.id}] 回复失败: ${result.error instanceof Error ? result.error.message : String(result.error)}`)
       }
     }
+    // 一片都没送到、且每次失败都是平台明确拒绝：不存在重复投递风险，交给自动补发。
+    if (!deliveredAny && !ambiguous && outcome) outcome.definite = true
     return deliveredAny
+  }
+
+  /**
+   * 发送一个分片，平台明确拒绝时按 {@link SEND_RETRY_DELAYS_MS} 退避重试。
+   * 结果不明的失败（超时、网络中断）立即返回：请求可能已经送达。
+   * 等待超过 `deadline` 就放弃，让整条回复的重试开销有上界。
+   */
+  private async sendChunk(channel: ChannelAdapter, chatId: string, chunk: string, deadline: number): Promise<{ ok: true } | { ok: false; error: unknown }> {
+    let error: unknown
+    for (const [attempt, delay] of this.sendRetryDelaysMs.entries()) {
+      if (attempt > 0) {
+        if (this.disposed || Date.now() + delay > deadline) break
+        this.log(`[${channel.id}] 平台拒收，${delay / 1000}s 后重试（第 ${attempt + 1}/${this.sendRetryDelaysMs.length} 次）`)
+        await sleepWithSignal(delay)
+        if (this.disposed) break
+      }
+      try {
+        await channel.send(chatId, chunk)
+        return { ok: true }
+      } catch (caught) {
+        error = caught
+        if (!isDefiniteSendFailure(caught)) return { ok: false, error }
+      }
+    }
+    return { ok: false, error }
   }
 
   private formatQuestion(...args: Parameters<typeof formatUserQuestion>): string { return withReplyLocale(this.ctx, () => formatUserQuestion(...args)) }

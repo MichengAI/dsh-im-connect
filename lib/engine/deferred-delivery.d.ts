@@ -39,7 +39,13 @@ export declare class DeferredDelivery {
     patch(id: string, update: Partial<DeferredEntry>): void;
     claim(sessionId: string, turn: number, requestId: string): void;
     liveStart(sessionId: string, turn: number): string[];
-    complete(sessionId: string, turn: number, ok: boolean): void;
+    /**
+     * 实时投递收口。`ok` 表示全部确认送达；`rejected` 表示一片都没送到、
+     * 且每次失败都是平台明确拒绝（服务端已应答），此时不存在「可能已送达」
+     * 的歧义，直接置为 `ready`，交回 30s 巡检自动补发。
+     * 其余失败保持 `unknown`，不猜测、不自动重发。
+     */
+    complete(sessionId: string, turn: number, ok: boolean, rejected?: boolean): void;
     block(channelId: string): void;
     coldTurn(sessionId: string, turn: number | undefined): boolean;
     release(sessionId?: string, channelId?: string): void;

@@ -1,0 +1,140 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { ImEngine, isDefiniteSendFailure } from '../lib/engine/gateway.js'
+import { SessionMapStore } from '../lib/engine/session-store.js'
+import { SeenStore } from '../lib/engine/seen-store.js'
+
+const message = { chatId: 'chat', userId: 'user', kind: 'dm', text: 'question' }
+const REPLY = 'original answer'
+/** 微信上游在拿到响应体之后给出的明确拒绝。 */
+const rejected = () => new Error('weixin /ilink/bot/sendmessage ret=-2 errcode=0 prepare failed')
+const aborted = () => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
+const tick = () => new Promise(resolve => setImmediate(resolve))
+
+test('只有平台已应答的失败才算明确拒绝，超时与网络失败一律不算', () => {
+  assert.equal(isDefiniteSendFailure(rejected()), true)
+  assert.equal(isDefiniteSendFailure(new Error('weixin /ilink/bot/sendmessage http 500')), true)
+  assert.equal(isDefiniteSendFailure(aborted()), false)
+  assert.equal(isDefiniteSendFailure(Object.assign(new Error('timed out'), { name: 'TimeoutError' })), false)
+  assert.equal(isDefiniteSendFailure(new TypeError('fetch failed')), false)
+  assert.equal(isDefiniteSendFailure('boom'), false)
+  assert.equal(isDefiniteSendFailure(undefined), false)
+})
+
+function fixture(t, delays = [0, 0, 0]) {
+  const dir = mkdtempSync(join(tmpdir(), 'im-delivery-retry-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const store = new SessionMapStore(join(dir, 'sessions.json'))
+  const sessionId = 'im:test:dm:1700000000000:chat'
+  store.upsert('test:dm:chat', { sessionId, channel: 'test', kind: 'dm', chatId: 'chat', title: 'original', updatedAt: new Date().toISOString() })
+  const history = [], requests = [], logs = []
+  /** 每一次 send 尝试都记下来；失败计划按「消息文本 + 该文本第几次尝试」给定， */
+  /** 这样投递失败后追加的收尾提示不会与正文的退避次序互相干扰。 */
+  const calls = []
+  const attemptsByText = new Map()
+  /** 分片文本首次出现的顺序，用于按「第几片」而不是按长度制定失败计划。 */
+  const order = []
+  const plan = { fail: () => undefined }
+  const ctx = {
+    on() { return () => {} },
+    get(name) {
+      if (name === 'settings') return { get: () => ({ preference: 'zh' }) }
+      if (name === 'sessionController') {
+        return {
+          async *follow() { yield { type: 'snapshot', cursor: 4, hasMore: false, records: history.map(event => ({ type: 'event', event })) } },
+          prompt() { assert.fail('no replay') },
+          resolveAgent() { assert.fail('no agent') },
+        }
+      }
+    },
+  }
+  const engine = new ImEngine(ctx, store, new SeenStore(join(dir, 'seen.json')),
+    { cwd: dir, provider: 'p', model: 'm', agentPreset: '', mergeTimeoutSecs: 1, permissionPreset: '' },
+    line => logs.push(line), undefined, undefined, undefined, undefined, join(dir, 'delivery.json'), delays)
+  const channel = {
+    id: 'test', label: 'Test', maxMessageLength: 2000, start() {}, stop() {}, status: () => 'connected', setMessageHandler() {},
+    canDeliverDeferred: () => true,
+    async send(_chat, text) {
+      if (!attemptsByText.has(text)) order.push(text)
+      const attempt = (attemptsByText.get(text) ?? 0) + 1
+      attemptsByText.set(text, attempt)
+      const error = plan.fail(text, attempt)
+      calls.push({ text, ok: !error })
+      if (error) throw error
+    },
+  }
+  engine.register(channel)
+  engine.addAllowed('test', 'user')
+  engine.router.getOrCreate = async () => ({ sessionId })
+  engine.router.followup = (_binding, request) => { requests.push(request) }
+  t.after(() => engine.dispose())
+
+  /** 提交一条消息，喂完整回合事件，等交付收口落盘。 */
+  const run = async (text = REPLY) => {
+    await engine.inject(channel, message)
+    history.push(
+      { type: 'turn/start', seq: 1, data: { turn: 1 } },
+      { type: 'user/message', seq: 2, surfaceOp: 'append', data: requests.at(-1) },
+      { type: 'assistant/message', seq: 3, surfaceOp: 'append', data: { turn: 1, message: { content: [{ type: 'text', text }] } } },
+      { type: 'turn/end', seq: 4, data: { turn: 1, reason: { kind: 'completed' } } },
+    )
+    for (const event of history) await engine.onSessionEvent({ id: sessionId }, event)
+    await tick(); await tick()
+  }
+  return {
+    engine, channel, run, logs, plan,
+    attempts: text => attemptsByText.get(text) ?? 0,
+    delivered: () => calls.filter(call => call.ok).length,
+    chunkIndexOf: text => order.indexOf(text),
+    chunkCount: () => order.length,
+    status: () => engine.deferred.list()[0]?.status,
+  }
+}
+
+test('平台明确拒收：按退避重试，仍失败则标记 ready 交给自动补发', async t => {
+  const f = fixture(t)
+  f.plan.fail = text => text === REPLY ? rejected() : undefined
+  await f.run()
+  assert.equal(f.attempts(REPLY), 3, '三个退避槽位各尝试一次')
+  assert.equal(f.delivered(), 1, '只有收尾提示送达，正文一片都没有')
+  assert.equal(f.status(), 'ready', '明确拒绝没有歧义，可以自动补发')
+  assert.match(f.logs.join('\n'), /平台拒收，0s 后重试/)
+})
+
+test('结果不明的失败不重试', async t => {
+  const f = fixture(t)
+  f.plan.fail = text => text === REPLY ? aborted() : undefined
+  await f.run()
+  assert.equal(f.attempts(REPLY), 1, '超时/中断下请求可能已经送达，不重发')
+  assert.equal(f.status(), 'unknown', '结果不明不能自动补发')
+})
+
+test('首次被拒、重试成功：消息最终送达且不再补发', async t => {
+  const f = fixture(t)
+  f.plan.fail = (text, attempt) => text === REPLY && attempt === 1 ? rejected() : undefined
+  await f.run()
+  assert.equal(f.attempts(REPLY), 2)
+  assert.equal(f.delivered(), 1)
+  assert.equal(f.status(), 'sent')
+})
+
+test('部分送达不算明确拒绝：不自动补发，避免重复', async t => {
+  const f = fixture(t)
+  // 2500 字符会切成多片；第一片正常送达，之后每一片都明确拒收。
+  f.plan.fail = text => f.chunkIndexOf(text) > 0 ? rejected() : undefined
+  await f.run('x'.repeat(2500))
+  assert.ok(f.chunkCount() >= 2, `期望被切成多片，实际 ${f.chunkCount()} 片`)
+  assert.ok(f.delivered() >= 1, '第一片已送达')
+  assert.equal(f.status(), 'unknown', '有内容落地过，不能整条重发')
+})
+
+test('退避表可配，槽位数决定最大尝试次数', async t => {
+  const f = fixture(t, [0, 0, 0, 0, 0])
+  f.plan.fail = text => text === REPLY ? rejected() : undefined
+  await f.run()
+  assert.equal(f.attempts(REPLY), 5)
+  assert.equal(f.status(), 'ready')
+})
