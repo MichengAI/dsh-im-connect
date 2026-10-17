@@ -156,6 +156,45 @@ function qqRequestError(message: string, detail: { status?: number; errCode?: nu
   return Object.assign(new Error(message), detail)
 }
 
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'])
+const VIDEO_EXTENSIONS = new Set(['.mp4'])
+
+function matchesBytes(data: Uint8Array, offset: number, bytes: readonly number[]): boolean {
+  if (data.length < offset + bytes.length) return false
+  return bytes.every((byte, index) => data[offset + index] === byte)
+}
+
+function matchesAscii(data: Uint8Array, offset: number, text: string): boolean {
+  if (data.length < offset + text.length) return false
+  for (let index = 0; index < text.length; index += 1) if (data[offset + index] !== text.charCodeAt(index)) return false
+  return true
+}
+
+/** 与 channel-image-download.ts 的入站嗅探保持同一套魔数判据；这里对未知内容返回 false 而不抛错。 */
+function qqImageBytes(data: Uint8Array): boolean {
+  return matchesBytes(data, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    || matchesBytes(data, 0, [0xff, 0xd8, 0xff])
+    || matchesAscii(data, 0, 'GIF87a') || matchesAscii(data, 0, 'GIF89a')
+    || (matchesAscii(data, 0, 'RIFF') && matchesAscii(data, 8, 'WEBP'))
+}
+
+/** QQ 富媒体上传的 file_type：1 图片、2 视频、4 文件。先看魔数再看扩展名，因为文件可能被改名。 */
+export function qqUploadFileType(name: string, data: Uint8Array): 1 | 2 | 4 {
+  if (qqImageBytes(data)) return 1
+  if (matchesAscii(data, 4, 'ftyp')) return 2
+  const dot = name.lastIndexOf('.')
+  const extension = dot < 0 ? '' : name.slice(dot).toLowerCase()
+  if (IMAGE_EXTENSIONS.has(extension)) return 1
+  if (VIDEO_EXTENSIONS.has(extension)) return 2
+  return 4
+}
+
+/** 富媒体上传被业务拒绝时允许退回 file_type: 4；频率限制（429，请求未被受理）与取消不能重发。 */
+function qqMediaFallbackAllowed(error: unknown): boolean {
+  if (error instanceof DeliveryRejected) return false
+  return !(error instanceof Error && error.name === 'AbortError')
+}
+
 export function createQqChannel(config: QqChannelConfig, log: (line: string) => void): ChannelAdapter | undefined {
   const additionalImageHosts = validateAdditionalImageHosts(config.additionalImageHosts)
   const trustedMediaHosts = new Set(['multimedia.nt.qq.com', 'multimedia.nt.qq.com.cn', 'gchat.qpic.cn', ...additionalImageHosts])
@@ -521,9 +560,19 @@ export function createQqChannel(config: QqChannelConfig, log: (line: string) => 
       const target = targets.get(chatId)
       const group = target?.kind === 'group' || chatId.startsWith('g:')
       const root = group ? `/v2/groups/${chatId.replace(/^g:/, '')}` : `/v2/users/${chatId}`
-      const uploaded = await qqFetch<{ file_info?: string }>(`${root}/files`, { signal, method: 'POST',
-        body: JSON.stringify({ file_type: 4, file_data: Buffer.from(file.data).toString('base64'), file_name: file.name, srv_send_msg: false }),
+      const upload = (fileType: number) => qqFetch<{ file_info?: string }>(`${root}/files`, { signal, method: 'POST',
+        body: JSON.stringify({ file_type: fileType, file_data: Buffer.from(file.data).toString('base64'), file_name: file.name, srv_send_msg: false }),
       })
+      const fileType = qqUploadFileType(file.name, file.data)
+      let uploaded: { file_info?: string }
+      try {
+        uploaded = await upload(fileType)
+      } catch (error) {
+        // 平台可能不接受该富媒体类型：退回「文件」重试一次，既有可用性不变。
+        if (fileType === 4 || !qqMediaFallbackAllowed(error)) throw error
+        log(`[qq] 富媒体上传被拒（file_type=${fileType}），退回文件类型重试`)
+        uploaded = await upload(4)
+      }
       if (!uploaded.file_info) throw new Error('qq: 文件上传未返回 file_info')
       signal?.throwIfAborted()
       const seq = (target?.seq ?? 0) + 1

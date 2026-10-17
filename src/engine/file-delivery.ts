@@ -62,6 +62,17 @@ export function toolResultFailed(data: any): boolean {
   return data?.message?.content?.[0]?.isError === true
 }
 
+/** 文件在投递前已被删除（例如同一回合写入后又被清理）不是投递失败：静默跳过，不打扰用户。 */
+export function missingFileError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  if (typeof code === 'string') {
+    const tail = code.slice(code.lastIndexOf('/') + 1)
+    if (tail === 'not-found' || tail === 'not-regular-file') return true
+  }
+  const message = error instanceof Error ? error.message : ''
+  return message === 'not-regular-file' || message === 'file-not-found'
+}
+
 /** 复用 Chat 完整文件读取服务，宿主负责路径、文件类型和大小限制。 */
 export class FileDelivery {
   private readonly queue = new KeyedSerialQueue()
@@ -106,9 +117,11 @@ export class FileDelivery {
           await latest.channel.sendFile!(latest.chatId, { name, data: Buffer.from(result.data, 'base64') }, signal)
           sent.add(identity)
         } catch (error) {
-          ok = false
           if (this.lifetime.signal.aborted) { ok = false; return }
-          this.log(`[${initial.channel.id}] 文件回传失败（${error instanceof Error ? error.name : 'Error'}；敏感详情已隐藏）`)
+          if (missingFileError(error)) continue
+          ok = false
+          const code = typeof (error as { code?: unknown })?.code === 'string' ? ` code=${(error as { code: string }).code}` : ''
+          this.log(`[${initial.channel.id}] 文件回传失败（${error instanceof Error ? error.name : 'Error'}${code}；敏感详情已隐藏）`)
           const latest = target()
           if (!latest || latest.channel !== initial.channel || latest.chatId !== initial.chatId) { ok = false; return }
           const text = withReplyLocale(this.host, () => replyText('文件“{0}”未能发送，请在网页 Chat 中打开该文件；也可让助手重新交付。', name))
