@@ -39,8 +39,16 @@ interface TgUpdate {
     caption_entities?: Array<{ type: string; offset: number; length: number }>
     reply_to_message?: { from?: { id: number } }
     message_thread_id?: number
+    /** 是否属于某个话题（论坛超级群或已开启话题的私聊）。 */
+    is_topic_message?: boolean
     /** 服务消息：话题被改名（群组论坛才会推送），用于识别人工改名。 */
     forum_topic_edited?: { name?: string }
+    /**
+     * 服务消息：话题被创建。新建话题那一刻，Telegram 会先推一条只带
+     * `message_thread_id` + 本字段、**没有正文**的服务消息，紧接着再推一条
+     * 带正文但 **不带 `message_thread_id`** 的消息 —— 后者才是用户的输入。
+     */
+    forum_topic_created?: { name?: string; is_name_implicit?: boolean }
   }
 }
 
@@ -135,6 +143,35 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   // Only metadata is buffered until an album member mentions this bot. Scope
   // admission to chat + sender + album, and bound both lifetime and entry count.
   const albumAccess = new Map<string, { expires: number; addressed: boolean; pending: TgUpdate[]; count: number }>()
+  /**
+   * 新建话题后「首条用户消息」的线程号兜底。
+   *
+   * 私聊话题里新建一个话题时，Telegram 先推一条 `forum_topic_created` 服务消息
+   * （带 `message_thread_id`、**没有正文**），紧接着推用户真正发的那条消息，
+   * 但**那条不带 `message_thread_id`**。只认 `message_thread_id` 就会把这条
+   * 用户输入送进 General 会话，回复自然也就发到总消息里。
+   *
+   * 所以在这里记下服务消息的线程号，让紧随其后的那条消息继承。判据刻意收紧：
+   * 同一会话 + 同一发送者 + `message_id` 恰好 +1 + 10 秒内，且只认一次。
+   */
+  const pendingTopicStart = new Map<string, { threadId: number; messageId: number; expires: number }>()
+
+  /** 取一条入站消息真正所属的话题线程号（含新建话题首条消息的继承兜底）。 */
+  function threadOf(message: NonNullable<TgUpdate['message']>): number | undefined {
+    if (message.message_thread_id !== undefined) return message.message_thread_id
+    const sender = message.from?.id
+    if (sender === undefined || message.message_id === undefined) return undefined
+    const key = `${message.chat.id}:${sender}`
+    const pending = pendingTopicStart.get(key)
+    if (!pending) return undefined
+    if (Date.now() > pending.expires) {
+      pendingTopicStart.delete(key)
+      return undefined
+    }
+    if (message.message_id !== pending.messageId + 1) return undefined
+    pendingTopicStart.delete(key)
+    return pending.threadId
+  }
 
   // Rich message 是较新的 Bot API 方法；一旦确认不可用就一直走纯文本，避免每条消息都先失败一次。
   let richDisabled = false
@@ -265,6 +302,20 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
             onTopicEdited?.(telegramChatId(message.chat.id, message.message_thread_id), message.forum_topic_edited.name ?? '')
             continue
           }
+          // 话题创建同样是服务消息：本身没有正文，但紧随其后的那条用户消息
+          // 不带 message_thread_id，靠这里记下的线程号把它接回新话题。
+          if (message.forum_topic_created) {
+            const threadId = message.message_thread_id
+            const sender = message.from?.id
+            if (threadId !== undefined && sender !== undefined) {
+              const now = Date.now()
+              for (const [key, entry] of pendingTopicStart) if (entry.expires <= now) pendingTopicStart.delete(key)
+              // 只保留最近若干条，避免异常流量把表撑大。
+              if (pendingTopicStart.size >= 32) pendingTopicStart.delete(pendingTopicStart.keys().next().value!)
+              pendingTopicStart.set(`${message.chat.id}:${sender}`, { threadId, messageId: message.message_id, expires: now + 10_000 })
+            }
+            continue
+          }
           const direct = message.chat.type === 'private'
           let addressed = direct
             || String(message.reply_to_message?.from?.id ?? '') === botId
@@ -314,7 +365,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
             }
             if (stopped) break
             void handler?.({
-              chatId: telegramChatId(message.chat.id, message.message_thread_id),
+              chatId: telegramChatId(message.chat.id, threadOf(message)),
               userId: message.from ? String(message.from.id) : undefined,
               username: message.from?.username ?? message.from?.first_name,
               text,

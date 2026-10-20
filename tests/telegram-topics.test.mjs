@@ -215,3 +215,140 @@ test('Telegram 出站富文本携带 message_thread_id 且普通聊天不携带'
     restore()
   }
 })
+
+/**
+ * 回归：私聊话题里新建话题时，用户发的那条消息不带 message_thread_id。
+ *
+ * 原始数据（2026-10-20 抓自 Bot API 10.0，私聊话题模式）——两条 update 同一秒、
+ * message_id 相邻，第一条是建话题服务消息（有 thread、无正文），第二条才是用户输入：
+ *
+ *   {"update_id":126045478,"message":{"message_id":3292,"chat":{"id":1081564546,"type":"private"},
+ *    "date":1792495136,"message_thread_id":144127,
+ *    "forum_topic_created":{"name":"测试","icon_color":7322096,"is_name_implicit":true},
+ *    "is_topic_message":true}}
+ *   {"update_id":126045479,"message":{"message_id":3293,"chat":{"id":1081564546,"type":"private"},
+ *    "date":1792495136,"text":"测试"}}
+ *
+ * 修复前：第二条没有 message_thread_id → 落到 General 会话，回复也发到总消息里。
+ */
+test('新建话题后的首条消息继承话题线程号（私聊话题模式）', async () => {
+  let pollCount = 0
+  const restore = mockFetch(async (url, init) => {
+    const method = String(url).split('/').pop()
+    if (method === 'getMe') return { json: async () => ({ ok: true, result: { id: 99, username: 'test_bot', is_bot: true } }) }
+    if (method === 'getWebhookInfo') return { json: async () => ({ ok: true, result: { url: '' } }) }
+    if (method === 'getUpdates' && pollCount++ === 0) {
+      return {
+        json: async () => ({
+          ok: true,
+          result: [
+            {
+              update_id: 126045478,
+              message: {
+                message_id: 3292,
+                chat: { id: 1081564546, type: 'private' },
+                from: { id: 1081564546, username: 'Siiloo_817' },
+                date: 1792495136,
+                message_thread_id: 144127,
+                forum_topic_created: { name: '测试', icon_color: 7322096, is_name_implicit: true },
+                is_topic_message: true,
+              },
+            },
+            {
+              update_id: 126045479,
+              message: {
+                message_id: 3293,
+                chat: { id: 1081564546, type: 'private' },
+                from: { id: 1081564546, username: 'Siiloo_817' },
+                date: 1792495136,
+                text: '测试',
+              },
+            },
+          ],
+        }),
+      }
+    }
+    return new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true })
+    })
+  })
+
+  try {
+    const channel = createTelegramChannel({ token: 'test-token' }, () => undefined)
+    assert.ok(channel)
+    const received = []
+    channel.setMessageHandler((msg) => { received.push(msg) })
+    await channel.start()
+    for (let i = 0; i < 40 && received.length < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    // 建话题的服务消息不能进 agent（否则是一个没有输入的空回合）
+    assert.equal(received.length, 1, '只有带正文的那条应当被投递')
+    // 关键：用户输入必须落进新话题，而不是 General
+    assert.equal(received[0].chatId, '1081564546:144127')
+    assert.equal(received[0].text, '测试')
+    await channel.stop()
+  } finally {
+    restore()
+  }
+})
+
+test('新建话题的线程号不会串到后续无关消息上', async () => {
+  let pollCount = 0
+  const restore = mockFetch(async (url, init) => {
+    const method = String(url).split('/').pop()
+    if (method === 'getMe') return { json: async () => ({ ok: true, result: { id: 99, username: 'test_bot', is_bot: true } }) }
+    if (method === 'getWebhookInfo') return { json: async () => ({ ok: true, result: { url: '' } }) }
+    if (method === 'getUpdates' && pollCount++ === 0) {
+      return {
+        json: async () => ({
+          ok: true,
+          result: [
+            {
+              update_id: 201,
+              message: {
+                message_id: 500,
+                chat: { id: 777, type: 'private' },
+                from: { id: 777 },
+                date: 1792495136,
+                message_thread_id: 900,
+                forum_topic_created: { name: '新话题' },
+                is_topic_message: true,
+              },
+            },
+            // message_id 不相邻 → 不能继承 900
+            {
+              update_id: 202,
+              message: {
+                message_id: 505,
+                chat: { id: 777, type: 'private' },
+                from: { id: 777 },
+                date: 1792495136,
+                text: '无关消息',
+              },
+            },
+          ],
+        }),
+      }
+    }
+    return new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true })
+    })
+  })
+
+  try {
+    const channel = createTelegramChannel({ token: 'test-token' }, () => undefined)
+    const received = []
+    channel.setMessageHandler((msg) => { received.push(msg) })
+    await channel.start()
+    for (let i = 0; i < 40 && received.length < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    assert.equal(received.length, 1)
+    // 不相邻就不继承，仍按普通私聊处理
+    assert.equal(received[0].chatId, '777')
+    await channel.stop()
+  } finally {
+    restore()
+  }
+})
