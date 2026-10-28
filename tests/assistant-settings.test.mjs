@@ -509,10 +509,19 @@ test('设置导航图标走通用 mask 注入，不改宿主 svg 内容', () => 
   buttonWithSpan.textContent = 'IM Assistant'
   assert.equal(applySettingsNavIcon(buttonWithSpan, () => 'IM助理'), true, '英文导航行在中文配置下也能识别')
   assert.equal(buttonWithSpan.hasAttribute('data-ima-nav-icon'), true)
+  buttonWithSpan.attributes.clear()
 
-  // 必须兼容 Alpha/新版的全屏快捷键设置面板选择器
+  // 词典未就绪（返回 key "settings.label"）也能通过自身别名识别
+  span.textContent = 'IM 助理'
+  buttonWithSpan.textContent = 'IM 助理'
+  assert.equal(applySettingsNavIcon(buttonWithSpan, () => 'settings.label'), true, '词典未就绪时也能通过自身别名识别')
+  assert.equal(buttonWithSpan.hasAttribute('data-ima-nav-icon'), true)
+
+  // 必须兼容 Alpha/新版的全屏快捷键设置面板选择器与固化 SVG 遮罩
   assert.match(client, /\[data-shortcut-modal="settings"\] nav button/, '必须兼容宿主新版设置工作台选择器')
   assert.match(client, /ima-settings-nav-icon-style/, '必须具备独立导航图标样式表 ID 保障')
+  assert.match(client, /QUEUE_ICON_PATHS/, '必须具备固化的对话气泡矢量路径，杜绝空 mask')
+  assert.match(client, /QUEUE_ICON_MASK/, '样式表默认 mask 必须直接固化气泡 Data URL')
 })
 
 test('设置页账号行和账号设置都能填写名称备注', () => {

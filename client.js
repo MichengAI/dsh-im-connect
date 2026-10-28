@@ -677,6 +677,10 @@ window.__ModuleLoader__.load({
       return children;
     }
 
+    const QUEUE_ICON_PATHS = '<path d="M5 6.75H11"/><path d="M5 9H8"/><path d="M2.37067 11.2497C1.5872 9.89252 1.32042 8.29798 1.61945 6.7597C1.91847 5.22141 2.76317 3.84293 3.99801 2.87809C5.23285 1.91325 6.7747 1.427 8.33964 1.50888C9.90458 1.59076 11.3873 2.23526 12.5147 3.32369C13.6422 4.41232 14.3384 5.8717 14.4751 7.43304C14.6118 8.99438 14.1797 10.5525 13.2585 11.8205C12.3372 13.0885 10.9889 13.9809 9.4617 14.3334C8.18666 14.6277 6.8587 14.529 5.64964 14.0601C5.17095 13.8745 4.76937 13.4929 4.26509 13.3963C3.67389 13.2832 2.95232 13.5595 2.0377 14.3334"/>';
+    const QUEUE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${QUEUE_ICON_PATHS}</svg>`;
+    const QUEUE_ICON_MASK = `url("data:image/svg+xml,${encodeURIComponent(QUEUE_ICON_SVG)}")`;
+
     const CSS = `
 .ima-page,.ima-account-modal,.ima-bind-modal,.ima-inspector{--ima-text:var(--dsw-alias-label-primary,var(--dsh-text,#e6edf3));--ima-muted:var(--dsw-alias-label-tertiary,var(--dsh-text-muted,#8b949e));--ima-line:var(--dsw-alias-border-l2,var(--dsh-border,rgba(255,255,255,.1)));--ima-card:var(--dsw-alias-bg-layer-2,rgba(255,255,255,.04));--ima-card-hover:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06));--ima-ok:var(--dsw-alias-state-success-primary,#3fb950);--ima-warning:var(--dsw-alias-state-warning-primary,#d29922);--ima-danger:var(--dsw-alias-state-error-primary,#f85149);--ima-accent:var(--dsw-alias-brand-primary,#4b7cff)}
 .ima-page{box-sizing:border-box;max-width:none;width:100%;margin:0;padding:0 0 32px;color:var(--ima-text)}
@@ -686,7 +690,7 @@ window.__ModuleLoader__.load({
 .ima-title-links{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ima-title-links>span[data-mpi-check]{display:inline-flex;align-items:center}
 [data-ima-nav-icon]>svg{display:none!important}
-[data-ima-nav-icon]::before{content:'';flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:var(--ima-nav-icon-mask) center/contain no-repeat;mask:var(--ima-nav-icon-mask) center/contain no-repeat;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:16px 16px;mask-size:16px 16px}
+[data-ima-nav-icon]::before{content:'';flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:var(--ima-nav-icon-mask,${QUEUE_ICON_MASK}) center/contain no-repeat;mask:var(--ima-nav-icon-mask,${QUEUE_ICON_MASK}) center/contain no-repeat;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:16px 16px;mask-size:16px 16px}
 .ima-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:32px;padding:0 12px;border:0.5px solid var(--dsw-alias-border-l3,#555);border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-label-primary,#eee);font:inherit;font-size:13px;line-height:20px;cursor:pointer;user-select:none;box-sizing:border-box;text-decoration:none;transition:border-color 120ms ease,color 120ms ease,background 120ms ease}
 .ima-btn:not(.is-primary):not(.ima-btn-danger){color:var(--dsw-alias-label-primary,#eee)!important}
 .ima-btn:hover:not(:disabled):not(.ima-btn-danger){border-color:var(--dsw-alias-border-l3,#666)!important;color:var(--dsw-alias-label-primary,#fff)!important;background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))!important}
@@ -2856,11 +2860,19 @@ window.__ModuleLoader__.load({
     }
 
     let settingsNavIconMaskValue;
-    /** 设置导航图标：用宿主 IconQueueOutline 的几何生成 mask，保持皮肤安全。 */
+    /** 设置导航图标：用内置的气泡对话几何生成 mask，对齐其他插件，杜绝动态渲染失败产生空 mask。 */
     function settingsNavIconMask() {
       if (settingsNavIconMaskValue !== undefined) return settingsNavIconMaskValue;
-      const markup = channelMarkup(h(IconQueueOutline, { size: 16 })).split("currentColor").join("#000");
-      settingsNavIconMaskValue = `url("data:image/svg+xml,${encodeURIComponent(markup)}")`;
+      if (typeof IconQueueOutline === "function") {
+        try {
+          const markup = channelMarkup(h(IconQueueOutline, { size: 16 })).split("currentColor").join("#000");
+          if (markup && markup.includes("<svg")) {
+            settingsNavIconMaskValue = `url("data:image/svg+xml,${encodeURIComponent(markup)}")`;
+            return settingsNavIconMaskValue;
+          }
+        } catch { /* ignore fallback */ }
+      }
+      settingsNavIconMaskValue = QUEUE_ICON_MASK;
       return settingsNavIconMaskValue;
     }
 
@@ -4159,7 +4171,7 @@ window.__ModuleLoader__.load({
         const style = typeof targetDoc.createElement === "function" ? targetDoc.createElement("style") : null;
         if (!style) return;
         style.id = NAV_ICON_STYLE_ID;
-        const mask = typeof settingsNavIconMask === "function" ? settingsNavIconMask() : "none";
+        const mask = QUEUE_ICON_MASK;
         style.textContent = `[${NAV_ICON_MARKER}]>svg{display:none!important}[${NAV_ICON_MARKER}]::before{content:'';flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:var(--ima-nav-icon-mask,${mask}) center/contain no-repeat;mask:var(--ima-nav-icon-mask,${mask}) center/contain no-repeat;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:16px 16px;mask-size:16px 16px}`;
         const targetParent = targetDoc.head ?? targetDoc.documentElement;
         if (targetParent && typeof targetParent.appendChild === "function") {
@@ -4175,12 +4187,14 @@ window.__ModuleLoader__.load({
       }
 
       function isOwnNavRow(rowText, wantedLabel) {
-        const normWanted = String(wantedLabel ?? "").replace(/\s+/g, "").toLowerCase();
-        if (normWanted.length === 0) return false;
         const normRow = String(rowText ?? "").replace(/\s+/g, "").toLowerCase();
         if (normRow.length === 0) return false;
-        if (normRow === normWanted) return true;
-        return KNOWN_NAV_LABELS.has(normWanted) && KNOWN_NAV_LABELS.has(normRow);
+        const normWanted = String(wantedLabel ?? "").replace(/\s+/g, "").toLowerCase();
+        if (normWanted.length > 0 && normWanted !== "settings.label" && !KNOWN_NAV_LABELS.has(normWanted)) {
+          return false;
+        }
+        if (KNOWN_NAV_LABELS.has(normRow)) return true;
+        return normWanted.length > 0 && normRow === normWanted;
       }
 
       function applySettingsNavIcon(button, wantedLabel) {
@@ -4229,8 +4243,9 @@ window.__ModuleLoader__.load({
           };
 
           sync();
+          const targetRoot = document.documentElement || document.body;
           const observer = new MutationObserver(schedule);
-          observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+          observer.observe(targetRoot, { childList: true, subtree: true, characterData: true });
 
           return () => {
             disposed = true;
