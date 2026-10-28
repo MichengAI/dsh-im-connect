@@ -16,10 +16,10 @@ test('管理 REST 路由在 /api 下与真实 Gateway 共存并复用宿主认�
   const { send, login, ctx } = await fixture(t)
   const cookie = await login()
   assert.ok(ctx.get('typertGateway'))
-  const result = await send('/api/dsh-im-connect/channels', { headers: { cookie } })
+  const result = await send('/api/michengai/dsh-im-connect/channels', { headers: { cookie } })
   assert.equal(result.status, 200)
   assert.equal(JSON.parse(result.text).ok, true)
-  assert.equal((await send('/api/dsh-im-connect/channels')).status, 401)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels')).status, 401)
   assert.equal((await send('/dsh-im-connect/api/channels', { headers: { cookie } })).status, 404)
   assert.equal((await send('/api/unknown', { headers: { cookie } })).status, 404)
 })
@@ -29,12 +29,12 @@ test('管理 REST 路由在 /api 下与真实 Gateway 共存并复用宿主认�
 test('真实 Cordis 服务晚于管理路由启动时先关闭入口再恢复认证，不缓存旧服务', { skip: !hostRoot }, async (t) => {
   const { send, login, activate, ctx } = await fixture(t, { activateConnection: false })
   assert.equal(ctx.get('connection'), undefined)
-  assert.equal((await send('/api/dsh-im-connect/channels', { host: 'localhost' })).status, 503)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { host: 'localhost' })).status, 503)
   await activate()
   await new Promise((resolve) => setImmediate(resolve))
   const cookie = await login()
-  assert.equal((await send('/api/dsh-im-connect/channels', { headers: { cookie } })).status, 200)
-  assert.equal((await send('/api/dsh-im-connect/channels', { host: 'localhost' })).status, 401)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { headers: { cookie } })).status, 200)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { host: 'localhost' })).status, 401)
 })
 
 test('认证桥保留账号修改删除、用户审批、扫码状态取消与会话校验', { skip: !hostRoot }, async (t) => {
@@ -44,8 +44,8 @@ test('认证桥保留账号修改删除、用户审批、扫码状态取消与�
     allowlist: {}, pending: { 'telegram:test': [{ userId: 'user-1', time: Date.now() }] },
   } })
   const cookie = await login()
-  const get = async (path) => JSON.parse((await send('/api/dsh-im-connect' + path, { headers: { cookie } })).text)
-  const post = (path, body = {}) => send('/api/dsh-im-connect' + path, {
+  const get = async (path) => JSON.parse((await send('/api/michengai/dsh-im-connect' + path, { headers: { cookie } })).text)
+  const post = (path, body = {}) => send('/api/michengai/dsh-im-connect' + path, {
     method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-dsh-im-connect-client': '1' }, body: JSON.stringify(body),
   })
   assert.equal((await post('/accounts/telegram:test/settings', { name: '已改名' })).status, 200)
@@ -65,19 +65,19 @@ test('真实宿主所有管理路由均拒绝未登录与伪造 Cookie，不信�
   const { send } = await fixture(t)
   for (const path of ['/channels', '/assistant', '/accounts/missing/remove', '/channels/weixin/qr/start', '/sessions/remove']) {
     for (const method of ['GET', 'POST']) {
-      const result = await send('/api/dsh-im-connect' + path, {
+      const result = await send('/api/michengai/dsh-im-connect' + path, {
         method, headers: { 'content-type': 'application/json', 'x-dsh-im-connect-client': '1', 'x-forwarded-host': 'localhost', 'x-forwarded-for': '127.0.0.1' }, body: '{}',
       })
       assert.equal(result.status, 401, `${method} ${path}`)
     }
   }
-  assert.equal((await send('/api/dsh-im-connect/channels', { headers: { cookie: 'fake=session' } })).status, 401)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { headers: { cookie: 'fake=session' } })).status, 401)
 })
 
 test('真实宿主拒绝非法 Host、跨站 Origin、跨站请求与错误 authority Cookie', { skip: !hostRoot }, async (t) => {
   const { send, login } = await fixture(t)
   const cookie = await login()
-  const path = '/api/dsh-im-connect/channels'
+  const path = '/api/michengai/dsh-im-connect/channels'
   assert.equal((await send(path, { host: 'evil.example.test', headers: { cookie } })).status, 403)
   assert.equal((await send(path, { headers: { cookie, origin: 'http://evil.example.test' } })).status, 403)
   assert.equal((await send(path, { headers: { cookie, origin: 'http://im.example.test', 'sec-fetch-site': 'cross-site' } })).status, 403)
@@ -89,7 +89,7 @@ test('真实宿主拒绝非法 Host、跨站 Origin、跨站请求与错误 auth
 
 test('本地管理同样必须登录，外部 Cookie 不替代本地登录', { skip: !hostRoot }, async (t) => {
   const { send, login } = await fixture(t)
-  const path = '/api/dsh-im-connect/channels'
+  const path = '/api/michengai/dsh-im-connect/channels'
   assert.equal((await send(path, { host: 'localhost' })).status, 401)
   const cookie = await login('localhost')
   assert.equal((await send(path, { host: 'localhost', headers: { cookie, origin: 'http://localhost' } })).status, 200)
@@ -101,26 +101,26 @@ test('服务缺失与认证故障均关闭管理入口，恢复后按当前服�
   const webServer = ctx.get('webServer')
   const connection = ctx.get('connection')
   let current
-  routes.delete('/api/dsh-im-connect')
+  routes.delete('/api/michengai/dsh-im-connect')
   manager.registerApi({ webServer, get: () => current })
   for (current of [undefined, { rpc: {} }]) {
-    const result = await send('/api/dsh-im-connect/channels', { host: 'localhost' })
+    const result = await send('/api/michengai/dsh-im-connect/channels', { host: 'localhost' })
     assert.equal(result.status, 503)
     assert.match(JSON.parse(result.text).error, /升级宿主/)
   }
   current = { requestRejection() { throw new Error('authentication unavailable') } }
-  assert.equal((await send('/api/dsh-im-connect/channels', { host: 'localhost' })).status, 500)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { host: 'localhost' })).status, 500)
   current = connection
-  assert.equal((await send('/api/dsh-im-connect/channels', { headers: { cookie } })).status, 200)
-  assert.equal((await send('/api/dsh-im-connect/channels')).status, 401)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { headers: { cookie } })).status, 200)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels')).status, 401)
   current = undefined
-  assert.equal((await send('/api/dsh-im-connect/channels', { headers: { cookie } })).status, 503)
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { headers: { cookie } })).status, 503)
 })
 
 test('认证后的写接口仍拒绝缺标记、非 JSON、非法 JSON 与超限体', { skip: !hostRoot }, async (t) => {
   const { send, login } = await fixture(t)
   const cookie = await login()
-  const path = '/api/dsh-im-connect/assistant'
+  const path = '/api/michengai/dsh-im-connect/assistant'
   assert.equal((await send(path, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: '{}' })).status, 403)
   const headers = { cookie, 'content-type': 'application/json', 'x-dsh-im-connect-client': '1' }
   assert.equal((await send(path, { method: 'POST', headers: { ...headers, 'content-type': 'text/plain' }, body: '{}' })).status, 415)
@@ -142,7 +142,7 @@ test('实际前端 api 函数通过真实宿主认证读取、修改并呈现登
   assert.equal((await api('/assistant')).assistant.provider, 'browser-provider')
   cookie = undefined
   assert.match((await api('/channels')).error, /Sign in/)
-  routes.delete('/api/dsh-im-connect')
+  routes.delete('/api/michengai/dsh-im-connect')
   manager.registerApi({ webServer: ctx.get('webServer'), get: () => undefined })
   assert.match((await api('/channels')).error, /upgrade DSH/i)
 })
@@ -152,7 +152,7 @@ test('管理入口拒绝未授权写入，不修改助理配置', { skip: !hostR
   const { send, login, manager } = await fixture(t)
   const cookie = await login()
   const initial = structuredClone(manager.currentAssistant())
-  const base = '/api/dsh-im-connect'
+  const base = '/api/michengai/dsh-im-connect'
   const path = base + '/assistant'
   const headers = { cookie, 'content-type': 'application/json', 'x-dsh-im-connect-client': '1' }
   const body = JSON.stringify({ provider: 'must-not-save', model: 'must-not-save' })
@@ -177,7 +177,7 @@ test('卸载插件移除管理入口且不删除宿主 API', { skip: !hostRoot }
   const { send, login, manager, routes } = await fixture(t)
   const cookie = await login()
   manager.disposeApi()
-  const base = '/api/dsh-im-connect'
+  const base = '/api/michengai/dsh-im-connect'
   assert.equal(routes.has(base), false)
   assert.equal((await send(base + '/channels', { headers: { cookie } })).status, 404)
   assert.ok(routes.has('/api'))
@@ -203,7 +203,7 @@ test('前端管理请求显式携带同源 Cookie 并禁用缓存', async () => 
   await api('/assistant', { method: 'POST', body: '{"provider":"p","model":"m"}' })
   assert.equal(calls.length, 2)
   for (const { url, init } of calls) {
-    assert.ok(url.startsWith('/api/dsh-im-connect/'))
+    assert.ok(url.startsWith('/api/michengai/dsh-im-connect/'))
     assert.equal(init.credentials, 'same-origin')
     assert.equal(init.cache, 'no-store')
   }
@@ -291,15 +291,15 @@ async function fixture(t, { activateConnection = true, initialState } = {}) {
 test('真实宿主登录 Cookie 允许反代外部 Host 读取与修改管理设置', { skip: !hostRoot }, async (t) => {
   const { send, login } = await fixture(t)
   const cookie = await login()
-  const response = await send('/api/dsh-im-connect/channels', { headers: { cookie } })
+  const response = await send('/api/michengai/dsh-im-connect/channels', { headers: { cookie } })
   assert.equal(response.status, 200)
   assert.equal(response.headers['cache-control'], 'no-store')
   assert.equal(JSON.parse(response.text).ok, true)
-  const saved = await send('/api/dsh-im-connect/assistant', {
+  const saved = await send('/api/michengai/dsh-im-connect/assistant', {
     method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-dsh-im-connect-client': '1' },
     body: JSON.stringify({ provider: 'new-provider', model: 'new-model' }),
   })
   assert.equal(saved.status, 200)
-  const read = JSON.parse((await send('/api/dsh-im-connect/assistant', { headers: { cookie } })).text)
+  const read = JSON.parse((await send('/api/michengai/dsh-im-connect/assistant', { headers: { cookie } })).text)
   assert.equal(read.assistant.provider, 'new-provider')
 })

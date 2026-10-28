@@ -23,7 +23,7 @@ function fixture() {
     storeCode + '; return channelRefresh;')(
     fetch,
     (callback, delay) => { timers.set(++timerId, { callback, at: now + delay, delay }); return timerId },
-    id => timers.delete(id), document, '/api/dsh-im-connect', groups => memberships.push(groups),
+    id => timers.delete(id), document, '/api/michengai/dsh-im-connect', groups => memberships.push(groups),
   )
   return {
     channelRefresh, requests, timers, memberships,

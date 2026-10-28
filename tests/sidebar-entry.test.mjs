@@ -92,8 +92,8 @@ test('侧边栏入口配置：管理器方法、持久化与 HTTP API', async ()
     const server = createServer((req, res) => route.handler(req, res))
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
     const port = server.address().port
-    const baseUrl = `http://127.0.0.1:${port}/api/dsh-im-connect/sidebar-entry`
-    const taskTreeUrl = `http://127.0.0.1:${port}/api/dsh-im-connect/task-tree-sessions`
+    const baseUrl = `http://127.0.0.1:${port}/api/michengai/dsh-im-connect/sidebar-entry`
+    const taskTreeUrl = `http://127.0.0.1:${port}/api/michengai/dsh-im-connect/task-tree-sessions`
     const headers = { 'content-type': 'application/json', 'x-dsh-im-connect-client': '1' }
 
     try {

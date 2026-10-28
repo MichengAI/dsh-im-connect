@@ -590,7 +590,7 @@ window.__ModuleLoader__.load({
     }
     const EMPTY_EXTRA_TABS = [];
     const inject = ["slots", "sessions", "workspaces", "locale"];
-    const API_BASE = "/api/dsh-im-connect";
+    const API_BASE = "/api/michengai/dsh-im-connect";
     const TAB_KEY = "dsh-native-sidebar.tab";
     const ACCOUNT_SELECTION_KEY = "dsh-im-connect.settings.selected-account";
     const IM_LOCALE_NS = "im-connect";

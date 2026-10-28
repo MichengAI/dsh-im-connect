@@ -90,7 +90,7 @@ test('在线更新开关：管理器方法、持久化、HTTP API 与更新器�
       return prefixRoute.handler(req, res)
     })
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const baseUrl = `http://127.0.0.1:${server.address().port}/api/dsh-im-connect/online-update`
+    const baseUrl = `http://127.0.0.1:${server.address().port}/api/michengai/dsh-im-connect/online-update`
     const updateUrl = `http://127.0.0.1:${server.address().port}/api/michengai/dsh-im-connect/update`
     const headers = { 'content-type': 'application/json', 'x-dsh-im-connect-client': '1' }
 
@@ -188,7 +188,7 @@ test('在线更新开关：管理器方法、持久化、HTTP API 与更新器�
 
     const lockedServer = createServer((req, res) => lockedPrefixRoute.handler(req, res))
     await new Promise((resolve) => lockedServer.listen(0, '127.0.0.1', resolve))
-    const lockedBaseUrl = `http://127.0.0.1:${lockedServer.address().port}/api/dsh-im-connect/online-update`
+    const lockedBaseUrl = `http://127.0.0.1:${lockedServer.address().port}/api/michengai/dsh-im-connect/online-update`
 
     try {
       const getRes = await fetch(lockedBaseUrl)

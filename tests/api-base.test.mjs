@@ -59,8 +59,8 @@ function withBase(baseURI, run) {
 test('直连部署保持根路径原始绝对 URL', () => {
   withBase('http://127.0.0.1:28000/', () => {
     assert.equal(
-      resolveApiUrl('/api/dsh-im-connect/channels'),
-      'http://127.0.0.1:28000/api/dsh-im-connect/channels',
+      resolveApiUrl('/api/michengai/dsh-im-connect/channels'),
+      'http://127.0.0.1:28000/api/michengai/dsh-im-connect/channels',
       'root deployment keeps the original absolute URL',
     )
   })
@@ -69,8 +69,8 @@ test('直连部署保持根路径原始绝对 URL', () => {
 test('带前缀的反向代理保留完整路径前缀', () => {
   withBase('https://nas.example.com/app/dsh/', () => {
     assert.equal(
-      resolveApiUrl('/api/dsh-im-connect/channels'),
-      'https://nas.example.com/app/dsh/api/dsh-im-connect/channels',
+      resolveApiUrl('/api/michengai/dsh-im-connect/channels'),
+      'https://nas.example.com/app/dsh/api/michengai/dsh-im-connect/channels',
       'prefix proxy keeps the path prefix',
     )
   })
@@ -79,8 +79,8 @@ test('带前缀的反向代理保留完整路径前缀', () => {
 test('页面地址不带结尾斜杠时也能保留完整前缀', () => {
   withBase('https://nas.example.com/app/dsh', () => {
     assert.equal(
-      resolveApiUrl('/api/dsh-im-connect/channels'),
-      'https://nas.example.com/app/dsh/api/dsh-im-connect/channels',
+      resolveApiUrl('/api/michengai/dsh-im-connect/channels'),
+      'https://nas.example.com/app/dsh/api/michengai/dsh-im-connect/channels',
       'prefix without trailing slash keeps the full prefix',
     )
   })
@@ -111,15 +111,15 @@ test('非根绝对路径原样返回', () => {
 test('无 document 或非法 base 时安全回退', () => {
   withBase(undefined, () => {
     assert.equal(
-      resolveApiUrl('/api/dsh-im-connect/channels'),
-      '/api/dsh-im-connect/channels',
+      resolveApiUrl('/api/michengai/dsh-im-connect/channels'),
+      '/api/michengai/dsh-im-connect/channels',
       'no document falls back to the literal path',
     )
   })
   withBase('not a url', () => {
     assert.equal(
-      resolveApiUrl('/api/dsh-im-connect/channels'),
-      '/api/dsh-im-connect/channels',
+      resolveApiUrl('/api/michengai/dsh-im-connect/channels'),
+      '/api/michengai/dsh-im-connect/channels',
       'invalid base falls back to the literal path',
     )
   })
