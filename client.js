@@ -4148,19 +4148,47 @@ window.__ModuleLoader__.load({
       };
 
       const NAV_ICON_MARKER = "data-ima-nav-icon";
-      const NAV_ROW_SELECTOR = '[role="dialog"] nav button';
+      const NAV_ROW_SELECTOR = '[role="dialog"] nav button, [data-shortcut-modal="settings"] nav button';
+      const NAV_ICON_STYLE_ID = "ima-settings-nav-icon-style";
+      const KNOWN_NAV_LABELS = new Set(["im助理", "imassistant"]);
+
+      function ensureNavIconStyle(doc) {
+        const targetDoc = doc || (typeof document !== "undefined" ? document : null);
+        if (!targetDoc || typeof targetDoc.getElementById !== "function") return;
+        if (targetDoc.getElementById(NAV_ICON_STYLE_ID) !== null) return;
+        const style = typeof targetDoc.createElement === "function" ? targetDoc.createElement("style") : null;
+        if (!style) return;
+        style.id = NAV_ICON_STYLE_ID;
+        const mask = typeof settingsNavIconMask === "function" ? settingsNavIconMask() : "none";
+        style.textContent = `[${NAV_ICON_MARKER}]>svg{display:none!important}[${NAV_ICON_MARKER}]::before{content:'';flex:none;width:16px;height:16px;background:currentColor;-webkit-mask:var(--ima-nav-icon-mask,${mask}) center/contain no-repeat;mask:var(--ima-nav-icon-mask,${mask}) center/contain no-repeat;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:16px 16px;mask-size:16px 16px}`;
+        const targetParent = targetDoc.head ?? targetDoc.documentElement;
+        if (targetParent && typeof targetParent.appendChild === "function") {
+          targetParent.appendChild(style);
+        }
+      }
+
+      function getNavButtonText(button) {
+        if (!button) return "";
+        const span = typeof button.querySelector === "function" ? button.querySelector("span") : null;
+        const label = span && span.textContent ? span.textContent : button.textContent;
+        return String(label ?? "").trim();
+      }
 
       function isOwnNavRow(rowText, wantedLabel) {
-        const wanted = String(wantedLabel ?? "").trim();
-        if (wanted.length === 0) return false;
-        const current = String(rowText ?? "").trim();
-        return current === wanted;
+        const normWanted = String(wantedLabel ?? "").replace(/\s+/g, "").toLowerCase();
+        if (normWanted.length === 0) return false;
+        const normRow = String(rowText ?? "").replace(/\s+/g, "").toLowerCase();
+        if (normRow.length === 0) return false;
+        if (normRow === normWanted) return true;
+        return KNOWN_NAV_LABELS.has(normWanted) && KNOWN_NAV_LABELS.has(normRow);
       }
 
       function applySettingsNavIcon(button, wantedLabel) {
-        const isOwn = isOwnNavRow(button.textContent, wantedLabel());
+        const isOwn = isOwnNavRow(getNavButtonText(button), wantedLabel());
         if (isOwn) {
-          button.style.setProperty("--ima-nav-icon-mask", settingsNavIconMask());
+          if (button && button.style && typeof button.style.setProperty === "function") {
+            button.style.setProperty("--ima-nav-icon-mask", settingsNavIconMask());
+          }
           if (button.getAttribute(NAV_ICON_MARKER) === "") return false;
           button.setAttribute(NAV_ICON_MARKER, "");
           return true;
@@ -4180,6 +4208,7 @@ window.__ModuleLoader__.load({
 
       function installSettingsNavIcon(targetCtx, resolveLabel) {
         if (typeof document === "undefined") return;
+        ensureNavIconStyle(document);
         targetCtx.effect(() => {
           let disposed = false;
           let scheduled = false;
@@ -4187,6 +4216,7 @@ window.__ModuleLoader__.load({
           const sync = () => {
             scheduled = false;
             if (disposed) return;
+            ensureNavIconStyle(document);
             for (const row of document.querySelectorAll(NAV_ROW_SELECTOR)) {
               applySettingsNavIcon(row, resolveLabel);
             }

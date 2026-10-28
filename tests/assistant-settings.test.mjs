@@ -485,6 +485,34 @@ test('设置导航图标走通用 mask 注入，不改宿主 svg 内容', () => 
   assert.equal(button.hasAttribute('data-ima-nav-icon'), true)
   assert.equal(restoreSettingsNavIcon(button), true)
   assert.equal(button.getAttribute('data-ima-nav-icon'), null)
+
+  // 跨版本与空白容错回归：宿主在 Alpha/Web 或不同语言下空格不一致、带 span 标签
+  const span = { textContent: 'IM 助理' }
+  const buttonWithSpan = {
+    textContent: '   IM 助理   ',
+    attributes: new Map(),
+    children: [svg, span],
+    style: { setProperty() {} },
+    querySelector(selector) { return selector === 'span' ? span : null },
+    hasAttribute(name) { return this.attributes.has(name) },
+    getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null },
+    setAttribute(name, value) { this.attributes.set(name, String(value)) },
+    removeAttribute(name) { this.attributes.delete(name) },
+  }
+  // 字典返回无空格 "IM助理"，DOM 渲染带空格 "IM 助理"
+  assert.equal(applySettingsNavIcon(buttonWithSpan, () => 'IM助理'), true, '无空格字典必须匹配带空格导航行')
+  assert.equal(buttonWithSpan.hasAttribute('data-ima-nav-icon'), true)
+  buttonWithSpan.attributes.clear()
+
+  // 英文与大小写容错
+  span.textContent = 'IM Assistant'
+  buttonWithSpan.textContent = 'IM Assistant'
+  assert.equal(applySettingsNavIcon(buttonWithSpan, () => 'IM助理'), true, '英文导航行在中文配置下也能识别')
+  assert.equal(buttonWithSpan.hasAttribute('data-ima-nav-icon'), true)
+
+  // 必须兼容 Alpha/新版的全屏快捷键设置面板选择器
+  assert.match(client, /\[data-shortcut-modal="settings"\] nav button/, '必须兼容宿主新版设置工作台选择器')
+  assert.match(client, /ima-settings-nav-icon-style/, '必须具备独立导航图标样式表 ID 保障')
 })
 
 test('设置页账号行和账号设置都能填写名称备注', () => {
