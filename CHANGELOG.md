@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.20 - 2026-10-29
+
+- Fix missing settings navigation icon in latest DSH Alpha Web host: Eliminate dynamic React rendering and `<use>` sprite references, resolving an issue where browser SVG Data URL security sandboxing produced a 100% transparent mask.
+- Align settings nav icon implementation with ecosystem standards: Adopt self-contained vector masks generated directly from official host `ChatLinesOutlineArtwork` paths, paired with pure attribute markers and standard CSS `mask` pseudo-element rules for robust visual consistency across host versions and skins.
+
 ## 1.0.19 - 2026-10-27
 
 - Add segmented replies: when set to "Send in segments" in an account's settings, the assistant splits one reply into several short messages at a line-exclusive separator (default `<<<MSG>>>`) and sends them sequentially; defaults to "Send as whole", preserving original behavior (#49).

@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-im-connect",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "DSH IM Connect — 将主流即时通讯平台接入本机 DeepSeek Harness · Connect major messaging platforms to local DeepSeek Harness agents",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
