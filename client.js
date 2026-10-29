@@ -2862,18 +2862,7 @@ window.__ModuleLoader__.load({
     let settingsNavIconMaskValue;
     /** 设置导航图标：用内置的气泡对话几何生成 mask，对齐其他插件，杜绝动态渲染失败产生空 mask。 */
     function settingsNavIconMask() {
-      if (settingsNavIconMaskValue !== undefined) return settingsNavIconMaskValue;
-      if (typeof IconQueueOutline === "function") {
-        try {
-          const markup = channelMarkup(h(IconQueueOutline, { size: 16 })).split("currentColor").join("#000");
-          if (markup && markup.includes("<svg")) {
-            settingsNavIconMaskValue = `url("data:image/svg+xml,${encodeURIComponent(markup)}")`;
-            return settingsNavIconMaskValue;
-          }
-        } catch { /* ignore fallback */ }
-      }
-      settingsNavIconMaskValue = QUEUE_ICON_MASK;
-      return settingsNavIconMaskValue;
+      return QUEUE_ICON_MASK;
     }
 
     /**
