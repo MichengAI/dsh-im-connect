@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.21 - 2026-10-30
+
+- Add idle session auto-rotation: After a long pause in conversation, incoming messages can automatically start a fresh session, preventing previous conversation context from polluting new topics; previous sessions are preserved in history and can be resumed anytime via `/sessions` (PR #52).
+- Per-account configuration: Added an "Idle session rotation" dropdown right below "Send mode" in each account's settings modal, supporting customizable thresholds (30 min, 1 hr, 2 hrs, 6 hrs, 12 hrs, 24 hrs, or Disabled); existing accounts default to Disabled to preserve original behavior.
+- Running task safety protection: Sessions currently executing tasks are never interrupted or rotated, ensuring follow-up instructions for long tasks remain in the same context; slash commands such as `/sessions`, `/workspace`, and `/help` automatically refresh activity timing.
+- Account settings UI polish: Removed redundant explanatory text beneath the segmented reply interval inputs, cleanly aligning the two-column settings form for a more compact layout.
+
 ## 1.0.20 - 2026-10-29
 
 - Fix missing settings navigation icon in latest DSH Alpha Web host: Eliminate dynamic React rendering and `<use>` sprite references, resolving an issue where browser SVG Data URL security sandboxing produced a 100% transparent mask.
