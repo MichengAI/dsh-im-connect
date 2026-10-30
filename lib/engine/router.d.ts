@@ -88,6 +88,19 @@ export declare class SessionRouter {
     });
     get(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined;
     lookup(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): ChatBinding | undefined;
+    /**
+     * 记录一次入站用户消息的时间，供空闲换会话判断；只更新时间戳，不改绑定关系。
+     *
+     * @param at 消息到达时间，测试可显式指定。
+     */
+    touch(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, at?: number): void;
+    /**
+     * 距最近一次入站消息的毫秒数。
+     *
+     * 没有登记时返回 0：未知状态不能当成「很久没说话」，否则会把正在进行的对话换掉。
+     * 旧数据没有时间戳时以 `updatedAt` 作为下界。
+     */
+    idleMs(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, now?: number): number;
     bindingForSession(sessionId: string): ChatBinding | undefined;
     sessionIdsForChannel(channelId: ChannelInstanceId): string[];
     /** 某个聊天登记过的全部会话记录（含当前绑定），按最近更新排序。 */

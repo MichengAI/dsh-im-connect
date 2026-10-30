@@ -322,6 +322,14 @@ When **Segmented replies** is set to Send in segments for an account, the assist
 - **Separator**: set by the plugin configuration `segmentMarker`, default `<<<MSG>>>`, and must occupy its own line. The same text inside a fenced code block never splits a reply, so code samples stay intact.
 - **Where it is stored**: the toggle and range live per account in `channels.json`; the plugin configuration `segmentReply` acts as the default for every account, with the account setting taking precedence. If one segment fails to send, the rest stop instead of resending the whole reply, so no duplicate messages.
 
+### Idle session rotation
+
+Groups and DMs bind one session per chat, so a message after a long pause easily continues the previous topic. Set the plugin configuration `sessionIdleMinutes` to a positive number and the next message starts a new session when more than that many minutes passed since the last user message, with a single notice in the chat; the previous session is kept and `/sessions` can switch back. The default `0` keeps the previous behavior.
+
+- A session that is still running is never rotated, so follow-up instructions for a long task stay in the same context; the switch happens before the next message is submitted.
+- The timer is stored per chat as `lastInboundAt` in `sessions.json` and keeps counting across restarts; explicit `/new`, `/session`, and `/workspace` are unaffected.
+- The value is read when the plugin loads, so a change applies to messages received afterwards.
+
 ### Connecting Slack
 
 Slack uses a Socket Mode long connection, so no public URL or request URL is required:

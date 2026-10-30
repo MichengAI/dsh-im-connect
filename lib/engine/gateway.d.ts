@@ -107,6 +107,15 @@ export declare class ImEngine {
     private deliveryCommand;
     private handleCommand;
     private takeMergedMessages;
+    /**
+     * 距上一条消息超过阈值时换会话：隔了很久回来，通常不是同一件事。
+     *
+     * 旧会话仍在运行时不换，避免把长任务的补充指令切进新上下文；换完在聊天里说明一次，
+     * 旧会话仍可用 `/sessions` 找回。
+     */
+    private rotateIdleSession;
+    /** 会话是否仍在运行；查不到状态时按运行中处理，宁可延续上下文也不切断任务。 */
+    private sessionRunning;
     private inject;
     private cancelInputs;
     private approvalVerdict;

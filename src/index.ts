@@ -41,6 +41,8 @@ export interface PluginConfig {
   segmentDelayMinSecs?: number
   /** 相邻两条分段消息之间随机间隔的上界（秒）。 */
   segmentDelayMaxSecs?: number
+  /** 空闲新开会话：距上一条用户消息超过该分钟数时，下一条消息开新会话；0 表示关闭。 */
+  sessionIdleMinutes?: number
   updater?: boolean
   onlineUpdate?: boolean
 }
@@ -57,6 +59,7 @@ export const Config: Schema<PluginConfig> = Schema.object({
   segmentMarker: Schema.string().default('<<<MSG>>>').description('分段回复的分隔标记，必须独占一行。'),
   segmentDelayMinSecs: Schema.number().default(1).description('相邻两条分段消息之间随机间隔的下界（秒）。'),
   segmentDelayMaxSecs: Schema.number().default(2).description('相邻两条分段消息之间随机间隔的上界（秒）。'),
+  sessionIdleMinutes: Schema.number().default(0).description('空闲新开会话：距上一条用户消息超过该分钟数时，下一条消息开新会话；0 表示关闭。'),
   updater: Schema.boolean(),
   onlineUpdate: Schema.boolean(),
 })
@@ -88,6 +91,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     segmentMarker: config.segmentMarker,
     segmentDelayMinSecs: config.segmentDelayMinSecs,
     segmentDelayMaxSecs: config.segmentDelayMaxSecs,
+    sessionIdleMinutes: config.sessionIdleMinutes ?? 0,
   }
 
   const applyStarted = Date.now()

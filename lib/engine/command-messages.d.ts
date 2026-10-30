@@ -443,5 +443,8 @@ export declare const commandEnglish: {
     readonly "\u56FE\u7247\u6216\u6587\u4EF6\u63A5\u6536\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u683C\u5F0F\u548C\u5927\u5C0F\u540E\u91CD\u65B0\u53D1\u9001\u5B8C\u6574\u6D88\u606F\u3002": "The image or file could not be received. Check its format and size, then send the full message again.";
     readonly "\u8BF7\u76F4\u63A5\u53D1\u9001 /menu \u4F7F\u7528\u547D\u4EE4\u3002": "Send /menu as a normal message to use commands.";
     readonly "IM \u5206\u6BB5\u56DE\u590D\u5DF2\u5F00\u542F\uFF1A\u8BF7\u628A\u8FD9\u6B21\u56DE\u590D\u62C6\u6210\u51E0\u6761\u77ED\u6D88\u606F\uFF0C\u6BCF\u6761\u4E4B\u95F4\u5355\u72EC\u4E00\u884C\u5199 {0}\u3002\u901A\u5E38 2 \u5230 4 \u6761\uFF0C\u4E00\u6761\u8BB2\u4E00\u4EF6\u4E8B\uFF1B\u4EE3\u7801\u5757\u3001\u8868\u683C\u548C\u94FE\u63A5\u91CC\u4E0D\u8981\u5199\u5206\u9694\u884C\u3002": "Segmented IM replies are on: split this reply into a few short messages and write {0} alone on its own line between them. Two to four messages is typical, one point each. Never put that separator line inside code blocks, tables, or links.";
+    readonly "\u8DDD\u4E0A\u4E00\u6761\u6D88\u606F\u5DF2\u8D85\u8FC7 {0}\uFF0C\u5DF2\u5F00\u542F\u65B0\u4F1A\u8BDD\uFF1B\u65E7\u4F1A\u8BDD\u53EF\u7528 /sessions \u627E\u56DE\u3002": "It has been over {0} since the last message, so a new session was started. The previous session is still available via /sessions.";
+    readonly "{0} \u5C0F\u65F6": "{0} hours";
+    readonly "{0} \u5206\u949F": "{0} minutes";
 };
 //# sourceMappingURL=command-messages.d.ts.map

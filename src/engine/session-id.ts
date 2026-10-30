@@ -29,6 +29,8 @@ export interface SessionRecord {
   title: string
   /** pending 仅用于新会话占位名称；缺省表示旧数据来源未知。 */
   titleSource?: 'pending' | 'message' | 'host' | 'user'
+  /** 最近一次入站用户消息的时间戳（毫秒），用于空闲换会话；缺省表示从未记录。 */
+  lastInboundAt?: number
   updatedAt: string
 }
 

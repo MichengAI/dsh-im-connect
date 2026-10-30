@@ -95,6 +95,31 @@ export class SessionRouter {
     }
   }
 
+  /**
+   * 记录一次入站用户消息的时间，供空闲换会话判断；只更新时间戳，不改绑定关系。
+   *
+   * @param at 消息到达时间，测试可显式指定。
+   */
+  touch(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, at = Date.now()): void {
+    const key = sessionKeyOf(channelId, kind, chatId)
+    const record = this.store.get(key)
+    if (!record || record.detached) return
+    this.store.upsert(key, { ...record, lastInboundAt: at })
+  }
+
+  /**
+   * 距最近一次入站消息的毫秒数。
+   *
+   * 没有登记时返回 0：未知状态不能当成「很久没说话」，否则会把正在进行的对话换掉。
+   * 旧数据没有时间戳时以 `updatedAt` 作为下界。
+   */
+  idleMs(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, now = Date.now()): number {
+    const record = this.store.get(sessionKeyOf(channelId, kind, chatId))
+    if (!record) return 0
+    const at = record.lastInboundAt ?? Date.parse(record.updatedAt)
+    return Number.isFinite(at) ? Math.max(0, now - at) : 0
+  }
+
   bindingForSession(sessionId: string): ChatBinding | undefined {
     for (const item of this.live.values()) {
       if (item.sessionId === sessionId) return item

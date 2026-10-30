@@ -51,6 +51,13 @@ const SEND_RETRY_DELAYS_MS = [0, 1_000, 3_000, 8_000, 20_000] as const
  */
 const SEND_RETRY_BUDGET_MS = 30_000
 
+/** 空闲阈值写进提示语：整小时按小时说，零头按分钟说。 */
+function formatIdleLimit(ms: number): string {
+  return ms >= 3_600_000
+    ? replyText('{0} 小时', String(Math.round(ms / 3_600_000)))
+    : replyText('{0} 分钟', String(Math.max(1, Math.round(ms / 60_000))))
+}
+
 /** 一次回复投递的收口状态，由 {@link Gateway.deliver} 就地填写。 */
 export interface DeliveryOutcome {
   /** 是否全部送达；任一出现失败即为 false。 */
@@ -613,6 +620,37 @@ export class ImEngine {
     return messages
   }
 
+  /**
+   * 距上一条消息超过阈值时换会话：隔了很久回来，通常不是同一件事。
+   *
+   * 旧会话仍在运行时不换，避免把长任务的补充指令切进新上下文；换完在聊天里说明一次，
+   * 旧会话仍可用 `/sessions` 找回。
+   */
+  private async rotateIdleSession(channel: ChannelAdapter, kind: ChatKind, msg: ImMessage, title: string, limitMs: number): Promise<void> {
+    const previous = this.router.lookup(channel.id, kind, msg.chatId)
+    if (!previous || this.router.idleMs(channel.id, kind, msg.chatId) <= limitMs) return
+    if (await this.sessionRunning(previous.sessionId)) return
+    await this.router.rotate(channel.id, kind, msg.chatId, title)
+    this.log(`[${channel.id}] 空闲超过 ${formatIdleLimit(limitMs)}，已开启新会话`)
+    await this.deliver(channel, msg.chatId, replyText('距上一条消息已超过 {0}，已开启新会话；旧会话可用 /sessions 找回。', formatIdleLimit(limitMs)))
+  }
+
+  /** 会话是否仍在运行；查不到状态时按运行中处理，宁可延续上下文也不切断任务。 */
+  private async sessionRunning(sessionId: string): Promise<boolean> {
+    try {
+      const controller = this.ctx.get('sessionController') as
+        | { list?: (request: object) => Promise<{ items?: Array<{ sessionId?: string; running?: boolean }> }> }
+        | undefined
+      const rows = await controller?.list?.({})
+      if (!rows?.items) return true
+      const row = rows.items.find(item => item.sessionId === sessionId)
+      return row ? row.running !== false : false
+    } catch (error) {
+      this.log(`[router] 无法确认 ${sessionId} 是否在运行，保留原会话: ${error instanceof Error ? error.message : String(error)}`)
+      return true
+    }
+  }
+
   private async inject(channel: ChannelAdapter, msg: ImMessage, sources: ImMessage[] = [msg]): Promise<void> {
     if (this.disposed || this.channels.get(channel.id) !== channel) return
     let scope = this.inputScopes.get(channel.id)
@@ -629,7 +667,10 @@ export class ImEngine {
       const kind: ChatKind = msg.kind === 'group' ? 'group' : 'dm'
       const initialTitle = initialSessionTitle(msg.text) || initialSessionTitle(msg.media?.find(item => item.name)?.name || '')
       const title = initialTitle || msg.username || msg.chatId
+      const idleLimitMs = Math.max(0, (this.resolveConfig(channel.id).sessionIdleMinutes ?? 0) * 60_000)
+      if (idleLimitMs > 0 && !signal.aborted) await this.rotateIdleSession(channel, kind, msg, title, idleLimitMs)
       const binding = await this.router.getOrCreate(channel.id, kind, msg.chatId, title)
+      this.router.touch(channel.id, kind, msg.chatId)
       if (initialTitle) this.router.setTitle(binding.sessionId, initialTitle, 'message')
       const content: Array<Record<string, unknown>> = []
       if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })

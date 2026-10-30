@@ -99,4 +99,6 @@ export interface EngineConfig {
   segmentDelayMinSecs?: number
   /** 相邻两条分段消息之间随机间隔的上界（秒）。 */
   segmentDelayMaxSecs?: number
+  /** 距上一条用户消息超过该分钟数时，下一条消息开新会话；0 或缺省表示不启用。 */
+  sessionIdleMinutes?: number
 }
