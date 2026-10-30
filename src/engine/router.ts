@@ -229,6 +229,24 @@ export class SessionRouter {
     return this.channelOperations.run(channelId, () => this.rotateNow(channelId, kind, chatId, title, options))
   }
 
+  /**
+   * 仅当聊天空闲超过阈值时才轮换；在渠道串行锁内复检，避免并发消息导致多次轮换。
+   * 如果不满足超时条件，返回 undefined。
+   */
+  async rotateIfIdle(
+    channelId: ChannelInstanceId,
+    kind: ChatKind,
+    chatId: string,
+    title: string,
+    limitMs: number,
+    options?: { cwd?: string; signal?: AbortSignal },
+  ): Promise<ChatBinding | undefined> {
+    return this.channelOperations.run(channelId, async () => {
+      if (this.idleMs(channelId, kind, chatId) <= limitMs) return undefined
+      return this.rotateNow(channelId, kind, chatId, title, options)
+    })
+  }
+
   private async rotateNow(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, options?: { cwd?: string; signal?: AbortSignal }): Promise<ChatBinding> {
     const key = sessionKeyOf(channelId, kind, chatId)
     const old = this.live.get(key)

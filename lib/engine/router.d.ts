@@ -118,6 +118,14 @@ export declare class SessionRouter {
         cwd?: string;
         signal?: AbortSignal;
     }): Promise<ChatBinding>;
+    /**
+     * 仅当聊天空闲超过阈值时才轮换；在渠道串行锁内复检，避免并发消息导致多次轮换。
+     * 如果不满足超时条件，返回 undefined。
+     */
+    rotateIfIdle(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, title: string, limitMs: number, options?: {
+        cwd?: string;
+        signal?: AbortSignal;
+    }): Promise<ChatBinding | undefined>;
     private rotateNow;
     private sessionWorkspace;
     rename(sessionId: string, title: string): boolean;

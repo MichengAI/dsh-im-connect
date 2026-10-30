@@ -104,3 +104,41 @@ test('账号独立配置 sessionIdleMinutes 生效', async t => {
   assert.equal(h.sent.length, 1)
   assert.match(h.sent[0], /^距上一条消息已超过 1 小时，已开启新会话/)
 })
+
+test('非整小时空闲阈值在提示语中精准按分钟显示', async t => {
+  const h = setup(t, { lastInboundAgoMs: 100 * 60_000, accountIdleMinutes: 90 })
+  await h.engine.handleInbound(h.id, { chatId: 'u', userId: 'u', messageId: 'm-6', text: '90分钟阈值' })
+  const current = h.store.get(`${h.id}:dm:u`).sessionId
+  assert.notEqual(current, h.oldSessionId)
+  assert.deepEqual(h.created, [current])
+  assert.equal(h.sent.length, 1)
+  assert.match(h.sent[0], /^距上一条消息已超过 90 分钟，已开启新会话/)
+})
+
+test('并发双消息进入时锁内复检，只轮换一次且只发一条提示', async t => {
+  const h = setup(t, { lastInboundAgoMs: 3 * 3_600_000, accountIdleMinutes: 120 })
+  await Promise.all([
+    h.engine.handleInbound(h.id, { chatId: 'u', userId: 'u', messageId: 'm-7a', text: '并发消息1' }),
+    h.engine.handleInbound(h.id, { chatId: 'u', userId: 'u', messageId: 'm-7b', text: '并发消息2' }),
+  ])
+  const current = h.store.get(`${h.id}:dm:u`).sessionId
+  assert.notEqual(current, h.oldSessionId)
+  // 只创建了 1 个新会话，而不是连续产生 2 个
+  assert.equal(h.created.length, 1)
+  // 提示语只发送了 1 条，没有重复发给用户
+  const notices = h.sent.filter(msg => msg.includes('已开启新会话'))
+  assert.equal(notices.length, 1)
+})
+
+test('执行聊天命令后刷新活跃计时，后续短时间内消息不被轮换', async t => {
+  const h = setup(t, { lastInboundAgoMs: 3 * 3_600_000, accountIdleMinutes: 120 })
+  // 执行命令（如 /help），会刷新活跃计时
+  await h.engine.handleInbound(h.id, { chatId: 'u', userId: 'u', messageId: 'm-cmd', text: '/help' })
+  const sessionAfterCmd = h.store.get(`${h.id}:dm:u`).sessionId
+  // 紧接着发普通消息，由于计时刚被 touch 刷新，不应触发超时换会话
+  await h.engine.handleInbound(h.id, { chatId: 'u', userId: 'u', messageId: 'm-after-cmd', text: '你好' })
+  const finalSession = h.store.get(`${h.id}:dm:u`).sessionId
+  assert.equal(finalSession, sessionAfterCmd)
+  const notices = h.sent.filter(msg => msg.includes('已开启新会话'))
+  assert.equal(notices.length, 0)
+})
