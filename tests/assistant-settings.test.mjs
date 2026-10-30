@@ -984,6 +984,40 @@ test('分段间隔区间可按账号保存，非法值与颠倒的上下界被�
   assert.equal(untouched.account.segmentDelayMaxSecs, 60)
 })
 
+test('账号空闲新开会话阈值可配置与持久化，缺省为 0（关闭）', async t => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'idle-account-token' }, {
+    provider: 'idle-provider',
+    model: 'idle-model',
+    cwd: 'D:\
+epo\\idle-test',
+    permission: 'review',
+  })
+  assert.equal(created.ok, true, created.error)
+  assert.equal(accountOf(manager, created.accountId).sessionIdleMinutes, 0, '账号未显式指定时默认关闭（0）')
+
+  // 账号单独修改为 120 分钟
+  const updated = await manager.updateAccount(created.accountId, { sessionIdleMinutes: 120 })
+  assert.equal(updated.ok, true)
+  assert.equal(updated.account.sessionIdleMinutes, 120)
+  const persisted = JSON.parse(readFileSync(manager.file, 'utf8'))
+  assert.equal(persisted.channels[created.accountId].sessionIdleMinutes, 120)
+
+  // 账号修改为 0（关闭）
+  const disabled = await manager.updateAccount(created.accountId, { sessionIdleMinutes: 0 })
+  assert.equal(disabled.ok, true)
+  assert.equal(disabled.account.sessionIdleMinutes, 0)
+
+  // 负数与非法值纠正为 0
+  const clamped = await manager.updateAccount(created.accountId, { sessionIdleMinutes: -10 })
+  assert.equal(clamped.account.sessionIdleMinutes, 0)
+
+  // 只修改其他属性时保留原 sessionIdleMinutes
+  const renamed = await manager.updateAccount(created.accountId, { name: 'idle-renamed' })
+  assert.equal(renamed.account.sessionIdleMinutes, 0)
+})
+
 test('插件级分段回复作为账号默认值，账号可单独关闭', async t => {
   const manager = makeManager(t, {}, { segmentReply: true })
   manager.startOne = async () => undefined
@@ -1058,6 +1092,22 @@ test('发送方式选择器有双语词条，保存请求带上所选值', () =>
   assert.match(client, /sendMode: next\.sendMode,/)
   assert.match(client, /account\.privateAccess, account\.sendMode,/)
   assert.match(client, /sendMode: "queue",/)
+})
+
+test('空闲新开会话选项放置在发送方式字段之后，具备预设与Tooltip提示', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /"account\.sessionIdle": "空闲新开会话"/)
+  assert.match(client, /"account\.sessionIdle": "Idle session rotation"/)
+  assert.match(client, /"account\.sessionIdleOff": "关闭（保持原会话）"/)
+  assert.match(client, /"account\.sessionIdleOff": "Disabled \(keep session\)"/)
+  assert.match(client, /"account\.sessionIdleNote": "距上一条消息超过该时间后再收到新消息/)
+  assert.match(client, /"account\.sessionIdleNote": "Start a new session when the next message arrives/)
+  // 严格校验字段排布顺序：sendMode 之后紧接着是 sessionIdle
+  assert.match(client, /field\("sendMode"[\s\S]*?\)\),\s*field\("sessionIdle"/)
+  assert.match(client, /field\("sessionIdle", sessionIdleLabel, h\(Select, \{/)
+  assert.match(client, /h\(HostTooltip,\s*\{\s*label:\s*sessionIdleTip,\s*portal:\s*true/)
+  assert.match(client, /onChange: \(next\) => update\(\{ sessionIdleMinutes: Number\(next\) \}\)/)
+  assert.match(client, /sessionIdleMinutes: Number\.isFinite\(next\.sessionIdleMinutes\)/)
 })
 
 test('分段回复选择器使用 Select，首选项为「完整发送」，映射布尔状态', () => {

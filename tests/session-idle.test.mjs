@@ -9,7 +9,7 @@ import { SessionMapStore } from '../lib/engine/session-store.js'
 import { SeenStore } from '../lib/engine/seen-store.js'
 
 /** 空闲新开会话：距上一条用户消息超过阈值时换会话，旧会话仍在运行时不动。 */
-function setup(t, { idleMinutes, lastInboundAgoMs, running = false }) {
+function setup(t, { idleMinutes, lastInboundAgoMs, running = false, accountIdleMinutes }) {
   const dir = mkdtempSync(join(tmpdir(), 'im-session-idle-'))
   const id = 'account-session-idle-1'
   const oldSessionId = `im:${id}:dm:1700000000000:u`
@@ -41,7 +41,11 @@ function setup(t, { idleMinutes, lastInboundAgoMs, running = false }) {
     },
   })
   const config = { cwd: dir, provider: 'p', model: 'm', agentPreset: 'standard', mergeTimeoutSecs: 1, permissionPreset: '', sessionIdleMinutes: idleMinutes }
-  const engine = new ImEngine(ctx, store, new SeenStore(join(dir, 'seen.json')), config, () => {})
+  const resolveConfig = (channelId) => ({
+    ...config,
+    ...(accountIdleMinutes !== undefined ? { sessionIdleMinutes: accountIdleMinutes } : {}),
+  })
+  const engine = new ImEngine(ctx, store, new SeenStore(join(dir, 'seen.json')), config, () => {}, undefined, resolveConfig)
   const sent = []
   engine.register({
     id, label: id, maxMessageLength: 4000, skipMerge: true,
@@ -89,4 +93,14 @@ test('旧会话仍在运行时保留原会话，不切断长任务', async t => 
   assert.equal(h.store.get(`${h.id}:dm:u`).sessionId, h.oldSessionId)
   assert.deepEqual(h.created, [])
   assert.deepEqual(h.sent, [])
+})
+
+test('账号独立配置 sessionIdleMinutes 生效', async t => {
+  const h = setup(t, { lastInboundAgoMs: 2 * 3_600_000, accountIdleMinutes: 60 })
+  await h.engine.handleInbound(h.id, { chatId: 'u', userId: 'u', messageId: 'm-5', text: '账号独立配置' })
+  const current = h.store.get(`${h.id}:dm:u`).sessionId
+  assert.notEqual(current, h.oldSessionId)
+  assert.deepEqual(h.created, [current])
+  assert.equal(h.sent.length, 1)
+  assert.match(h.sent[0], /^距上一条消息已超过 1 小时，已开启新会话/)
 })

@@ -56,6 +56,12 @@ function normalizeSegmentSecs(input: unknown): number | undefined {
   return Math.min(60, Math.max(0, Math.round(input)))
 }
 
+/** 空闲新开会话分钟数：0 表示关闭，限制为非负整数；缺失或非法值返回 undefined 交给上一层回退。 */
+function normalizeIdleMinutes(input: unknown): number | undefined {
+  if (typeof input !== 'number' || !Number.isFinite(input)) return undefined
+  return Math.max(0, Math.round(input))
+}
+
 function channelAutoPrefix(platform: ChannelId): string {
   return `${CHANNEL_META[platform].label}账号`
 }
@@ -182,6 +188,8 @@ export interface ChannelState {
   segmentDelayMinSecs?: number
   /** 分段消息之间随机间隔的上界（秒）。 */
   segmentDelayMaxSecs?: number
+  /** 空闲新开会话分钟数：缺省为 0 表示关闭。 */
+  sessionIdleMinutes?: number
   lastCheckedAt?: string
 }
 
@@ -209,6 +217,8 @@ export interface AccountView {
   segmentReplySupported: boolean
   segmentDelayMinSecs: number
   segmentDelayMaxSecs: number
+  /** 空闲新开会话分钟数：0 表示关闭。 */
+  sessionIdleMinutes: number
   proxyMode: ChannelProxyMode
   proxyConfigured: boolean
   proxyUrl?: string
@@ -426,6 +436,7 @@ export class ChannelManager {
       segmentReplySupported: segmentSupported,
       segmentDelayMinSecs: segmentDelay.min,
       segmentDelayMaxSecs: segmentDelay.max,
+      sessionIdleMinutes: normalizeIdleMinutes(state.sessionIdleMinutes) ?? 0,
       proxyMode: supportsProxy(platform) && (config.proxyMode === 'direct' || config.proxyMode === 'custom') ? config.proxyMode : 'inherit',
       proxyConfigured: supportsProxy(platform) && config.proxyMode === 'custom'
         ? this.proxyUrlCache.has(accountId)
@@ -495,6 +506,7 @@ export class ChannelManager {
       ...(normalized.settings.segmentReply !== undefined ? { segmentReply: normalized.settings.segmentReply } : {}),
       ...(normalized.settings.segmentDelayMinSecs !== undefined ? { segmentDelayMinSecs: normalized.settings.segmentDelayMinSecs } : {}),
       ...(normalized.settings.segmentDelayMaxSecs !== undefined ? { segmentDelayMaxSecs: normalized.settings.segmentDelayMaxSecs } : {}),
+      ...(normalized.settings.sessionIdleMinutes !== undefined ? { sessionIdleMinutes: normalized.settings.sessionIdleMinutes } : {}),
       enabled: true,
       receiveEnabled: true,
       config: nextConfig,
@@ -1011,6 +1023,7 @@ export class ChannelManager {
       state.privateAccess = normalized.settings.privateAccess
       // 发送方式按注入时机读取，不需要重载会话。
       state.sendMode = normalized.settings.sendMode
+      if (normalized.settings.sessionIdleMinutes !== undefined) state.sessionIdleMinutes = normalized.settings.sessionIdleMinutes
       if (normalized.settings.segmentReply !== undefined) state.segmentReply = normalized.settings.segmentReply
       if (normalized.settings.segmentDelayMinSecs !== undefined) state.segmentDelayMinSecs = normalized.settings.segmentDelayMinSecs
       if (normalized.settings.segmentDelayMaxSecs !== undefined) state.segmentDelayMaxSecs = normalized.settings.segmentDelayMaxSecs
@@ -1462,7 +1475,7 @@ export class ChannelManager {
     return ordinal
   }
 
-  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all'; sendMode: SendMode; segmentReply?: boolean; segmentDelayMinSecs?: number; segmentDelayMaxSecs?: number } } | { ok: false; error: string }> {
+  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all'; sendMode: SendMode; sessionIdleMinutes?: number; segmentReply?: boolean; segmentDelayMinSecs?: number; segmentDelayMaxSecs?: number } } | { ok: false; error: string }> {
     const agentPreset = input.agentPreset ?? previous.agentPreset ?? this.engineConfig.agentPreset ?? 'standard'
     if (typeof agentPreset !== 'string' || !agentPreset.trim()) return { ok: false, error: '请选择 Agent 预设' }
     if (input.agentPreset !== undefined) {
@@ -1485,6 +1498,7 @@ export class ChannelManager {
     if (!permission) return { ok: false, error: '请选择权限' }
     const privateAccess = input.privateAccess === 'all' || (input.privateAccess === undefined && previous.privateAccess === 'all') ? 'all' : 'approved'
     const sendMode = normalizeSendMode(input.sendMode === undefined ? previous.sendMode : input.sendMode)
+    const sessionIdleMinutes = normalizeIdleMinutes(input.sessionIdleMinutes) ?? previous.sessionIdleMinutes
     // 未传就从状态里沿用；显式传布尔值才覆盖，避免旧客户端保存时把开关打回默认。
     // 只有已开放分段回复的渠道才保存开关，未验证渠道一律记为关闭。
     const segmentReply = channelSupportsSegmentReply(platform)
@@ -1501,7 +1515,7 @@ export class ChannelManager {
     if ([...trimmed].length > ACCOUNT_REMARK_LIMIT) return { ok: false, error: `账号备注不能超过 ${ACCOUNT_REMARK_LIMIT} 个字符` }
     if (/[\u0000-\u001F\u007F]/.test(trimmed)) return { ok: false, error: '账号备注不能包含换行或控制字符' }
     const name = trimmed || autoAccountName(platform, nameOrdinal)
-    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, sendMode, segmentReply, segmentDelayMinSecs, segmentDelayMaxSecs, commandPermissions } }
+    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, sendMode, sessionIdleMinutes, segmentReply, segmentDelayMinSecs, segmentDelayMaxSecs, commandPermissions } }
   }
 
   private accountIdFor(platform: ChannelId, config: Record<string, string>): string {
@@ -1561,6 +1575,7 @@ export class ChannelManager {
         && (state.segmentReply ?? this.engineConfig.segmentReply) === true,
       segmentDelayMinSecs: this.segmentDelayRange(state).min,
       segmentDelayMaxSecs: this.segmentDelayRange(state).max,
+      sessionIdleMinutes: normalizeIdleMinutes(state.sessionIdleMinutes) ?? 0,
     }
   }
 
@@ -1635,7 +1650,7 @@ function pairingSettings(input?: Record<string, unknown>): Record<string, string
   if (!input) return {}
   const out: Record<string, string> = {}
   if (input.commandPermissions !== undefined) out.__setting_commandPermissions = JSON.stringify(normalizeCommandPermissions(input.commandPermissions))
-  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess', 'sendMode', 'segmentReply', 'segmentDelayMinSecs', 'segmentDelayMaxSecs', 'agentPreset']) {
+  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess', 'sendMode', 'sessionIdleMinutes', 'segmentReply', 'segmentDelayMinSecs', 'segmentDelayMaxSecs', 'agentPreset']) {
     const value = input[key]
     if (value !== undefined && value !== null) out[`__setting_${key}`] = String(value)
   }

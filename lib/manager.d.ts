@@ -40,6 +40,8 @@ export interface ChannelState {
     segmentDelayMinSecs?: number;
     /** 分段消息之间随机间隔的上界（秒）。 */
     segmentDelayMaxSecs?: number;
+    /** 空闲新开会话分钟数：缺省为 0 表示关闭。 */
+    sessionIdleMinutes?: number;
     lastCheckedAt?: string;
 }
 export interface AccountView {
@@ -66,6 +68,8 @@ export interface AccountView {
     segmentReplySupported: boolean;
     segmentDelayMinSecs: number;
     segmentDelayMaxSecs: number;
+    /** 空闲新开会话分钟数：0 表示关闭。 */
+    sessionIdleMinutes: number;
     proxyMode: ChannelProxyMode;
     proxyConfigured: boolean;
     proxyUrl?: string;

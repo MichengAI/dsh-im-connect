@@ -324,11 +324,11 @@ When **Segmented replies** is set to Send in segments for an account, the assist
 
 ### Idle session rotation
 
-Groups and DMs bind one session per chat, so a message after a long pause easily continues the previous topic. Set the plugin configuration `sessionIdleMinutes` to a positive number and the next message starts a new session when more than that many minutes passed since the last user message, with a single notice in the chat; the previous session is kept and `/sessions` can switch back. The default `0` keeps the previous behavior.
+Groups and DMs bind one session per chat, so a message after a long pause easily continues the previous topic. Configure **Idle session rotation** right below Send mode in account settings; when more than that many minutes passed since the last user message, the next message starts a new session with a single notice in the chat. The previous session is kept and `/sessions` can switch back. The default is Disabled (keep session).
 
 - A session that is still running is never rotated, so follow-up instructions for a long task stay in the same context; the switch happens before the next message is submitted.
 - The timer is stored per chat as `lastInboundAt` in `sessions.json` and keeps counting across restarts; explicit `/new`, `/session`, and `/workspace` are unaffected.
-- The value is read when the plugin loads, so a change applies to messages received afterwards.
+- Configurable per account in settings (30 min, 1 hr, 2 hrs, 6 hrs, 12 hrs, 24 hrs, or Disabled).
 
 ### Connecting Slack
 
