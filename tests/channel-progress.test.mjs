@@ -5,7 +5,7 @@ import { createFeishuChannel } from '../lib/channels/feishu.js'
 import { createTelegramChannel } from '../lib/channels/telegram.js'
 import { network } from './channel-image-fixture.mjs'
 
-const message = { chatId: 'chat', messageId: '123', context: { conversationId: 'conversation' } }
+const message = { chatId: 'chat', messageId: '123', platformMessageId: '123', context: { conversationId: 'conversation' } }
 const signal = () => AbortSignal.timeout(2000)
 
 test('钉钉在原消息添加、撤回文字表情，成功标签独立于卡片', async t => {

@@ -44,7 +44,7 @@ test('Telegram 长轮询解析入站消息并在分发前持久化 offset', asyn
     await channel.start()
     const message = await received
     assert.deepEqual(message, {
-      chatId: '123', userId: '456', username: 'alice', text: 'hello', kind: 'dm', addressed: true, messageId: '41',
+      chatId: '123', userId: '456', username: 'alice', text: 'hello', kind: 'dm', addressed: true, messageId: '41', platformMessageId: '7',
     })
     assert.equal(JSON.parse(readFileSync(join(stateDir, 'cursor.json'), 'utf8')).offset, 42)
     await channel.stop()

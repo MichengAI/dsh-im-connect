@@ -14,7 +14,10 @@ export interface ImMessage {
     text: string;
     kind?: 'dm' | 'group';
     addressed?: boolean;
+    /** 去重键。渠道内唯一即可，不必是平台消息 id。 */
     messageId?: string;
+    /** 平台侧的消息 id，用于表情回应等只认平台 id 的接口。 */
+    platformMessageId?: string;
     actionToken?: string;
     context?: Record<string, unknown>;
     media?: ImMedia[];
