@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.25 - 2026-11-04
+
+- Fix settings navigation icon compatibility across host generations: ensure the IM Assistant icon correctly appears in older DSH hosts without falling back to the default gear glyph, while cleanly using the native icon slot without duplicates on newer hosts.
+- Graceful fallback for slot registration: ensure settings icon registration errors are isolated and automatically retried when switching views, preventing host settings dialog interruptions.
+
 ## 1.0.24 - 2026-11-03
 
 - Integrate official native settings navigation icon slot: present dedicated instant messaging vector icon on newer hosts while maintaining graceful compatibility with older hosts to prevent dual icons.
