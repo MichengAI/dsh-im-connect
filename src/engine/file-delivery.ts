@@ -11,26 +11,7 @@ export interface DeliverySession {
   events?: readonly Event[]
 }
 
-/** 与 Chat 的成功文件变更规则保持一致；不从助手回复中猜路径。 */
-function mutationPath(name: string, raw: unknown): string | undefined {
-  if (typeof raw !== 'string') return
-  let args: any
-  try { args = JSON.parse(raw) } catch { return }
-  if (!args || typeof args !== 'object') return
-  const path = name === 'str_replace_editor' ? args.path : args.file_path
-  if (typeof path !== 'string' || !path.trim()) return
-  if (name === 'write' && typeof args.content === 'string') return path
-  if (name === 'edit' && typeof args.old_string === 'string' && args.old_string.length > 0
-    && typeof args.new_string === 'string' && args.old_string !== args.new_string
-    && (args.replace_all === undefined || typeof args.replace_all === 'boolean')) return path
-  if (name !== 'str_replace_editor') return
-  if (args.command === 'create' && typeof args.file_text === 'string') return path
-  if (args.command === 'str_replace' && typeof args.old_str === 'string' && args.old_str.length > 0
-    && (args.new_str === undefined || typeof args.new_str === 'string')) return path
-  if (args.command === 'insert' && Number.isInteger(args.insert_line) && args.insert_line >= 0 && typeof args.new_str === 'string') return path
-}
-
-/** 只选当前回复所在回合、已成功产生或明确 present 的文件。 */
+/** 只选当前回复所在回合、明确由宿主交付服务（tool-present）交付的文件。 */
 export function filesForReply(events: readonly Event[], closing: Event): { turn: number; paths: string[] } | undefined {
   let end = events.findIndex(event => event === closing || (closing.seq !== undefined && event.seq === closing.seq))
   if (end < 0) end = events.length
@@ -39,27 +20,14 @@ export function filesForReply(events: readonly Event[], closing: Event): { turn:
   const prefix = events.slice(0, end)
   const turn = closing.data?.turn
   if (!Number.isSafeInteger(turn)) return
-  const calls = new Map<string, string>()
   const paths = new Set<string>()
   for (const event of prefix) {
     const data = event.data
-    if (event.type === 'tool/call' && data?.turn === turn) {
-      const path = mutationPath(data.name, data.arguments)
-      if (path && typeof data.callId === 'string') calls.set(data.callId, path)
-    } else if (event.type === 'tool/result' && data?.turn === turn && event.surfaceOp === 'append') {
-      const path = calls.get(data?.message?.source?.callId)
-      if (path && !toolResultFailed(data)) paths.add(path)
-    } else if (event.type === 'deliverables/presented' && data?.turn === turn && Array.isArray(data.files)) {
+    if (event.type === 'deliverables/presented' && data?.turn === turn && Array.isArray(data.files)) {
       for (const file of data.files) if (typeof file?.path === 'string' && file.path.trim()) paths.add(file.path)
     }
   }
   return { turn, paths: [...paths] }
-}
-
-/** V4 把 isError 放到 message 上；旧日志仍在 tool-result 内容块上。 */
-export function toolResultFailed(data: any): boolean {
-  if (data?.message?.isError === true) return true
-  return data?.message?.content?.[0]?.isError === true
 }
 
 /** 文件在投递前已被删除（例如同一回合写入后又被清理）不是投递失败：静默跳过，不打扰用户。 */

@@ -5,10 +5,7 @@ import { FileDelivery, filesForReply } from '../lib/engine/file-delivery.js'
 
 function fixture(paths = ['D:\\outside\\报告.pdf']) {
   const events = [{ type: 'turn/start', data: { turn: 1 } }]
-  for (const [i, path] of paths.entries()) {
-    events.push({ type: 'tool/call', data: { turn: 1, callId: String(i), name: 'write', arguments: JSON.stringify({ file_path: path, content: 'report' }) } })
-    events.push({ type: 'tool/result', surfaceOp: 'append', data: { turn: 1, message: { source: { callId: String(i) }, content: [{ type: 'tool-result', isError: false }] } } })
-  }
+  events.push({ type: 'deliverables/presented', data: { turn: 1, files: paths.map(path => ({ path })) } })
   const closing = { type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, message: { content: [{ type: 'text', text: 'Done' }] } } }
   events.push(closing)
   events.forEach((event, seq) => { event.seq = seq })
@@ -42,23 +39,21 @@ test('回传用活日志，忽略 inspect 的空存储前缀', async t => {
   assert.equal(s.files.length, 1)
 })
 
-test('成功变更与 present 合并去重，任意正文路径不回传', () => {
+test('普通 write/edit 工具修改不自动作为交付物，只有 present 才回传', () => {
+  const events = [
+    { seq: 0, type: 'turn/start', data: { turn: 1 } },
+    { seq: 1, type: 'tool/call', data: { turn: 1, callId: '1', name: 'write', arguments: JSON.stringify({ file_path: 'C:\\secret.md', content: 'note' }) } },
+    { seq: 2, type: 'tool/result', surfaceOp: 'append', data: { turn: 1, message: { source: { callId: '1' }, content: [{ type: 'tool-result', isError: false }] } } },
+    { seq: 3, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, message: { content: [{ type: 'text', text: 'Done' }] } } },
+  ]
+  assert.deepEqual(filesForReply(events, events[3]).paths, [])
+})
+
+test('present 交付物合并去重，任意正文路径不回传', () => {
   const f = fixture(['one.txt', 'one.txt'])
   f.events.splice(-1, 0, { type: 'deliverables/presented', data: { turn: 1, files: [{ path: 'existing.pdf' }, { path: 'one.txt' }] } })
   f.closing.data.message.content[0].text = 'C:\\secret.txt'
   assert.deepEqual(filesForReply(f.events, f.closing).paths, ['one.txt', 'existing.pdf'])
-})
-for (const mode of ['failed', 'failed-v4', 'other-turn', 'replacement', 'unsupported']) test(`排除 ${mode} 工具结果`, () => {
-  const f = fixture()
-  if (mode === 'failed') f.events[2].data.message.content[0].isError = true
-  if (mode === 'failed-v4') {
-    f.events[2].data.message.isError = true
-    f.events[2].data.message.content = [{ type: 'text', text: 'write failed' }]
-  }
-  if (mode === 'other-turn') f.events[2].data.turn = 2
-  if (mode === 'replacement') f.events[2].surfaceOp = 'replace'
-  if (mode === 'unsupported') f.events[1].data.name = 'read'
-  assert.deepEqual(filesForReply(f.events, f.closing).paths, [])
 })
 for (const mode of ['interrupted', 'replacement', 'tool-call', 'missing-turn']) test(`不在 ${mode} 助手事件回传`, () => {
   const f = fixture()
