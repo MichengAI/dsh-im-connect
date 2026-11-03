@@ -254,6 +254,8 @@ interface PendingRequest {
   time: number
 }
 
+export type EntryLocation = 'both' | 'sidebar' | 'settings'
+
 interface Persisted {
   version?: 2
   /** v2 起按账号实例 ID 存储；旧版按渠道 ID 的记录会原位升级为首个账号。 */
@@ -264,6 +266,7 @@ interface Persisted {
   agentPreset?: string
   cwd?: string
   permission?: PermissionPreset
+  entryLocation?: EntryLocation
   sidebarEntry?: boolean
   onlineUpdate?: boolean
   taskTreeSessions?: boolean
@@ -650,17 +653,32 @@ export class ChannelManager {
         const parts = ('/dsh-im-connect/api' + path).split('/').filter(Boolean)
         if (parts[2] === 'sidebar-entry' && parts.length === 3) {
           if (method === 'GET' || method === 'HEAD') {
-            send(200, method === 'HEAD' ? undefined : { ok: true, enabled: this.getSidebarEntry() })
+            const location = this.getEntryLocation()
+            send(200, method === 'HEAD' ? undefined : { ok: true, location, enabled: location !== 'settings' })
             return
           }
           if (method === 'POST') {
             const body = await readBody()
-            if (!body || typeof body.enabled !== 'boolean') {
-              send(400, { ok: false, error: 'enabled 必须是布尔值' })
+            if (!body) {
+              send(400, { ok: false, error: '请求体不能为空' })
               return
             }
-            const enabled = await this.setSidebarEntry(body.enabled)
-            send(200, { ok: true, enabled })
+            if (typeof body.location === 'string') {
+              const loc = body.location
+              if (loc !== 'both' && loc !== 'sidebar' && loc !== 'settings') {
+                send(400, { ok: false, error: 'location 必须是 both、sidebar 或 settings' })
+                return
+              }
+              const location = await this.setEntryLocation(loc)
+              send(200, { ok: true, location, enabled: location !== 'settings' })
+              return
+            }
+            if (typeof body.enabled === 'boolean') {
+              const location = await this.setEntryLocation(body.enabled ? 'both' : 'settings')
+              send(200, { ok: true, location, enabled: location !== 'settings' })
+              return
+            }
+            send(400, { ok: false, error: '缺少合法的 location 或 enabled 参数' })
             return
           }
           send(405, { ok: false, error: 'method not allowed' })
@@ -936,14 +954,30 @@ export class ChannelManager {
     this.engine.dispose()
   }
 
+  getEntryLocation(): EntryLocation {
+    if (this.store.entryLocation === 'both' || this.store.entryLocation === 'sidebar' || this.store.entryLocation === 'settings') {
+      return this.store.entryLocation
+    }
+    return this.store.sidebarEntry === true ? 'both' : 'settings'
+  }
+
+  async setEntryLocation(location: EntryLocation): Promise<EntryLocation> {
+    if (location !== 'both' && location !== 'sidebar' && location !== 'settings') {
+      throw new Error("location must be one of 'both', 'sidebar', or 'settings'")
+    }
+    this.store.entryLocation = location
+    this.store.sidebarEntry = location !== 'settings'
+    this.flush()
+    return location
+  }
+
   getSidebarEntry(): boolean {
-    return this.store.sidebarEntry === true
+    return this.getEntryLocation() !== 'settings'
   }
 
   async setSidebarEntry(enabled: boolean): Promise<boolean> {
     if (typeof enabled !== 'boolean') throw new Error('enabled 必须是布尔值')
-    this.store.sidebarEntry = enabled
-    this.flush()
+    await this.setEntryLocation(enabled ? 'both' : 'settings')
     return enabled
   }
 
@@ -1403,7 +1437,12 @@ export class ChannelManager {
         assistant: normalizeAssistantModel(parsed.assistant ?? {}),
         cwd: normalizeWorkspacePath(parsed.cwd),
         permission: normalizePermission(parsed.permission),
-        sidebarEntry: typeof parsed.sidebarEntry === 'boolean' ? parsed.sidebarEntry : undefined,
+        entryLocation: (parsed.entryLocation === 'both' || parsed.entryLocation === 'sidebar' || parsed.entryLocation === 'settings')
+          ? parsed.entryLocation
+          : (typeof parsed.sidebarEntry === 'boolean' ? (parsed.sidebarEntry ? 'both' : 'settings') : undefined),
+        sidebarEntry: typeof parsed.sidebarEntry === 'boolean'
+          ? parsed.sidebarEntry
+          : (parsed.entryLocation ? parsed.entryLocation !== 'settings' : undefined),
         onlineUpdate: typeof parsed.onlineUpdate === 'boolean' ? parsed.onlineUpdate : undefined,
         taskTreeSessions: typeof parsed.taskTreeSessions === 'boolean' ? parsed.taskTreeSessions : undefined,
       }

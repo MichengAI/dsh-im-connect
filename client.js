@@ -16,6 +16,7 @@ window.__ModuleLoader__.load({
     const HostSegmentedTabs = primitives.SegmentedTabs;
     const HostTooltip = primitives.Tooltip;
     const PrimitiveSwitch = primitives.Switch;
+    const PrimitiveSegmentedControl = primitives.SegmentedControl;
     // 宿主 Button 由 forwardRef 包成对象，typeof 是 object，不是 function。
     function isHostComponent(component) {
       return typeof component === "function" || (!!component && typeof component === "object" && typeof component.render === "function");
@@ -615,6 +616,7 @@ window.__ModuleLoader__.load({
         "connection.next.connected": "可在原聊天发送消息验证收发；私聊仍需符合准入设置。", "connection.next.connecting": "请稍后再次检查；等待扫码时请完成手机确认。", "connection.next.reconnecting": "渠道正在尝试恢复，请稍后再次检查。", "connection.next.disconnected": "请重新连接；需要扫码的渠道可重新添加绑定。", "connection.next.stopped": "请点击重新连接以启动账号。", "connection.next.error": "请尝试重新连接；仍有异常时查看本机日志。", "connection.next.unknown": "暂时无法确认状态，请稍后再检查或查看本机日志。",
         "settings.label": "IM助理", "settings.title": "IM助理", "settings.description": "管理各渠道账号。每个账号独立选择工作区、模型和权限，配置仅保存在本机。", "settings.viewProject": "GitHub", "settings.feedback": "问题反馈",
         "sidebar.entry.title": "侧边栏入口", "sidebar.entry.desc": "在侧栏显示即时通讯管理入口。设置里的入口不变。", "sidebar.entry.toggle": "切换侧边栏入口",
+        "entry.location.title": "入口展示位置", "entry.location.desc": "选择即时通信功能在界面上的显示入口（侧边栏或设置页面）", "entry.location.both": "全部显示", "entry.location.sidebar": "仅侧边栏", "entry.location.settings": "仅设置",
         "update.entry.title": "在线更新", "update.entry.desc": "允许检查并在线安装即时通讯插件的新版本。关闭后隐藏更新入口。", "update.entry.toggle": "切换在线更新", "error.update.disabled": "在线更新已被禁用",
         "taskTreeSessions.entry.title": "在任务树显示 IM 会话", "taskTreeSessions.entry.desc": "在官方工作区任务树中显示各渠道会话。关闭后仅在侧栏「频道」页签中显示", "taskTreeSessions.entry.toggle": "切换在任务树显示 IM 会话",
         "settings.aria": "IM助理", "settings.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
@@ -647,6 +649,7 @@ window.__ModuleLoader__.load({
         "connection.next.connected": "Send a message in the original chat to verify delivery. Private chats still follow access settings.", "connection.next.connecting": "Check again shortly. Complete confirmation on your phone if a QR scan is pending.", "connection.next.reconnecting": "The channel is attempting to recover. Check again shortly.", "connection.next.disconnected": "Reconnect the account. QR channels may need to be added again.", "connection.next.stopped": "Select Reconnect to start the account.", "connection.next.error": "Try reconnecting. If the issue persists, check the local logs.", "connection.next.unknown": "The current state could not be confirmed. Check again later or inspect the local logs.",
         "settings.label": "IM Assistant", "settings.title": "IM Assistant", "settings.description": "Manage accounts across channels. Each account has its own workspace, model, and permission settings, stored only on this machine.", "settings.viewProject": "GitHub", "settings.feedback": "Issues",
         "sidebar.entry.title": "Sidebar entry", "sidebar.entry.desc": "Show IM Connect in the sidebar. The Settings entry stays either way.", "sidebar.entry.toggle": "Toggle sidebar entry",
+        "entry.location.title": "Entry location", "entry.location.desc": "Choose where IM Connect is displayed (sidebar or Settings page)", "entry.location.both": "Both", "entry.location.sidebar": "Sidebar only", "entry.location.settings": "Settings only",
         "update.entry.title": "Online updates", "update.entry.desc": "Allow checking and installing new versions online. Hides the update entry when disabled.", "update.entry.toggle": "Toggle online updates", "error.update.disabled": "Online updates are disabled",
         "taskTreeSessions.entry.title": "Show IM sessions in task tree", "taskTreeSessions.entry.desc": "Show messaging channel sessions in the official workspace task tree. When disabled, sessions are shown only under the 'Channels' tab.", "taskTreeSessions.entry.toggle": "Toggle show IM sessions in task tree",
         "settings.aria": "IM Assistant", "settings.publicChatNotice": "Unapproved users can start chats, but they cannot approve tool calls.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
@@ -3667,6 +3670,8 @@ window.__ModuleLoader__.load({
         enabled,
         onToggle,
         disabled,
+        location,
+        onLocationChange,
         onlineUpdateEnabled = true,
         onToggleOnlineUpdate,
         onlineUpdateDisabled,
@@ -3677,19 +3682,46 @@ window.__ModuleLoader__.load({
       } = props;
 
       const SwitchComponent = PrimitiveSwitch || Switch;
+      const SegmentedControlComponent = PrimitiveSegmentedControl;
+      const currentLocation = location || (enabled ? 'both' : 'settings');
+      const locationOptions = [
+        { label: t("entry.location.both"), value: "both" },
+        { label: t("entry.location.sidebar"), value: "sidebar" },
+        { label: t("entry.location.settings"), value: "settings" },
+      ];
+
       const rows = [
-        h("div", { key: "sidebar-entry", className: "ima-bundle-row" },
-          h("div", { className: "ima-bundle-label-box" },
-            h("span", { className: "ima-bundle-title" }, t("sidebar.entry.title")),
-            h("span", { className: "ima-bundle-desc" }, t("sidebar.entry.desc"))
-          ),
-          h(SwitchComponent, {
-            checked: enabled,
-            onChange: onToggle,
-            label: t("sidebar.entry.toggle"),
-            disabled: disabled,
-          })
-        ),
+        SegmentedControlComponent
+          ? h("div", { key: "sidebar-entry", className: "ima-bundle-row" },
+              h("div", { className: "ima-bundle-label-box" },
+                h("span", { className: "ima-bundle-title" }, t("entry.location.title")),
+                h("span", { className: "ima-bundle-desc" }, t("entry.location.desc"))
+              ),
+              h(SegmentedControlComponent, {
+                value: currentLocation,
+                options: locationOptions,
+                onChange: (val) => {
+                  if (typeof onLocationChange === "function") {
+                    onLocationChange(val);
+                  } else if (typeof onToggle === "function") {
+                    onToggle(val !== "settings");
+                  }
+                },
+                disabled: disabled,
+              })
+            )
+          : h("div", { key: "sidebar-entry", className: "ima-bundle-row" },
+              h("div", { className: "ima-bundle-label-box" },
+                h("span", { className: "ima-bundle-title" }, t("sidebar.entry.title")),
+                h("span", { className: "ima-bundle-desc" }, t("sidebar.entry.desc"))
+              ),
+              h(SwitchComponent, {
+                checked: enabled,
+                onChange: onToggle,
+                label: t("sidebar.entry.toggle"),
+                disabled: disabled,
+              })
+            ),
       ];
 
       if (typeof onToggleOnlineUpdate === "function") {
@@ -3733,6 +3765,7 @@ window.__ModuleLoader__.load({
     }
 
     function ImBundleConfigCardWrapper(props) {
+      const [location, setLocation] = useState(props.getLocation ? props.getLocation : () => (props.getEnabled() ? 'both' : 'settings'));
       const [enabled, setEnabled] = useState(props.getEnabled);
       const [onlineUpdateEnabled, setOnlineUpdateEnabled] = useState(props.getOnlineUpdateEnabled ? props.getOnlineUpdateEnabled : () => true);
       const [onlineUpdateLocked, setOnlineUpdateLocked] = useState(props.getOnlineUpdateLocked ? props.getOnlineUpdateLocked : () => false);
@@ -3742,6 +3775,7 @@ window.__ModuleLoader__.load({
       const [savingTaskTreeSessions, setSavingTaskTreeSessions] = useState(false);
 
       useEffect(() => {
+        if (props.getLocation) setLocation(props.getLocation());
         setEnabled(props.getEnabled());
         if (props.getOnlineUpdateEnabled) {
           setOnlineUpdateEnabled(props.getOnlineUpdateEnabled());
@@ -3753,6 +3787,7 @@ window.__ModuleLoader__.load({
           setTaskTreeSessionsEnabled(props.getTaskTreeSessionsEnabled());
         }
         return props.subscribe(() => {
+          if (props.getLocation) setLocation(props.getLocation());
           setEnabled(props.getEnabled());
           if (props.getOnlineUpdateEnabled) {
             setOnlineUpdateEnabled(props.getOnlineUpdateEnabled());
@@ -3766,14 +3801,21 @@ window.__ModuleLoader__.load({
         });
       }, [props]);
 
-      const onToggleSidebar = (next) => {
+      const onLocationChange = (next) => {
         setSavingSidebar(true);
-        setEnabled(next);
-        props.setSidebar(next).catch(() => {
+        setLocation(next);
+        setEnabled(next !== "settings");
+        const p = props.setLocation ? props.setLocation(next) : props.setSidebar(next !== "settings");
+        p.catch(() => {
+          if (props.getLocation) setLocation(props.getLocation());
           setEnabled(props.getEnabled());
         }).finally(() => {
           setSavingSidebar(false);
         });
+      };
+
+      const onToggleSidebar = (next) => {
+        onLocationChange(next ? "both" : "settings");
       };
 
       const onToggleOnlineUpdate = props.setOnlineUpdate ? (next) => {
@@ -3803,6 +3845,8 @@ window.__ModuleLoader__.load({
 
       return h(ImBundleConfigCard, {
         t: props.t,
+        location,
+        onLocationChange,
         enabled,
         disabled: savingSidebar,
         onToggle: onToggleSidebar,
@@ -3833,6 +3877,7 @@ window.__ModuleLoader__.load({
         };
       }
       const { callApi, renderPanel, ns } = options;
+      let entryLocation = "settings";
       let sidebarEntryEnabled = false;
       let sidebarSupported = false;
       let offPanel = null;
@@ -3840,10 +3885,14 @@ window.__ModuleLoader__.load({
       let epoch = 0;
       let layoutService;
       const listeners = new Set();
+      const locationListeners = new Set();
 
       const notify = () => {
         for (const listener of listeners) {
           try { listener(); } catch {}
+        }
+        for (const listener of locationListeners) {
+          try { listener(entryLocation); } catch {}
         }
       };
 
@@ -3890,25 +3939,36 @@ window.__ModuleLoader__.load({
         }
       };
 
-      const setEnabled = async (next) => {
+      const setLocation = async (next) => {
+        if (next !== "both" && next !== "sidebar" && next !== "settings") {
+          throw new Error("location must be one of 'both', 'sidebar', or 'settings'");
+        }
+        const prevLocation = entryLocation;
+        const prevEnabled = sidebarEntryEnabled;
         const currentEpoch = ++epoch;
-        sidebarEntryEnabled = next;
+        entryLocation = next;
+        sidebarEntryEnabled = next !== "settings";
         sync();
         notify();
         try {
           await callApi("/sidebar-entry", {
             method: "POST",
-            body: JSON.stringify({ enabled: next }),
+            body: JSON.stringify({ location: next }),
           });
           return next;
         } catch (err) {
           if (currentEpoch === epoch) {
-            sidebarEntryEnabled = !next;
+            entryLocation = prevLocation;
+            sidebarEntryEnabled = prevEnabled;
             sync();
             notify();
           }
           throw err;
         }
+      };
+
+      const setEnabled = async (next) => {
+        return (await setLocation(next ? "both" : "settings")) !== "settings";
       };
 
       let onlineUpdateEnabled = true;
@@ -3948,8 +4008,14 @@ window.__ModuleLoader__.load({
       const loadEpoch = epoch;
       callApi("/sidebar-entry")
         .then((res) => {
-          if (epoch === loadEpoch && res && typeof res.enabled === "boolean") {
-            sidebarEntryEnabled = res.enabled;
+          if (epoch === loadEpoch && res) {
+            if (res.location === "both" || res.location === "sidebar" || res.location === "settings") {
+              entryLocation = res.location;
+              sidebarEntryEnabled = entryLocation !== "settings";
+            } else if (typeof res.enabled === "boolean") {
+              sidebarEntryEnabled = res.enabled;
+              entryLocation = res.enabled ? "both" : "settings";
+            }
             sync();
             notify();
           }
@@ -4046,6 +4112,8 @@ window.__ModuleLoader__.load({
           if (ownerProps && ownerProps.view === "summary") return null;
           return h(ImBundleConfigCardWrapper, {
             t: ctx.locale.bind(ns),
+            getLocation: () => entryLocation,
+            setLocation: setLocation,
             getEnabled: () => sidebarEntryEnabled,
             setSidebar: setEnabled,
             getOnlineUpdateEnabled: () => onlineUpdateEnabled,
@@ -4062,6 +4130,13 @@ window.__ModuleLoader__.load({
       });
 
       return {
+        getLocation: () => entryLocation,
+        setLocation,
+        isSettingsSectionEnabled: () => entryLocation !== "sidebar",
+        onLocationChange: (fn) => {
+          locationListeners.add(fn);
+          return () => { locationListeners.delete(fn); };
+        },
         isEnabled: () => sidebarEntryEnabled,
         isSupported: () => sidebarSupported,
         setEnabled,
@@ -4294,21 +4369,58 @@ window.__ModuleLoader__.load({
 
       installSettingsNavIcon(ctx, () => t("settings.label"));
 
-      ctx.slots.inject("settings.section", () => ctx.slots.register({
+      let unregSettings = null;
+      const mountSettingsSection = () => {
+        if (unregSettings) return;
+        const res = (ctx.slots.register({
           name: "settings.section",
           id: "im-assistant",
           order: 40,
           label: () => t("settings.label"),
           icon: "chat",
           locale: IM_LOCALE_NS,
-        inject: () => ({
-          createWorkspace: typeof ctx.workspaces?.create === "function" ? (input) => ctx.workspaces.create(input) : undefined,
-          pickDirectory: () => pickHostDirectory(ctx),
-          permissionT,
-          modelT,
-          presetT,
-        }),
-      }, LocalizedSettingsPage));
+          inject: () => ({
+            createWorkspace: typeof ctx.workspaces?.create === "function" ? (input) => ctx.workspaces.create(input) : undefined,
+            pickDirectory: () => pickHostDirectory(ctx),
+            permissionT,
+            modelT,
+            presetT,
+          }),
+        }, LocalizedSettingsPage));
+        unregSettings = typeof res === "function" ? res : () => {};
+      };
+
+      const unmountSettingsSection = () => {
+        if (!unregSettings) return;
+        try { unregSettings(); } catch {}
+        unregSettings = null;
+      };
+
+      let settingsSlotInjected = false;
+      const syncSettingsSection = () => {
+        if (!settingsSlotInjected) return;
+        const shouldShow = sidebarController && typeof sidebarController.isSettingsSectionEnabled === "function"
+          ? sidebarController.isSettingsSectionEnabled()
+          : true;
+        if (shouldShow) {
+          mountSettingsSection();
+        } else {
+          unmountSettingsSection();
+        }
+      };
+
+      ctx.slots.inject("settings.section", () => {
+        settingsSlotInjected = true;
+        syncSettingsSection();
+        return () => {
+          unmountSettingsSection();
+          settingsSlotInjected = false;
+        };
+      });
+
+      if (sidebarController && typeof sidebarController.onLocationChange === "function") {
+        sidebarController.onLocationChange(() => syncSettingsSection());
+      }
 
       ctx.slots.inject("sidebar.channels", () => ctx.slots.register({
           name: "sidebar.channels",

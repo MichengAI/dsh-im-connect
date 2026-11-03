@@ -110,6 +110,7 @@ interface PendingRequest {
     chatId?: string;
     time: number;
 }
+export type EntryLocation = 'both' | 'sidebar' | 'settings';
 export interface PermissionOptionView {
     value: string;
     name: string;
@@ -171,6 +172,8 @@ export declare class ChannelManager {
     initEnabled(): Promise<void>;
     registerApi(ctx: Context): void;
     disposeApi(): void;
+    getEntryLocation(): EntryLocation;
+    setEntryLocation(location: EntryLocation): Promise<EntryLocation>;
     getSidebarEntry(): boolean;
     setSidebarEntry(enabled: boolean): Promise<boolean>;
     getTaskTreeSessions(): boolean;

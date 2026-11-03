@@ -50,6 +50,17 @@ test('侧边栏入口配置：管理器方法、持久化与 HTTP API', async ()
     const enabled = await manager.setSidebarEntry(true)
     assert.equal(enabled, true, 'setSidebarEntry(true) 返回 true')
     assert.equal(manager.getSidebarEntry(), true, 'getSidebarEntry() 返回已更新的 true')
+    assert.equal(manager.getEntryLocation(), 'both', 'setSidebarEntry(true) 映射为 both')
+
+    const locSidebar = await manager.setEntryLocation('sidebar')
+    assert.equal(locSidebar, 'sidebar')
+    assert.equal(manager.getEntryLocation(), 'sidebar')
+    assert.equal(manager.getSidebarEntry(), true)
+
+    const locSettings = await manager.setEntryLocation('settings')
+    assert.equal(locSettings, 'settings')
+    assert.equal(manager.getEntryLocation(), 'settings')
+    assert.equal(manager.getSidebarEntry(), false)
 
     const taskTreeEnabled = await manager.setTaskTreeSessions(true)
     assert.equal(taskTreeEnabled, true, 'setTaskTreeSessions(true) 返回 true')
@@ -133,10 +144,23 @@ test('侧边栏入口配置：管理器方法、持久化与 HTTP API', async ()
       assert.equal(postTaskTreeData.ok, true)
       assert.equal(postTaskTreeData.enabled, true)
 
+      // POST location 更新为 sidebar
+      const postLocRes = await fetch(baseUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ location: 'sidebar' }),
+      })
+      assert.equal(postLocRes.status, 200)
+      const postLocData = await postLocRes.json()
+      assert.equal(postLocData.ok, true)
+      assert.equal(postLocData.location, 'sidebar')
+      assert.equal(postLocData.enabled, true)
+
       // GET 验证更新已生效
       const getRes2 = await fetch(baseUrl)
       const getData2 = await getRes2.json()
       assert.equal(getData2.ok, true)
+      assert.equal(getData2.location, 'sidebar')
       assert.equal(getData2.enabled, true)
 
       // taskTreeSessions: GET 验证更新已生效
