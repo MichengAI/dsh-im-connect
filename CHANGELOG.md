@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.22 - 2026-11-03
+
+- File delivery now sends only what the assistant explicitly delivers (#54): previously, any file the assistant touched (a memory note, a config edit, a log write) could be treated as this turn's output and pushed into the chat, which is especially awkward in group conversations. Only files the assistant declares as deliverables are returned now; ordinary file writes, code edits and state files no longer appear in chat.
+- Upgrade note: if you relied on "the assistant writes a file and it arrives automatically", ask the assistant to deliver that file explicitly. `/export` for session logs is unaffected.
+- New three-way entry location setting: the plugin details page switch became "Entry location" with Both / Sidebar only / Settings only, applied immediately without a reload. The default stays "Settings only", matching the previous behavior; accounts that had the sidebar entry enabled carry over to Both and keep their icon.
+- In "Sidebar only" mode the duplicated **Settings → IM Assistant** tab is no longer shown and configuration happens in the sidebar panel; switch back to Both on the plugin details page to bring the settings tab back.
+- Accessibility hardening: the new control now carries the identifiers and accessible names the host primitive requires, so screen readers announce the control and its three options.
+- Documentation: both READMEs now describe the entry location states, its default value, and the file-delivery rule as implemented.
+
 ## 1.0.21 - 2026-10-30
 
 - Add idle session auto-rotation: After a long pause in conversation, incoming messages can automatically start a fresh session, preventing previous conversation context from polluting new topics; previous sessions are preserved in history and can be resumed anytime via `/sessions` (PR #52).
