@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.24 - 2026-11-03
+
+- Integrate official native settings navigation icon slot: present dedicated instant messaging vector icon on newer hosts while maintaining graceful compatibility with older hosts to prevent dual icons.
+
 ## 1.0.23 - 2026-11-03
 
 - Fix Telegram status emoji reactions not appearing on incoming messages (#55, PR #56): when sending messages to the Telegram bot, original messages now properly show status reactions (👀 processing / 🤔 waiting / 👍 finished / 👎 failed) as the assistant makes progress, resolving an issue where reaction updates were silently swallowed due to targeting event cursors instead of user message IDs.
