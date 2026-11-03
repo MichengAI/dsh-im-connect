@@ -4316,9 +4316,8 @@ window.__ModuleLoader__.load({
         const isOwn = isOwnNavRow(getNavButtonText(button), typeof wantedLabel === "function" ? wantedLabel() : wantedLabel);
         if (isOwn) {
           const hasSlotIcon = Array.from((button && button.children) || []).some((child) =>
-            child.tagName === "SPAN" &&
-            ((child.className && String(child.className).includes("navIcon")) || (typeof child.getAttribute === "function" && child.getAttribute("aria-hidden") === "true"))
-          ) || Boolean(button && typeof button.querySelector === "function" && button.querySelector('[class*="navIcon"]'));
+            child.tagName === "SPAN" && child.className && String(child.className).includes("navIcon")
+          ) || Boolean(button && typeof button.querySelector === "function" && button.querySelector('span[class*="navIcon"]'));
           if (hasSlotIcon) {
             if (button.hasAttribute(NAV_ICON_MARKER)) {
               button.removeAttribute(NAV_ICON_MARKER);
@@ -4341,6 +4340,19 @@ window.__ModuleLoader__.load({
         if (!button.hasAttribute(NAV_ICON_MARKER)) return false;
         button.removeAttribute(NAV_ICON_MARKER);
         return true;
+      }
+
+      /**
+       * 宿主是否已声明设置图标插槽。
+       * 实测宿主公开面只暴露 `spec`（`specDynamic` 仅在 SlotCore 内部使用），
+       * 两个都探是为了兼容将来把宽形式提到公开面的宿主；返回值可能是 null，
+       * 所以统一按 `!= null` 判定，不能写 `!== undefined`。
+       */
+      function hostDeclaresIconSlot(slots) {
+        if (!slots) return false;
+        if (typeof slots.specDynamic === "function" && slots.specDynamic("settings.section.icon") != null) return true;
+        if (typeof slots.spec === "function" && slots.spec("settings.section.icon") != null) return true;
+        return false;
       }
 
       function installSettingsNavIcon(targetCtx, resolveLabel) {
@@ -4380,7 +4392,11 @@ window.__ModuleLoader__.load({
         }, "im-connect: settings nav icon");
       }
 
-      installSettingsNavIcon(ctx, () => t("settings.label"));
+      const hasIconSlot = hostDeclaresIconSlot(ctx.slots);
+
+      if (!hasIconSlot) {
+        installSettingsNavIcon(ctx, () => t("settings.label"));
+      }
 
       function ImNavIcon({ size = 16 }) {
         return React.createElement(
@@ -4402,18 +4418,52 @@ window.__ModuleLoader__.load({
         );
       }
 
+      /**
+       * 在宿主声明了 `settings.section.icon` 后注册插件图标，并跟随入口位置启停。
+       * 注册动作必须自带清理：槽位声明被撤销后宿主会重跑 inject 回调，不返回 disposer
+       * 会让本地 unregIcon 变成永久非空、图标再也注册不回去。
+       * 注册失败只影响图标本身（宿主回退自带字形），不得把宿主 settings 壳的注册流程带崩。
+       */
+      function installSettingsIconSlot(targetCtx, controller, IconComponent) {
+        targetCtx.slots.inject("settings.section.icon", () => {
+          let unregIcon = null;
+          const syncIcon = () => {
+            const shouldShow = controller && typeof controller.isSettingsSectionEnabled === "function"
+              ? controller.isSettingsSectionEnabled()
+              : true;
+            if (shouldShow && !unregIcon) {
+              try {
+                const res = targetCtx.slots.register({
+                  name: "settings.section.icon",
+                  id: "im-assistant",
+                  locale: IM_LOCALE_NS,
+                }, IconComponent);
+                unregIcon = typeof res === "function" ? res : () => {};
+              } catch { /* 注册抛错时留空 unregIcon，等下一次位置变化重试 */ }
+            } else if (!shouldShow && unregIcon) {
+              try { unregIcon(); } catch {}
+              unregIcon = null;
+            }
+          };
+          syncIcon();
+          const unlisten = controller && typeof controller.onLocationChange === "function"
+            ? controller.onLocationChange(() => syncIcon())
+            : null;
+          return () => {
+            if (typeof unlisten === "function") {
+              try { unlisten(); } catch {}
+            }
+            if (unregIcon) {
+              try { unregIcon(); } catch {}
+              unregIcon = null;
+            }
+          };
+        });
+      }
+
       let unregSettings = null;
-      let unregSettingsIcon = null;
       const mountSettingsSection = () => {
         if (unregSettings) return;
-        try {
-          const iconRes = ctx.slots.register({
-            name: "settings.section.icon",
-            id: "im-assistant",
-            locale: IM_LOCALE_NS,
-          }, ImNavIcon);
-          unregSettingsIcon = typeof iconRes === "function" ? iconRes : () => {};
-        } catch {}
         const res = (ctx.slots.register({
           name: "settings.section",
           id: "im-assistant",
@@ -4433,10 +4483,6 @@ window.__ModuleLoader__.load({
       };
 
       const unmountSettingsSection = () => {
-        if (unregSettingsIcon) {
-          try { unregSettingsIcon(); } catch {}
-          unregSettingsIcon = null;
-        }
         if (!unregSettings) return;
         try { unregSettings(); } catch {}
         unregSettings = null;
@@ -4463,6 +4509,8 @@ window.__ModuleLoader__.load({
           settingsSlotInjected = false;
         };
       });
+
+      installSettingsIconSlot(ctx, sidebarController, ImNavIcon);
 
       if (sidebarController && typeof sidebarController.onLocationChange === "function") {
         sidebarController.onLocationChange(() => syncSettingsSection());

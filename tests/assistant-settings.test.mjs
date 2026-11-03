@@ -516,12 +516,220 @@ test('设置导航图标走通用 mask 注入，不改宿主 svg 内容', () => 
   buttonWithSpan.textContent = 'IM 助理'
   assert.equal(applySettingsNavIcon(buttonWithSpan, () => 'settings.label'), true, '词典未就绪时也能通过自身别名识别')
   assert.equal(buttonWithSpan.hasAttribute('data-ima-nav-icon'), true)
+  buttonWithSpan.attributes.clear()
+
+  // 老宿主回归：老宿主原生图标为 <svg class="...navIcon">，不得被误判为新版插槽容器导致 marker 被移除
+  const oldHostSvgWithNavIcon = {
+    tagName: 'SVG',
+    className: 'dcu-nav-item-navIcon',
+    innerHTML: '<path d="gear"/>',
+  }
+  const oldHostButton = {
+    textContent: 'IM 助理',
+    attributes: new Map(),
+    children: [oldHostSvgWithNavIcon, span],
+    querySelector(selector) {
+      if (selector === 'span') return span
+      if (selector === 'span[class*="navIcon"]') return null
+      if (selector === '[class*="navIcon"]') return oldHostSvgWithNavIcon
+      return null
+    },
+    hasAttribute(name) { return this.attributes.has(name) },
+    getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null },
+    setAttribute(name, value) { this.attributes.set(name, String(value)) },
+    removeAttribute(name) { this.attributes.delete(name) },
+  }
+  assert.equal(applySettingsNavIcon(oldHostButton, () => 'IM 助理'), true, '老宿主带 navIcon 类名的 svg 不得误判为插槽容器，必须打上 marker')
+  assert.equal(oldHostButton.hasAttribute('data-ima-nav-icon'), true)
+
+  // 新宿主防御：带 navIcon 类的容器被识别为已有插槽，不打 marker 且移除残留
+  const newHostIconSpan = {
+    tagName: 'SPAN',
+    className: 'navIcon dcu-nav-icon',
+    getAttribute() { return null },
+  }
+  const newHostButton = {
+    textContent: 'IM 助理',
+    attributes: new Map([['data-ima-nav-icon', '']]),
+    children: [newHostIconSpan, span],
+    querySelector(selector) {
+      if (selector === 'span') return span
+      if (selector.includes('navIcon')) return newHostIconSpan
+      return null
+    },
+    hasAttribute(name) { return this.attributes.has(name) },
+    getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null },
+    setAttribute(name, value) { this.attributes.set(name, String(value)) },
+    removeAttribute(name) { this.attributes.delete(name) },
+  }
+  assert.equal(applySettingsNavIcon(newHostButton, () => 'IM 助理'), true, '新版宿主插槽容器存在时必须移除 DOM marker')
+  assert.equal(newHostButton.hasAttribute('data-ima-nav-icon'), false)
+  assert.equal(applySettingsNavIcon(newHostButton, () => 'IM 助理'), false, '新宿主下不重复打 marker')
 
   // 必须兼容 Alpha/新版的全屏快捷键设置面板选择器与固化 SVG 遮罩
   assert.match(client, /\[data-shortcut-modal="settings"\] nav button/, '必须兼容宿主新版设置工作台选择器')
+  assert.match(client, /\.slots\.inject\("settings\.section\.icon"/, '必须通过 inject 声明式门控注册图标插槽')
+  assert.match(client, /specDynamic\("settings\.section\.icon"\)/, '必须具备图标插槽服务层先验门控')
   assert.match(client, /ima-settings-nav-icon-style/, '必须具备独立导航图标样式表 ID 保障')
   assert.match(client, /QUEUE_ICON_PATHS/, '必须具备固化的对话气泡矢量路径，杜绝空 mask')
   assert.match(client, /QUEUE_ICON_MASK/, '样式表默认 mask 必须直接固化气泡 Data URL')
+})
+
+test('设置导航图标服务层门控：宿主声明插槽时不挂 DOM 观察器，未声明时挂载兜底', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const start = client.indexOf('const NAV_ICON_MARKER')
+  const end = client.indexOf('function ImNavIcon', start)
+  assert.ok(start >= 0 && end > start, '必须能提取导航图标初始化闭包')
+  const code = client.slice(start, end)
+
+  const createHarness = (slotsSpec) => {
+    const tracker = { effectCount: 0, effectLabel: '' }
+    const ctx = {
+      slots: slotsSpec,
+      effect: (fn, label) => {
+        tracker.effectCount++
+        tracker.effectLabel = label
+      },
+    }
+    const document = {
+      getElementById: () => null,
+      createElement: () => ({ setAttribute() {} }),
+      head: { appendChild() {} },
+      querySelectorAll: () => [],
+      documentElement: {},
+    }
+    class MockMutationObserver {
+      observe() {}
+      disconnect() {}
+    }
+    const runner = new Function(
+      'ctx', 't', 'document', 'MutationObserver', 'queueMicrotask', 'tracker',
+      `${code}; return { hasIconSlot, tracker };`
+    )
+    return runner(ctx, key => key, document, MockMutationObserver, () => {}, tracker)
+  }
+
+  // 1. 老宿主（无 specDynamic，也无 spec）：探不到插槽，挂载 DOM 补丁
+  const oldHost1 = createHarness({})
+  assert.equal(oldHost1.hasIconSlot, false)
+  assert.equal(oldHost1.tracker.effectCount, 1, '老宿主下必须挂载 DOM 补丁 effect')
+  assert.equal(oldHost1.tracker.effectLabel, 'im-connect: settings nav icon')
+
+  // 2. 老宿主返回 null（防御性硬化测试）：仍然挂载 DOM 补丁
+  const oldHost2 = createHarness({
+    specDynamic: () => null,
+    spec: () => null,
+  })
+  assert.equal(oldHost2.hasIconSlot, false)
+  assert.equal(oldHost2.tracker.effectCount, 1, '返回 null 时也必须视为老宿主并挂载兜底')
+
+  // 3. 新宿主（真实公开面只有 spec，声明了 settings.section.icon）：不挂载 DOM 补丁
+  const newHost = createHarness({
+    spec: (name) => name === 'settings.section.icon' ? { kind: 'list' } : undefined,
+  })
+  assert.equal(newHost.hasIconSlot, true)
+  assert.equal(newHost.tracker.effectCount, 0, '新宿主声明插槽时坚决不挂载 DOM 观察器')
+
+  // 4. 向前兼容：将来若宿主把 specDynamic 提到公开面，也要识别
+  const newHostWide = createHarness({
+    specDynamic: (name) => name === 'settings.section.icon' ? { kind: 'list' } : undefined,
+  })
+  assert.equal(newHostWide.hasIconSlot, true)
+  assert.equal(newHostWide.tracker.effectCount, 0, 'specDynamic 形式命中也必须跳过 DOM 观察器')
+
+  // 5. 其它槽位有声明不等于本插件槽位有声明
+  const otherSlotOnly = createHarness({
+    spec: (name) => name === 'settings.section' ? { kind: 'list' } : undefined,
+  })
+  assert.equal(otherSlotOnly.hasIconSlot, false, '不得因为别的槽位存在就跳过图标兜底')
+  assert.equal(otherSlotOnly.tracker.effectCount, 1)
+})
+
+test('图标插槽注册随入口位置启停，声明撤销时自清理且注册失败不带崩宿主', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const start = client.indexOf('function installSettingsIconSlot')
+  const end = client.indexOf('let unregSettings', start)
+  assert.ok(start >= 0 && end > start, '必须能提取图标插槽注册函数')
+  const factory = new Function('IM_LOCALE_NS', `${client.slice(start, end)}; return installSettingsIconSlot;`)('im-assistant')
+
+  const makeController = () => {
+    const state = { enabled: true }
+    const taps = new Set()
+    return {
+      state,
+      taps,
+      controller: {
+        isSettingsSectionEnabled: () => state.enabled,
+        onLocationChange(fn) {
+          taps.add(fn)
+          return () => { taps.delete(fn) }
+        },
+      },
+      fire() { for (const fn of [...taps]) fn() },
+    }
+  }
+
+  // 1. 声明后：注册；切 sidebar：注销；切回：重新注册；撤销声明：摘监听 + 注销
+  const registered = []
+  const disposed = []
+  let injectCallback = null
+  const ctx = {
+    slots: {
+      inject(name, callback) {
+        injectCallback = callback
+        return () => {}
+      },
+      register(options) {
+        registered.push(options)
+        return () => { disposed.push(options.id) }
+      },
+    },
+  }
+  const host = makeController()
+  factory(ctx, host.controller, () => null)
+  assert.equal(typeof injectCallback, 'function', '必须注册 settings.section.icon 的 inject 回调')
+  assert.equal(registered.length, 0, '槽位声明之前不得注册图标')
+
+  const dispose = injectCallback()
+  assert.equal(registered.length, 1, '槽位声明后必须注册图标')
+  assert.equal(registered[0].name, 'settings.section.icon')
+  assert.equal(registered[0].id, 'im-assistant', '注册 id 必须等于 settings.section 的 id')
+
+  host.state.enabled = false
+  host.fire()
+  assert.equal(disposed.length, 1, '入口位置改成仅侧栏时必须注销图标')
+
+  host.state.enabled = true
+  host.fire()
+  assert.equal(registered.length, 2, '切回设置入口时必须重新注册图标')
+
+  dispose()
+  assert.equal(host.taps.size, 0, '声明撤销时必须摘掉入口位置监听')
+  assert.equal(disposed.length, 2, '声明撤销时必须注销图标')
+
+  // 2. 注册抛错：必须被吞掉（不能带崩宿主 settings 壳的注册流程），且下次位置变化可重试
+  let attempts = 0
+  let injected = null
+  const ctxFailing = {
+    slots: {
+      inject(name, callback) { injected = callback },
+      register() {
+        attempts += 1
+        if (attempts === 1) throw new Error('duplicate id')
+        return () => {}
+      },
+    },
+  }
+  const host2 = makeController()
+  factory(ctxFailing, host2.controller, () => null)
+  const dispose2 = injected()
+  assert.equal(attempts, 1, '注册失败必须被吞掉而不是抛给宿主')
+  host2.state.enabled = false
+  host2.fire()
+  host2.state.enabled = true
+  host2.fire()
+  assert.equal(attempts, 2, '失败后必须在下次位置变化时重试注册')
+  dispose2()
 })
 
 test('设置页账号行和账号设置都能填写名称备注', () => {
