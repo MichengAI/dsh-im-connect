@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.23 - 2026-11-03
+
+- Fix Telegram status emoji reactions not appearing on incoming messages (#55, PR #56): when sending messages to the Telegram bot, original messages now properly show status reactions (👀 processing / 🤔 waiting / 👍 finished / 👎 failed) as the assistant makes progress, resolving an issue where reaction updates were silently swallowed due to targeting event cursors instead of user message IDs.
+- Skip reactions on interactive callbacks: button clicks and menu selections no longer attempt redundant status reactions, eliminating unnecessary background warning logs.
+
 ## 1.0.22 - 2026-11-03
 
 - File delivery now sends only what the assistant explicitly delivers (#54): previously, any file the assistant touched (a memory note, a config edit, a log write) could be treated as this turn's output and pushed into the chat, which is especially awkward in group conversations. Only files the assistant declares as deliverables are returned now; ordinary file writes, code edits and state files no longer appear in chat.
