@@ -103,8 +103,8 @@ WeChat, WeCom, DingTalk, Feishu, Lark, QQ, Telegram, Discord, and Slack accept o
 
 WeChat, WeCom, DingTalk, Feishu, Lark, QQ, Telegram, Discord, and Slack can return files produced by the assistant. For example: “Create a PDF report and send me the file.”
 
-- Files successfully created or edited with Chat's supported file tools are sent after the reply. On hosts with `present`, explicitly presented files are also sent, including existing files.
-- File access follows Chat: files outside the workspace are allowed when the host can read them. The plugin does not extract arbitrary paths from reply text. Files created through shell commands need to be presented explicitly.
+- Aligned with DSH Host delivery contracts: when the assistant explicitly declares deliverables via `tool-present` (`deliverables/presented`), the corresponding files are returned as chat attachments. Ordinary low-level tool mutations (such as editing code or writing state files) are not sent automatically, preventing chat noise and credential leakage.
+- File access follows Chat: files outside the workspace are allowed when the host can read them. The plugin does not extract arbitrary paths from reply text. Files created through shell commands or scripts need to be presented explicitly by the assistant.
 - Supported hosts use Chat's complete-file download service and its configured size limit. Directories and symbolic links are not sent; channel-specific file limits still apply.
 - A failed transfer produces a message naming the file and does not stop the remaining files. Switching away from the session or stopping the account prevents pending delivery from continuing to a different target.
 - Send `/export` as a standalone command to receive the current linked session’s Chat ZIP logs in this chat, without child sessions. The ZIP limit is 32 MiB; channel limits also apply. If the file is too large or cannot be sent, use `/export` in web Chat. Paths and other session IDs are not accepted.
@@ -239,15 +239,15 @@ The configuration output should contain `im-connect`. Restart DSH Web and hard-r
 The plugin follows standard DSH bundle configuration conventions. Options are located at:
 > **Sidebar → Plugins → Click `@michengai/dsh-im-connect`** (the host's `plugins.bundle.config` slot).
 
-Three native switches are available. Their values are persisted in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `sidebarEntry` and `taskTreeSessions` are managed through this UI, while `onlineUpdate` is also subject to the host lock described below:
+Native configuration options are provided here. Their values are persisted in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `location` and `taskTreeSessions` are managed through this UI, while `onlineUpdate` is also subject to the host lock described below:
 
-### 1. Sidebar Entry (`sidebarEntry`)
-- **Default**: Disabled (`false`)
-- **Description**: Displays a persistent **IM Connect** navigation icon in the host's left primary sidebar.
-- **Effect**:
-  - When enabled, clicking the sidebar icon opens the IM Assistant management page directly in the primary workspace with a **960px centered container** (matching host plugin manager conventions). This eliminates vertical scrolling constraints in narrow settings dialogs;
-  - When disabled, unregisters the sidebar entry cleanly (and resets active panel gracefully if currently viewing the panel, preventing blank views);
-  - The standard **Settings → IM Assistant** view remains active either way, and state is synchronized live across both entry points.
+### 1. Entry Location (`location`)
+- **Default**: Settings only (`settings`)
+- **Description**: Controls where the IM Assistant management page is displayed in the host navigation, supporting three states (matching host bundle entry conventions):
+  - **Both (`both`)**: Displays a persistent icon in the left primary sidebar and retains the entry in **Settings → IM Assistant**;
+  - **Sidebar only (`sidebar`)**: Displays only the sidebar icon, omitting the global settings entry;
+  - **Settings only (`settings`)**: Unregisters the sidebar icon (gracefully switching active views if currently open) and retains only the entry in **Settings → IM Assistant**.
+- **Effect**: Clicking the sidebar icon opens the IM Assistant management page directly in the primary workspace with a **960px centered container** (matching host plugin manager conventions). This eliminates vertical scrolling constraints in narrow settings dialogs; state is synchronized live across both entry points.
 
 ### 2. Online Updates (`onlineUpdate` / `updater`)
 - **Default**: Enabled (`true`)

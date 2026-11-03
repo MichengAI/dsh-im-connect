@@ -3698,8 +3698,10 @@ window.__ModuleLoader__.load({
                 h("span", { className: "ima-bundle-desc" }, t("entry.location.desc"))
               ),
               h(SegmentedControlComponent, {
+                id: "ima-bundle-entry-location",
                 value: currentLocation,
                 options: locationOptions,
+                label: t("entry.location.title"),
                 onChange: (val) => {
                   if (typeof onLocationChange === "function") {
                     onLocationChange(val);
