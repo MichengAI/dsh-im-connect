@@ -31,17 +31,19 @@ function setup(t, id = 'account-opaque-123', controller, options = {}) {
 test('image admission ignores an inactive Cordis provider until it becomes active', async t => {
   const h = setup(t)
   const implementation = h.ctx.reflect._getImpl('sessionController', false)
-  const activeFiber = implementation.fiber
-  // Simulate only this provider's pending lifecycle, preserving other services.
-  // Cordis FiberState.PENDING is 0; use its real strict lookup implementation.
-  implementation.fiber = Object.assign(Object.create(activeFiber), { state: 0 })
+  const activeFiber = implementation.ctx.fiber
+  // Cordis 4.1.0 严格模式依赖 impl.ctx.fiber.state === 2 (ACTIVE)
+  // 模拟 PENDING (state = 0)
+  implementation.ctx = Object.assign(Object.create(implementation.ctx), {
+    fiber: Object.assign(Object.create(activeFiber), { state: 0 })
+  })
   try {
     assert.equal(h.ctx.get('sessionController'), undefined)
     assert.ok(h.ctx.get('sessionController', false))
     await h.send()
     assert.equal(h.calls.length, 0)
     assert.match(h.sent[0], /不支持.*图片|升级/)
-  } finally { implementation.fiber = activeFiber }
+  } finally { implementation.ctx.fiber = activeFiber }
   await h.send()
   assert.equal(h.calls.length, 1)
 })
