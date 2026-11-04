@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Honest delivery logging (#58): `ret=0` from the iLink gateway only means the platform accepted the request, not that the client actually received the message. The gateway now logs outbound sends as submitted instead of delivered, so silent drops (see #58) are no longer masked by a misleading "delivered" line.
+- Context token rotation capture (#58): the WeChat channel now picks up a refreshed `context_token` from `getconfig` and `sendmessage` responses whenever the server rotates it. Previously such tokens were ignored, so replies could keep using a stale token and be silently dropped while `sendtyping` (which runs right before a reply) kept working.
+
 ## 1.0.26 - 2026-11-04
 
 - Telegram reply placeholders now display intermediate assistant progress: when handling requests on Telegram, the reply message dynamically shows a concise header for thinking status with cumulative character counts, as well as tool execution steps with parameters and duration (#57).

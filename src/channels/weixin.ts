@@ -682,7 +682,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
 
   async function sendRaw(toUserId: string, item: Json, clientId: string, signal?: AbortSignal): Promise<void> {
     const contextToken = state.contextTokens[toUserId]
-    await outbound.run(toUserId, () => request(
+    const resp = await outbound.run(toUserId, () => request(
         SEND_MESSAGE_PATH,
       {
         msg: {
@@ -698,6 +698,12 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
       },
       15_000, false, signal,
     ))
+    // iLink 可能轮换 context_token：响应里带了新令牌就立刻换上，避免下一条消息用过期令牌被静默丢弃。
+    const freshToken = pickStr(resp, 'context_token')
+    if (freshToken && freshToken !== contextToken) {
+      state.contextTokens[toUserId] = freshToken
+      log(`[weixin] sendmessage 响应刷新了 ${toUserId} 的 context_token`)
+    }
   }
 
   async function sendText(toUserId: string, text: string): Promise<void> {
@@ -715,6 +721,12 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
           15_000,
         )
         const ticket = pickStr(resp, 'typing_ticket')
+        // getconfig 同样可能轮换 context_token：忽略响应里的新令牌会导致后续回复被静默丢弃。
+        const freshToken = pickStr(resp, 'context_token')
+        if (freshToken && freshToken !== state.contextTokens[toUserId]) {
+          state.contextTokens[toUserId] = freshToken
+          log(`[weixin] getconfig 返回了新的 context_token，已刷新 ${toUserId} 的会话令牌`)
+        }
         if (!ticket) return
         cached = { ticket, nextFetchAt: Date.now() + 5 * 60_000 }
         typingTickets.set(toUserId, cached)

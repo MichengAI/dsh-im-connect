@@ -159,7 +159,7 @@ export declare class ImEngine {
     renameTopicNow(sessionId: string, title: string): Promise<void>;
     /** 正常交付保持安静；仅异常结果追加必要文字提示。 */
     private notifyCompletion;
-    /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
+    /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已提交。 */
     private deliver;
     /**
      * 打开分段回复后按标记切消息。

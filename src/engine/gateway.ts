@@ -1464,7 +1464,7 @@ export class ImEngine {
     if (notified) for (const id of terminalIds) this.deferred.patch(id, { status: 'sent' })
   }
 
-  /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
+  /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已提交。 */
   private async deliver(channel: ChannelAdapter, chatId: string, text: string, outcome?: DeliveryOutcome): Promise<boolean> {
     let deliveredAny = false
     let ambiguous = false
@@ -1474,7 +1474,8 @@ export class ImEngine {
       const result = await this.sendChunk(channel, chatId, chunk, deadline)
       if (result.ok) {
         deliveredAny = true
-        this.log(`[${channel.id}] 已投递 ${chatId}，长度 ${chunk.length}`)
+        // ret=0 只代表平台受理了请求，不代表对端客户端真的收到（如 weixin #58 的静默丢弃）。
+        this.log(`[${channel.id}] 已提交 ${chatId}，长度 ${chunk.length}`)
       } else {
         if (outcome) outcome.ok = false
         if (!isDefiniteSendFailure(result.error)) ambiguous = true
@@ -1644,7 +1645,7 @@ export class ImEngine {
       try {
         await channel.send(chatId, chunk)
         deliveredAny = true
-        this.log(`[${channel.id}] 已投递交互 ${chatId}，长度 ${chunk.length}`)
+        this.log(`[${channel.id}] 已提交交互 ${chatId}，长度 ${chunk.length}`)
       } catch (error) {
         this.log(`[${channel.id}] 交互提示发送失败: ${error instanceof Error ? error.message : String(error)}`)
         return { status: 'failed', deliveredAny }
