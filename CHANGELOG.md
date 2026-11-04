@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.26 - 2026-11-04
+
+- Telegram reply placeholders now display intermediate assistant progress: when handling requests on Telegram, the reply message dynamically shows a concise header for thinking status with cumulative character counts, as well as tool execution steps with parameters and duration (#57).
+- Automatic status cleanup on answer delivery: the progress header is cleared immediately once real answer text begins streaming, ensuring finished replies only retain the final content.
+- Clean placeholder disposal: turns ending without text output automatically remove temporary status-only messages, preventing leftover intermediate bubbles in the chat.
+- Delivery safety and admission enforcement: status events strictly follow existing permission and offline delivery gates, and race conditions between placeholder resets and fresh replies are resolved to safeguard against answer loss.
+
 ## 1.0.25 - 2026-11-04
 
 - Fix settings navigation icon compatibility across host generations: ensure the IM Assistant icon correctly appears in older DSH hosts without falling back to the default gear glyph, while cleanly using the native icon slot without duplicates on newer hosts.
