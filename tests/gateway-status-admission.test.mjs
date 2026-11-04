@@ -27,6 +27,56 @@ function fixture(t, { status = true } = {}) {
 }
 const tool = { type: 'tool/call', data: { turn: 1, name: 'shell', arguments: { command: 'echo private' }, callId: 'c', step: 1 } }
 
+test('同一回合下一段正文开始时清除新思考状态', async t => {
+  const f = fixture(t)
+  const reasoning = text => ({ type: 'assistant/chunk', data: { turn: 1, chunk: { type: 'reasoning-delta', text } } })
+  const body = text => ({ type: 'assistant/chunk', data: { turn: 1, chunk: { type: 'text-delta', text } } })
+  await f.event(reasoning('a'.repeat(40)))
+  await f.event(body('第一段'))
+  await f.event({ type: 'assistant/message', data: { turn: 1, message: { content: [{ type: 'text', text: '第一段' }] } } })
+  await tick()
+  f.outputs.length = 0
+  await f.event(reasoning('b'.repeat(250)))
+  await f.event(body('第二段'))
+  await tick()
+  const statuses = f.outputs.filter(item => item[0] === 'status').map(item => item[1])
+  assert.ok(statuses.some(value => value.includes('思考中')))
+  assert.equal(statuses.at(-1), '')
+  assert.ok(f.outputs.some(item => item[0] === 'text' && item[1] === '第二段'))
+})
+
+test('正文已排队时迟到工具结果不会重新显示状态', async t => {
+  const f = fixture(t)
+  await f.event(tool)
+  await f.event({ type: 'assistant/chunk', data: { turn: 1, chunk: { type: 'text-delta', text: '答案' } } })
+  await f.event({ type: 'tool/result', data: { turn: 1, toolCallId: 'c' } })
+  await tick()
+  const statuses = f.outputs.filter(item => item[0] === 'status').map(item => item[1])
+  assert.equal(statuses.at(-1), '')
+  assert.ok(!statuses.some(value => value.startsWith('✅')))
+  assert.ok(f.outputs.some(item => item[0] === 'text' && item[1] === '答案'))
+})
+
+test('新工具调用后旧工具迟到结果不能覆盖新状态', async t => {
+  const f = fixture(t)
+  await f.event(tool)
+  await f.event({ type: 'assistant/chunk', data: { turn: 1, chunk: { type: 'text-delta', text: '答案' } } })
+  await f.event({ type: 'tool/call', data: { turn: 1, name: 'read', arguments: { file_path: 'new.txt' }, callId: 'new', step: 2 } })
+  await f.event({ type: 'tool/result', data: { turn: 1, toolCallId: 'c' } })
+  await tick()
+  const statuses = f.outputs.filter(item => item[0] === 'status').map(item => item[1])
+  assert.ok(statuses.at(-1).includes('read'))
+  assert.ok(!statuses.some(value => value.startsWith('✅')))
+})
+
+test('正文之前的工具结果仍显示完成状态', async t => {
+  const f = fixture(t)
+  await f.event(tool)
+  await f.event({ type: 'tool/result', data: { turn: 1, toolCallId: 'c' } })
+  await tick()
+  assert.ok(f.outputs.some(item => item[0] === 'status' && item[1].startsWith('✅')))
+})
+
 test('撤销权限后工具状态不得泄露参数', async t => {
   const f = fixture(t)
   f.engine.extraAllow.clear()

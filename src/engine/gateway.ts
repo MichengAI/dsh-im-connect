@@ -65,6 +65,7 @@ interface ToolStatusCall {
   name: string
   detail: string
   at: number
+  bodyStarted?: boolean
 }
 
 /** 每个聊天当前回合的中间态：思考字数、已展示字数、工具步数、正文是否已开流。 */
@@ -1181,6 +1182,8 @@ export class ImEngine {
       // 一次调用只回写一次结果；之后模型继续思考，状态行会被下一步覆盖。
       if (typeof callId === 'string') state.calls?.delete(callId)
       if (state.tool === call) state.tool = undefined
+      // 正文事件已进入队列后，迟到的工具结果不能重新盖在正文上。
+      if (state.text || call.bodyStarted) return
       const failed = event.data?.message?.isError === true || event.data?.error !== undefined
       const elapsed = formatToolDuration((Number(event.time) || Date.now()) - call.at)
       const head = `${failed ? '❌' : '✅'} ${notice(this.ctx, '第 {0} 步', call.step)} · ${call.name}${elapsed ? ` · ${elapsed}` : ''}`
@@ -1206,9 +1209,12 @@ export class ImEngine {
         const state = hint()
         // 正文一到就撤掉状态行，聊天里只剩正在生长的答案。
         // 只有状态消息已经存在时才需要撤，否则会为一次空状态多开一条消息。
-        if (statusStream && !state.text) {
+        if (statusStream) {
           state.text = true
-          if (this.streams.statusOf(streamKey) !== undefined) pushStatus('')
+          // 已开始正文时记录每个未完成工具，后续新工具不能恢复旧结果的展示资格。
+          for (const call of state.calls?.values() ?? []) call.bodyStarted = true
+          if (state.tool) state.tool.bodyStarted = true
+          if (this.streams.statusOf(streamKey)) pushStatus('')
         }
         markAttempt()
         // 事件回调不在请求链路里，流式更新失败必须自兜底，避免 unhandled rejection
