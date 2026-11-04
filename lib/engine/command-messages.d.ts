@@ -39,6 +39,10 @@ export declare const commandEnglish: {
     readonly "\u672C\u6B21\u5904\u7406\u5DF2\u8FBE\u5230\u8F93\u51FA\u957F\u5EA6\u4E0A\u9650\uFF0C\u5DF2\u8FD4\u56DE\u7684\u5185\u5BB9\u4FDD\u7559\u3002\u53EF\u53D1\u9001\u300C\u7EE7\u7EED\u300D\u63A5\u7EED\u751F\u6210\u3002": "This turn reached the maximum output length. Any results already sent are kept. Send \"continue\" to proceed.";
     readonly "\u672C\u6B21\u5904\u7406\u5931\u8D25\uFF0C\u5DF2\u8FD4\u56DE\u7684\u5185\u5BB9\u4FDD\u7559\u3002\u8BF7\u67E5\u770B\u4F1A\u8BDD\u72B6\u6001\uFF0C\u6216\u8865\u5145\u8981\u6C42\u540E\u91CD\u8BD5\u3002": "This turn failed. Any results already sent are kept. Check the session status, or send more details to try again.";
     readonly "\u672C\u6B21\u5904\u7406\u5DF2\u7ED3\u675F\uFF0C\u672A\u8FD4\u56DE\u53EF\u6295\u9012\u7684\u7ED3\u679C\u3002\u53EF\u8865\u5145\u8981\u6C42\u540E\u7EE7\u7EED\u3002": "This turn ended without a deliverable result. Send more details to continue.";
+    readonly 工具: "tool";
+    readonly "\u7B2C {0} \u6B65": "Step {0}";
+    readonly "\uD83E\uDDE0 \u601D\u8003\u4E2D\u2026": "🧠 Thinking…";
+    readonly "\uD83E\uDDE0 \u601D\u8003\u4E2D\u2026 {0} \u5B57": "🧠 Thinking… {0} chars";
     readonly "\u4E5F\u53EF\u4F7F\u7528 /reasoning id:\u7B49\u7EA7ID\uFF1B\u5E8F\u53F7 15 \u5206\u949F\u5185\u6709\u6548\u3002": "You can also use /reasoning id:effort-ID. List numbers are valid for 15 minutes.";
     readonly "\u7528\u6CD5\uFF1A/menu [sessions|workspaces|models|presets|reasoning] [\u9875\u7801]": "Usage: /menu [sessions|workspaces|models|presets|reasoning] [page]";
     readonly "\u9009\u62E9\u5DF2\u8FC7\u671F\uFF0C\u6216\u4F1A\u8BDD\u3001\u6A21\u578B\u5DF2\u53D8\u5316\u3002\u8BF7\u53D1\u9001 /reasoning \u91CD\u65B0\u9009\u62E9\u3002": "This selection expired, or the session or model changed. Send /reasoning to choose again.";

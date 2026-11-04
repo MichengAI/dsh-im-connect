@@ -27,6 +27,10 @@ export interface ImMessage {
 export interface ReplyStream {
   update(text: string): Promise<void>
   finish(text: string): Promise<void>
+  /** 只改顶部状态行（思考 / 工具进度），不碰正文；渠道不支持时省略。 */
+  setStatus?(text: string): Promise<void>
+  /** 新回合接管时删掉还没写正文的占位消息，避免聊天里留下停在「第 N 步」的消息。 */
+  discard?(): Promise<void>
 }
 
 export type MessageStatus = 'queued' | 'processing' | 'waiting' | 'success' | 'ended' | 'error' | 'cancelled' | 'cleared'
@@ -65,7 +69,10 @@ export interface ChannelAdapter {
   sendMedia?(chatId: string, filePath: string, caption?: string): Promise<void>
   /** 渠道本地白名单。true 放行，false 硬拒绝，undefined 交给引擎白名单。 */
   authorizes?(userId: string): boolean | undefined
-  beginReply?(chatId: string): Promise<ReplyStream>
+  /** 占位消息支持顶部状态行时置 true；网关据此推送思考与工具进度，其他渠道不受影响。 */
+  readonly replyStatus?: boolean
+  /** initial 是占位消息的首屏文字（通常为当前状态行）；省略时由渠道自行兜底。 */
+  beginReply?(chatId: string, initial?: string): Promise<ReplyStream>
   /**
    * 把会话标题写成平台侧的「话题名」（Telegram 论坛话题 / 私聊话题）。
    * 返回 false 表示该聊天没有话题名这一层级（普通私聊、未开启话题的群），调用方应据此跳过。

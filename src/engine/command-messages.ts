@@ -45,6 +45,11 @@ export const commandEnglish = {
   "本次处理已达到输出长度上限，已返回的内容保留。可发送「继续」接续生成。": "This turn reached the maximum output length. Any results already sent are kept. Send \"continue\" to proceed.",
   "本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。": "This turn failed. Any results already sent are kept. Check the session status, or send more details to try again.",
   "本次处理已结束，未返回可投递的结果。可补充要求后继续。": "This turn ended without a deliverable result. Send more details to continue.",
+  // 占位消息顶部的状态行（思考 / 工具进度），由声明 replyStatus 的渠道显示。
+  "工具": "tool",
+  "第 {0} 步": "Step {0}",
+  "🧠 思考中…": "🧠 Thinking…",
+  "🧠 思考中… {0} 字": "🧠 Thinking… {0} chars",
   "也可使用 /reasoning id:等级ID；序号 15 分钟内有效。": "You can also use /reasoning id:effort-ID. List numbers are valid for 15 minutes.",
   "用法：/menu [sessions|workspaces|models|presets|reasoning] [页码]": "Usage: /menu [sessions|workspaces|models|presets|reasoning] [page]",
   "选择已过期，或会话、模型已变化。请发送 /reasoning 重新选择。": "This selection expired, or the session or model changed. Send /reasoning to choose again.",
