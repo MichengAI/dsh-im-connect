@@ -23,6 +23,7 @@ import { TopicTitleStore, clampTopicName, type TopicMode } from './topic-title.j
 import { type ChatKind } from './session-id.js'
 import { decideAccess } from './access.js'
 import { splitText } from './split.js'
+import { describeToolCall, formatThinkingChars, formatToolDuration } from './status-line.js'
 import { channelSupportsSegmentReply } from '../channels/meta.js'
 import {
   DEFAULT_SEGMENT_DELAY_MAX_SECS,
@@ -56,6 +57,24 @@ function formatIdleLimit(ms: number): string {
   return ms >= 3_600_000 && ms % 3_600_000 === 0
     ? replyText('{0} 小时', String(Math.round(ms / 3_600_000)))
     : replyText('{0} 分钟', String(Math.max(1, Math.round(ms / 60_000))))
+}
+
+/** 一次工具调用的进度记录，结果事件按 callId 回写同一步的摘要与耗时。 */
+interface ToolStatusCall {
+  step: number
+  name: string
+  detail: string
+  at: number
+}
+
+/** 每个聊天当前回合的中间态：思考字数、已展示字数、工具步数、正文是否已开流。 */
+interface StreamHint {
+  reasoning: number
+  shown: number
+  tools: number
+  text: boolean
+  tool?: ToolStatusCall
+  calls?: Map<string, ToolStatusCall>
 }
 
 /** 一次回复投递的收口状态，由 {@link Gateway.deliver} 就地填写。 */
@@ -142,6 +161,8 @@ export class ImEngine {
   private readonly queues = new Map<string, Promise<void>>()
   private readonly interactionQueues = new Map<string, Promise<void>>()
   private readonly streams = new ReplyStreamHub()
+  /** 每个聊天当前回合的中间态计数：思考字数、工具步数、正文是否已开流。 */
+  private readonly streamHints = new Map<string, StreamHint>()
   private readonly disposeEvents: Array<() => void> = []
   private readonly wrappedUserQuestionServices = new WeakSet<object>()
   private legacyServiceTimer?: NodeJS.Timeout
@@ -1062,7 +1083,23 @@ export class ImEngine {
 
   private async processSessionEvent(
     session: DeliverySession,
-    event: { type?: string; data?: { message?: { content?: Array<{ type?: string; text?: string }> }; chunk?: { type?: string; text?: string } } },
+    event: {
+      type?: string
+      time?: number
+      data?: {
+        message?: { content?: Array<{ type?: string; text?: string }>; toolCallId?: string; isError?: boolean }
+        chunk?: { type?: string; text?: string }
+        /** tool/call：工具名、原始参数，以及宿主给的步骤号（同一步的并发调用共用一个步骤号）。 */
+        name?: string
+        arguments?: unknown
+        callId?: string
+        step?: number
+        /** tool/result：配对键有时在 data.toolCallId，有时在 data.message.toolCallId。 */
+        toolCallId?: string
+        error?: unknown
+        reason?: { kind?: string; error?: { message?: string } }
+      }
+    },
     outcome: DeliveryOutcome,
     trackedEnd = false,
   ): Promise<void> {
@@ -1093,16 +1130,92 @@ export class ImEngine {
     }
     const chunk = event.data?.chunk
     const markAttempt = () => this.deferred.liveStart(sessionId, (event.data as { turn?: number })?.turn ?? this.observedTurns.get(sessionId)!)
-    if (event.type === 'assistant/chunk' && channel.beginReply && isAssistantTextDelta(chunk)) {
-      markAttempt()
-      // 事件回调不在请求链路里，流式更新失败必须自兜底，避免 unhandled rejection
-      void this.streams.onTextDelta(streamKey, chunk.text, () => channel.beginReply!(binding.chatId).catch(() => undefined), sessionId)
-        .catch((error) => {
-          this.log(`[${channel.id}] 流式更新失败: ${error instanceof Error ? error.message : String(error)}`)
-        })
+    // 中间态（思考 / 工具进度）只推给显式声明支持的渠道，其他渠道保持原样。
+    const statusStream = channel.beginReply !== undefined && channel.replyStatus === true
+    const startStream = () => channel.beginReply!(binding.chatId, this.streams.statusOf(streamKey)).catch(() => undefined)
+    const pushStatus = (line: string) => {
+      if (!statusStream) return
+      void this.streams.onStatus(streamKey, line, startStream, sessionId).catch((error) => {
+        this.log(`[${channel.id}] 状态行更新失败: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }
+    // 状态行文案和命令回复共用同一套中英对照；语言取宿主当前偏好。
+    const hint = (): StreamHint => {
+      let current = this.streamHints.get(streamKey)
+      if (!current) this.streamHints.set(streamKey, current = { reasoning: 0, shown: 0, tools: 0, text: false })
+      return current
+    }
+    if (event.type === 'tool/call' && statusStream) {
+      const state = hint()
+      // 同一步里可能并发多个工具调用：编号优先用宿主给的 step，
+      // 结果再按 callId 配对，别让后一个调用把前一个的摘要顶掉。
+      const step = Number(event.data?.step)
+      const stepNo = step > 0 ? step : state.tools + 1
+      state.tools = Math.max(state.tools, stepNo)
+      state.text = false
+      const name = typeof event.data?.name === 'string' && event.data.name.trim() ? event.data.name.trim() : notice(this.ctx, '工具')
+      // 光有工具名等于没说：把「跑的什么命令 / 改的哪个文件」一并带上。
+      const detail = describeToolCall(name, event.data?.arguments)
+      const call: ToolStatusCall = { step: stepNo, name, detail, at: Number(event.time) || Date.now() }
+      if (typeof event.data?.callId === 'string') {
+        state.calls ??= new Map()
+        state.calls.set(event.data.callId, call)
+      }
+      state.tool = call
+      pushStatus(`🔧 ${notice(this.ctx, '第 {0} 步', stepNo)} · ${name}${detail ? ` — ${detail}` : ''}`)
+      return
+    }
+    if (event.type === 'tool/result' && statusStream) {
+      const state = this.streamHints.get(streamKey)
+      if (!state) return
+      const callId = event.data?.message?.toolCallId ?? event.data?.toolCallId
+      const call = (typeof callId === 'string' ? state.calls?.get(callId) : undefined)
+        ?? (state.calls?.size === 1 ? [...state.calls.values()][0] : undefined)
+        ?? state.tool
+      if (!call) return
+      // 一次调用只回写一次结果；之后模型继续思考，状态行会被下一步覆盖。
+      if (typeof callId === 'string') state.calls?.delete(callId)
+      if (state.tool === call) state.tool = undefined
+      const failed = event.data?.message?.isError === true || event.data?.error !== undefined
+      const elapsed = formatToolDuration((Number(event.time) || Date.now()) - call.at)
+      const head = `${failed ? '❌' : '✅'} ${notice(this.ctx, '第 {0} 步', call.step)} · ${call.name}${elapsed ? ` · ${elapsed}` : ''}`
+      pushStatus(call.detail ? `${head} — ${call.detail}` : head)
+      return
+    }
+    if (event.type === 'assistant/chunk' && channel.beginReply) {
+      if (statusStream && chunk?.type === 'reasoning-delta' && typeof chunk.text === 'string') {
+        const state = hint()
+        state.reasoning += chunk.text.length
+        // 先立刻亮出「思考中」，之后每 200 字刷一次体量，
+        // 别把 Telegram 的编辑配额花在个位数变化上。
+        if (state.shown === 0) {
+          state.shown = state.reasoning
+          pushStatus(notice(this.ctx, '🧠 思考中…'))
+        } else if (state.reasoning - state.shown >= 200) {
+          state.shown = state.reasoning
+          pushStatus(notice(this.ctx, '🧠 思考中… {0} 字', formatThinkingChars(state.reasoning)))
+        }
+        return
+      }
+      if (isAssistantTextDelta(chunk)) {
+        const state = hint()
+        // 正文一到就撤掉状态行，聊天里只剩正在生长的答案。
+        // 只有状态消息已经存在时才需要撤，否则会为一次空状态多开一条消息。
+        if (statusStream && !state.text) {
+          state.text = true
+          if (this.streams.statusOf(streamKey) !== undefined) pushStatus('')
+        }
+        markAttempt()
+        // 事件回调不在请求链路里，流式更新失败必须自兜底，避免 unhandled rejection
+        void this.streams.onTextDelta(streamKey, chunk.text, startStream, sessionId)
+          .catch((error) => {
+            this.log(`[${channel.id}] 流式更新失败: ${error instanceof Error ? error.message : String(error)}`)
+          })
+      }
       return
     }
     if (event.type === 'turn/end') {
+      this.streamHints.delete(streamKey)
       const reason = (event.data as { reason?: { kind?: string; error?: { message?: string } } } | undefined)?.reason
       this.log(`[${channel.id}] 回合结束 ${sessionId}: ${reason?.kind ?? 'ok'}`)
       if (reason?.kind === 'error' && !trackedEnd) {
@@ -1119,6 +1232,9 @@ export class ImEngine {
         }
         // 仅在确已送达时标记，失败后同回合残留的 assistant/message 还有机会补发
         if (failureDelivered) this.streams.markDelivered(streamKey, sessionId)
+      } else {
+        // 正常收口：只有状态行、没有正文的占位直接删掉，别把「第 N 步」留在聊天里。
+        this.streams.discard(streamKey, sessionId)
       }
       return
     }
@@ -1130,11 +1246,23 @@ export class ImEngine {
           this.log(`[${channel.id}] 跳过含工具调用的中间叙述 ${sessionId}`)
           return
         }
+        // 这一步只有工具调用、还没有任何正文：把状态占位原地留着，
+        // 连 take 都不要做（取走再放回在并发事件下会丢流，聊天里就会一条条刷屏）。
+        if (!text) {
+          const live = this.streams.peek(streamKey, sessionId)
+          if (live && !live.text) return
+        }
         const taken = await this.streams.take(streamKey, sessionId)
         stopped = !!taken.invalidated || !stillDeliverable()
         if (stopped) return
         if (taken.stream) {
           const finalText = text || taken.text
+          // 这一步只有工具调用、没有正文：状态消息留着，下一步继续改同一条，
+          // 否则每个工具调用都会另开一条半截消息。
+          if (!finalText) {
+            this.streams.restore(streamKey, taken.stream, taken.text, sessionId)
+            return
+          }
           if (finalText) {
             outcome.content = true
             markAttempt()

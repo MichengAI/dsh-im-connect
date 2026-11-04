@@ -129,6 +129,19 @@ export function toTelegramRichMarkdown(value: string): string | undefined {
   return toTelegramHardBreaks(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+/** 每个聊天当前还没收口的那条回复消息；状态行与正文合成同一条 Telegram 消息。 */
+interface OpenReply {
+  messageId: number
+  body: string
+  status: string
+  last: string
+  timer: ReturnType<typeof setTimeout> | undefined
+  pendingBody: string | undefined
+  inflight: Promise<void>
+  closed: boolean
+  reused: boolean
+}
+
 export function createTelegramChannel(config: TelegramConfig, log: (line: string) => void): ChannelAdapter | undefined {
   const token = config.token?.trim()
   if (!token) return undefined
@@ -163,6 +176,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
 
   // Rich message 是较新的 Bot API 方法；一旦确认不可用就一直走纯文本，避免每条消息都先失败一次。
   let richDisabled = false
+  // 每个聊天当前还没收口的那条回复消息（见 beginReply）：中途重新开流时复用它，不再另发一条。
+  const openReplies = new Map<string, OpenReply>()
 
   function richUnsupported(error: unknown): boolean {
     const status = Number((error as { status?: number } | undefined)?.status)
@@ -364,6 +379,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     id: 'telegram',
     label: 'Telegram',
     maxMessageLength: 4000,
+    /** 占位消息支持顶部状态行（思考 / 工具进度），网关据此推送中间态。 */
+    replyStatus: true,
     async start() {
       albumAccess.clear()
       lifecycle?.abort()
@@ -469,68 +486,127 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       const threadParam = route.threadId !== undefined ? { message_thread_id: route.threadId } : {}
       await api('sendChatAction', { chat_id: route.chatId, ...threadParam, action: 'typing' }).catch(() => undefined)
     },
-    async beginReply(chatId): Promise<ReplyStream> {
+    async beginReply(chatId, initial = '…'): Promise<ReplyStream> {
       const route = parseTelegramChatId(chatId)
       const threadParam = route.threadId !== undefined ? { message_thread_id: route.threadId } : {}
-      const first = await api<{ message_id: number }>('sendMessage', { chat_id: route.chatId, ...threadParam, text: '…' })
-      let last = '…'
-      let timer: ReturnType<typeof setTimeout> | undefined
-      let pending: string | undefined
-      let inflight = Promise.resolve()
+      // 每个聊天只保留一条「还没收口」的回复消息。编排层偶尔会把同一步拆成
+      // 多次开流，若每次都 sendMessage，聊天里就会一条条刷「第 N 步」。
+      let track = openReplies.get(chatId)
+      if (track?.closed) {
+        openReplies.delete(chatId)
+        track = undefined
+      }
+      if (track) {
+        if (!track.reused) {
+          track.reused = true
+          log(`[telegram] 复用未收口的回复消息 ${track.messageId}`)
+        }
+      } else {
+        // 空首屏会被 Bot API 拒绝，统一兜底成省略号。
+        const firstText = initial || '…'
+        const first = await api<{ message_id: number }>('sendMessage', { chat_id: route.chatId, ...threadParam, text: firstText })
+        track = {
+          messageId: first.message_id,
+          body: '',
+          status: '',
+          last: firstText,
+          timer: undefined,
+          pendingBody: undefined,
+          inflight: Promise.resolve(),
+          closed: false,
+          reused: false,
+        }
+        openReplies.set(chatId, track)
+      }
+      const current = track
+      const close = () => {
+        current.closed = true
+        if (openReplies.get(chatId) === current) openReplies.delete(chatId)
+      }
+      /** 状态行在上、正文在下，合成同一条消息；状态为空时只剩正文。 */
+      const compose = (nextBody: string) => {
+        const head = current.status.trim()
+        const text = head ? (nextBody ? `${head}\n\n${nextBody}` : head) : nextBody
+        return [...(text || '')].slice(0, 4000).join('') || '…'
+      }
 
-      const flush = async (text: string, allowSend: boolean) => {
-        const next = [...text].slice(0, 4000).join('') || '…'
-        if (next === last) return
+      const flush = async (nextBody: string, allowSend: boolean) => {
+        const next = compose(nextBody)
+        if (next === current.last) return
         // last 只在发送成功后更新：失败时保留旧值，finish 才能靠 sendMessage 兜底送出全文
         try {
           const markdown = richDisabled ? undefined : toTelegramRichMarkdown(next)
           if (markdown !== undefined) {
             try {
-              await api('editMessageText', { chat_id: route.chatId, message_id: first.message_id, rich_message: { markdown } })
-              last = next
+              await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, rich_message: { markdown } })
+              current.last = next
               return
             } catch (error) {
               // 富文本被拒就退回纯文本编辑；确认方法不可用后不再重试。
               if (richUnsupported(error)) richDisabled = true
               else if (!(error instanceof Error && error.message.includes('message is not modified'))) {
-                await api('editMessageText', { chat_id: route.chatId, message_id: first.message_id, text: next })
-                last = next
+                await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, text: next })
+                current.last = next
                 return
               }
             }
           }
-          await api('editMessageText', { chat_id: route.chatId, message_id: first.message_id, text: next })
-          last = next
+          await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, text: next })
+          current.last = next
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error)
           if (detail.includes('message is not modified')) {
-            last = next
+            current.last = next
             return
           }
           if (!allowSend) return
           await sendMessageText(chatId, next)
-          last = next
+          current.last = next
         }
+      }
+
+      const schedule = (nextBody: string) => {
+        current.pendingBody = nextBody
+        if (current.timer) return
+        current.timer = setTimeout(() => {
+          current.timer = undefined
+          const next = current.pendingBody
+          current.pendingBody = undefined
+          if (next !== undefined) current.inflight = current.inflight.then(() => flush(next, false))
+        }, 400)
       }
 
       return {
         async update(text) {
-          pending = text
-          if (timer) return
-          timer = setTimeout(() => {
-            timer = undefined
-            const next = pending
-            pending = undefined
-            if (next !== undefined) inflight = inflight.then(() => flush(next, false))
-          }, 400)
+          current.body = text
+          schedule(text)
+        },
+        /** 只改顶部状态行，正文保持累积值；空串表示清除状态。 */
+        async setStatus(text) {
+          current.status = text ?? ''
+          schedule(current.body)
+        },
+        /** 新回合接管时删掉还没写正文的占位，别留下一条停在原地的状态消息。 */
+        async discard() {
+          if (current.timer) {
+            clearTimeout(current.timer)
+            current.timer = undefined
+          }
+          await current.inflight.catch(() => undefined)
+          close()
+          await api('deleteMessage', { chat_id: route.chatId, message_id: current.messageId }).catch(() => undefined)
         },
         async finish(text) {
-          if (timer) {
-            clearTimeout(timer)
-            timer = undefined
+          if (current.closed) return
+          if (current.timer) {
+            clearTimeout(current.timer)
+            current.timer = undefined
           }
-          await inflight.catch(() => undefined)
-          const chars = [...(text || pending || last)]
+          await current.inflight.catch(() => undefined)
+          close()
+          // 收口只留正文：状态行不能跟着最终回复一起留在聊天里。
+          current.status = ''
+          const chars = [...(text || current.body || current.pendingBody || '')]
           await flush(chars.slice(0, 4000).join(''), true)
           // 首段更新原气泡，剩余正文依次发送；全部确认后上层才将完整正文记为已送达。
           for (let offset = 4000; offset < chars.length; offset += 4000) {

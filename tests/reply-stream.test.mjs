@@ -117,6 +117,77 @@ test('reset 后迟到的旧回合增量不会重建流', async () => {
   assert.equal(taken.text, '')
 })
 
+test('状态行单独更新占位，peek 只读不取走', async () => {
+  const hub = new ReplyStreamHub()
+  const seen = []
+  const stream = { async update() {}, async finish() {}, async setStatus(text) { seen.push(text) } }
+  await hub.onStatus('chat', '🧠 思考中…', async () => stream, 's1')
+  assert.equal(hub.statusOf('chat'), '🧠 思考中…')
+  assert.equal(hub.peek('chat', 's1').stream, stream)
+  assert.equal(hub.peek('chat', 's1').text, '')
+  // peek 之后状态与流都还在，同一条消息可以继续用
+  assert.equal(hub.statusOf('chat'), '🧠 思考中…')
+  assert.deepEqual(seen, ['🧠 思考中…'])
+  const taken = await hub.take('chat', 's1')
+  assert.equal(taken.stream, stream)
+  assert.equal(hub.statusOf('chat'), undefined)
+})
+
+test('状态行与正文共用串行队列，后到的状态不会覆盖已收口的正文', async () => {
+  const hub = new ReplyStreamHub()
+  const events = []
+  const stream = {
+    async update(text) { events.push(['body', text]) },
+    async finish() {},
+    async setStatus(text) { events.push(['status', text]) },
+  }
+  await hub.onStatus('chat', '🔧 第 1 步 · pwsh', async () => stream, 's1')
+  await hub.onTextDelta('chat', '答案', async () => stream, 's1')
+  assert.deepEqual(events, [['status', '🔧 第 1 步 · pwsh'], ['body', '答案']])
+})
+
+test('discard 只删除没有正文的占位，正文已写出时保留', async () => {
+  const hub = new ReplyStreamHub()
+  const discarded = []
+  const make = (tag) => ({
+    async update() {},
+    async finish() {},
+    async setStatus() {},
+    async discard() { discarded.push(tag) },
+  })
+  await hub.onStatus('chat', '🔧 第 1 步', async () => make('empty'), 's1')
+  hub.discard('chat', 's1')
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.deepEqual(discarded, ['empty'])
+  assert.equal(hub.peek('chat', 's1'), undefined)
+
+  await hub.onTextDelta('chat', '答案', async () => make('body'), 's1')
+  hub.discard('chat', 's1')
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.deepEqual(discarded, ['empty'])
+  assert.ok(hub.peek('chat', 's1'))
+})
+
+test('reset 删除只有状态行、还没有正文的占位', async () => {
+  const hub = new ReplyStreamHub()
+  let discarded = 0
+  const stream = { async update() {}, async finish() {}, async setStatus() {}, async discard() { discarded += 1 } }
+  await hub.onStatus('chat', '🔧 第 1 步 · pwsh', async () => stream, 's1')
+  hub.reset('chat', 's1')
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(discarded, 1)
+})
+
+test('reset 不删除已经写入正文的消息', async () => {
+  const hub = new ReplyStreamHub()
+  let discarded = 0
+  const stream = { async update() {}, async finish() {}, async setStatus() {}, async discard() { discarded += 1 } }
+  await hub.onTextDelta('chat', '答案', async () => stream, 's1')
+  hub.reset('chat', 's1')
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(discarded, 0)
+})
+
 test('流式收口后标记已投递，重复助手消息不再发', async () => {
   const hub = new ReplyStreamHub()
   await hub.onTextDelta('dingtalk:c1', '完', async () => ({

@@ -59,6 +59,8 @@ export declare class ImEngine {
     private readonly queues;
     private readonly interactionQueues;
     private readonly streams;
+    /** 每个聊天当前回合的中间态计数：思考字数、工具步数、正文是否已开流。 */
+    private readonly streamHints;
     private readonly disposeEvents;
     private readonly wrappedUserQuestionServices;
     private legacyServiceTimer?;
