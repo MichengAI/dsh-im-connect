@@ -27,6 +27,26 @@ function fixture(t, { status = true } = {}) {
 }
 const tool = { type: 'tool/call', data: { turn: 1, name: 'shell', arguments: { command: 'echo private' }, callId: 'c', step: 1 } }
 
+test('冷回合（未走投递）结束后，下一回合的思考状态仍从头开始显示', async t => {
+  const f = fixture(t)
+  // 回合 1：思考 400 字（状态行先出现），随后不再投递（模拟掌端接管 / 撤权）
+  await f.event({ type: 'turn/start', data: { turn: 1 } })
+  await f.event({ type: 'assistant/chunk', data: { turn: 1, chunk: { type: 'reasoning-delta', text: 'a'.repeat(400) } } })
+  await tick()
+  f.engine.deferred.release(f.id)
+  await f.event({ type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } })
+  await tick()
+  // 回合 2：新请求走投递，只思考 50 字也必须马上有「思考中」
+  f.engine.deferred.begin('request2', f.id, 'test', { chatId: 'chat', userId: 'user', kind: 'dm', text: '' })
+  f.engine.deferred.claim(f.id, 2, 'request2')
+  f.outputs.length = 0
+  await f.event({ type: 'turn/start', data: { turn: 2 } })
+  await f.event({ type: 'assistant/chunk', data: { turn: 2, chunk: { type: 'reasoning-delta', text: 'b'.repeat(50) } } })
+  await tick()
+  const statuses = f.outputs.filter(item => item[0] === 'status').map(item => item[1])
+  assert.ok(statuses.includes('🧠 思考中…'), `回合 2 首个思考提示缺失，实际：${JSON.stringify(statuses)}`)
+})
+
 test('同一回合下一段正文开始时清除新思考状态', async t => {
   const f = fixture(t)
   const reasoning = text => ({ type: 'assistant/chunk', data: { turn: 1, chunk: { type: 'reasoning-delta', text } } })
