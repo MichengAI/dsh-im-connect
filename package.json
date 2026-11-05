@@ -24,6 +24,7 @@
     "cordis.patch.yml",
     "assets",
     "README.md",
+    "README.en.md",
     "README.zh-CN.md",
     "SECURITY.md",
     "CHANGELOG.md",

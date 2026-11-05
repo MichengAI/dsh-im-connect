@@ -1,0 +1,455 @@
+<p align="center">
+  <img src="assets/branding/dsh-banner.png" alt="DSH IM Connect" width="100%">
+</p>
+
+<div align="center">
+
+  # DSH IM Connect
+
+  **Connect Feishu, Lark, DingTalk, WeCom, WeChat, QQ, Telegram, Discord, and Slack to local DeepSeek Harness**
+
+  [简体中文](README.md) · [Changelog](CHANGELOG.md) · [QQ reference notes](docs/01-当前工作/I022-QQ直接引用接入/00-迭代总览.md) · [Apache-2.0](LICENSE)
+
+  [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+  [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-im-connect.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-im-connect)
+  [![npm downloads](https://img.shields.io/npm/dt/%40michengai%2Fdsh-im-connect.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-im-connect)
+  [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-im-connect)
+  [![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%20or%20later-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+  [![Channels](https://img.shields.io/badge/channels-9-238636.svg)](#-supported-channels)
+</div>
+
+> DSH IM Connect is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
+
+## Features
+
+Send tasks to your local DSH through your usual messenger, even when you are away from the computer. Receive replies, answer questions, and handle tool approvals in the same chat.
+
+- **Connect familiar platforms**: DingTalk, Feishu, Lark, WeChat, WeCom, QQ, Telegram, Discord, and Slack.
+- **Configure accounts separately**: each account has its own workspace, model, reasoning effort, permissions, private-access mode, and send mode.
+- **Handle task interactions on your phone**: send work, read replies, and answer single- or multiple-choice questions. Approved users can approve or deny tools in private chats.
+- **Keep chat records separate**: each IM chat has its own session under **Channels** in the web workspace.
+- **Connect by QR code or credentials**: use the platform-specific setup in **Settings → IM Assistant**, then control message reception per account.
+- **Control access**: groups trigger through mentions and private chats follow each account’s access settings, as detailed below.
+
+## Who can drive the assistant
+
+Inbound messages are identified before commands, tool approvals, or injection.
+
+| Case | Behavior |
+|---|---|
+| Group without a mention of this bot | Ignored without a reply or pending approval request; mentioning someone else also does not trigger it |
+| Group explicitly mentioning this bot | No binding. Anyone can send work |
+| DM from the QR scanner | WeChat / Feishu / Lark / QQ scanners are allowlisted automatically |
+| DM from anyone else | Appears on the settings pending list until approved |
+| DM after QR binding that does not return user identity | DingTalk / WeCom QR setup returns bot credentials only, so the scanner still needs settings approval |
+| DM after manual credentials | Telegram, Discord, Slack, and DingTalk / WeCom / QQ bound manually, require approval for every DM |
+| DM without a userId | Denied |
+| Tool approval | Reply `Approve` / `Deny` (or `批准` / `拒绝`) in the chat bound to that session; works in DMs and groups, and never falls back to the web. No reply within 5 minutes cancels the action, and other text is not queued behind it |
+| Interactive choice | Reply with an option number or text in the originating IM conversation; separate multiple choices with commas or add a custom answer; only the initiating user can answer in a group |
+
+WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk immediately. A different WeChat account DMing the bot waits for settings approval.
+
+## 📡 Supported channels
+
+<p align="center">
+  <code>🔔 DingTalk</code>&nbsp;
+  <code>🐦 Feishu</code>&nbsp;
+  <code>🌐 Lark</code>&nbsp;
+  <code>💬 WeChat</code>&nbsp;
+  <code>🏢 WeCom</code>&nbsp;
+  <code>🐧 QQ</code>&nbsp;
+  <code>✈️ Telegram</code>&nbsp;
+  <code>🎮 Discord</code>&nbsp;
+  <code>🧩 Slack</code>
+</p>
+
+| Channel | Status | How to connect | You need |
+|---|---|---|---|
+| 🔔 **DingTalk** | ✅ Ready | QR, or Client ID / Secret | DingTalk open-platform bot; replies prefer AI Card |
+| 🐦 **Feishu** | ✅ Ready | QR, or App ID / App Secret; QR creates the bot automatically | Feishu account, or a self-built bot with App ID / Secret |
+| 🌐 **Lark** | ✅ Ready | QR, or App ID / App Secret | Lark account, or a self-built bot with App ID / Secret |
+| 💬 **WeChat** | ✅ Ready* | Official iLink QR | Dedicated account recommended; DM only |
+| 🏢 **WeCom** | ✅ Ready | QR (recommended), or Bot ID / Secret | WeCom intelligent bot |
+| 🐧 **QQ** | ✅ Ready | QR, or AppID / AppSecret | QQ Open Platform bot, not a personal QQ account |
+| ✈️ **Telegram** | ✅ Ready | Bot Token only | `@BotFather`; do not enable Webhook on the same bot |
+| 🎮 **Discord** | ✅ Ready | Bot Token only | Official Developer Portal bot. Enable the Message Content Intent. The first mention in a text or announcement channel continues in a thread without another mention |
+| 🧩 **Slack** | ✅ Ready | Bot Token and App Token | Create an app at api.slack.com and enable Socket Mode. DMs reply directly; channel mentions reply inside that message's thread, and later replies in the thread need no new mention |
+
+✅ Ready = text in and out works ｜ *WeChat = official iLink only, no reverse-engineered personal protocol ｜ Groups still require an @ mention. Discord skips repeat mentions only inside a thread the bot created; Slack skips them inside a thread the bot already joined
+
+## Image input
+
+Image input follows DSH Chat's model-capability and attachment rules rather than guessing vision support from model names:
+
+The receive paths cover WeChat, WeCom, DingTalk, Feishu, Lark, QQ, Telegram, Discord, and Slack. See the [image-input verification guide](docs/image-input.md) for protocol forms and live checks.
+
+- Use the model currently selected for the IM session, not just the global default.
+- When the model declares `image` support, store images as standard DSH attachments and submit image content to the model. Session history keeps image references rather than only local-path text.
+- When the model explicitly excludes image input, tell the sender to switch models instead of silently dropping the image. Missing capability metadata follows Chat's compatibility behavior and is not, by itself, a reason to reject an image.
+- Channel download limits, host attachment size and format limits, DM access rules, and group mention requirements still apply.
+- This is inbound image analysis, not a promise that every channel supports sending images from the bot or generating images.
+
+## File input
+
+WeChat, WeCom, DingTalk, Feishu, Lark, QQ, Telegram, Discord, and Slack accept ordinary files through Chat’s upload service for the current session. Send PDFs, documents or spreadsheets for the assistant to process. Format support follows web Chat’s models, tools and file capabilities; uploading does not guarantee that every format can be understood directly.
+
+- Requires the file-upload service on supported hosts (`>=0.2.0-rc.1 <0.3.0-0`). Legacy versions and breaking changes in the `0.3.0` generation are rejected by the version gate. If you still use a `0.1.x` host, install plugin `0.1.78` instead of `@latest`.
+- Up to 4 ordinary files per message, totaling 20 MiB. Channel download limits also apply.
+- Files become standard Chat attachments and are submitted with session-specific receipts, rather than local-path text.
+- Private admission and group mention rules remain in force. File captions such as `/new` or “allow” are content, not commands or approval responses.
+- Failed uploads do not submit partial text. Disabling or reloading an account prevents later submission to the old session. Generated files can be sent back after the reply.
+
+## File delivery
+
+WeChat, WeCom, DingTalk, Feishu, Lark, QQ, Telegram, Discord, and Slack can return files produced by the assistant. For example: “Create a PDF report and send me the file.”
+
+- Aligned with DSH Host delivery contracts: when the assistant explicitly declares deliverables via `tool-present` (`deliverables/presented`), the corresponding files are returned as chat attachments. Ordinary low-level tool mutations (such as editing code or writing state files) are not sent automatically, preventing chat noise and credential leakage.
+- File access follows Chat: files outside the workspace are allowed when the host can read them. The plugin does not extract arbitrary paths from reply text. Files created through shell commands or scripts need to be presented explicitly by the assistant.
+- Supported hosts use Chat's complete-file download service and its configured size limit. Directories and symbolic links are not sent; channel-specific file limits still apply.
+- A failed transfer produces a message naming the file and does not stop the remaining files. Switching away from the session or stopping the account prevents pending delivery from continuing to a different target.
+- Send `/export` as a standalone command to receive the current linked session’s Chat ZIP logs in this chat, without child sessions. The ZIP limit is 32 MiB; channel limits also apply. If the file is too large or cannot be sent, use `/export` in web Chat. Paths and other session IDs are not accepted.
+
+## Action menu
+
+After a valid selection, supported cards remove their buttons and mark the selection; the following reply reports the actual result. WeCom updates are limited to the button callback window; expired actions are still rejected by the server. `/status` offers actions based on the current state, such as stopping a task, pausing or resuming a goal, and viewing queued messages.
+
+On channels with native buttons, `/sessions`, `/workspaces` and `/models` open a selector directly. After paging, numbered replies and `/session N`, `/workspace N` or `/model N` refer to the current selection page. Text channels keep their original list numbering.
+
+Send `/menu` or `/m` to select sessions, workspaces, models and Agent presets, or start, stop, export and inspect a session. Lists support pagination. Click a button or reply with the current menu number; ordinary text exits the menu.
+
+Menus include previous, next and back actions. WeCom menus paginate to fit card limits, including the main menu (`/menu 2`). Open a selector directly with `/menu sessions`, `/menu workspaces` or `/menu models`; presets and reasoning use `/menu presets` and `/menu reasoning`.
+
+Common command replies offer related next steps: for example, `/model` → select a model / adjust reasoning → back to menu. Supported channels offer buttons; text replies include the commands to send. Navigation buttons on ordinary result replies do not accept numeric shortcuts, so numbers remain chat input; only selection menus accept numbered replies. Oversized cards fall back to complete text.
+
+DingTalk, Telegram, Discord, Slack, and Feishu/Lark use native buttons. WeCom uses cards when button count and text length fit platform limits. Other cases, QQ and WeChat use numbered text. Explicit rejections and capacity limits fall back to complete text. Uncertain network delivery produces a confirmation notice instead of resending the card. Menus are scoped to the account, chat, operator and session, expire after 15 minutes or restart, and recheck permissions on selection. Used buttons cannot execute again.
+
+Approvals and questions use the same native-button channels: allow once/reject, single-choice selection, and multiple selections followed by submit. Open questions retain text input. Approvals always stay in the chat that started the task and never fall back to the web; a failed prompt is treated as a denial. If nobody approves or rejects within 5 minutes, the action is canceled and the chat is told it did not run. Other text during that wait is reminded to finish the approval and is not submitted as the next turn. Images and files are still submitted as content and are not treated as the approval reply. In groups only the task initiator can approve; DMs add no extra restriction beyond chatting. Disabling commands does not disable pending approvals or questions. Questions have no such timeout; the next text message is still the answer.
+
+
+Agent presets: `/presets` (alias `/presetlist`) lists presets; `/preset` shows the current preset. `/preset number-or-ID` starts and switches to a new session in the current workspace, keeping previous sessions. Use `/preset id:ID` for numeric IDs and `/preset --default` for the default preset. Account defaults remain unchanged; later `/new` commands still use account settings. Native buttons support direct selection; text lists use numbers valid for 15 minutes.
+
+Reasoning: `/reasoning` (aliases `/reasonings`, `/reasoninglist`) lists levels for the current model. Use `/reasoning number` or `/reasoning id:effort-ID`, or `/reasoning --default` to reset. Native channels offer paginated buttons. List selections are bound to the session and model; refresh the list after switching. Model and reasoning updates follow Chat’s default-selection persistence rules.
+
+Work started by an IM message gets one result notice after response and file delivery finishes, with links to recent messages, status, session export and the menu. Failures, stops and delivery failures are distinguished; tasks and files are not retried automatically. When commands are disabled, notices are text-only. Ordinary numbers remain chat input. Approvals and questions keep their existing prompts. Completion navigation is suppressed after switching sessions, disabling the account or starting a later turn.
+
+## Message progress
+
+Regular chat messages follow the actual task state. Commands continue to use text replies.
+
+- DingTalk: labels on the original message show queued, thinking, waiting for confirmation, done, failed, or cancelled.
+- Feishu / Lark: reactions indicate processing, done, or failed. Waiting keeps the processing reaction; cancellation removes it.
+- Telegram: 👀 processing, 🤔 waiting for confirmation, 👍 done, and 👎 failed. Cancellation removes the reaction. Typing is refreshed while processing.
+- Discord: uses the same reactions and edits one message as the answer streams. Typing is refreshed while processing. Cancellation removes the reaction.
+- Slack: ✅ done, ❌ failed, 🤔 waiting, and 👀 processing are added as emoji reactions on the original message (requires `reactions:write`). Answers stream by editing one message; Slack has no bot typing indicator.
+- WeChat: typing is refreshed while processing and stopped when finished or waiting for confirmation. WeCom and QQ retain their existing reply behavior.
+- Telegram also carries the intermediate steps in one placeholder message: its header shows what the assistant is doing (thinking with a running character count, then each tool step with a short argument summary and duration) while the answer grows underneath. The header is cleared as soon as real answer text arrives, so the finished reply contains only the answer. Channels that do not declare status-line support keep their existing behavior.
+
+WeChat suppresses transition text in assistant messages that also contain `tool-call` blocks to reduce reply-window usage. Text-only replies, approvals, questions, and result files are unaffected by this filter. Suppressed text does not count as a successful delivery, and history-based redelivery uses the same rule. This does not remove platform limits: long reply fragments and necessary interactions may still exhaust the window. Ambiguous or partial deliveries are not blindly resent in full. See the [WeChat delivery handoff (Chinese)](docs/01-当前工作/I023-微信中间叙述投递过滤/00-迭代总览.md).
+
+Done means the turn completed normally and both text and files were delivered. Stopped or failed tasks and later queued messages are not marked done. Channel permissions and network conditions may prevent status updates without blocking chat. Text labels follow the web language setting.
+
+## Connection diagnostics
+
+Use **Diagnose connection** in account settings to query platform APIs: WeChat configuration, a ping acknowledgement on the existing WeCom connection, DingTalk credentials, Feishu/Lark credentials and bot identity, QQ credentials and gateway, Telegram bot identity and Webhook conflicts, Discord bot identity and Gateway URL, or Slack bot identity plus Socket Mode state when a connection already exists (no new connection is opened).
+
+Each check reports passed, failed, or unverified, with timing and a suggested next step. No test messages are sent and no extra message polling is started. Passing one check does not verify all messaging permissions. An older backend prompts you to restart DSH and refresh the page. See the [connection diagnostics API and validation notes (Chinese)](docs/01-当前工作/I015-命令权限与Chat命令/06-账号状态检查.md).
+
+## Screenshots
+
+Add accounts under each channel in **Settings → IM Assistant**. Expand a channel and click an account name to add a remark so you can tell users apart; leave it blank to restore the automatic name. The settings button configures workspace, model, permission, private access, and send mode, and can edit the same remark. The **Receive messages** switch is on the account row:
+
+![IM Assistant settings](assets/screenshots/settings-channels.png)
+
+The workspace splits **Tasks** and **Channels**. IM sessions appear only under **Channels**:
+
+![Workspace channel sidebar](assets/screenshots/workspace-channels.png)
+
+WeCom and other QR channels support scan-to-bind:
+
+![WeCom QR binding](assets/screenshots/wecom-qr.png)
+
+After connecting, drive the local assistant from each IM:
+
+<p align="center">
+  <img src="assets/screenshots/wecom-chat.jpg" width="220" alt="WeCom chat">
+  <img src="assets/screenshots/weixin-chat.jpg" width="220" alt="WeChat chat">
+  <img src="assets/screenshots/dingtalk-chat.jpg" width="220" alt="DingTalk chat">
+</p>
+<p align="center">
+  <img src="assets/screenshots/feishu-chat.jpg" width="220" alt="Feishu chat">
+  <img src="assets/screenshots/qq-chat.jpg" width="220" alt="QQ chat">
+  <img src="assets/screenshots/telegram-chat.jpg" width="220" alt="Telegram chat">
+</p>
+
+## DSH product ecosystem
+
+For a desktop workbench, download [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases). Existing [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) installations can add plugins as needed by following each project's README. Below are 11 first-party plugins; consult the corresponding desktop release notes and bundled catalog for what that version includes.
+
+| Plugin | What you can do |
+| --- | --- |
+| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | Organize projects and conversations, search tasks, and navigate chat turns |
+| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | Choose and summon specialists for your task |
+| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | Find, enable, create, and import local skills |
+| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | Search, restore, or clean up archived conversations |
+| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | Send tasks and receive replies through messaging platforms |
+| [Automation](https://github.com/MichengAI/dsh-automation) | Schedule tasks and review each run |
+| [BTW](https://github.com/MichengAI/dsh-btw) | Ask side questions without interrupting the main task |
+| [Simplify](https://github.com/MichengAI/dsh-simplify) | Use `/simplify` to improve code within your Git changes |
+| [PUA](https://github.com/MichengAI/dsh-pua) | Guide the Agent to try new approaches after failures, investigate causes, and verify results before completion |
+| [Code Review](https://github.com/MichengAI/dsh-code-review) | Use `/review` to request an independent Agent code review and receive the report in the current conversation |
+| [Codex Pet](https://github.com/MichengAI/dsh-codex-pet) | View conversation notifications and respond to tool approvals and questions through a desktop pet |
+
+## Prerequisites
+
+- A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
+- Host compatibility: Full DeepSeek Harness `0.2.x` line (`>=0.2.0-rc.1 <0.3.0-0`), verified with `0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1`–`0.2.1-rc.5`, and `0.2.2-rc.1`, and forwards-compatible with subsequent `0.2.x` RC releases without requiring routine plugin version bumps. Legacy versions and breaking changes in the `0.3.0` generation are rejected by the version gate. If you still use a `0.1.x` host, install plugin `0.1.78` instead of `@latest`.
+- Examples use the `web` profile; replace it with the target profile.
+- Source installation and development require Node.js 22+. npm installation does not require running `npm install` in an arbitrary directory.
+- After install, restart `dsh web` and hard-refresh the browser before opening **Settings → IM Assistant**.
+- **Reverse proxy deployment**: Supports hosting DSH behind prefix-stripping reverse proxies (e.g. `/app/dsh/`). API and update endpoints automatically resolve against the page base URI (`document.baseURI`), preventing 404 errors caused by lost prefix segments.
+
+## Installation
+
+The installation commands below use the official npm registry.
+
+### Ask an agent to install it (recommended)
+
+Send the prompt below to any agent that can run terminal commands on your computer. Replace `web` with your actual profile. Once installed, use the plugin in DSH.
+
+```text
+Install the DSH plugin @michengai/dsh-im-connect into my local web profile by running: dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/. Then run dsh --profile web --dump-config, confirm the configuration includes im-connect, and explain how to reload DSH and start using the plugin.
+```
+
+### Install the latest package from the official npm registry
+
+Run this from any PowerShell directory:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+dsh plugin --profile web add @michengai/dsh-im-connect@latest --registry=https://registry.npmjs.org/
+dsh --profile web --dump-config
+```
+
+To pin a release, replace `@latest` with a version such as `@0.1.28`.
+
+The configuration output should contain `im-connect`. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: `dsh plugin add` also applies `cordis.patch.yml`.
+
+## Plugin Configuration & Toggles
+
+The plugin follows standard DSH bundle configuration conventions. Options are located at:
+> **Sidebar → Plugins → Click `@michengai/dsh-im-connect`** (the host's `plugins.bundle.config` slot).
+
+Native configuration options are provided here. Their values are persisted in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `location` and `taskTreeSessions` are managed through this UI, while `onlineUpdate` is also subject to the host lock described below:
+
+### 1. Entry Location (`location`)
+- **Default**: Settings only (`settings`)
+- **Description**: Controls where the IM Assistant management page is displayed in the host navigation, supporting three states (matching host bundle entry conventions):
+  - **Both (`both`)**: Displays a persistent icon in the left primary sidebar and retains the entry in **Settings → IM Assistant**;
+  - **Sidebar only (`sidebar`)**: Displays only the sidebar icon, omitting the global settings entry;
+  - **Settings only (`settings`)**: Unregisters the sidebar icon (gracefully switching active views if currently open) and retains only the entry in **Settings → IM Assistant**.
+- **Effect**: Clicking the sidebar icon opens the IM Assistant management page directly in the primary workspace with a **960px centered container** (matching host plugin manager conventions). This eliminates vertical scrolling constraints in narrow settings dialogs; state is synchronized live across both entry points.
+
+### 2. Online Updates (`onlineUpdate` / `updater`)
+- **Default**: Enabled (`true`)
+- **Description**: Controls whether the plugin checks for and installs updates from npm.
+- **Effect**:
+  - **Dynamic UI Sync**: Disabling the toggle hides the **Check for updates** button and version badge in the header immediately without requiring a full page reload;
+  - **Endpoint Guard**: When disabled, the update API route returns `HTTP 403` for all check and install requests, preventing unreviewed updates;
+  - **Host / Platform Lock**: For curated plugin indexes (such as VibeDev) or restricted enterprise environments, this can be locked directly via Cordis configuration (bundle patch) without needing UI interaction:
+    ```yaml
+    updater: false # or onlineUpdate: false
+    ```
+    Once configured, the updater is disabled at startup, the update action stays hidden, and the online-update switch is disabled. The host lock takes precedence over the user's choice in `channels.json` and cannot be lifted through the UI. Removing the host lock restores the saved user preference.
+  - **Update Modes**: When a newer release is available, **Update automatically** runs only when the DSH CLI or Desktop update service is available; otherwise, the dialog provides a profile-specific manual command to copy and run.
+
+### 3. Show IM Sessions in Task Tree (`taskTreeSessions`)
+- **Default**: Disabled (`false`, hides IM sessions in the workspace task tree by default to keep daily workspaces clean)
+- **Description**: Controls whether messaging channel sessions appear in the official workspace task tree.
+- **Effect**:
+  - **Workspace Decluttering**: When disabled, all messaging sessions (including `dsh-im-session-*`, legacy `im:*` prefixes, and active channel session bindings) are automatically filtered out from the official workspace task tree, preventing high-frequency chats from flooding your daily development workspaces;
+  - **Channels Tab Preserved**: Filtering applies only to the official workspace tree. All channel sessions remain fully available and accessible at any time under the sidebar's **Channels** tab;
+  - **Lightweight Pipeline Collaboration**: Implemented via the `NativeTabRegistry.sessionFilters` inter-plugin protocol without invasive host hijacking. Toggling takes effect immediately and interoperates smoothly with Automation and Archive Manager. Non-supporting host shells degrade gracefully with a one-time warning.
+
+## Usage
+
+Open **Settings → IM Assistant**, select **Add account** under the target channel, then choose that account's workspace, model, permission, private-access mode, and send mode. To register a new workspace, click **Add workspace…** in the dropdown footer to invoke the system folder picker (manual path inputs are disallowed); hosts lacking native folder pickers show "This Host cannot create workspaces" (upgrade to one of the supported host releases listed in Requirements, or add via the host sidebar).
+
+| Goal | Action | Notes |
+| --- | --- | --- |
+| Add an account | Select **Add account** under a channel, choose the account settings, then scan or enter credentials | The same channel can contain multiple accounts; WeChat is QR-only, Feishu / Lark accept QR or App ID / App Secret, Telegram and Discord need a Bot Token, and Slack needs a Bot Token plus an App Token |
+| Change account settings | Expand the channel, select an account, then edit its workspace, model, reasoning effort, permission, private-access mode, or send mode in its settings dialog | Changes affect only that account and apply to its subsequent sessions immediately |
+| Pause receiving | Turn off **Receive messages** on the account row | Credentials and settings stay; only new inbound messages for that account pause |
+| Send work from IM | WeChat / Feishu / Lark / QQ QR scanners can DM immediately; DingTalk / WeCom scanners and other users need approval. Groups only need a mention | Each chat has its own channel session |
+| Split input | End with `..` to continue, `!!` to flush now | Default merge window is about 5 seconds |
+| Start a new session | Send `/new` or `/clear` | Creates and switches the current IM session; previous sessions stay in the Channels list without affecting web tasks |
+| Status / help | Send `/status` or `/help` | Current session and dynamically discovered Chat commands |
+| Agent preset | Choose **Agent preset** when adding or editing an account | Uses the Chat roster; changes apply to new sessions while previous sessions keep their preset |
+| Command permissions | Open Settings on the account row and toggle DM/group commands | Admission is checked first; disabling commands keeps conversation and approval/question replies available |
+| Sessions / workspaces | `/sessions`, `/session <number or ID>`; `/workspaces`, `/workspace <number or ID>` | Resume ordinary Chat sessions; workspace selection creates a session without changing account defaults |
+| Task controls | `/stop`, `/steer <text>`, `/queue` | Stop, provide instructions, or inspect the queue; stopping preserves Host queued messages |
+| Send mode | Open Settings on the account row and choose Queue or Steer under **Send mode** | Queue (the default) keeps today's behavior; Steer hands an ordinary message to the running task as additional instructions immediately (same as `/steer`), and behaves like Queue while the task is idle |
+| Segmented replies | Open Settings on the account row, choose Send in segments under **Segmented replies**, and fill in the send-gap range | Defaults to Send as whole; when set to Send in segments, the assistant splits one reply into several short messages at the separator, and the first message also waits a random gap. See [Segmented replies](#segmented-replies) |
+| Session with a preset | `/presets`, `/preset <number or ID>`, `/preset --default` | Starts and connects a new session in the current workspace without changing account defaults |
+| Model / reasoning | `/models`, `/model <number or provider/model>`, `/reasoning [effort or --default]` | Changes the current selection and updates the Host default for subsequent Chat sessions |
+| Result recovery | `/delivery`, `/delivery retry <record-ID>` | Check recent deliveries and resend text from the original task |
+| Session management | `/history`, `/rename <title>`, `/fork` | Recent text history, rename, or fork and switch |
+| Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
+| Answer an interactive question | Reply with an option number or text; separate multiple choices with commas, or enter a custom answer | Multiple questions arrive in order; only the initiating user can answer in a group |
+| Approve a tool | Reply `Approve` / `Deny` or `批准` / `拒绝` in a DM | Also accepts `yes` / `no` / `allow` / `reject`; group replies cannot grant |
+| Review on the web | Open the workspace **Channels** tab | IM sessions never appear under **Tasks** |
+
+After `/workspace`, `/new` and continuing after archiving the current session keep the selected workspace and use the account model, Agent preset, and permission preset. `/session` and `/fork` preserve the original session configuration.
+
+Switching sessions stops output pushes from previous sessions to this chat, including switches through `/preset` and `/fork`. History remains available on the web, and the stopped delivery stays stopped after restarting DSH. `/unbind` lists this chat's registered sessions; `/unbind <number or ID>` removes an old registration, and `/unbind all` keeps only the current session. `/mute <number or ID>` pauses assistant output without removing the registration; `/unmute` with the same target resumes future output. Use the numbers from `/unbind`.
+
+Explicitly binding a session with `/session` restores its output, including when selecting the current session again. Mute pauses assistant text and file output; approvals, questions, and task status notices still arrive. Switching or muting discards queued stream updates and cached text; an already sent partial card may remain visible, but the next output starts a fresh stream.
+
+DingTalk replies prefer official AI Card streaming. If card creation fails, plain text preserves line breaks; code fences and list markers remain literal. QQ replies use official markdown and keep headings, bold text, links, and tables; only a platform rejection falls back to plain text (where tables become lists). Telegram replies are sent as Rich Messages with Markdown so headings, bold text, and tables render, falling back to plain text when that method is unavailable; do not enable Webhook on the same bot. Feishu normal replies also use card Markdown, so headings and tables render; cards are split so none holds more than five tables, with a plain-text fallback. Long replies split with structure awareness: table chunks repeat the header, code fences are re-closed, and the `(n/m)` marker only prefixes prose chunks. `/help` is grouped as getting around / sessions and workspaces / models and reasoning / tasks and delivery, with one entry per feature and the usable aliases marked; group titles are bold while the rest of the command copy stays plain text, which keeps them scannable on a phone. Discord renders headings, bold text, code, and lists on the client but has no Markdown tables, and mobile clients cannot scroll horizontally, so pipe tables become a vertical block per row (first two columns as a bold title, remaining columns as `header: value`). Everything else is sent verbatim. Do not configure a Discord Interactions Endpoint URL, or button clicks will not arrive through the Gateway. Slack also has no Markdown tables and no `#` headings, so outgoing text is converted to mrkdwn: headings become a bold whole line, tables become the same vertical block, `**bold**` becomes `*bold*`, and links become `<url|label>`, while code fences stay untouched.
+
+### Telegram topic naming
+
+Telegram topics are automatically named once from the first non-fallback session title; later conversation titles do not keep changing the topic name. `/rename <title>` explicitly synchronizes the topic name. Ordinary chats are unaffected. The bot needs permission to rename the topic.
+
+- `/topicname` shows this topic's policy and lock state. `/topicname off` locks automatic naming; `/topicname on` unlocks it. With the default policy, unlocking allows the next valid title to name the topic again.
+- The plugin configuration `topicNaming` accepts `once` (default), `follow` (follow valid titles), or `off` (disable automatic naming). `/topicname on` does not override global `off`. Explicit `/rename` remains available regardless of automatic naming settings.
+- A manual rename event in a group forum locks automatic naming. Private topics cannot rely on that event for manual rename detection; use `/topicname off`. Naming and lock state persist across restarts in `topic-titles.json` under the state directory.
+
+### Segmented replies
+
+When **Segmented replies** is set to Send in segments for an account, the assistant splits one reply at a separator and sends the pieces one by one, which reads like a few messages in a row. It defaults to Send as whole and behavior is unchanged while off. It is currently enabled for QQ only (verified end to end); other channels do not show the option and never split.
+
+- **Send gap**: fill in the minimum and maximum gap (seconds, 0–60). Every message, including the first, waits a random gap drawn from that range; saving is rejected when the maximum is lower than the minimum, and changes apply immediately.
+- **Separator**: set by the plugin configuration `segmentMarker`, default `<<<MSG>>>`, and must occupy its own line. The same text inside a fenced code block never splits a reply, so code samples stay intact.
+- **Where it is stored**: the toggle and range live per account in `channels.json`; the plugin configuration `segmentReply` acts as the default for every account, with the account setting taking precedence. If one segment fails to send, the rest stop instead of resending the whole reply, so no duplicate messages.
+
+### Idle session rotation
+
+Groups and DMs bind one session per chat, so a message after a long pause easily continues the previous topic. Configure **Idle session rotation** right below Send mode in account settings; when more than that many minutes passed since the last user message, the next message starts a new session with a single notice in the chat. The previous session is kept and `/sessions` can switch back. The default is Disabled (keep session).
+
+- A session that is still running is never rotated, so follow-up instructions for a long task stay in the same context; the switch happens before the next message is submitted.
+- The timer is stored per chat as `lastInboundAt` in `sessions.json` and keeps counting across restarts; explicit `/new`, `/session`, and `/workspace` are unaffected.
+- Configurable per account in settings (30 min, 1 hr, 2 hrs, 6 hrs, 12 hrs, 24 hrs, or Disabled).
+
+### Connecting Slack
+
+Slack uses a Socket Mode long connection, so no public URL or request URL is required:
+
+1. Open <https://api.slack.com/apps> and choose **Create New App → From scratch**, then pick your workspace.
+2. Under **OAuth & Permissions → Bot Token Scopes**, add at least: `chat:write` (replies), `reactions:write` (status reactions), `files:read` (receive files), `files:write` (return files), `im:history` (DMs), `channels:history` (public channels), `groups:history` (private channels), and `app_mentions:read` (@ mentions). Do not paste a user token (`xoxp-`). Multi-person DMs (mpim) are not supported.
+3. Click **Install to Workspace** at the top of the page and copy the **Bot User OAuth Token** (`xoxb-…`).
+4. Open **Socket Mode**, enable it, click **Generate Token and Scopes**, tick `connections:write`, and copy the **App-Level Token** (`xapp-…`, shown once).
+5. Open **Event Subscriptions**, enable events, and under **Subscribe to bot events** add `message.im`, `message.channels`, `message.groups`, and `app_mention`.
+6. In **Settings → IM Assistant → Slack → Add account**, paste both tokens.
+7. Invite the bot to the channels you need with `/invite @your-bot`. Channels only respond after an @ mention; DMs work immediately.
+
+Notes:
+
+- **Where replies land**: DMs answer directly. Public and private channels answer inside the thread of the message. The 512 most recently joined threads are saved per account on this machine, so follow-ups still need no mention after a restart. Mention the bot again after switching bot identity, clearing the account state directory, or when a thread record is evicted. Multi-person DMs are not handled.
+- **Commands**: Slack clients treat a halfwidth `/` as a slash command, so `/menu` must be registered in the app. Without that registration, send `!menu` or `!help`, or a fullwidth `／help`, the same way Discord does. An unknown `!hello` stays an ordinary message. DM commands still use the allowlist. A `!` command in a channel does not need a mention and is answered in a thread. Native buttons also work.
+- **Diagnostics**: **Diagnose connection** calls `auth.test` for bot identity and reports Socket Mode state only when a connection already exists; it never opens a new connection for the check.
+- **After changing scopes**, reinstall the app and reconnect the bot; an old Bot Token does not gain new scopes automatically.
+
+Send commands as separate text messages; image captions remain ordinary input. Start with `/help`; individual replies also suggest related actions.
+
+- Sessions and workspaces: list numbers expire after 15 minutes. Archived sessions are marked; restore them on the web first. Finish running tasks and pending interactions before switching.
+- Models: as in Chat, `/model` and `/reasoning` also attempt to save the default for future sessions. Other existing sessions are not changed.
+- Stopping and queues: `/stop` submits a stop request and keeps queued messages. Pause an active goal separately with `/goal pause`. Use `/queue` to view and manage queued messages.
+- Forking: `/fork` requires at least one completed turn. If a fork was created but switching failed, follow the session ID and recovery instructions in the reply.
+- Permissions and export: `/permission` settings survive session restoration. `/export` follows private-chat admission and private/group command permissions. Completion is reported only after the ZIP file is sent.
+
+Command replies, tool approvals, interactive questions, and channel notices sent directly to the user follow the language saved in the host's global settings. With no saved preference or an unavailable language service, they default to Chinese. Dynamic names, paths, user content, and extension results remain unchanged. Connection status on the settings page still uses the interface dictionary.
+
+## Permissions and security boundaries
+
+Command permission does not grant DM admission or replace tool approval. Enabled users can inspect and resume ordinary Chat sessions and execute registered Host commands. Each account has independent DM/group switches without user IDs; legacy configurations default to enabled for compatibility.
+
+| Item | Current behavior |
+| --- | --- |
+| Access | Groups need no binding, only a mention. Each account can allow only approved users or all DM users; approved-only is the default, and WeChat / Feishu / Lark / QQ QR scanners are added to that account's allowlist automatically |
+| Management API | Uses `/api/dsh-im-connect`, following the REST prefix used by other DSH plugins. It delegates Host, Origin, and Cookie checks to Host `connection.requestRejection`, including local requests. Unavailable authentication returns 503; mutations retain JSON, client-header, and 1 MiB limits |
+| Secrets | WeChat tokens and other secrets prefer DSH `ctx.credentials`; otherwise they use plaintext `%DSH_HOME%\dsh-im-connect\secrets.json`, restricted to the current user and never safe to sync or share |
+| Account state | `channels.json` stores per-account workspace, model, permission, private access, send mode, segmented-reply toggle and gaps, enablement, and credential refs, not raw secrets |
+| Browser payloads | Never include tokens, secrets, App Secrets, or internal error details |
+| WeChat protocol | Official iLink only; no reverse-engineered personal WeChat protocol |
+| Tool approval | The task initiator replies in the chat bound to that session. DM admission decides who can chat and no longer gates approvals, and approvals never go back to the web. No reply within 5 minutes cancels the action instead of queueing later text |
+| Interactive questions | Single-choice, multiple-choice, and custom questions return to the originating IM conversation; one conversation handles them in order, and only the initiating user can answer in a group |
+
+Keep the DSH backend listening on loopback. Remote access should use a controlled HTTPS reverse proxy, the actual authority in the Host's `trustedHosts`, and a login through that authority. Do not spoof localhost or remove authentication to bypass 403. Image-download `additionalImageHosts` does not configure management access; see [management authentication](SECURITY.md#管理面). Permission presets use the same host sandbox-policy values as Chat; `danger-full-access` does not wrap a sandbox.
+
+## Development
+
+### Install from source
+
+Use this for debugging or unpublished changes. The cloned directory becomes the plugin source path:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+# Replace this with an existing projects directory.
+Set-Location "$HOME\Projects"
+git clone https://github.com/MichengAI/dsh-im-connect.git
+Set-Location .\dsh-im-connect
+npm install
+npm test
+dsh plugin --profile web add .
+dsh --profile web --dump-config
+```
+
+Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
+
+This repository develops in `src` and builds to `lib`:
+
+- [src\index.ts](src/index.ts): host entry, config, and lifecycle.
+- [src\manager.ts](src/manager.ts): channel start/stop, authenticated management API, and credential persistence.
+- [src\engine](src/engine): session routing, slash commands, approval, splitting, and outbound push.
+- [src\channels](src/channels): DingTalk, Feishu, Lark, WeChat, WeCom, QQ, Telegram, Discord, and Slack adapters.
+- `client.js`: settings page and workspace channel sidebar.
+- `tests\*.test.mjs`: routing, QR, credentials, QQ, delivery, and sidebar tests.
+
+After changing the source, test and install from the local directory:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+npm test
+dsh plugin --profile web add .
+```
+
+When changing channel or session logic, keep the engine platform-agnostic, keep adapters from creating agents, and keep web tasks separate from IM channels.
+
+### Native sidebar coordination protocol
+
+IM and Automation share tabs through the active `sidebar.workspaces` entry and the `__dshNativeTabs` registry on the entry or component. This is an inter-plugin convention, not an official stable DSH API. When replacing or restoring a sidebar component or handing over a registry without a host slot notification, the changing plugin should dispatch `dsh-native-sidebar-change` on `window` in a microtask after updating its state (a plain `Event`, with no payload). Receivers reread the active entry. Inserting a tab alone must not forward the event, to avoid notification loops.
+
+Cleanup restores only components still owned by the plugin, removes its own registry and tabs, and releases event, slot, and tab subscriptions. Changes to the event name, registry structure, or notification semantics require coordinated compatibility updates. IM retries startup every 250ms for at most 20 attempts and stops early after inserting a tab. This only covers startup ordering; it cannot guarantee reconnection when an older plugin silently replaces a component after retries end.
+
+## Validation
+
+For real management-authentication tests, set `DSH_CONNECTION_CONTRACT_ROOT` to the isolated `@deepseek-ai/dsh-client-connection` package root. The Gateway-coexistence case also uses `DSH_CHAT_CONTRACT_ROOT` from the image contracts. Local runs skip these contracts when unconfigured; CI supplies both. Tests use temporary HTTP servers and credentials, not a live Cloudflare deployment.
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+npm test
+```
+
+`prepublishOnly` runs the tests before publishing.
+
+Sidebar tests read the built `lib/client.js`; run `npm run build` before invoking individual tests directly. The lifecycle harness verifies attachment and disposal with simulated slots, notifications, and timers. It does not render React or replace validation of real messages, archiving, scheduled tasks, or Desktop.
+
+
+## Result recovery after disconnects and restarts
+
+Delivery tracking starts with ordinary IM messages received after this feature is enabled. If the original result is saved but sending has not started, its final text and completion status can be recovered after reconnecting or restarting. Questions, tools, approvals, and files are never replayed. Messages handled by earlier plugin versions are not recovered retroactively.
+
+- Telegram, Discord, Slack, Feishu/Lark, and WeCom can attempt background delivery using a stable chat destination. DingTalk, QQ, and WeChat wait for a new message in the original chat to refresh the reply channel. Connection, expiry, and platform quotas still apply.
+- When sending was attempted but delivery is unconfirmed, automatic resend pauses. Use `/delivery` to check records, then `/delivery retry <record-ID>` if you want to resend. This may duplicate text you already received. View files in the original session on the web.
+- Records and resend actions are scoped to the original sender in the current chat, subject to admission and command permissions. Disabling an account, changing the session binding, or changing access pauses recovery. Restore the original binding and access before retrying manually.
+- Recovery is available for 7 days per record, with at most 1,000 records. Delivered and definitively rejected records are removed first when capacity is reached; expired records are cleaned up when a new message arrives. Background checks run in batches every 30 seconds. Unreadable history or unfinished tasks remain pending. Recovery does not resume task execution.
+
+## License
+
+Security guidance is in [SECURITY.md](SECURITY.md).
+
+Licensed under [Apache License 2.0](LICENSE).
