@@ -27,6 +27,8 @@ export interface ImMessage {
 export interface ReplyStream {
   update(text: string): Promise<void>
   finish(text: string): Promise<void>
+  /** Stop channel-level reuse when taken for finalization, without closing this handle. */
+  seal?(): void
   /** 只改顶部状态行（思考 / 工具进度），不碰正文；渠道不支持时省略。 */
   setStatus?(text: string): Promise<void>
   /** 新回合接管时删掉还没写正文的占位消息，避免聊天里留下停在「第 N 步」的消息。 */
@@ -44,6 +46,8 @@ export interface ChannelAdapter {
   readonly maxMessageLength: number
   /** 抑制含工具调用的助手文字；实时与补发共用规则，不计为已投递。 */
   readonly skipInterimText?: boolean
+  /** 交互提示仅在明确拒收且没有已送分片时允许整体重试。 */
+  readonly interactionRetryRequiresDefinite?: boolean
   start(): void | Promise<void>
   stop(): void | Promise<void>
   send(chatId: string, text: string): Promise<void>

@@ -1,4 +1,5 @@
 import { DeferredDelivery, DeliveryRejected, DeliveryUnavailable, type DeferredEntry } from './deferred-delivery.js'
+import { ChoiceSendError } from './choice-delivery.js'
 import { sleepWithSignal } from './abort.js'
 import { assistantText } from './assistant-text.js'
 import { readDeliveryHistory } from './delivery-history.js'
@@ -136,6 +137,7 @@ interface LegacyUserQuestionService {
 interface InteractionDeliveryResult {
   status: 'delivered' | 'failed' | 'aborted'
   deliveredAny: boolean
+  retrySafe?: boolean
 }
 
 const USER_QUESTION_WRAPPER = Symbol('dsh-im-connect.user-question-wrapper')
@@ -1620,7 +1622,7 @@ export class ImEngine {
   /** 同一条提示失败后再发一次。微信正文和问题撞车时，第一次会失败，排空后的重试仍可在聊天里回答。 */
   private async retryInteraction(channel: ChannelAdapter, deliver: () => Promise<InteractionDeliveryResult>): Promise<InteractionDeliveryResult> {
     const first = await deliver()
-    if (first.status !== 'failed') return first
+    if (first.status !== 'failed' || first.retrySafe === false) return first
     this.log(`[${channel.id}] 交互提示发送失败，重试一次`)
     return deliver()
   }
@@ -1634,8 +1636,17 @@ export class ImEngine {
     interactive?: { sessionId: string; message: ImMessage; choices: Choice[]; valid: () => boolean },
   ): Promise<InteractionDeliveryResult> {
     let deliveredAny = false
+    const requiresDefinite = channel.interactionRetryRequiresDefinite === true
+    let cardUnknown = false
     if (channel.sendChoices && interactive && text.length < channel.maxMessageLength - 512 && !signal?.aborted) {
-      const result = await withReplyLocale(this.ctx, () => this.choices.show(channel, interactive.message, text, interactive.choices,
+      const choiceChannel = requiresDefinite ? { ...channel, sendChoices: async (...args: Parameters<NonNullable<ChannelAdapter['sendChoices']>>) => {
+        try { return await channel.sendChoices!(...args) }
+        catch (error) {
+          if (error instanceof ChoiceSendError && error.reason === 'delivery-unknown') cardUnknown = true
+          throw error
+        }
+      } } : channel
+      const result = await withReplyLocale(this.ctx, () => this.choices.show(choiceChannel, interactive.message, text, interactive.choices,
         interactive.sessionId, interactive.valid, replyText('点击按钮或按提示回复文字。')))
       if (!result) return { status: signal?.aborted ? 'aborted' : 'delivered', deliveredAny: true }
     }
@@ -1647,7 +1658,7 @@ export class ImEngine {
         this.log(`[${channel.id}] 已投递交互 ${chatId}，长度 ${chunk.length}`)
       } catch (error) {
         this.log(`[${channel.id}] 交互提示发送失败: ${error instanceof Error ? error.message : String(error)}`)
-        return { status: 'failed', deliveredAny }
+        return { status: 'failed', deliveredAny, retrySafe: !requiresDefinite || (!cardUnknown && !deliveredAny && isDefiniteSendFailure(error)) }
       }
       if (signal?.aborted) return { status: 'aborted', deliveredAny }
     }

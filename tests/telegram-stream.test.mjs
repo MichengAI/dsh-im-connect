@@ -83,7 +83,7 @@ test('Telegram 流式只发一条占位，后续只编辑同一条', async () =>
   }
 })
 
-test('Telegram 中途编辑失败后收口仍能送达全文', async () => {
+test('Telegram 占位消息确认不可编辑后收口仍能补发全文', async () => {
   const calls = []
   const restore = mockFetch(async (url, init) => {
     const method = String(url).split('/').pop()
@@ -91,7 +91,7 @@ test('Telegram 中途编辑失败后收口仍能送达全文', async () => {
     if (body.rich_message) return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
     calls.push({ method, body })
     if (method === 'editMessageText') {
-      return { json: async () => ({ ok: false, description: 'Too Many Requests: retry after 1' }) }
+      return { json: async () => ({ ok: false, error_code: 400, description: "Bad Request: message can't be edited" }) }
     }
     return { json: async () => ({ ok: true, result: { message_id: 88 } }) }
   })
@@ -116,7 +116,7 @@ test('Telegram 中途编辑失败时不补发新消息', async () => {
     if (body.rich_message) return { json: async () => ({ ok: false, error_code: 404, description: 'Not Found' }) }
     calls.push({ method, body })
     if (method === 'editMessageText') {
-      return { json: async () => ({ ok: false, description: 'Too Many Requests: retry after 1' }) }
+      return { json: async () => ({ ok: false, error_code: 400, description: "Bad Request: message can't be edited" }) }
     }
     return { json: async () => ({ ok: true, result: { message_id: 9 } }) }
   })

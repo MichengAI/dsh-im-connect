@@ -17,17 +17,18 @@ const sendError = async action => { try { await action() } catch (error) { retur
 
 test('Telegram：429 为明确拒收且不再回退纯文本；其余失败结果不明', async t => {
   t.after(() => mock.restoreAll())
-  for (const [code, expected] of [[429, true], [400, false], [500, false], [409, false]]) {
+  for (const [code, expected, attempts] of [[429, true, 1], [400, false, 2], [500, false, 1], [409, false, 1]]) {
     const calls = []
     mock.method(globalThis, 'fetch', async url => {
       calls.push(String(url).split('/').pop())
-      return Response.json({ ok: false, error_code: code, description: 'mock' })
+      return Response.json({ ok: false, error_code: code, description: 'mock', ...(code === 429 ? { parameters: { retry_after: 120 } } : {}) })
     })
     const error = await sendError(() => createTelegramChannel({ token: 'test' }, () => {}).send('123', 'hello'))
     assert.ok(error, `错误码 ${code} 应当抛错`)
     assert.equal(definite(error), expected, `错误码 ${code}`)
-    // 限流时再发一次纯文本只会再次被限流；其余拒绝保留原有的富文本→纯文本回退。
-    assert.equal(calls.length, expected ? 1 : 2, `错误码 ${code} 的调用序列 ${calls}`)
+    // 超预算限流不提前重试；500 结果未知不重发；只有格式/方法拒绝允许纯文本回退。
+    assert.equal(calls.length, attempts, `错误码 ${code} 的调用序列 ${calls}`)
+    if (code !== 400) assert.ok(calls.every(method => method === 'sendRichMessage'))
     mock.restoreAll()
   }
 })

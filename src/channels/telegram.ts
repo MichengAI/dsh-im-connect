@@ -8,6 +8,7 @@ import { fileForm, fileRequest } from './file-send.js'
 import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
+import { retryTelegram } from './telegram-retry.js'
 
 export interface TelegramConfig {
   token?: string
@@ -176,6 +177,14 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
 
   // Rich message 是较新的 Bot API 方法；一旦确认不可用就一直走纯文本，避免每条消息都先失败一次。
   let richDisabled = false
+  // A bot-wide 429 cooldown must survive stream flushes, format fallbacks and outer gateway retries.
+  let rateLimitedUntil = 0
+  function checkCooldown(): void {
+    const remaining = rateLimitedUntil - Date.now()
+    if (remaining > 0) throw Object.assign(new DeliveryRejected('telegram delivery rate limited'), {
+      status: 429, rejected: true, retryAfterMs: remaining,
+    })
+  }
   // 每个聊天当前还没收口的那条回复消息（见 beginReply）：中途重新开流时复用它，不再另发一条。
   const openReplies = new Map<string, OpenReply>()
   const openingReplies = new Map<string, object>()
@@ -195,32 +204,61 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         await api('sendRichMessage', { chat_id: route.chatId, ...threadParam, rich_message: { markdown } })
         return
       } catch (error) {
-        // 响应超时或连接中断时，原消息可能已经送达，不能再发一份。
+        // Transport retries already ran; do not restart their budget by switching formats.
         if ((error as { rejected?: boolean })?.rejected !== true) throw error
-        // 限流时再发一次纯文本只会再被限流，直接交给上层退避重试。
         if (error instanceof DeliveryRejected) throw error
+        // Only unsupported rich payload/method errors may fall back to plain text.
+        if (![400, 404].includes(Number((error as { status?: number }).status))) throw error
         if (richUnsupported(error)) richDisabled = true
       }
     }
     await api('sendMessage', { chat_id: route.chatId, ...threadParam, text })
   }
 
-  async function api<T>(method: string, body: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
-    const res = await fetchTelegram(`${API}/bot${token}/${method}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: timeoutSignal(timeoutMs, lifecycle?.signal),
-    })
-    const data = (await res.json()) as { ok: boolean; description?: string; error_code?: number; result: T }
-    if (!data.ok) {
-      const message = `telegram ${method}: ${data.description ?? 'unknown'}`
-      // 429 表示平台因限流未受理该请求，重发不会重复。
-      const error = Object.assign(data.error_code === 429 ? new DeliveryRejected(message) : new Error(message), { status: data.error_code, rejected: true })
-      if (data.error_code === 401) (error as Error & { code?: string }).code = 'telegram-401'
+  async function readApiResult<T>(method: string, res: Response): Promise<T> {
+    // Gateways may return HTML on transient HTTP failures; do not lose the status to JSON parsing.
+    if (res.status >= 500 || [408, 425].includes(res.status)) {
+      await res.body?.cancel().catch(() => undefined)
+      throw Object.assign(new Error(`telegram ${method}: HTTP ${res.status}`), { status: res.status })
+    }
+    let data: { ok: boolean; description?: string; error_code?: number; parameters?: { retry_after?: number }; result: T }
+    try { data = await res.json() as typeof data }
+    catch (error) {
+      if (!(res.status >= 400)) throw error
+      const retryAfterMs = Number(res.headers?.get('retry-after')) * 1000
+      if (res.status === 429) rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + Math.max(1000, retryAfterMs || 0))
+      throw Object.assign(res.status === 429 ? new DeliveryRejected(`telegram ${method}: HTTP 429`) : new Error(`telegram ${method}: HTTP ${res.status}`), {
+        status: res.status, rejected: true, retryAfterMs,
+      })
+    }
+    if (!data.ok || res.ok === false) {
+      const status = data.error_code ?? res.status
+      const message = `telegram ${method}: ${data.description ?? 'request rejected'}`
+      const error = Object.assign(status === 429 ? new DeliveryRejected(message) : new Error(message), {
+        status, rejected: true, retryAfterMs: Number(data.parameters?.retry_after ?? res.headers?.get('retry-after')) * 1000,
+      })
+      if (status === 429) rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + Math.max(1000, error.retryAfterMs || 0))
+      if (status === 401) (error as Error & { code?: string }).code = 'telegram-401'
       throw error
     }
     return data.result
+  }
+
+  async function api<T>(method: string, body: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
+    if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
+    const request = async (signal?: AbortSignal) => {
+      if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
+      if (['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)) checkCooldown()
+      const res = await fetchTelegram(`${API}/bot${token}/${method}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+        redirect: 'error', signal: timeoutSignal(timeoutMs, signal ?? lifecycle?.signal),
+      })
+      return readApiResult<T>(method, res)
+    }
+    // Retry delivery, never task execution, polling, topic creation or unrelated mutations.
+    return ['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)
+      ? retryTelegram(request, { signal: lifecycle?.signal, method, log, edit: method === 'editMessageText' })
+      : request()
   }
 
   function mentioned(message: NonNullable<TgUpdate['message']>): boolean {
@@ -382,6 +420,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     maxMessageLength: 4000,
     /** 占位消息支持顶部状态行（思考 / 工具进度），网关据此推送中间态。 */
     replyStatus: true,
+    interactionRetryRequiresDefinite: true,
     async start() {
       albumAccess.clear()
       lifecycle?.abort()
@@ -412,13 +451,21 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       await sendMessageText(chatId, text)
     },
     async sendFile(chatId, file, signal) {
+      if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
       const route = parseTelegramChatId(chatId)
-      const form = fileForm(file, 'document')
-      form.append('chat_id', String(route.chatId))
-      if (route.threadId !== undefined) {
-        form.append('message_thread_id', String(route.threadId))
-      }
-      await fileRequest(`${API}/bot${token}/sendDocument`, { method: 'POST', body: form, signal: timeoutSignal(120_000, AbortSignal.any([...(signal ? [signal] : []), ...(lifecycle ? [lifecycle.signal] : [])])) }, fetchTelegram)
+      await retryTelegram(async attemptSignal => {
+        if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
+        checkCooldown()
+        // Multipart bodies are recreated for each upload attempt; never reuse a consumed body.
+        const form = fileForm(file, 'document')
+        form.append('chat_id', String(route.chatId))
+        if (route.threadId !== undefined) form.append('message_thread_id', String(route.threadId))
+        const res = await fetchTelegram(`${API}/bot${token}/sendDocument`, {
+          // Preserve the original upload allowance; the shared signal already bounds all attempts.
+          method: 'POST', body: form, redirect: 'error', signal: attemptSignal,
+        })
+        await readApiResult('sendDocument', res)
+      }, { signal: AbortSignal.any([...(signal ? [signal] : []), ...(lifecycle ? [lifecycle.signal] : [])]), budgetMs: 120_000, method: 'sendDocument', log })
     },
     /**
      * 把会话标题写成话题名。只有论坛话题（话题群 / 私聊话题）有这一层级；
@@ -554,13 +601,14 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
               current.last = next
               return
             } catch (error) {
-              // 富文本被拒就退回纯文本编辑；确认方法不可用后不再重试。
-              if (richUnsupported(error)) richDisabled = true
-              else if (!(error instanceof Error && error.message.includes('message is not modified'))) {
-                await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, text: next })
+              // A confirmed no-op is success; only rich-format rejection permits plain fallback.
+              if (error instanceof Error && error.message.includes('message is not modified')) {
                 current.last = next
                 return
               }
+              if ((error as { rejected?: boolean })?.rejected !== true
+                || ![400, 404].includes(Number((error as { status?: number }).status))) throw error
+              if (richUnsupported(error)) richDisabled = true
             }
           }
           await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, text: next })
@@ -572,6 +620,11 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
             return
           }
           if (!allowSend) return
+          // Only a definitively uneditable/deleted placeholder justifies creating a new message.
+          // Exhausted transport retries, cancellation and auth errors must not start a new budget.
+          if (stopped || (error as { rejected?: boolean })?.rejected !== true
+            || Number((error as { status?: number }).status) !== 400
+            || !/message to edit not found|message can(?:not|'t) be edited|message_id_invalid/i.test(detail)) throw error
           await sendMessageText(chatId, next)
           current.last = next
         }
@@ -589,6 +642,11 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       }
 
       return {
+        seal() {
+          // Taken by the hub for final delivery: reserve this message for this handle only.
+          // Unlike detach(), sealing must not close it before its original finish().
+          if (openReplies.get(chatId) === current) openReplies.delete(chatId)
+        },
         detach() {
           // 已排队的正文仍需写入旧消息，只解除复用，避免新回合覆盖它。
           close()

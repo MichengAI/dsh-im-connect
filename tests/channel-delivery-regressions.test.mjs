@@ -82,8 +82,12 @@ for (const mode of ['normal', 'edit-failed', 'tail-failed']) test(`Telegram 长�
     // 这组用例验的是纯文本长回复的交付语义，声明富文本方法不存在，走 fallback。
     if (body.rich_message) return Response.json({ ok: false, error_code: 404, description: 'Not Found' })
     if (text === '…') return Response.json({ ok: true, result: { message_id: 1 } })
-    if ((mode === 'edit-failed' && String(url).endsWith('editMessageText')) || (mode === 'tail-failed' && delivered.length === 1)) {
-      return Response.json({ ok: false, description: 'mock rejected' })
+    if (mode === 'edit-failed' && String(url).endsWith('editMessageText')) {
+      // Only a definitively uneditable placeholder permits a new-message fallback.
+      return Response.json({ ok: false, error_code: 400, description: "Bad Request: message can't be edited" })
+    }
+    if (mode === 'tail-failed' && delivered.length === 1) {
+      return Response.json({ ok: false, error_code: 403, description: 'mock rejected' })
     }
     delivered.push(text)
     return Response.json({ ok: true, result: { message_id: 1 } })

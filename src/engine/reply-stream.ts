@@ -90,15 +90,23 @@ export class ReplyStreamHub {
   async take(key: string, sessionId?: string): Promise<{ stream?: ReplyStream; text: string; invalidated?: boolean }> {
     if (sessionId !== undefined && this.owners.has(key) && this.owners.get(key) !== sessionId) return { text: '' }
     const generation = this.generations.get(key) ?? 0
-    await (this.tails.get(key) ?? Promise.resolve()).catch(() => undefined)
-    if (generation !== (this.generations.get(key) ?? 0)) return { text: '', invalidated: true }
-    const stream = this.streams.get(key)
-    const text = this.texts.get(key) ?? ''
-    this.streams.delete(key)
-    this.texts.delete(key)
-    this.tails.delete(key)
-    this.statuses.delete(key)
-    return { stream, text }
+    const prev = this.tails.get(key) ?? Promise.resolve()
+    // Extraction is itself a queued operation. Later deltas must not reuse the handle
+    // that is now being finalized, nor lose their own tail to an unconditional delete.
+    const next = prev.catch(() => undefined).then(() => {
+      if (generation !== (this.generations.get(key) ?? 0)) return { text: '', invalidated: true }
+      const stream = this.streams.get(key)
+      const text = this.texts.get(key) ?? ''
+      stream?.seal?.()
+      this.streams.delete(key)
+      this.texts.delete(key)
+      this.statuses.delete(key)
+      return { stream, text }
+    })
+    const tail = next.then(() => undefined)
+    this.tails.set(key, tail)
+    try { return await next }
+    finally { if (this.tails.get(key) === tail) this.tails.delete(key) }
   }
 
   /** 读当前流但不取走：只有状态行的占位要留在原地，等下一步继续改。 */

@@ -8,8 +8,8 @@ function mockFetch(handler) {
   return () => { globalThis.fetch = previous }
 }
 
-test('Telegram 富文本结果未知时不重复发送纯文本', async () => {
-  for (const error of [new DOMException('response lost', 'TimeoutError'), new TypeError('connection reset')]) {
+test('Telegram 新建富文本结果未知时不自动重发或降级', async () => {
+  for (const [error, attempts] of [[new DOMException('response lost', 'TimeoutError'), 1], [new TypeError('connection reset'), 1]]) {
     const calls = []
     const restore = mockFetch(async (url) => {
       calls.push(String(url).split('/').pop())
@@ -18,7 +18,7 @@ test('Telegram 富文本结果未知时不重复发送纯文本', async () => {
     try {
       const channel = createTelegramChannel({ token: 'test-token' }, () => {})
       await assert.rejects(channel.send('123', 'hello'), (actual) => actual === error)
-      assert.deepEqual(calls, ['sendRichMessage'])
+      assert.deepEqual(calls, Array(attempts).fill('sendRichMessage'))
     } finally { restore() }
   }
 })
@@ -90,7 +90,7 @@ test('Telegram 富文本被拒时单条回退，不影响后续内容', async ()
     const method = String(url).split('/').pop()
     const body = JSON.parse(String(init.body))
     calls.push({ method, body })
-    if (body.rich_message) return { json: async () => ({ ok: false, description: 'Bad Request: can\'t parse entities' }) }
+    if (body.rich_message) return { json: async () => ({ ok: false, error_code: 400, description: 'Bad Request: can\'t parse entities' }) }
     return { json: async () => ({ ok: true, result: { message_id: 5 } }) }
   })
   try {
