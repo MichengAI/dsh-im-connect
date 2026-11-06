@@ -23,6 +23,25 @@ test('Telegram 新建富文本结果未知时不自动重发或降级', async ()
   }
 })
 
+test('占位被删导致的 message to edit not found 不会禁用后续富文本', async () => {
+  const calls = []
+  const restore = mockFetch(async (url, init) => {
+    const method = String(url).split('/').pop()
+    const body = JSON.parse(String(init.body))
+    calls.push({ method, rich: Boolean(body.rich_message) })
+    if (method === 'editMessageText') return Response.json({ ok: false, error_code: 400, description: "Bad Request: message to edit not found" }, { status: 400 })
+    return Response.json({ ok: true, result: { message_id: 1 } })
+  })
+  try {
+    const channel = createTelegramChannel({ token: 'test-token' }, () => {})
+    const stream = await channel.beginReply('123')
+    await stream.finish('### 标题一').catch(() => undefined)
+    calls.length = 0
+    await channel.send('123', '### 标题二')
+    assert.equal(calls[0].method, 'sendRichMessage')
+  } finally { restore() }
+})
+
 test('Telegram 富文本给正文行补硬换行，块级语法不动', () => {
   assert.equal(toTelegramHardBreaks('第一行\n第二行'), '第一行  \n第二行')
   assert.equal(toTelegramHardBreaks('第一行\n\n第二段'), '第一行\n\n第二段')

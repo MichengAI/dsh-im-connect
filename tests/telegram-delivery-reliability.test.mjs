@@ -75,6 +75,12 @@ test('HTML 503 在新建文字时保留送达未知且不重发', async () => {
   let n = 0;
   await mock(async (channel, calls) => { await assert.rejects(channel.send('42', 'answer')); assert.equal(n, 1); assert.equal(calls.length, 1); }, () => ++n === 1 ? new Response('unavailable', { status: 503 }) : undefined);
 });
+test('一个聊天的 429 冷却不阻塞其他聊天', async () => {
+  await mock(async (channel) => {
+    await assert.rejects(channel.send('A', 'x'))
+    await channel.send('B', 'y')
+  }, c => c.body.chat_id === 'A' ? response({ ok: false, error_code: 429, parameters: { retry_after: 120 } }, 429) : undefined);
+});
 test('占位创建响应丢失时不自动再创建一条', async () => {
   let attempts = 0;
   await mock(async (channel, calls) => {
@@ -254,7 +260,8 @@ test('retry helper respects retry_after beyond remaining budget without early re
 test('classification excludes permanent, arbitrary, TLS and explicit cancellation errors', () => {
   for (const status of [400, 401, 403, 404, 413]) assert.equal(isTelegramTransient({ status, cause: network() }), false);
   for (const error of [new Error('local bug'), new DOMException('cancelled', 'AbortError'), { code: 'CERT_HAS_EXPIRED' }, new TypeError('fetch failed', { cause: Object.assign(new Error('expired certificate'), { code: 'CERT_HAS_EXPIRED' }) })]) assert.equal(isTelegramTransient(error), false);
-  for (const error of [network(), { status: 429 }, { status: 502 }, new DOMException('timed out', 'TimeoutError')]) assert.equal(isTelegramTransient(error), true);
+  for (const error of [network(), { status: 429 }, { status: '429' }, { status: 502 }, new DOMException('timed out', 'TimeoutError')]) assert.equal(isTelegramTransient(error), true);
+  assert.equal(isTelegramTransient({ status: '400' }), false);
 });
 test('sealed old stream can finish after next stream opens without touching its message', async () => {
   await mock(async (channel, calls) => {

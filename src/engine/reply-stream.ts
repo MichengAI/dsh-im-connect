@@ -106,7 +106,7 @@ export class ReplyStreamHub {
       if (this.statuses.get(key) === statusEntry) this.statuses.delete(key)
       return { stream, text }
     })
-    const tail = next.then(() => undefined)
+    const tail = next.then(() => undefined, () => undefined)
     this.tails.set(key, tail)
     try { return await next }
     finally { if (this.tails.get(key) === tail) this.tails.delete(key) }

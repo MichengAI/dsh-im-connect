@@ -177,10 +177,19 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
 
   // Rich message 是较新的 Bot API 方法；一旦确认不可用就一直走纯文本，避免每条消息都先失败一次。
   let richDisabled = false
-  // A bot-wide 429 cooldown must survive stream flushes, format fallbacks and outer gateway retries.
-  let rateLimitedUntil = 0
-  function checkCooldown(): void {
-    const remaining = rateLimitedUntil - Date.now()
+  // 429 按聊天记冷却：一个群/会话限流不应阻塞其他聊天的正常发送。
+  const MAX_COOLDOWN_MS = 5 * 60_000
+  const rateLimitedUntil = new Map<string, number>()
+  function cooldownKey(chatId: unknown): string { return chatId === undefined || chatId === null ? '' : String(chatId) }
+  function noteCooldown(chatId: unknown, retryAfterMs: number): void {
+    const key = cooldownKey(chatId)
+    if (!key) return
+    const wait = Math.min(Math.max(1000, Number.isFinite(retryAfterMs) ? retryAfterMs : 0), MAX_COOLDOWN_MS)
+    rateLimitedUntil.set(key, Math.max(rateLimitedUntil.get(key) ?? 0, Date.now() + wait))
+  }
+  function checkCooldown(chatId: unknown): void {
+    const key = cooldownKey(chatId)
+    const remaining = key ? (rateLimitedUntil.get(key) ?? 0) - Date.now() : 0
     if (remaining > 0) throw Object.assign(new DeliveryRejected('telegram delivery rate limited'), {
       status: 429, rejected: true, retryAfterMs: remaining,
     })
@@ -192,7 +201,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   function richUnsupported(error: unknown): boolean {
     const status = Number((error as { status?: number } | undefined)?.status)
     if (status === 404) return true
-    return /not found|unknown method|unsupported/i.test(error instanceof Error ? error.message : '')
+    // 只认「方法不存在」；消息被删/chat 不存在不能当成富文本能力缺失，否则会全局退化为纯文本。
+    return /unknown method|unsupported/i.test(error instanceof Error ? error.message : '')
   }
 
   async function sendMessageText(chatId: string, text: string): Promise<void> {
@@ -215,7 +225,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     await api('sendMessage', { chat_id: route.chatId, ...threadParam, text })
   }
 
-  async function readApiResult<T>(method: string, res: Response): Promise<T> {
+  async function readApiResult<T>(method: string, res: Response, chatId: unknown): Promise<T> {
     // Gateways may return HTML on transient HTTP failures; do not lose the status to JSON parsing.
     if (res.status >= 500 || [408, 425].includes(res.status)) {
       await res.body?.cancel().catch(() => undefined)
@@ -226,7 +236,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     catch (error) {
       if (!(res.status >= 400)) throw error
       const retryAfterMs = Number(res.headers?.get('retry-after')) * 1000
-      if (res.status === 429) rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + Math.max(1000, retryAfterMs || 0))
+      if (res.status === 429) noteCooldown(chatId, retryAfterMs)
       throw Object.assign(res.status === 429 ? new DeliveryRejected(`telegram ${method}: HTTP 429`) : new Error(`telegram ${method}: HTTP ${res.status}`), {
         status: res.status, rejected: true, retryAfterMs,
       })
@@ -237,7 +247,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       const error = Object.assign(status === 429 ? new DeliveryRejected(message) : new Error(message), {
         status, rejected: true, retryAfterMs: Number(data.parameters?.retry_after ?? res.headers?.get('retry-after')) * 1000,
       })
-      if (status === 429) rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + Math.max(1000, error.retryAfterMs || 0))
+      if (status === 429) noteCooldown(chatId, error.retryAfterMs)
       if (status === 401) (error as Error & { code?: string }).code = 'telegram-401'
       throw error
     }
@@ -248,12 +258,12 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
     const request = async (signal?: AbortSignal) => {
       if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
-      if (['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)) checkCooldown()
+      if (['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)) checkCooldown(body.chat_id)
       const res = await fetchTelegram(`${API}/bot${token}/${method}`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
         redirect: 'error', signal: timeoutSignal(timeoutMs, signal ?? lifecycle?.signal),
       })
-      return readApiResult<T>(method, res)
+      return readApiResult<T>(method, res, body.chat_id)
     }
     // Retry delivery, never task execution, polling, topic creation or unrelated mutations.
     return ['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)
@@ -423,6 +433,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     interactionRetryRequiresDefinite: true,
     async start() {
       albumAccess.clear()
+      rateLimitedUntil.clear()
       lifecycle?.abort()
       lifecycle = new AbortController()
       stopped = false
@@ -455,7 +466,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       const route = parseTelegramChatId(chatId)
       await retryTelegram(async attemptSignal => {
         if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
-        checkCooldown()
+        checkCooldown(route.chatId)
         // Multipart bodies are recreated for each upload attempt; never reuse a consumed body.
         const form = fileForm(file, 'document')
         form.append('chat_id', String(route.chatId))
@@ -464,7 +475,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           // Preserve the original upload allowance; the shared signal already bounds all attempts.
           method: 'POST', body: form, redirect: 'error', signal: attemptSignal,
         })
-        await readApiResult('sendDocument', res)
+        await readApiResult('sendDocument', res, route.chatId)
       }, { signal: AbortSignal.any([...(signal ? [signal] : []), ...(lifecycle ? [lifecycle.signal] : [])]), budgetMs: 120_000, method: 'sendDocument', log })
     },
     /**

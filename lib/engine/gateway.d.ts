@@ -139,6 +139,8 @@ export declare class ImEngine {
     private runInteraction;
     private approvalPrompt;
     private onSessionEvent;
+    /** 取流后因会话失效等原因放弃收口时，清掉只有状态、没有正文的占位。 */
+    private discardEmptyTake;
     private processSessionEvent;
     /**
      * 把会话标题写成话题名。

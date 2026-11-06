@@ -36,6 +36,17 @@ test('Telegram 交互重试策略不依赖话题能力', async t => {
   assert.equal(attempts.length, 1)
 })
 
+test('交互提示命中限流冷却时不再整条重试', async t => {
+  const f = fixture(t), attempts = []
+  f.channel.sendChoices = undefined
+  f.channel.send = async (_chat, text) => {
+    attempts.push(text)
+    throw Object.assign(new DeliveryRejected('rate limited'), { status: 429, rejected: true, retryAfterMs: 120000 })
+  }
+  assert.equal(await f.approval('test'), 'rejected')
+  assert.equal(attempts.length, 1)
+})
+
 test('Telegram 审批普通文字结果未知不整条重试', async t => {
   const f = fixture(t), attempts = []
   f.channel.sendChoices = undefined

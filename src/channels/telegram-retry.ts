@@ -7,8 +7,11 @@ const TRANSIENT_CODE = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_
 /** Only transport/timeouts and explicit temporary platform errors, never arbitrary application failures. */
 export function isTelegramTransient(error: unknown, depth = 0): boolean {
   if (!error || typeof error !== 'object' || depth > 4) return false
-  const e = error as { status?: number; code?: string; name?: string; message?: string; cause?: unknown; errors?: unknown[] }
-  if (e.status !== undefined) return TRANSIENT_STATUS.has(e.status)
+  const e = error as { status?: number | string; code?: string; name?: string; message?: string; cause?: unknown; errors?: unknown[] }
+  if (e.status !== undefined) {
+    const status = Number(e.status)
+    if (Number.isFinite(status)) return TRANSIENT_STATUS.has(status)
+  }
   if (TRANSIENT_CODE.has(e.code ?? '') || e.name === 'TimeoutError') return true
   // A generic fetch wrapper can hide permanent TLS/configuration errors in its cause.
   if (e.name === 'TypeError' && e.message === 'fetch failed' && !e.cause) return true

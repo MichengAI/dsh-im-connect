@@ -145,6 +145,20 @@ test('取旧流后入队的新状态即使内容相同也不能被清除', async
   assert.equal(hub.statusOf('chat'), '同一个状态')
 })
 
+test('seal 抛错时 take 正常抛出且不产生未处理拒绝', async () => {
+  const rejections = []
+  const onRejection = reason => rejections.push(reason)
+  process.on('unhandledRejection', onRejection)
+  try {
+    const hub = new ReplyStreamHub()
+    const stream = { async update() {}, async finish() {}, seal() { throw new Error('seal boom') } }
+    await hub.onTextDelta('k', 'x', async () => stream, 's')
+    await assert.rejects(hub.take('k', 's'), /seal boom/)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    assert.deepEqual(rejections, [])
+  } finally { process.off('unhandledRejection', onRejection) }
+})
+
 test('状态行与正文共用串行队列，后到的状态不会覆盖已收口的正文', async () => {
   const hub = new ReplyStreamHub()
   const events = []

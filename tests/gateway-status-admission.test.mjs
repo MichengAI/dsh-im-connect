@@ -17,13 +17,13 @@ function fixture(t, { status = true } = {}) {
   const ctx = { on(name, fn) { handlers[name] = fn; return () => {} }, get() {} }
   const engine = new ImEngine(ctx, store, new SeenStore(join(dir, 'seen.json')), { cwd: dir, provider: 'p', model: 'm', agentPreset: '', mergeTimeoutSecs: 1, permissionPreset: '' }, line => logs.push(line))
   let online = true
-  const channel = { id: 'test', label: 'Test', maxMessageLength: 2000, replyStatus: status, canDeliverDeferred: () => online, setMessageHandler() {}, async send(_id, text) { outputs.push(text) }, async beginReply(_id, initial) { outputs.push(['begin', initial]); return { async setStatus(s) { outputs.push(['status', s]) }, async update(s) { outputs.push(['text', s]) }, async finish() {}, async discard() { outputs.push(['discard']) } } } }
+  const channel = { id: 'test', label: 'Test', maxMessageLength: 2000, replyStatus: status, canDeliverDeferred: () => online, setMessageHandler() {}, async send(_id, text) { outputs.push(text) }, async beginReply(_id, initial) { outputs.push(['begin', initial]); return { async setStatus(s) { outputs.push(['status', s]) }, async update(s) { outputs.push(['text', s]) }, async finish(t) { outputs.push(['finish', t]) }, async discard() { outputs.push(['discard']) }, seal() { outputs.push(['seal']) } } } }
   engine.register(channel)
   engine.addAllowed('test', 'user')
   engine.deferred.begin('request', id, 'test', { chatId: 'chat', userId: 'user', kind: 'dm', text: '' })
   engine.deferred.claim(id, 1, 'request')
   t.after(() => engine.dispose())
-  return { engine, handlers, outputs, logs, id, setOnline(value) { online = value }, event: event => engine.onSessionEvent({ id }, event) }
+  return { engine, handlers, outputs, logs, id, channel, setOnline(value) { online = value }, event: event => engine.onSessionEvent({ id }, event) }
 }
 const tool = { type: 'tool/call', data: { turn: 1, name: 'shell', arguments: { command: 'echo private' }, callId: 'c', step: 1 } }
 
@@ -136,6 +136,30 @@ test('撤销权限后工具结果不更新已有占位', async t => {
   f.engine.extraAllow.clear()
   await f.event({ type: 'tool/result', data: { turn: 1, toolCallId: 'c' } }); await tick()
   assert.deepEqual(f.outputs, [['discard']])
+})
+
+test('取流后会话解绑：空占位被清理，不留孤儿', async t => {
+  const f = fixture(t)
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const base = f.channel.beginReply
+  f.channel.beginReply = async (chatId, initial) => {
+    await gate
+    return base.call(f.channel, chatId, initial)
+  }
+  const statusPromise = f.event(tool)
+  await tick()
+  const messagePromise = f.event({ type: 'assistant/message', data: { turn: 1, message: { content: [{ type: 'text', text: '正文' }] } } })
+  await tick()
+  // 替换渠道实例：stillDeliverable() 的 identity 检查失效，但不触发 unbind 的既有 reset。
+  f.engine.channels.set('test', { ...f.channel })
+  release()
+  await statusPromise
+  await messagePromise
+  const kinds = f.outputs.map(item => Array.isArray(item) ? item[0] : item)
+  assert.ok(kinds.includes('seal'), `应已取流，实际 ${JSON.stringify(f.outputs)}`)
+  assert.ok(kinds.includes('discard'), `应清理空占位，实际 ${JSON.stringify(f.outputs)}`)
+  assert.ok(!kinds.includes('finish'), `解绑后不应收口，实际 ${JSON.stringify(f.outputs)}`)
 })
 
 test('不支持状态的渠道仍处理冷回合的内部工具进度', async t => {
