@@ -1,4 +1,15 @@
 # Changelog
+## [1.0.28] - 2026-11-06
+
+### Telegram delivery reliability
+
+- New Telegram messages and file uploads are now retried only when the platform explicitly rate-limits them. Network failures, timeouts and server errors are treated as unknown delivery instead of being resent, so a reply can no longer arrive twice.
+- Edits to an existing reply keep retrying temporary errors on the same message. A reply whose delivery was unknown is no longer replaced by a second message when the placeholder becomes uneditable.
+- Rate limits are tracked per chat: a busy group no longer delays replies in other conversations, and reconnecting clears stale cooldowns.
+- Deleting a placeholder no longer disables rich formatting for every later message in that account.
+- If a reply is finalized while the conversation has been muted, unbound or switched, an empty placeholder is removed instead of staying in the chat.
+- Approval and question prompts are no longer retried as a whole while the platform is still asking to wait.
+
 ## [1.0.27] - 2026-11-04
 
 ### Compatibility & Dependencies
