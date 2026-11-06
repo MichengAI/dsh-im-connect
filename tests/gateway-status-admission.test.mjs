@@ -162,6 +162,50 @@ test('取流后会话解绑：空占位被清理，不留孤儿', async t => {
   assert.ok(!kinds.includes('finish'), `解绑后不应收口，实际 ${JSON.stringify(f.outputs)}`)
 })
 
+test('回合失败且会话失效时清理空占位', async t => {
+  const f = fixture(t)
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const base = f.channel.beginReply
+  f.channel.beginReply = async (chatId, initial) => {
+    await gate
+    return base.call(f.channel, chatId, initial)
+  }
+  const statusPromise = f.event(tool)
+  await tick()
+  const endPromise = f.event({ type: 'turn/end', data: { turn: 1, reason: { kind: 'error', error: { message: 'boom' } } } })
+  await tick()
+  f.engine.channels.set('test', { ...f.channel })
+  release()
+  await statusPromise
+  await endPromise
+  const kinds = f.outputs.map(item => Array.isArray(item) ? item[0] : item)
+  assert.ok(kinds.includes('discard'), `应清理空占位，实际 ${JSON.stringify(f.outputs)}`)
+  assert.ok(!kinds.includes('finish'), `会话失效后不应收口，实际 ${JSON.stringify(f.outputs)}`)
+})
+
+test('取流后有正文时保留占位而不是删除', async t => {
+  const f = fixture(t)
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const base = f.channel.beginReply
+  f.channel.beginReply = async (chatId, initial) => {
+    await gate
+    return base.call(f.channel, chatId, initial)
+  }
+  const statusPromise = f.event(tool)
+  await tick()
+  const chunkPromise = f.event({ type: 'assistant/chunk', data: { turn: 1, chunk: { type: 'text-delta', text: '正文' } } })
+  await tick()
+  const messagePromise = f.event({ type: 'assistant/message', data: { turn: 1, message: { content: [{ type: 'text', text: '正文' }] } } })
+  await tick()
+  f.engine.channels.set('test', { ...f.channel })
+  release()
+  await Promise.all([statusPromise, chunkPromise, messagePromise])
+  const kinds = f.outputs.map(item => Array.isArray(item) ? item[0] : item)
+  assert.ok(!kinds.includes('discard'), `已有正文不应删除占位，实际 ${JSON.stringify(f.outputs)}`)
+})
+
 test('不支持状态的渠道仍处理冷回合的内部工具进度', async t => {
   const f = fixture(t, { status: false })
   f.engine.deferred.release(f.id)
