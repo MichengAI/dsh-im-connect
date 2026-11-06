@@ -133,6 +133,18 @@ test('状态行单独更新占位，peek 只读不取走', async () => {
   assert.equal(hub.statusOf('chat'), undefined)
 })
 
+test('取旧流后入队的新状态即使内容相同也不能被清除', async () => {
+  const hub = new ReplyStreamHub()
+  const stream = { async update() {}, async finish() {}, async setStatus() {} }
+  const start = async () => stream
+  await hub.onStatus('chat', '同一个状态', start, 's1')
+  await hub.onTextDelta('chat', '旧正文', start, 's1')
+  const taking = hub.take('chat', 's1')
+  const next = hub.onStatus('chat', '同一个状态', start, 's1')
+  await Promise.all([taking, next])
+  assert.equal(hub.statusOf('chat'), '同一个状态')
+})
+
 test('状态行与正文共用串行队列，后到的状态不会覆盖已收口的正文', async () => {
   const hub = new ReplyStreamHub()
   const events = []

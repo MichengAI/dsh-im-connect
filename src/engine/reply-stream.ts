@@ -16,10 +16,10 @@ export class ReplyStreamHub {
   // 回合纪元：reset 时自增，迟到的旧回合增量据此丢弃，不会重建流
   private readonly generations = new Map<string, number>()
   // 顶部状态行（思考进度 / 工具进度）；占位消息创建时用它做首屏文字。
-  private readonly statuses = new Map<string, string>()
+  private readonly statuses = new Map<string, { text: string }>()
 
   statusOf(key: string): string | undefined {
-    return this.statuses.get(key)
+    return this.statuses.get(key)?.text
   }
 
   onTextDelta(key: string, delta: string, start: () => Promise<ReplyStream | undefined>, sessionId?: string): Promise<void> {
@@ -61,7 +61,8 @@ export class ReplyStreamHub {
       this.owners.set(key, sessionId)
     }
     const generation = this.generations.get(key) ?? 0
-    this.statuses.set(key, status)
+    const statusEntry = { text: status }
+    this.statuses.set(key, statusEntry)
     const prev = this.tails.get(key) ?? Promise.resolve()
     const next = prev.catch(() => undefined).then(async () => {
       if (generation !== (this.generations.get(key) ?? 0)) return
@@ -74,7 +75,7 @@ export class ReplyStreamHub {
         }
         if (!stream) {
           // 开流失败：清掉状态，别让下一条正文把过期状态写进去
-          if (this.statuses.get(key) === status) this.statuses.delete(key)
+          if (this.statuses.get(key) === statusEntry) this.statuses.delete(key)
           return
         }
         this.streams.set(key, stream)
@@ -90,6 +91,7 @@ export class ReplyStreamHub {
   async take(key: string, sessionId?: string): Promise<{ stream?: ReplyStream; text: string; invalidated?: boolean }> {
     if (sessionId !== undefined && this.owners.has(key) && this.owners.get(key) !== sessionId) return { text: '' }
     const generation = this.generations.get(key) ?? 0
+    const statusEntry = this.statuses.get(key)
     const prev = this.tails.get(key) ?? Promise.resolve()
     // Extraction is itself a queued operation. Later deltas must not reuse the handle
     // that is now being finalized, nor lose their own tail to an unconditional delete.
@@ -100,7 +102,8 @@ export class ReplyStreamHub {
       stream?.seal?.()
       this.streams.delete(key)
       this.texts.delete(key)
-      this.statuses.delete(key)
+      // 只清理取流前的状态，保留之后入队的状态（即使文案相同）。
+      if (this.statuses.get(key) === statusEntry) this.statuses.delete(key)
       return { stream, text }
     })
     const tail = next.then(() => undefined)
