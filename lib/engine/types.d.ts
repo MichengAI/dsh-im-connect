@@ -25,6 +25,8 @@ export interface ImMessage {
 export interface ReplyStream {
     update(text: string): Promise<void>;
     finish(text: string): Promise<void>;
+    /** Stop channel-level reuse when taken for finalization, without closing this handle. */
+    seal?(): void;
     /** 只改顶部状态行（思考 / 工具进度），不碰正文；渠道不支持时省略。 */
     setStatus?(text: string): Promise<void>;
     /** 新回合接管时删掉还没写正文的占位消息，避免聊天里留下停在「第 N 步」的消息。 */
