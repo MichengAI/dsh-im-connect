@@ -86,6 +86,25 @@ export interface ChannelAdapter {
   setTopicEditHandler?(handler: (chatId: string, name: string) => void): void
   /** 企业微信等回调通道不能等合并窗口，必须立刻处理。 */
   skipMerge?: boolean
+  /**
+   * 把模型的思考过程发成一条可在聊天里折叠/展开的消息（近似网页里收起的思考行）。
+   *
+   * 同一回合复用同一条消息，`final` 为 true 时收口并释放，下一回合另起一条。
+   * 渠道不实现该方法时，引擎不会发送思考内容，只保留状态行。
+   */
+  sendThinking?(chatId: string, text: string, options?: ThinkingOptions): Promise<void>
+}
+
+/** 思考过程消息的渲染参数；标题由引擎按宿主语言生成。 */
+export interface ThinkingOptions {
+  /** 本回合的最后一次更新：标题改为「已完成」并释放句柄。 */
+  final?: boolean
+  /** 已本地化的标题行，例如「🧠 思考中… · 512 字」。 */
+  label?: string
+  /** 整条消息允许的最大字符数。 */
+  maxChars?: number
+  /** 是否渲染成可折叠块（默认折叠）。 */
+  expandable?: boolean
 }
 
 /**
@@ -115,4 +134,17 @@ export interface EngineConfig {
   segmentDelayMaxSecs?: number
   /** 距上一条用户消息超过该分钟数时，下一条消息开新会话；0 或缺省表示不启用。 */
   sessionIdleMinutes?: number
+  /**
+   * 思考过程的投递策略。`mode` 缺省为 `off`：只有渠道实现 `sendThinking` 且显式开启时才发。
+   * 开启后按 `intervalMs` 节流刷新同一条折叠消息，回合结束时收口。
+   */
+  thinkingDisplay?: {
+    mode?: 'off' | 'collapsed'
+    /** 累计到这个字数才发第一条，避免为两句思考多开一条消息。 */
+    minChars?: number
+    /** 两次刷新之间的最小间隔（毫秒）。 */
+    intervalMs?: number
+    /** 单条思考消息允许的最大字符数。 */
+    maxChars?: number
+  }
 }

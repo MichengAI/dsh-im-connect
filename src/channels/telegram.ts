@@ -3,12 +3,13 @@ import { Agent, ProxyAgent, type Dispatcher } from 'undici'
 import { DeliveryRejected } from '../engine/deferred-delivery.js'
 import { notice } from '../engine/command-locale.js'
 import { diagnosticJson, DiagnosticError, probe, requireDiagnostic } from './diagnostics.js'
-import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream } from '../engine/types.js'
+import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream, ThinkingOptions } from '../engine/types.js'
 import { fileForm, fileRequest } from './file-send.js'
 import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
 import { retryTelegram } from './telegram-retry.js'
+import { renderThinkingBlock } from './thinking-block.js'
 
 export interface TelegramConfig {
   token?: string
@@ -197,6 +198,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   // 每个聊天当前还没收口的那条回复消息（见 beginReply）：中途重新开流时复用它，不再另发一条。
   const openReplies = new Map<string, OpenReply>()
   const openingReplies = new Map<string, object>()
+  /** 每个聊天当前回合的思考折叠消息；同一回合就地编辑，收口后释放。 */
+  const openThinking = new Map<string, { messageId?: number; last?: string; chain: Promise<void> }>()
 
   function richUnsupported(error: unknown): boolean {
     const status = Number((error as { status?: number } | undefined)?.status)
@@ -269,6 +272,49 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     return ['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)
       ? retryTelegram(request, { signal: lifecycle?.signal, method, log, edit: method === 'editMessageText' })
       : request()
+  }
+
+  /**
+   * 把思考过程发成一条可折叠消息：首次新建，之后编辑同一条，`final` 收口并释放。
+   * 旧版 Bot API 不认 expandable blockquote 时退回纯文本，避免整段思考丢失。
+   */
+  async function publishThinking(chatId: string, text: string, options?: ThinkingOptions): Promise<void> {
+    const route = parseTelegramChatId(chatId)
+    const threadParam = route.threadId !== undefined ? { message_thread_id: route.threadId } : {}
+    const label = options?.label ?? (options?.final === true ? '🧠 思考过程' : '🧠 思考中…')
+    const block = renderThinkingBlock({ label, text, maxChars: options?.maxChars, expandable: options?.expandable })
+    if (!block.plain.trim()) return
+    const key = chatId
+    const state = openThinking.get(key) ?? { chain: Promise.resolve() }
+    openThinking.set(key, state)
+    state.chain = state.chain.then(async () => {
+      try {
+        if (block.html === state.last) return
+        if (state.messageId === undefined) {
+          let text = block.html
+          const sent = await api<{ message_id: number }>('sendMessage', {
+            chat_id: route.chatId, ...threadParam, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true },
+          }).catch(async (error: unknown) => {
+            if (![400, 404].includes(Number((error as { status?: number }).status))) throw error
+            text = block.plain
+            return await api<{ message_id: number }>('sendMessage', { chat_id: route.chatId, ...threadParam, text })
+          })
+          state.messageId = sent?.message_id
+          state.last = text
+          return
+        }
+        await api('editMessageText', {
+          chat_id: route.chatId, message_id: state.messageId, text: block.html, parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        })
+        state.last = block.html
+      } catch (error) {
+        log(`[telegram] 思考过程投递失败: ${error instanceof Error ? error.message : String(error)}`)
+      } finally {
+        if (options?.final === true && openThinking.get(key) === state) openThinking.delete(key)
+      }
+    })
+    return state.chain
   }
 
   function mentioned(message: NonNullable<TgUpdate['message']>): boolean {
@@ -703,6 +749,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         },
       }
     },
+    sendThinking: publishThinking,
     setMessageHandler(h) { handler = h },
     setTopicEditHandler(h) { onTopicEdited = h },
     async diagnose(signal) {
