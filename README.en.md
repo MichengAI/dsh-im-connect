@@ -271,6 +271,27 @@ Native configuration options are provided here. Their values are persisted in `c
   - **Channels Tab Preserved**: Filtering applies only to the official workspace tree. All channel sessions remain fully available and accessible at any time under the sidebar's **Channels** tab;
   - **Lightweight Pipeline Collaboration**: Implemented via the `NativeTabRegistry.sessionFilters` inter-plugin protocol without invasive host hijacking. Toggling takes effect immediately and interoperates smoothly with Automation and Archive Manager. Non-supporting host shells degrade gracefully with a one-time warning.
 
+### 4. Telegram group trigger policy (`mentionPolicy` / `freeChatGroups`)
+- **Default**: `addressed` — in groups the bot only reacts to an @mention, a reply to it, or a direct message.
+- **What it does**: to let a group chat with the bot without @mentioning it, relax the trigger in that account's `channels.json`:
+  ```json
+  {
+    "channels": {
+      "<account id>": {
+        "config": {
+          "mentionPolicy": "always",
+          "freeChatGroups": "-1001234567890, -5496760438"
+        }
+      }
+    }
+  }
+  ```
+  - `mentionPolicy: "always"`: every plain group message triggers the bot for this account;
+  - `freeChatGroups`: relax only the listed groups (chat ids separated by commas/whitespace); other groups keep the default;
+  - Both only decide whether a message reaches the agent — direct-message admission, tool approvals and command permissions are unchanged.
+- **Platform prerequisite**: with Telegram privacy mode the bot only receives mentions, replies and commands. Make the bot a group administrator, or run `setprivacy` → `Disable` in @BotFather, so plain group messages reach the plugin.
+- **UI**: configured through `channels.json` for now; the management panel does not expose these switches yet.
+
 ## Usage
 
 Open **Settings → IM Assistant**, select **Add account** under the target channel, then choose that account's workspace, model, permission, private-access mode, and send mode. To register a new workspace, click **Add workspace…** in the dropdown footer to invoke the system folder picker (manual path inputs are disallowed); hosts lacking native folder pickers show "This Host cannot create workspaces" (upgrade to one of the supported host releases listed in Requirements, or add via the host sidebar).
