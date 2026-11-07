@@ -77,6 +77,10 @@ interface StreamHint {
   text: boolean
   tool?: ToolStatusCall
   calls?: Map<string, ToolStatusCall>
+  /** 本回合累积的思考原文，供可折叠思考消息使用。 */
+  reasoningText?: string
+  /** 上一次投递思考消息的时间，用于节流。 */
+  thinkingAt?: number
 }
 
 /** 一次回复投递的收口状态，由 {@link Gateway.deliver} 就地填写。 */
@@ -1163,6 +1167,24 @@ export class ImEngine {
       if (!current) this.streamHints.set(streamKey, current = { reasoning: 0, shown: 0, tools: 0, text: false })
       return current
     }
+    // 思考过程的折叠消息：只在渠道实现 sendThinking 且显式开启时投递。
+    const publishThinking = (final: boolean): void => {
+      const state = this.streamHints.get(streamKey)
+      const text = state?.reasoningText
+      if (!text || typeof channel.sendThinking !== 'function') return
+      const display = this.config.thinkingDisplay
+      if (display?.mode !== 'collapsed') return
+      if (!final) {
+        if (text.length < (display.minChars ?? 120)) return
+        const now = Date.now()
+        if (state?.thinkingAt !== undefined && now - state.thinkingAt < (display.intervalMs ?? 2000)) return
+        if (state) state.thinkingAt = now
+      }
+      const chars = formatThinkingChars([...text].length)
+      const label = final ? notice(this.ctx, '🧠 思考过程 · {0} 字', chars) : notice(this.ctx, '🧠 思考中… · {0} 字', chars)
+      void channel.sendThinking(String(binding.chatId), text, { final, label, maxChars: display.maxChars })
+        ?.catch?.((error: unknown) => this.log(`[${channel.id}] 思考过程投递失败: ${error instanceof Error ? error.message : String(error)}`))
+    }
     if (event.type === 'tool/call' && statusStream) {
       const state = hint()
       // 同一步里可能并发多个工具调用：编号优先用宿主给的 step，
@@ -1202,10 +1224,14 @@ export class ImEngine {
       pushStatus(call.detail ? `${head} — ${call.detail}` : head)
       return
     }
-    if (event.type === 'assistant/chunk' && channel.beginReply) {
-      if (statusStream && chunk?.type === 'reasoning-delta' && typeof chunk.text === 'string') {
+    if (event.type === 'assistant/chunk') {
+      if (chunk?.type === 'reasoning-delta' && typeof chunk.text === 'string' && chunk.text.length > 0) {
         const state = hint()
         state.reasoning += chunk.text.length
+        // 累积原文供折叠消息使用；状态行仍只显示体量。
+        state.reasoningText = (state.reasoningText ?? '') + chunk.text
+        publishThinking(false)
+        if (!statusStream) return
         // 先立刻亮出「思考中」，之后每 200 字刷一次体量，
         // 别把 Telegram 的编辑配额花在个位数变化上。
         if (state.shown === 0) {
@@ -1217,7 +1243,7 @@ export class ImEngine {
         }
         return
       }
-      if (isAssistantTextDelta(chunk)) {
+      if (isAssistantTextDelta(chunk) && channel.beginReply) {
         const state = hint()
         // 正文一到就撤掉状态行，聊天里只剩正在生长的答案。
         // 只有状态消息已经存在时才需要撤，否则会为一次空状态多开一条消息。
@@ -1238,6 +1264,8 @@ export class ImEngine {
       return
     }
     if (event.type === 'turn/end') {
+      // 先把最后一段思考写进折叠消息，再释放本回合的中间态。
+      publishThinking(true)
       this.streamHints.delete(streamKey)
       const reason = (event.data as { reason?: { kind?: string; error?: { message?: string } } } | undefined)?.reason
       this.log(`[${channel.id}] 回合结束 ${sessionId}: ${reason?.kind ?? 'ok'}`)

@@ -41,6 +41,13 @@ export interface PluginConfig {
   segmentDelayMinSecs?: number
   /** 相邻两条分段消息之间随机间隔的上界（秒）。 */
   segmentDelayMaxSecs?: number
+  /** 思考过程折叠消息；缺省关闭，只有渠道实现 sendThinking 时才生效。 */
+  thinkingDisplay?: {
+    mode?: 'off' | 'collapsed'
+    minChars?: number
+    intervalMs?: number
+    maxChars?: number
+  }
   updater?: boolean
   onlineUpdate?: boolean
 }
@@ -57,6 +64,12 @@ export const Config: Schema<PluginConfig> = Schema.object({
   segmentMarker: Schema.string().default('<<<MSG>>>').description('分段回复的分隔标记，必须独占一行。'),
   segmentDelayMinSecs: Schema.number().default(1).description('相邻两条分段消息之间随机间隔的下界（秒）。'),
   segmentDelayMaxSecs: Schema.number().default(2).description('相邻两条分段消息之间随机间隔的上界（秒）。'),
+  thinkingDisplay: Schema.object({
+    mode: Schema.union(['off', 'collapsed']).default('off').description('思考过程投递：off 关闭，collapsed 发成可折叠消息。'),
+    minChars: Schema.number().default(120).description('累计到这个字数才发第一条思考消息。'),
+    intervalMs: Schema.number().default(2000).description('两次思考消息刷新之间的最小间隔（毫秒）。'),
+    maxChars: Schema.number().default(3500).description('单条思考消息允许的最大字符数。'),
+  }).description('思考过程折叠消息；需要渠道实现 sendThinking（目前为 Telegram）。'),
   updater: Schema.boolean(),
   onlineUpdate: Schema.boolean(),
 })
@@ -88,6 +101,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     segmentMarker: config.segmentMarker,
     segmentDelayMinSecs: config.segmentDelayMinSecs,
     segmentDelayMaxSecs: config.segmentDelayMaxSecs,
+    thinkingDisplay: config.thinkingDisplay,
   }
 
   const applyStarted = Date.now()

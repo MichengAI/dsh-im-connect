@@ -50,6 +50,8 @@ export const commandEnglish = {
   "第 {0} 步": "Step {0}",
   "🧠 思考中…": "🧠 Thinking…",
   "🧠 思考中… {0} 字": "🧠 Thinking… {0} chars",
+  "🧠 思考中… · {0} 字": "🧠 Thinking… · {0} chars",
+  "🧠 思考过程 · {0} 字": "🧠 Thought process · {0} chars",
   "也可使用 /reasoning id:等级ID；序号 15 分钟内有效。": "You can also use /reasoning id:effort-ID. List numbers are valid for 15 minutes.",
   "用法：/menu [sessions|workspaces|models|presets|reasoning] [页码]": "Usage: /menu [sessions|workspaces|models|presets|reasoning] [page]",
   "选择已过期，或会话、模型已变化。请发送 /reasoning 重新选择。": "This selection expired, or the session or model changed. Send /reasoning to choose again.",
