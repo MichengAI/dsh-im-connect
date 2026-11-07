@@ -283,7 +283,11 @@ Native configuration options are provided here. Their values are persisted in `c
     maxChars: 3500    # per-message cap; longer text is truncated and noted
   ```
 - **Channel support**: a channel must implement `sendThinking`; Telegram is the only implementation today, other channels ignore the setting and keep the existing status line.
-- **Boundaries**: collapsing only affects presentation — authorization, approvals and delivery semantics are unchanged; over-long content is truncated while the full reasoning stays in the web session.
+- **Boundaries and privacy**: collapsing is not access control; everyone who can read the group message can expand the reasoning. Enable only where sharing reasoning is intentional. Thinking is not counted as final-answer delivery or included in automatic recovery.
+- **Resources and lifecycle**: off/unsupported channels retain no raw reasoning. When enabled, each turn retains at most a 4096 UTF-16-unit prefix plus a scalar character count. Pending refreshes coalesce to the latest snapshot; cancellation, rebinding, muting, unloading and turn replacement prevent stale output.
+- **Ranges**: `minChars` 0–4096 (also applied on final), `intervalMs` 1000–60000, `maxChars` 200–4096. Finite out-of-range values are clamped, nonfinite values use defaults. HTML escaping, labels, wrappers and truncation notes all fit the budget without splitting emoji surrogate pairs.
+- **Fallback**: only a definite HTML entity rejection switches to plain text, which persists for later edits in that turn. Unknown network outcomes, authentication failures and rate limits do not trigger a format-switch resend.
+- **Migration**: the old local `showReasoning` patch is not migrated automatically; explicitly choose `thinkingDisplay.mode: collapsed`. Consult the web session for omitted reasoning if retained by the host. Configuration is currently plugin-wide; the account UI has no independent toggle.
 
 ## Usage
 

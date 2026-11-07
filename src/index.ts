@@ -42,12 +42,7 @@ export interface PluginConfig {
   /** 相邻两条分段消息之间随机间隔的上界（秒）。 */
   segmentDelayMaxSecs?: number
   /** 思考过程折叠消息；缺省关闭，只有渠道实现 sendThinking 时才生效。 */
-  thinkingDisplay?: {
-    mode?: 'off' | 'collapsed'
-    minChars?: number
-    intervalMs?: number
-    maxChars?: number
-  }
+  thinkingDisplay?: EngineConfig['thinkingDisplay']
   updater?: boolean
   onlineUpdate?: boolean
 }

@@ -198,8 +198,30 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   // 每个聊天当前还没收口的那条回复消息（见 beginReply）：中途重新开流时复用它，不再另发一条。
   const openReplies = new Map<string, OpenReply>()
   const openingReplies = new Map<string, object>()
-  /** 每个聊天当前回合的思考折叠消息；同一回合就地编辑，收口后释放。 */
-  const openThinking = new Map<string, { messageId?: number; last?: string; chain: Promise<void> }>()
+  interface ThinkingState {
+    messageId?: number
+    last?: string
+    plain: boolean
+    sealed: boolean
+    failed?: unknown
+    scope: AbortController
+    pending?: { text: string; options?: ThinkingOptions }
+    running?: Promise<void>
+    guard: { signal: AbortSignal; isCurrent?: () => boolean }
+    detach: () => void
+  }
+  // Explicit turn identity, not the chat's most recent message. Keep only the latest pending snapshot.
+  const openThinking = new Map<string, ThinkingState>()
+  const activeThinking = new Set<ThinkingState>()
+  function clearThinking(): void {
+    for (const state of activeThinking) {
+      state.pending = undefined
+      state.scope.abort()
+      state.detach()
+    }
+    activeThinking.clear()
+    openThinking.clear()
+  }
 
   function richUnsupported(error: unknown): boolean {
     const status = Number((error as { status?: number } | undefined)?.status)
@@ -257,64 +279,127 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     return data.result
   }
 
-  async function api<T>(method: string, body: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
+  async function api<T>(method: string, body: Record<string, unknown>, timeoutMs = 30_000, guard?: { signal: AbortSignal; isCurrent?: () => boolean }): Promise<T> {
     if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
+    const signals = [lifecycle?.signal, guard?.signal].filter((signal): signal is AbortSignal => signal !== undefined)
+    const scope = signals.length ? AbortSignal.any(signals) : undefined
     const request = async (signal?: AbortSignal) => {
-      if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
+      if (stopped || guard?.isCurrent?.() === false) throw new DOMException('Telegram delivery canceled', 'AbortError')
+      scope?.throwIfAborted()
       if (['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)) checkCooldown(body.chat_id)
       const res = await fetchTelegram(`${API}/bot${token}/${method}`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-        redirect: 'error', signal: timeoutSignal(timeoutMs, signal ?? lifecycle?.signal),
+        redirect: 'error', signal: timeoutSignal(timeoutMs, signal ?? scope),
       })
       return readApiResult<T>(method, res, body.chat_id)
     }
     // Retry delivery, never task execution, polling, topic creation or unrelated mutations.
     return ['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)
-      ? retryTelegram(request, { signal: lifecycle?.signal, method, log, edit: method === 'editMessageText' })
+      ? retryTelegram(request, { signal: scope, method, log, edit: method === 'editMessageText' })
       : request()
   }
 
-  /**
-   * 把思考过程发成一条可折叠消息：首次新建，之后编辑同一条，`final` 收口并释放。
-   * 旧版 Bot API 不认 expandable blockquote 时退回纯文本，避免整段思考丢失。
-   */
+  /** Seal finals synchronously; a slow final can never lend its message to the next turn. */
   async function publishThinking(chatId: string, text: string, options?: ThinkingOptions): Promise<void> {
-    const route = parseTelegramChatId(chatId)
-    const threadParam = route.threadId !== undefined ? { message_thread_id: route.threadId } : {}
-    const label = options?.label ?? (options?.final === true ? '🧠 思考过程' : '🧠 思考中…')
-    const block = renderThinkingBlock({ label, text, maxChars: options?.maxChars, expandable: options?.expandable })
-    if (!block.plain.trim()) return
-    const key = chatId
-    const state = openThinking.get(key) ?? { chain: Promise.resolve() }
-    openThinking.set(key, state)
-    state.chain = state.chain.then(async () => {
-      try {
-        if (block.html === state.last) return
-        if (state.messageId === undefined) {
-          let text = block.html
-          const sent = await api<{ message_id: number }>('sendMessage', {
-            chat_id: route.chatId, ...threadParam, text, parse_mode: 'HTML', link_preview_options: { is_disabled: true },
-          }).catch(async (error: unknown) => {
-            if (![400, 404].includes(Number((error as { status?: number }).status))) throw error
-            text = block.plain
-            return await api<{ message_id: number }>('sendMessage', { chat_id: route.chatId, ...threadParam, text })
-          })
-          state.messageId = sent?.message_id
-          state.last = text
-          return
-        }
-        await api('editMessageText', {
-          chat_id: route.chatId, message_id: state.messageId, text: block.html, parse_mode: 'HTML',
-          link_preview_options: { is_disabled: true },
-        })
-        state.last = block.html
-      } catch (error) {
-        log(`[telegram] 思考过程投递失败: ${error instanceof Error ? error.message : String(error)}`)
-      } finally {
-        if (options?.final === true && openThinking.get(key) === state) openThinking.delete(key)
+    if (stopped || options?.signal?.aborted || options?.isCurrent?.() === false) return
+    const key = JSON.stringify([chatId, options?.streamId ?? 'legacy'])
+    let state = openThinking.get(key)
+    if (!state) {
+      if (!text.trim()) return
+      const scope = new AbortController()
+      const signal = options?.signal ? AbortSignal.any([scope.signal, options.signal]) : scope.signal
+      state = { plain: false, sealed: false, scope, guard: { signal, isCurrent: options?.isCurrent }, detach: () => {} }
+      const current = state
+      const cancel = () => {
+        current.pending = undefined
+        if (openThinking.get(key) === current) openThinking.delete(key)
+        activeThinking.delete(current)
+        current.detach()
       }
-    })
-    return state.chain
+      current.detach = () => signal.removeEventListener('abort', cancel)
+      signal.addEventListener('abort', cancel, { once: true })
+      openThinking.set(key, current)
+      activeThinking.add(current)
+    }
+    if (state.failed) {
+      if (options?.final) {
+        openThinking.delete(key)
+        activeThinking.delete(state)
+        state.detach()
+      }
+      throw state.failed
+    }
+    state.pending = { text, options }
+    if (options?.final === true) {
+      state.sealed = true
+      if (openThinking.get(key) === state) openThinking.delete(key)
+    }
+    if (!state.running) {
+      const current = state
+      const drain = (): Promise<void> => current.running = Promise.resolve().then(async () => {
+        while (current.pending) {
+          const next = current.pending
+          current.pending = undefined
+          current.guard.signal.throwIfAborted()
+          if (current.guard.isCurrent?.() === false) break
+          const label = next.options?.label ?? (next.options?.final ? '🧠 思考过程' : '🧠 思考中…')
+          const block = renderThinkingBlock({ label, text: next.text, maxChars: next.options?.maxChars, expandable: next.options?.expandable, truncated: next.options?.truncated })
+          if (!block.plain) continue
+          const route = parseTelegramChatId(chatId)
+          const method = current.messageId === undefined ? 'sendMessage' : 'editMessageText'
+          const send = async () => {
+            const body = {
+              chat_id: route.chatId,
+              ...(current.messageId === undefined
+                ? (route.threadId === undefined ? {} : { message_thread_id: route.threadId })
+                : { message_id: current.messageId }),
+              text: current.plain ? block.plain : block.html,
+              ...(!current.plain ? { parse_mode: 'HTML', link_preview_options: { is_disabled: true } } : {}),
+            }
+            if (body.text === current.last) return
+            try {
+              const result = await api<{ message_id: number }>(method, body, 30_000, current.guard)
+              if (current.messageId === undefined) {
+                if (!Number.isSafeInteger(result?.message_id)) throw new Error('telegram thinking receipt missing')
+                current.messageId = result.message_id
+              }
+            } catch (error) {
+              if (!(method === 'editMessageText' && Number((error as { status?: number })?.status) === 400
+                && /message is not modified/i.test(error instanceof Error ? error.message : ''))) throw error
+            }
+            current.last = body.text
+          }
+          try { await send() }
+          catch (error) {
+            // Only a definite HTML parse rejection permits format fallback, never unknown delivery.
+            const rejected = error as { status?: number; rejected?: boolean }
+            if (current.plain || rejected?.rejected !== true || Number(rejected.status) !== 400
+              || !/can't parse entities|unsupported start tag|unsupported.*blockquote/i.test(error instanceof Error ? error.message : '')) throw error
+            current.plain = true
+            await send()
+          }
+        }
+      }).catch(error => {
+        current.failed = error
+        current.pending = undefined
+        // Keep a failed unsealed handle until final/cancel so later deltas cannot replay a creation.
+        throw error
+      }).finally(() => {
+        current.running = undefined
+        const canceled = current.guard.signal.aborted || current.guard.isCurrent?.() === false
+        // A publisher can enqueue after the loop exits but before this finally.
+        // Restart atomically on this same state, even when a final already sealed it.
+        // Returning the new worker also keeps existing callers waiting for its drain.
+        if (!current.failed && !canceled && current.pending) return drain()
+        if (current.sealed || canceled) {
+          if (openThinking.get(key) === current) openThinking.delete(key)
+          activeThinking.delete(current)
+          current.detach()
+        }
+      })
+      drain()
+    }
+    return state.running
   }
 
   function mentioned(message: NonNullable<TgUpdate['message']>): boolean {
@@ -478,6 +563,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     replyStatus: true,
     interactionRetryRequiresDefinite: true,
     async start() {
+      clearThinking()
       albumAccess.clear()
       rateLimitedUntil.clear()
       lifecycle?.abort()
@@ -495,6 +581,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     },
     async stop() {
       stopped = true
+      clearThinking()
       albumAccess.clear()
       lifecycle?.abort()
       await pollTask?.catch(() => undefined)
