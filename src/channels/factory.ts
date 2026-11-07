@@ -9,6 +9,7 @@ import { createWeixinChannel } from './weixin.js'
 import { createQqChannel } from './qq.js'
 import { createSlackChannel } from './slack.js'
 import { parseAdditionalImageHosts } from './image-host-policy.js'
+import { parseChatIdList } from './mention-policy.js'
 
 export function createChannelAdapter(
   id: ChannelId,
@@ -21,8 +22,19 @@ export function createChannelAdapter(
   const imageOptions = ['qq', 'wecom', 'dingtalk'].includes(id)
     ? { additionalImageHosts: parseAdditionalImageHosts(config.additionalImageHosts) } : {}
   switch (id) {
-    case 'telegram':
-      adapter = createTelegramChannel({ token: config.token, stateDir, host: options?.host, proxyMode: config.proxyMode as 'inherit' | 'direct' | 'custom' | undefined, proxyUrl: config.proxyUrl }, log); break
+    case 'telegram': {
+      const freeChatGroups = parseChatIdList(config.freeChatGroups)
+      adapter = createTelegramChannel({
+        token: config.token,
+        stateDir,
+        host: options?.host,
+        proxyMode: config.proxyMode as 'inherit' | 'direct' | 'custom' | undefined,
+        proxyUrl: config.proxyUrl,
+        mentionPolicy: config.mentionPolicy === 'always' ? 'always' : undefined,
+        ...(freeChatGroups.length > 0 ? { freeChatGroups } : {}),
+      }, log)
+      break
+    }
     case 'discord':
       adapter = createDiscordChannel({
         token: config.token,

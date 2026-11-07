@@ -9,6 +9,7 @@ import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
 import { retryTelegram } from './telegram-retry.js'
+import { isInboundAddressed, type MentionPolicy } from './mention-policy.js'
 
 export interface TelegramConfig {
   token?: string
@@ -16,6 +17,10 @@ export interface TelegramConfig {
   host?: { get(name: string): unknown }
   proxyMode?: 'inherit' | 'direct' | 'custom'
   proxyUrl?: string
+  /** 群聊触发策略：默认 `addressed`（私聊 / 回复 bot / @bot），`always` 表示普通群消息也触发。 */
+  mentionPolicy?: MentionPolicy
+  /** 只对这些群放宽触发（群 id 字符串）；未列出的群保持默认策略。 */
+  freeChatGroups?: readonly string[]
 }
 
 interface TgUpdate {
@@ -355,9 +360,14 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
             continue
           }
           const direct = message.chat.type === 'private'
-          let addressed = direct
-            || String(message.reply_to_message?.from?.id ?? '') === botId
-            || mentioned(message)
+          let addressed = isInboundAddressed({
+            direct,
+            chatId: message.chat.id,
+            replyToBot: String(message.reply_to_message?.from?.id ?? '') === botId,
+            mentioned: mentioned(message),
+            policy: config.mentionPolicy,
+            freeChatGroups: config.freeChatGroups,
+          })
           let deliveries = [update]
           if (!direct && message.media_group_id && message.from?.id) {
             const now = Date.now()
