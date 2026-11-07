@@ -3,6 +3,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import Schema from '@deepseek-ai/schemastery';
+import type { EngineConfig } from './engine/types.js';
 import type { TopicMode } from './engine/topic-title.js';
 export declare const name = "dsh-im-connect";
 export declare const inject: string[];
@@ -22,6 +23,8 @@ export interface PluginConfig {
     segmentDelayMinSecs?: number;
     /** 相邻两条分段消息之间随机间隔的上界（秒）。 */
     segmentDelayMaxSecs?: number;
+    /** 思考过程折叠消息；缺省关闭，只有渠道实现 sendThinking 时才生效。 */
+    thinkingDisplay?: EngineConfig['thinkingDisplay'];
     updater?: boolean;
     onlineUpdate?: boolean;
 }

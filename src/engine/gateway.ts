@@ -1,6 +1,7 @@
 import { DeferredDelivery, DeliveryRejected, DeliveryUnavailable, type DeferredEntry } from './deferred-delivery.js'
 import { ChoiceSendError } from './choice-delivery.js'
 import { sleepWithSignal } from './abort.js'
+import { ThinkingDisplayTracker, normalizeThinkingDisplay, type ThinkingDisplayTarget } from './thinking-display.js'
 import { assistantText } from './assistant-text.js'
 import { readDeliveryHistory } from './delivery-history.js'
 import { FileInputError, filePromptParts } from './file-input.js'
@@ -166,6 +167,9 @@ export class ImEngine {
   private readonly queues = new Map<string, Promise<void>>()
   private readonly interactionQueues = new Map<string, Promise<void>>()
   private readonly streams = new ReplyStreamHub()
+  private readonly thinking = new ThinkingDisplayTracker(error => {
+    this.log(`[im-thinking] 思考过程投递失败: ${error instanceof Error ? error.name : 'Error'}`)
+  })
   /** 每个聊天当前回合的中间态计数：思考字数、工具步数、正文是否已开流。 */
   private readonly streamHints = new Map<string, StreamHint>()
   private readonly disposeEvents: Array<() => void> = []
@@ -216,7 +220,10 @@ export class ImEngine {
     this.choices = new ChoiceStore(log)
     // DSH 的真实 agents 类型比路由器所需的最小会话契约更严格，在此处完成边界适配。
     this.router = new SessionRouter(ctx as unknown as ConstructorParameters<typeof SessionRouter>[0], store, config, log, resolveConfig, {
-      onDeliveryStopped: binding => this.streams.reset(`${binding.channelId}:${binding.chatId}`, binding.sessionId),
+      onDeliveryStopped: binding => {
+        this.streams.reset(`${binding.channelId}:${binding.chatId}`, binding.sessionId)
+        this.thinking.cancelSession(binding.sessionId)
+      },
     })
     this.fileDelivery = new FileDelivery(ctx as unknown as { get(name: string): unknown }, log)
     this.chatCommands = new ChatCommands(ctx as unknown as { get(name: string): unknown }, this.router, id => this.questions.has(id) || this.broker.has(id), (id, msg) => { if (msg.userId) this.sessionActors.set(id, msg.userId) }, (channel, msg, text, choices, session, allowNumber = true) => this.choices.show(channel, msg, text, choices, session, undefined,
@@ -372,6 +379,7 @@ export class ImEngine {
 
   dispose(): void {
     this.disposed = true
+    this.thinking.dispose()
     if (this.deferredTimer) clearInterval(this.deferredTimer)
     this.recoveryScope.abort()
     this.choices.clear()
@@ -413,6 +421,7 @@ export class ImEngine {
   }
 
   private cancelSessionInteractions(sessionId: string, reason?: unknown): void {
+    this.thinking.cancelSession(sessionId)
     this.progress.cancel(undefined, sessionId)
     this.deferred.release(sessionId)
     this.observedTurns.delete(sessionId)
@@ -751,6 +760,7 @@ export class ImEngine {
   }
 
   private cancelInputs(channelId: string): void {
+    this.thinking.cancelChannel(channelId)
     if (!this.disposed) this.deferred.block(channelId)
     this.choices.clear(channelId)
     this.progress.cancel(channelId)
@@ -1062,8 +1072,11 @@ export class ImEngine {
   private onSessionEvent(session: DeliverySession, event: { type?: string; surfaceOp?: unknown; data?: any }): Promise<void> {
     const id = String(session.id ?? '')
     if (event.type === 'turn/start' && Number.isSafeInteger(event.data?.turn)) {
-      if (this.observedTurns.size >= 1024) this.observedTurns.delete(this.observedTurns.keys().next().value!)
-      this.observedTurns.set(id, event.data.turn)
+      const previous = this.observedTurns.get(id)
+      if (previous === undefined || event.data.turn >= previous) {
+        if (this.observedTurns.size >= 1024) this.observedTurns.delete(this.observedTurns.keys().next().value!)
+        this.observedTurns.set(id, event.data.turn)
+      }
     }
     if (event.type === 'user/message' && this.observedTurns.has(id)) this.deferred.claim(id, this.observedTurns.get(id)!, event.data?.source?.rpcId ?? event.data?.id ?? '')
     const turn = event.data?.turn ?? this.observedTurns.get(id)
@@ -1074,17 +1087,25 @@ export class ImEngine {
     if (event.type === 'turn/start' && binding) this.streamHints.delete(`${binding.channelId}:${binding.chatId}`)
     const statusEvent = !!channel?.beginReply && channel.replyStatus === true && ['tool/call', 'tool/result'].includes(event.type ?? '')
     const deliveryEvent = statusEvent || ['assistant/chunk', 'assistant/message', 'turn/end'].includes(event.type ?? '')
-    if (deliveryEvent && this.deferred.coldTurn(id, turn)) return Promise.resolve()
+    if (deliveryEvent && this.deferred.coldTurn(id, turn)) {
+      this.thinking.cancelTurn(id, turn)
+      return Promise.resolve()
+    }
     const tracked = this.deferred.turnEntries(id, turn)
     const unavailable = !!channel?.canDeliverDeferred && !channel.canDeliverDeferred()
     const invalid = tracked.some(entry => entry.status === 'blocked' || !this.validDelivery(entry))
     if (invalid) for (const entry of tracked) if (entry.status !== 'sent') this.deferred.patch(entry.id, { status: 'blocked' })
     const skip = (unavailable || invalid) && deliveryEvent
+    if (skip) this.thinking.cancelTurn(id, turn)
+    if (!binding || !channel || this.router.isMuted(id)) this.thinking.cancelSession(id)
     if (skip && statusEvent && binding) this.streams.discard(`${binding.channelId}:${binding.chatId}`, id)
     const trackedEnd = event.type === 'turn/end' && this.progress.hasTurn(id, event.data?.turn)
-    this.progress.event(id, event)
+    // Register the optional thinking final before progress closes its delivery list.
+    // Otherwise normal settlement makes the still-pending final look like a cold turn.
+    if (event.type !== 'turn/end') this.progress.event(id, event)
     const outcome: DeliveryOutcome = { ok: !skip, content: false }
     const work = skip ? Promise.resolve() : this.processSessionEvent(session, event, outcome, trackedEnd)
+    if (event.type === 'turn/end') this.progress.event(id, event)
     if (event.type === 'assistant/message' && event.surfaceOp === 'append') {
       this.progress.delivery(id, event.data?.turn, work.then(
         () => !outcome.ok ? (outcome.definite ? 'rejected' as const : false) : outcome.content ? true : undefined,
@@ -1105,6 +1126,7 @@ export class ImEngine {
       type?: string
       time?: number
       data?: {
+        turn?: number
         message?: { content?: Array<{ type?: string; text?: string }>; toolCallId?: string; isError?: boolean }
         chunk?: { type?: string; text?: string }
         /** tool/call：工具名、原始参数，以及宿主给的步骤号（同一步的并发调用共用一个步骤号）。 */
@@ -1163,6 +1185,23 @@ export class ImEngine {
       if (!current) this.streamHints.set(streamKey, current = { reasoning: 0, shown: 0, tools: 0, text: false })
       return current
     }
+    const thinkingTurn = event.data?.turn ?? this.observedTurns.get(sessionId)
+    const thinkingTarget: ThinkingDisplayTarget = {
+      key: JSON.stringify([streamKey, sessionId]), sessionId, channel, chatId: binding.chatId,
+      turn: thinkingTurn, config: this.resolveConfig(channel.id).thinkingDisplay,
+      isCurrent: () => {
+        if (!stillDeliverable() || normalizeThinkingDisplay(this.resolveConfig(channel.id).thinkingDisplay).mode !== 'collapsed'
+          || (channel.canDeliverDeferred && !channel.canDeliverDeferred())
+          || this.deferred.coldTurn(sessionId, thinkingTurn)) return false
+        const observed = this.observedTurns.get(sessionId)
+        if (thinkingTurn !== undefined && observed !== undefined && thinkingTurn !== observed) return false
+        return !this.deferred.turnEntries(sessionId, thinkingTurn).some(entry => entry.status === 'blocked' || !this.validDelivery(entry))
+      },
+      label: (final, total) => final
+        ? notice(this.ctx, '🧠 思考过程 · {0} 字', formatThinkingChars(total))
+        : notice(this.ctx, '🧠 思考中… · {0} 字', formatThinkingChars(total)),
+    }
+    if (event.type === 'turn/start') this.thinking.start(thinkingTarget)
     if (event.type === 'tool/call' && statusStream) {
       const state = hint()
       // 同一步里可能并发多个工具调用：编号优先用宿主给的 step，
@@ -1202,10 +1241,12 @@ export class ImEngine {
       pushStatus(call.detail ? `${head} — ${call.detail}` : head)
       return
     }
-    if (event.type === 'assistant/chunk' && channel.beginReply) {
-      if (statusStream && chunk?.type === 'reasoning-delta' && typeof chunk.text === 'string') {
+    if (event.type === 'assistant/chunk') {
+      if (chunk?.type === 'reasoning-delta' && typeof chunk.text === 'string' && chunk.text.length > 0) {
         const state = hint()
         state.reasoning += chunk.text.length
+        this.thinking.append(thinkingTarget, chunk.text)
+        if (!statusStream) return
         // 先立刻亮出「思考中」，之后每 200 字刷一次体量，
         // 别把 Telegram 的编辑配额花在个位数变化上。
         if (state.shown === 0) {
@@ -1217,7 +1258,7 @@ export class ImEngine {
         }
         return
       }
-      if (isAssistantTextDelta(chunk)) {
+      if (isAssistantTextDelta(chunk) && channel.beginReply) {
         const state = hint()
         // 正文一到就撤掉状态行，聊天里只剩正在生长的答案。
         // 只有状态消息已经存在时才需要撤，否则会为一次空状态多开一条消息。
@@ -1238,6 +1279,9 @@ export class ImEngine {
       return
     }
     if (event.type === 'turn/end') {
+      // 先把最后一段思考写进折叠消息，再释放本回合的中间态。
+      const thinkingFinal = this.thinking.finish(thinkingTarget)
+      this.progress.delivery(sessionId, thinkingTurn, thinkingFinal.then(() => undefined))
       this.streamHints.delete(streamKey)
       const reason = (event.data as { reason?: { kind?: string; error?: { message?: string } } } | undefined)?.reason
       this.log(`[${channel.id}] 回合结束 ${sessionId}: ${reason?.kind ?? 'ok'}`)

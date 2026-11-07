@@ -271,6 +271,24 @@ Native configuration options are provided here. Their values are persisted in `c
   - **Channels Tab Preserved**: Filtering applies only to the official workspace tree. All channel sessions remain fully available and accessible at any time under the sidebar's **Channels** tab;
   - **Lightweight Pipeline Collaboration**: Implemented via the `NativeTabRegistry.sessionFilters` inter-plugin protocol without invasive host hijacking. Toggling takes effect immediately and interoperates smoothly with Automation and Archive Manager. Non-supporting host shells degrade gracefully with a one-time warning.
 
+### Collapsible thinking message (`thinkingDisplay`)
+- **Default**: off (`mode: 'off'`).
+- **What it does**: when enabled, the model's reasoning is sent as a separate Telegram collapsible quote (`<blockquote expandable>`) — about three lines collapsed, tap "show more" to expand. The same message is edited in place during the turn and retitled "🧠 Thought process" when the turn ends.
+- **Example** (plugin config slot):
+  ```yaml
+  thinkingDisplay:
+    mode: collapsed   # off | collapsed
+    minChars: 120     # only send once this many characters accumulated
+    intervalMs: 2000  # minimum interval between refreshes
+    maxChars: 3500    # per-message cap; longer text is truncated and noted
+  ```
+- **Channel support**: a channel must implement `sendThinking`; Telegram is the only implementation today, other channels ignore the setting and keep the existing status line.
+- **Boundaries and privacy**: collapsing is not access control; everyone who can read the group message can expand the reasoning. Enable only where sharing reasoning is intentional. Thinking is not counted as final-answer delivery or included in automatic recovery.
+- **Resources and lifecycle**: off/unsupported channels retain no raw reasoning. When enabled, each turn retains at most a 4096 UTF-16-unit prefix plus a scalar character count. Pending refreshes coalesce to the latest snapshot; cancellation, rebinding, muting, unloading and turn replacement prevent stale output.
+- **Ranges**: `minChars` 0–4096 (also applied on final), `intervalMs` 1000–60000, `maxChars` 200–4096. Finite out-of-range values are clamped, nonfinite values use defaults. HTML escaping, labels, wrappers and truncation notes all fit the budget without splitting emoji surrogate pairs.
+- **Fallback**: only a definite HTML entity rejection switches to plain text, which persists for later edits in that turn. Unknown network outcomes, authentication failures and rate limits do not trigger a format-switch resend.
+- **Migration**: the old local `showReasoning` patch is not migrated automatically; explicitly choose `thinkingDisplay.mode: collapsed`. Consult the web session for omitted reasoning if retained by the host. Configuration is currently plugin-wide; the account UI has no independent toggle.
+
 ## Usage
 
 Open **Settings → IM Assistant**, select **Add account** under the target channel, then choose that account's workspace, model, permission, private-access mode, and send mode. To register a new workspace, click **Add workspace…** in the dropdown footer to invoke the system folder picker (manual path inputs are disallowed); hosts lacking native folder pickers show "This Host cannot create workspaces" (upgrade to one of the supported host releases listed in Requirements, or add via the host sidebar).
