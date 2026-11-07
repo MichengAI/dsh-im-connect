@@ -97,6 +97,14 @@ export interface ChannelAdapter {
 
 /** 思考过程消息的渲染参数；标题由引擎按宿主语言生成。 */
 export interface ThinkingOptions {
+  /** 本次输出的唯一身份；引擎为每个会话回合生成，不得跨回合复用。 */
+  streamId?: string
+  /** 会话停止、换绑、静音或渠道卸载时取消剩余投递。 */
+  signal?: AbortSignal
+  /** 每次实际请求（含重试）前重新检查当前绑定与投递许可。 */
+  isCurrent?: () => boolean
+  /** 引擎为限制内存已截断原文，渠道仍需显示截断说明。 */
+  truncated?: boolean
   /** 本回合的最后一次更新：标题改为「已完成」并释放句柄。 */
   final?: boolean
   /** 已本地化的标题行，例如「🧠 思考中… · 512 字」。 */

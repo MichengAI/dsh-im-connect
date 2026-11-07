@@ -27,6 +27,8 @@ export interface ThinkingBlockInput {
   maxChars?: number
   /** 渲染可折叠的块；默认 true。 */
   expandable?: boolean
+  /** 上游已因内存预算截断，仍应输出截断说明。 */
+  truncated?: boolean
 }
 
 export interface ThinkingBlock {
@@ -38,24 +40,49 @@ export interface ThinkingBlock {
   truncated: boolean
 }
 
-/**
- * 把思考原文渲染成一条折叠消息。
- *
- * 截断按「转义后的长度」收敛：`& < >` 转义会变长，先按原文比例收敛再校验，
- * 避免发出超过 4096 的消息被平台拒绝。
- */
+/** 只在 Unicode 码点边界截断，同时满足 HTML 与纯文本的 UTF-16 长度预算。 */
+function boundedPrefix(value: string, htmlBudget: number, plainBudget: number): string {
+  let end = 0
+  for (const char of value) {
+    const htmlLength = escapeTelegramHtml(char).length
+    if (htmlLength > htmlBudget || char.length > plainBudget) break
+    htmlBudget -= htmlLength
+    plainBudget -= char.length
+    end += char.length
+  }
+  return value.slice(0, end)
+}
+
+/** 把思考原文渲染成一条折叠消息，精确计入转义、标签与截断提示的长度。 */
 export function renderThinkingBlock(input: ThinkingBlockInput): ThinkingBlock {
-  const limit = Math.max(200, input.maxChars ?? DEFAULT_THINKING_MAX_CHARS)
+  const requested = typeof input.maxChars === 'number' && Number.isFinite(input.maxChars)
+    ? input.maxChars
+    : DEFAULT_THINKING_MAX_CHARS
+  const limit = Math.min(4096, Math.max(200, Math.floor(requested)))
   const raw = input.text.trim()
-  let body = raw
-  const fits = (): boolean => escapeTelegramHtml(input.label).length + escapeTelegramHtml(body).length + 64 <= limit
-  while (!fits() && body.length > 200) body = body.slice(0, Math.floor(body.length * 0.8))
-  const truncated = body.length < raw.length
+  if (!raw) return { html: '', plain: '', truncated: false }
+
+  const open = input.expandable === false ? '' : '<blockquote expandable>'
+  const close = input.expandable === false ? '' : '</blockquote>'
+  const htmlBudget = limit - 1 - open.length - close.length
+  const plainBudget = limit - 1
+  const htmlNoteLength = escapeTelegramHtml(TRUNCATED_NOTE).length
+  const plainNoteLength = 1 + TRUNCATED_NOTE.length
+  let label = boundedPrefix(input.label, htmlBudget, plainBudget)
+  let body = boundedPrefix(raw, htmlBudget - escapeTelegramHtml(label).length, plainBudget - label.length)
+  const truncated = input.truncated === true || label.length < input.label.length || body.length < raw.length
+  if (truncated) {
+    // 即使标题极长，也保留提示与至少一个正文码点的位置。
+    const firstChar = String.fromCodePoint(raw.codePointAt(0)!)
+    label = boundedPrefix(input.label,
+      htmlBudget - htmlNoteLength - escapeTelegramHtml(firstChar).length,
+      plainBudget - plainNoteLength - firstChar.length)
+    body = boundedPrefix(raw,
+      htmlBudget - escapeTelegramHtml(label).length - htmlNoteLength,
+      plainBudget - label.length - plainNoteLength)
+  }
   const note = truncated ? TRUNCATED_NOTE : ''
-  const escapedBody = `${escapeTelegramHtml(body)}${note ? escapeTelegramHtml(note) : ''}`
-  const html = input.expandable === false
-    ? `${escapeTelegramHtml(input.label)}\n${escapedBody}`
-    : `${escapeTelegramHtml(input.label)}\n<blockquote expandable>${escapedBody}</blockquote>`
-  const plain = `${input.label}\n${body}${note ? `\n${note}` : ''}`
+  const html = `${escapeTelegramHtml(label)}\n${open}${escapeTelegramHtml(body)}${escapeTelegramHtml(note)}${close}`
+  const plain = `${label}\n${body}${note ? `\n${note}` : ''}`
   return { html, plain, truncated }
 }

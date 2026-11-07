@@ -43,6 +43,8 @@ export declare const commandEnglish: {
     readonly "\u7B2C {0} \u6B65": "Step {0}";
     readonly "\uD83E\uDDE0 \u601D\u8003\u4E2D\u2026": "🧠 Thinking…";
     readonly "\uD83E\uDDE0 \u601D\u8003\u4E2D\u2026 {0} \u5B57": "🧠 Thinking… {0} chars";
+    readonly "\uD83E\uDDE0 \u601D\u8003\u4E2D\u2026 \u00B7 {0} \u5B57": "🧠 Thinking… · {0} chars";
+    readonly "\uD83E\uDDE0 \u601D\u8003\u8FC7\u7A0B \u00B7 {0} \u5B57": "🧠 Thought process · {0} chars";
     readonly "\u4E5F\u53EF\u4F7F\u7528 /reasoning id:\u7B49\u7EA7ID\uFF1B\u5E8F\u53F7 15 \u5206\u949F\u5185\u6709\u6548\u3002": "You can also use /reasoning id:effort-ID. List numbers are valid for 15 minutes.";
     readonly "\u7528\u6CD5\uFF1A/menu [sessions|workspaces|models|presets|reasoning] [\u9875\u7801]": "Usage: /menu [sessions|workspaces|models|presets|reasoning] [page]";
     readonly "\u9009\u62E9\u5DF2\u8FC7\u671F\uFF0C\u6216\u4F1A\u8BDD\u3001\u6A21\u578B\u5DF2\u53D8\u5316\u3002\u8BF7\u53D1\u9001 /reasoning \u91CD\u65B0\u9009\u62E9\u3002": "This selection expired, or the session or model changed. Send /reasoning to choose again.";
