@@ -1,4 +1,5 @@
 import type { ChannelAdapter } from '../engine/types.js';
+import { type MentionPolicy } from './mention-policy.js';
 export interface TelegramConfig {
     token?: string;
     stateDir?: string;
@@ -7,6 +8,10 @@ export interface TelegramConfig {
     };
     proxyMode?: 'inherit' | 'direct' | 'custom';
     proxyUrl?: string;
+    /** 群聊触发策略：默认 `addressed`（私聊 / 回复 bot / @bot），`always` 表示普通群消息也触发。 */
+    mentionPolicy?: MentionPolicy;
+    /** 只对这些群放宽触发（群 id 字符串）；未列出的群保持默认策略。 */
+    freeChatGroups?: readonly string[];
 }
 /**
  * 编码 Telegram 会话键：
