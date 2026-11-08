@@ -8,6 +8,11 @@ import type { EngineConfig, SendMode } from './engine/types.js';
 export declare const API_CLIENT_HEADER = "x-dsh-im-connect-client";
 type ChannelProxyMode = 'inherit' | 'direct' | 'custom';
 type ThinkingDisplayMode = 'off' | 'collapsed';
+/**
+ * 自动重连退避：指数增长并带 ±20% 抖动。
+ * 抖动是必要的——多个账号在同一轮宿主重载里同时失败时，不能让它们锁步重连。
+ */
+export declare function reconnectDelayMs(attempt: number, random?: () => number): number;
 interface ApiBodyReadResult {
     body: Record<string, unknown>;
     oversized: boolean;
@@ -144,6 +149,9 @@ export declare class ChannelManager {
     private readonly channelOperations;
     private apiDisposers;
     private disposed;
+    private readonly reconnectTimers;
+    private readonly reconnectAttempts;
+    private readonly starting;
     constructor(options: {
         ctx: Context;
         stateDir: string;
@@ -227,6 +235,17 @@ export declare class ChannelManager {
     private listModelCatalog;
     private startOne;
     private stopOne;
+    /**
+     * 启动失败后的自动重连：指数退避、带抖动，直到成功或账号被显式停止。
+     * 返回是否已排队重试，调用方据此决定给用户看的错误文案。
+     *
+     * 为什么不能只靠轮询循环里的 3s 重试：那只覆盖「已经连上之后」的抖动。
+     * 启动阶段的 getMe 只尝试一次，一次 fetch failed 就会让整个渠道永久停摆，
+     * 用户必须在设置页反复点「重新连接」——这正是本节要消灭的行为。
+     */
+    private scheduleReconnect;
+    private retryStart;
+    private cancelReconnect;
     private persistSecrets;
     private resolveSecrets;
     private migrateLegacyWeixinToken;
