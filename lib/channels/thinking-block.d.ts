@@ -32,4 +32,8 @@ export interface ThinkingBlock {
 }
 /** 把思考原文渲染成一条折叠消息，精确计入转义、标签与截断提示的长度。 */
 export declare function renderThinkingBlock(input: ThinkingBlockInput): ThinkingBlock;
+/** Custom-button preview: latest lines collapsed, chronological retained window expanded. */
+export declare function renderLatestThinkingBlock(input: ThinkingBlockInput & {
+    expanded?: boolean;
+}): ThinkingBlock;
 //# sourceMappingURL=thinking-block.d.ts.map

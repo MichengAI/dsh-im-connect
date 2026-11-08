@@ -34,6 +34,13 @@ export interface ThinkingDisplayTarget {
   label(final: boolean, totalChars: number): string
 }
 
+interface ViewIdentity {
+  sessionId: string
+  turn?: number
+  channelId: string
+  viewValid: boolean
+}
+
 interface Lifecycle {
   target: ThinkingDisplayTarget
   config: ThinkingDisplayConfig
@@ -53,7 +60,7 @@ export class ThinkingDisplayTracker {
   private readonly states = new Map<string, Lifecycle>()
   private generation = 0
   private readonly identity = crypto.randomUUID()
-  private readonly identities = new Map<string, { sessionId: string; turn?: number }>()
+  private readonly identities = new Map<string, ViewIdentity>()
 
   constructor(private readonly onError: (error: unknown) => void = () => {}, private readonly now = () => Date.now()) {}
 
@@ -63,8 +70,13 @@ export class ThinkingDisplayTracker {
       && old.turn !== undefined && target.turn < old.turn) return
     this.cancelKey(target.key)
     // Tombstones reject late frames after finalization without retaining raw text.
-    if (this.identities.size >= 1024 && !this.identities.has(target.key)) this.identities.delete(this.identities.keys().next().value!)
-    this.identities.set(target.key, { sessionId: target.sessionId, turn: target.turn })
+    if (this.identities.size >= 1024 && !this.identities.has(target.key)) {
+      const oldestKey = this.identities.keys().next().value!
+      // Bound live raw accumulation too: at most 1024 windows of 4096 UTF-16 units.
+      this.cancelKey(oldestKey)
+      this.identities.delete(oldestKey)
+    }
+    this.identities.set(target.key, { sessionId: target.sessionId, turn: target.turn, channelId: target.channel.id, viewValid: true })
     const config = normalizeThinkingDisplay(target.config)
     if (config.mode !== 'collapsed' || !target.channel.sendThinking || !target.isCurrent()) return
     this.states.set(target.key, {
@@ -91,9 +103,21 @@ export class ThinkingDisplayTracker {
     const joins = state.high !== undefined && first >= 0xdc00 && first <= 0xdfff
     state.total += count - (joins ? 1 : 0)
     let addition = text
-    if (state.high !== undefined && !state.closed) addition = String.fromCharCode(state.high) + text
+    const latest = state.target.channel.thinkingPreview === 'latest'
+    if (state.high !== undefined && (!state.closed || latest)) addition = String.fromCharCode(state.high) + text
     state.high = undefined
-    if (!state.closed) {
+    if (latest) {
+      const last = addition.charCodeAt(addition.length - 1)
+      if (last >= 0xd800 && last <= 0xdbff) addition = addition.slice(0, -1)
+      // A giant frame replaces the retained window without concatenating the old text.
+      // Copy only its bounded suffix so its backing string cannot stay alive via slices.
+      const combined = addition.length >= 4096 ? addition : state.prefix + addition
+      let start = Math.max(0, combined.length - 4096)
+      if (start > 0 && combined.charCodeAt(start) >= 0xdc00 && combined.charCodeAt(start) <= 0xdfff
+        && combined.charCodeAt(start - 1) >= 0xd800 && combined.charCodeAt(start - 1) <= 0xdbff) start++
+      state.closed ||= state.prefix.length + addition.length > 4096
+      state.prefix = Array.from(combined.slice(start)).join('')
+    } else if (!state.closed) {
       const last = addition.charCodeAt(addition.length - 1)
       if (last >= 0xd800 && last <= 0xdbff) {
         state.high = last
@@ -132,6 +156,13 @@ export class ThinkingDisplayTracker {
   }
 
   cancelKey(key: string): void {
+    const identity = this.identities.get(key)
+    if (identity) identity.viewValid = false
+    this.releaseState(key)
+  }
+
+  /** Normal final drain ends accumulation, not the bounded read-only view. */
+  private releaseState(key: string): void {
     const state = this.states.get(key)
     if (!state) return
     this.states.delete(key)
@@ -142,16 +173,21 @@ export class ThinkingDisplayTracker {
   }
 
   cancelTurn(sessionId: string, turn?: number): void {
+    for (const identity of this.identities.values()) {
+      if (identity.sessionId === sessionId && identity.turn === turn) identity.viewValid = false
+    }
     for (const [key, state] of this.states) {
       if (state.target.sessionId === sessionId && state.target.turn === turn) this.cancelKey(key)
     }
   }
 
   cancelSession(sessionId: string): void {
+    for (const identity of this.identities.values()) if (identity.sessionId === sessionId) identity.viewValid = false
     for (const [key, state] of this.states) if (state.target.sessionId === sessionId) this.cancelKey(key)
   }
 
   cancelChannel(channelId: string): void {
+    for (const identity of this.identities.values()) if (identity.channelId === channelId) identity.viewValid = false
     for (const [key, state] of this.states) if (state.target.channel.id === channelId) this.cancelKey(key)
   }
 
@@ -174,7 +210,16 @@ export class ThinkingDisplayTracker {
 
   private send(state: Lifecycle, final: boolean): Promise<void> {
     if (!this.valid(state)) return Promise.resolve()
+    const target = state.target
+    const identity = this.identities.get(target.key)
     const options: ThinkingOptions = {
+      ...(target.channel.thinkingPreview === 'latest' ? {
+        previewMode: 'latest' as const,
+        // Metadata survives a normal final drain, but explicit cancellation,
+        // replacement and tombstone eviction all revoke access without raw text.
+        isViewCurrent: () => this.identities.get(target.key) === identity && identity?.viewValid === true
+          && normalizeThinkingDisplay(target.config).mode === 'collapsed' && target.isCurrent(),
+      } : {}),
       final, label: state.target.label(final, state.total), maxChars: state.config.maxChars,
       streamId: state.streamId, signal: state.scope.signal, isCurrent: () => this.valid(state),
       truncated: state.closed || state.high !== undefined,
@@ -191,11 +236,11 @@ export class ThinkingDisplayTracker {
       })
       return Promise.race([Promise.resolve(work).catch(this.onError), cancellation]).finally(() => {
         state.scope.signal.removeEventListener('abort', aborted!)
-        if (final && this.states.get(state.target.key) === state) this.cancelKey(state.target.key)
+        if (final && this.states.get(state.target.key) === state) this.releaseState(state.target.key)
       })
     } catch (error) {
       this.onError(error)
-      if (final && this.states.get(state.target.key) === state) this.cancelKey(state.target.key)
+      if (final && this.states.get(state.target.key) === state) this.releaseState(state.target.key)
       return Promise.resolve()
     }
   }
