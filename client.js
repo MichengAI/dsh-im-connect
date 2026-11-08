@@ -2216,7 +2216,7 @@ window.__ModuleLoader__.load({
         setDraft(account);
         setProxyModeDraft(account.proxyMode || "inherit");
         setNote("");
-      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort]);
+      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort, account.thinkingDisplay]);
       useEffect(() => {
         if (accountIdRef.current !== account.id) {
           accountIdRef.current = account.id;
@@ -2264,8 +2264,6 @@ window.__ModuleLoader__.load({
           }
           if (Object.prototype.hasOwnProperty.call(patch, "thinkingDisplay")) {
             payload.thinkingDisplay = patch.thinkingDisplay;
-          } else if (typeof draft.thinkingDisplay === "boolean") {
-            payload.thinkingDisplay = draft.thinkingDisplay;
           }
         }
         return onSave(account.id, payload).then((ok) => {

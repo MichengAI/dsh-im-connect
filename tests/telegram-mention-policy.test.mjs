@@ -191,6 +191,8 @@ test('Telegram 群聊策略仅在 Telegram 设置中渲染，支持三态、群�
   assert.match(inspector, /value: "addressed"/)
   assert.match(inspector, /value: "custom"/)
   assert.match(inspector, /value: "always"/)
+  assert.match(inspector, /thinkingDisplaySupported:\s*account\.platform === "telegram"/)
+  assert.match(inspector, /account\.thinkingDisplay/)
 
   const picker = client.slice(client.indexOf('function AccountSettingsPicker'), client.indexOf('function AccountInspector'))
   assert.match(picker, /props\.thinkingDisplaySupported/)
