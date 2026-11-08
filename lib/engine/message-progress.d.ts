@@ -11,6 +11,10 @@ export declare class MessageProgress {
     private terminal;
     private releaseTyping?;
     private readonly expiry;
+    /** 状态表情的预算由渠道声明：冷连接下的首次请求会明显慢于热连接。 */
+    private readonly reactionTimeoutMs;
+    /** 终态可以用更长的预算，等过平台一次几十秒的限流冷却；中间态不值得等。 */
+    private readonly finalTimeoutMs;
     constructor(channel: ChannelAdapter, message: ImMessage, host: {
         get(name: string): unknown;
     }, log: (line: string) => void, initial?: 'queued' | 'processing');

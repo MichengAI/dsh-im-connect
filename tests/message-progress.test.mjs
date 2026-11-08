@@ -1,4 +1,4 @@
-import test from 'node:test'
+import test, { mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { MessageProgress, ProgressTracker } from '../lib/engine/message-progress.js'
 
@@ -82,6 +82,75 @@ test('同一聊天共用 typing 刷新，旧任务结束不能停止新任务', 
   b.finish('success'); await tick(); assert.equal(stops, 1)
   const before = starts; await new Promise(r => setTimeout(r, 25)); assert.equal(starts, before)
 })
+function typingFixture(t, sendAction, overrides = {}) {
+  let pulse
+  const realInterval = globalThis.setInterval
+  mock.method(globalThis, 'setInterval', callback => { pulse = callback; return realInterval(() => {}, 60_000) })
+  const channel = { id: 'typing-test', typingIntervalMs: 4000, ...overrides, sendAction }
+  const items = []
+  const make = () => {
+    const item = new MessageProgress(channel, { chatId: 'chat' }, { get() {} }, () => {})
+    items.push(item); return item
+  }
+  t.after(() => { for (const item of items) item.finish('cleared'); mock.restoreAll() })
+  return { make, pulse: () => pulse() }
+}
+
+test('typing timeout releases bounded pending; ignored-abort old settlement cannot clear newer pulse', async t => {
+  const requests = []
+  const f = typingFixture(t, (_chat, _action, signal) => new Promise((resolve, reject) => requests.push({ resolve, reject, signal })), { typingTimeoutMs: 40 })
+  f.make(); await tick()
+  assert.equal(requests.length, 1)
+  await new Promise(resolve => setTimeout(resolve, 150))
+  f.pulse(); await tick()
+  assert.equal(requests.length, 2, 'a stuck raw promise must not suppress renewal')
+  assert.ok(requests[0].signal instanceof AbortSignal)
+  assert.equal(requests[0].signal.aborted, true)
+  requests[0].reject(new Error('late transport rejection')); await tick()
+  f.pulse(); await tick()
+  assert.equal(requests.length, 2, 'old rejection cannot unlock newer pending')
+  requests[1].resolve(); await tick()
+  f.pulse(); await tick(); assert.equal(requests.length, 3)
+})
+
+test('typing budget covers a cold round trip instead of cancelling before delivery', async t => {
+  let signal
+  let settled = false
+  const f = typingFixture(t, (_chat, _action, guard) => new Promise((resolve, reject) => {
+    signal = guard
+    const timer = setTimeout(() => { settled = true; resolve() }, 2400)
+    guard.addEventListener('abort', () => { clearTimeout(timer); reject(guard.reason) }, { once: true })
+  }))
+  f.make(); await tick()
+  assert.ok(signal)
+  await new Promise(resolve => setTimeout(resolve, 2200))
+  assert.equal(signal.aborted, false, 'a 2.2s platform round trip must not abandon the typing pulse')
+  await new Promise(resolve => setTimeout(resolve, 400))
+  assert.equal(settled, true, 'the slow pulse must complete rather than be cancelled')
+})
+
+for (const state of ['waiting', 'cancelled', 'success']) test(`typing ${state} before scheduled start never sends late pulse`, async t => {
+  let calls = 0
+  const f = typingFixture(t, async () => { calls++ })
+  const item = f.make()
+  if (state === 'waiting') item.update(state); else item.finish(state)
+  await tick(); f.pulse(); await tick()
+  assert.equal(calls, 0)
+})
+
+test('waiting aborts inflight typing; stale group cleanup cannot stop a new shared group', async t => {
+  const requests = []; let stops = 0
+  const f = typingFixture(t, (_chat, _action, signal) => new Promise(resolve => requests.push({ resolve, signal })))
+  const a = f.make(); a.channel.stopAction = async () => { stops++ }
+  const b = f.make(); await tick(); assert.equal(requests.length, 1)
+  a.update('waiting'); assert.equal(requests[0].signal?.aborted, false)
+  b.finish('success'); assert.equal(requests[0].signal?.aborted, true)
+  a.update('processing'); await tick(); assert.equal(requests.length, 2)
+  requests[0].resolve(); await tick(); assert.equal(stops, 0)
+  f.pulse(); await tick(); assert.equal(requests.length, 2)
+  requests[1].resolve(); await tick(); a.finish('success'); await tick(); assert.equal(stops, 1)
+})
+
 test('状态接口抛错不产生未处理拒绝，也不妨碍后续清理', async t => {
   const logs = []
   const item = new MessageProgress({ id: 'test', addStatusReaction: async () => { throw new Error('secret') } },
@@ -143,6 +212,76 @@ test('超时状态的迟到响应不会撤销已经显示的完成标签', async
   assert.equal(f.calls.at(-1)[2], 'success')
   late('processing'); await tick()
   assert.equal(f.calls.some(c => c[0] === 'remove'), false)
+})
+
+test('支持原子替换的渠道只设置新表情，不再先撤销一次', async t => {
+  const calls = []
+  const channel = {
+    id: 'account', replaceStatusReaction: true,
+    addStatusReaction: async (_msg, state) => { calls.push(['add', state]); return `reaction:${state}` },
+    removeStatusReaction: async (_msg, reaction) => { calls.push(['remove', reaction]) },
+  }
+  const item = new MessageProgress(channel, { chatId: 'chat', messageId: 'one' }, { get: () => undefined }, () => {})
+  t.after(() => item.finish('cancelled'))
+  await item.settled()
+  item.update('waiting'); await item.settled()
+  item.finish('success'); await item.settled()
+  assert.deepEqual(calls, [['add', 'processing'], ['add', 'waiting'], ['add', 'success']])
+})
+
+test('原子替换的渠道在清空状态时仍然撤销表情', async t => {
+  const calls = []
+  const channel = {
+    id: 'account', replaceStatusReaction: true,
+    addStatusReaction: async (_msg, state) => { calls.push(['add', state]); return `reaction:${state}` },
+    removeStatusReaction: async (_msg, reaction) => { calls.push(['remove', reaction]) },
+  }
+  const item = new MessageProgress(channel, { chatId: 'chat', messageId: 'one' }, { get: () => undefined }, () => {})
+  t.after(() => item.finish('cancelled'))
+  await item.settled()
+  item.finish('cleared'); await item.settled()
+  assert.deepEqual(calls, [['add', 'processing'], ['remove', 'reaction:processing']])
+})
+
+test('状态表情预算跟随渠道声明，慢于 2 秒的请求仍能落地', async t => {
+  const calls = []
+  const channel = { id: 'slow', statusReactionTimeoutMs: 5000, addStatusReaction: async (_msg, state) => {
+    await new Promise(resolve => setTimeout(resolve, 2200))
+    calls.push(state); return `reaction:${state}`
+  } }
+  const item = new MessageProgress(channel, { chatId: 'chat', messageId: 'one' }, { get: () => undefined }, () => {})
+  t.after(() => item.finish('cancelled'))
+  await item.settled()
+  assert.deepEqual(calls, ['processing'])
+})
+
+test('终态使用更长的预算，中间态仍按短预算放弃', async t => {
+  const calls = []
+  const channel = { id: 'split-budget', statusReactionTimeoutMs: 120, finalStatusReactionTimeoutMs: 600,
+    addStatusReaction: async (_msg, state, _label, signal) => {
+      await new Promise(resolve => setTimeout(resolve, 240))
+      if (!signal.aborted) calls.push(state)
+      return `reaction:${state}`
+    } }
+  const item = new MessageProgress(channel, { chatId: 'chat', messageId: 'one' }, { get: () => undefined }, () => {})
+  t.after(() => item.finish('cancelled'))
+  await item.settled()
+  item.finish('success')
+  await item.settled()
+  assert.deepEqual(calls, ['success'], '中间态超时放弃，终态等到结果')
+})
+
+test('状态更新失败只记录失败类别，不泄漏响应正文或令牌', async t => {
+  const logs = []
+  const item = new MessageProgress({ id: 'test', addStatusReaction: async () => {
+    throw Object.assign(new Error('Bad Request: token=123456:secret'), { status: 400 })
+  } }, { chatId: 'chat', messageId: 'one' }, { get: () => undefined }, line => logs.push(line))
+  t.after(() => item.finish('cancelled'))
+  await item.settled()
+  assert.equal(logs.length, 1)
+  assert.match(logs[0], /status=400/)
+  assert.ok(!logs[0].includes('secret'))
+  assert.ok(!logs[0].includes('123456'))
 })
 
 
