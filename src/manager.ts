@@ -224,6 +224,7 @@ export interface AccountView {
   proxyUrl?: string
   mentionPolicy?: 'addressed' | 'always'
   freeChatGroups?: string
+  thinkingDisplay?: boolean
   lastCheckedAt?: string
 }
 
@@ -450,6 +451,11 @@ export class ChannelManager {
       ...(platform === 'telegram' ? {
         mentionPolicy: config.mentionPolicy === 'always' ? 'always' : 'addressed',
         freeChatGroups: typeof config.freeChatGroups === 'string' ? config.freeChatGroups : '',
+        thinkingDisplay: config.thinkingDisplay === 'true'
+          ? true
+          : (config.thinkingDisplay === 'false'
+            ? false
+            : (this.engineConfig.thinkingDisplay?.mode === 'collapsed')),
       } : {}),
       lastCheckedAt: state.lastCheckedAt,
     }
@@ -1115,6 +1121,14 @@ export class ChannelManager {
         else delete config.freeChatGroups
         state.config = config
       }
+      const hasThinkingDisplaySetting = platform === 'telegram' && Object.hasOwn(input, 'thinkingDisplay')
+      if (hasThinkingDisplaySetting) {
+        const config = { ...(state.config ?? {}) }
+        if (input.thinkingDisplay === true) config.thinkingDisplay = 'true'
+        else if (input.thinkingDisplay === false) config.thinkingDisplay = 'false'
+        else delete config.thinkingDisplay
+        state.config = config
+      }
       this.flush()
       if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
       if ((proxyChanged || mentionPolicyChanged) && this.running.has(accountId)) await this.startOne(accountId)
@@ -1642,6 +1656,11 @@ export class ChannelManager {
       segmentDelayMinSecs: this.segmentDelayRange(state).min,
       segmentDelayMaxSecs: this.segmentDelayRange(state).max,
       sessionIdleMinutes: normalizeIdleMinutes(state.sessionIdleMinutes) ?? 0,
+      thinkingDisplay: state.config?.thinkingDisplay === 'true'
+        ? { ...this.engineConfig.thinkingDisplay, mode: 'collapsed' }
+        : (state.config?.thinkingDisplay === 'false'
+          ? { ...this.engineConfig.thinkingDisplay, mode: 'off' }
+          : this.engineConfig.thinkingDisplay),
     }
   }
 

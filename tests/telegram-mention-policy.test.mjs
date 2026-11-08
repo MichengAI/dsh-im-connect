@@ -126,6 +126,15 @@ test('ChannelManager 反显、保存与更新 Telegram 群聊触发策略', asyn
   assert.equal(saved.ok, true)
   assert.equal(saved.account.mentionPolicy, 'addressed')
   assert.equal(saved.account.freeChatGroups, '')
+
+  // 5. 测试 thinkingDisplay 开关保存与反显
+  assert.equal(saved.account.thinkingDisplay, false, '默认未开启思考展示')
+  saved = await manager.updateAccount(created.accountId, { thinkingDisplay: true })
+  assert.equal(saved.ok, true)
+  assert.equal(saved.account.thinkingDisplay, true, '更新后反显 thinkingDisplay 为 true')
+  saved = await manager.updateAccount(created.accountId, { thinkingDisplay: false })
+  assert.equal(saved.ok, true)
+  assert.equal(saved.account.thinkingDisplay, false, '关闭后反显 thinkingDisplay 为 false')
 })
 
 test('运行中的 Telegram 账号在群聊策略变更时会触发 startOne 重启', async t => {
@@ -176,8 +185,10 @@ test('Telegram 群聊策略仅在 Telegram 设置中渲染，支持三态、群�
   const inspector = client.slice(client.indexOf('function AccountInspector'), client.indexOf('function AccountRemarkEditor'))
   assert.match(inspector, /account\.platform === "telegram"/)
   assert.match(inspector, /ima-mention-policy-settings/)
+  assert.match(inspector, /ima-thinking-display-settings/)
   assert.match(inspector, /account\.telegramGroupPolicy/)
   assert.match(inspector, /account\.telegramFreeChatGroups/)
+  assert.match(inspector, /account\.telegramThinkingDisplay/)
   assert.match(inspector, /account\.telegramFreeChatGroupsInvalid/)
   assert.match(inspector, /value: "addressed"/)
   assert.match(inspector, /value: "custom"/)

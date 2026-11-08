@@ -75,6 +75,7 @@ export interface AccountView {
     proxyUrl?: string;
     mentionPolicy?: 'addressed' | 'always';
     freeChatGroups?: string;
+    thinkingDisplay?: boolean;
     lastCheckedAt?: string;
 }
 interface AccountDiagnosticResult {
