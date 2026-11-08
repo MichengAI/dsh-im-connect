@@ -38,10 +38,12 @@ export declare class DeferredDelivery {
     reject(id: string, definite?: boolean): void;
     patch(id: string, update: Partial<DeferredEntry>): void;
     claim(sessionId: string, turn: number, requestId: string): void;
+    /** Save authoritative reply text before platform I/O, independent of later history availability. */
+    preserveText(sessionId: string, turn: number | undefined, text: string): void;
     liveStart(sessionId: string, turn: number): string[];
     /**
      * 实时投递收口。`ok` 表示全部确认送达；`rejected` 表示一片都没送到、
-     * 且每次失败都是平台明确拒绝（服务端已应答），此时不存在「可能已送达」
+     * 且每次失败都明确未提交或被平台拒绝，此时不存在「可能已送达」
      * 的歧义，直接置为 `ready`，交回 30s 巡检自动补发。
      * 其余失败保持 `unknown`，不猜测、不自动重发。
      */
@@ -54,6 +56,7 @@ export declare class DeferredDelivery {
         turn?: number;
     } | undefined>, valid: (entry: DeferredEntry) => boolean, send: (entry: DeferredEntry, text: string) => Promise<void>, chunks: (text: string) => string[], explicit?: boolean): Promise<'missing' | 'unavailable' | undefined>;
 }
+/** Trusted adapter evidence that no request was submitted; not a generic network failure. */
 export declare class DeliveryUnavailable extends Error {
 }
 /**

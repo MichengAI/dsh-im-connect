@@ -7,9 +7,9 @@ export interface TelegramRetryOptions {
     log?: (line: string) => void;
     /** Fixed method name only; never log token-bearing URLs, payloads or raw network errors. */
     method?: string;
-    /** 已有消息的编辑可安全重试；新建操作默认只重试明确拒收。 */
+    /** 已有消息的编辑可安全重试；新建操作只重试明确拒收或连接建立前失败。 */
     edit?: boolean;
 }
-/** 新建操作只重试明确限流，编辑已有消息可重试临时错误。 */
+/** 新建操作只重试明确限流或连接建立前失败；编辑已有消息可重试临时错误。 */
 export declare function retryTelegram<T>(operation: (signal: AbortSignal) => Promise<T>, options?: TelegramRetryOptions): Promise<T>;
 //# sourceMappingURL=telegram-retry.d.ts.map
