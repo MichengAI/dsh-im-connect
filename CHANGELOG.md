@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.30] - 2026-11-08
+
+### Telegram collapsible thinking message & visual settings
+
+- Collapsible thinking messages in Telegram: support sending the model's reasoning chain as a native collapsible quote block (`<blockquote expandable>`), allowing chat participants to tap and expand the thought process (#63).
+- Visual dropdown setting: add a native "Show thinking process" dropdown (Off / Collapsed) in **Settings → IM Assistant → Telegram Account**, allowing quick per-account toggling or falling back to plugin defaults.
+- Harmonized form layout: place the thinking process setting next to "Idle session rotation" in a balanced two-column grid with an inline privacy and display guidance tooltip.
+
 ## [1.0.29] - 2026-11-08
 
 ### Telegram group mention policy & visual configuration
