@@ -7,6 +7,7 @@ import { type AssistantModel, type PermissionPreset } from './engine/assistant-s
 import type { EngineConfig, SendMode } from './engine/types.js';
 export declare const API_CLIENT_HEADER = "x-dsh-im-connect-client";
 type ChannelProxyMode = 'inherit' | 'direct' | 'custom';
+type ThinkingDisplayMode = 'off' | 'collapsed';
 interface ApiBodyReadResult {
     body: Record<string, unknown>;
     oversized: boolean;
@@ -32,6 +33,10 @@ export interface ChannelState {
     permission?: PermissionPreset;
     commandPermissions?: CommandPermissions;
     privateAccess?: 'approved' | 'all';
+    /** Undefined preserves legacy adapter configuration; [] explicitly disables bypass. */
+    freeChatGroups?: string[];
+    /** Undefined follows the existing plugin-level thinking configuration. */
+    thinkingDisplayMode?: ThinkingDisplayMode;
     /** 普通消息的默认发送方式；缺省为排队发送。 */
     sendMode?: SendMode;
     /** 分段回复：覆盖插件级默认值；缺省时跟随插件配置。 */
@@ -62,6 +67,10 @@ export interface AccountView {
     permission: PermissionPreset;
     commandPermissions: CommandPermissions;
     privateAccess: 'approved' | 'all';
+    freeChatGroups: string[];
+    /** Legacy all-group bypass remains effective until an explicit selected-group save. */
+    legacyAllGroupsBypass: boolean;
+    thinkingDisplayMode: ThinkingDisplayMode;
     sendMode: SendMode;
     segmentReply: boolean;
     /** 该渠道是否已开放分段回复；未开放的渠道不展示开关。 */
@@ -232,6 +241,7 @@ export declare class ChannelManager {
     private accountStateDir;
     /** 与 Chat 使用同一预设名册，不向客户端暴露预设文件路径。 */
     private agentPresetOptions;
+    private accountFreeChatGroups;
     private accountEngineConfig;
     /** 分段间隔区间：账号设置优先，其次插件配置，最后回落到 1–2 秒；上下界颠倒时自动对调。 */
     private segmentDelayRange;
