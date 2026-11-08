@@ -30,6 +30,8 @@ export declare class ThinkingDisplayTracker {
     append(target: ThinkingDisplayTarget, text: string): void;
     finish(target: ThinkingDisplayTarget): Promise<void>;
     cancelKey(key: string): void;
+    /** Normal final drain ends accumulation, not the bounded read-only view. */
+    private releaseState;
     cancelTurn(sessionId: string, turn?: number): void;
     cancelSession(sessionId: string): void;
     cancelChannel(channelId: string): void;

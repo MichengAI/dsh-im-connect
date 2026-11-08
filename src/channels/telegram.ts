@@ -11,6 +11,7 @@ import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-
 import { retryTelegram } from './telegram-retry.js'
 import { isInboundAddressed, type MentionPolicy } from './mention-policy.js'
 import { renderThinkingBlock } from './thinking-block.js'
+import { createTelegramThinkingControls } from './telegram-thinking-controls.js'
 
 export interface TelegramConfig {
   token?: string
@@ -314,7 +315,12 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   // Explicit turn identity, not the chat's most recent message. Keep only the latest pending snapshot.
   const openThinking = new Map<string, ThinkingState>()
   const activeThinking = new Set<ThinkingState>()
+  const latestThinking = createTelegramThinkingControls(
+    (method, body, timeoutMs, guard) => api(method, body, timeoutMs, guard, { bulk: true }),
+    parseTelegramChatId, log,
+  )
   function clearThinking(): void {
+    latestThinking.clear()
     for (const state of activeThinking) {
       state.pending = undefined
       state.scope.abort()
@@ -608,6 +614,10 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           if (persist) cursorFile.write({ offset })
           if (update.callback_query) {
             const callback = update.callback_query
+            if (latestThinking.consume(callback)) {
+              void api('answerCallbackQuery', { callback_query_id: callback.id }).catch(() => log('[telegram] 按钮回执失败'))
+              continue
+            }
             await api('answerCallbackQuery', { callback_query_id: callback.id }).catch(() => log('[telegram] 按钮回执失败'))
             if (callback.data && callback.message) await handler?.({
               chatId: telegramChatId(callback.message.chat.id, callback.message.message_thread_id),
@@ -730,6 +740,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     id: 'telegram',
     label: 'Telegram',
     maxMessageLength: 4000,
+    thinkingPreview: 'latest',
     /** 占位消息支持顶部状态行（思考 / 工具进度），网关据此推送中间态。 */
     replyStatus: true,
     interactionRetryRequiresDefinite: true,
@@ -1037,7 +1048,11 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         },
       }
     },
-    sendThinking: publishThinking,
+    sendThinking(chatId, text, options) {
+      if (options?.previewMode !== 'latest') return publishThinking(chatId, text, options)
+      if (stopped) return Promise.resolve()
+      return latestThinking.publish(chatId, text, options)
+    },
     setMessageHandler(h) { handler = h },
     setTopicEditHandler(h) { onTopicEdited = h },
     async diagnose(signal) {
