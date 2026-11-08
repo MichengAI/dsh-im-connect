@@ -43,27 +43,29 @@ function normalizeChatId(item: string): string | undefined {
   let cleaned = item.trim()
   if (!cleaned) return undefined
 
-  // 1. Telegram 链接提取:
-  // 1.1 t.me/c/(\d+) 内部 ID 一律拼 -100 前缀（如 t.me/c/1005555 -> -1001005555）
+  // 1. 先统一 Unicode 负号为 ASCII '-'：否则带全角负号的链接会在链接分支里失配。
+  cleaned = cleaned.replace(/[\u2212\u2013\u2014\uFF0D]/g, '-')
+
+  // 2. Telegram 链接提取:
+  // 2.1 t.me/c/(\d+) 内部 ID 一律拼 -100 前缀（如 t.me/c/1005555 -> -1001005555），
+  //     数字后必须是分隔符或结尾，避免把 "…7890abc" 这类残链接认成群号。
   const tmeMatch = cleaned.match(/t\.me\/c\/(\d{1,18})(?:[/?#]|$)/i)
   if (tmeMatch && tmeMatch[1]) {
     return `-100${tmeMatch[1]}`
   }
 
-  // 1.2 web.telegram.org 链接:
+  // 2.2 web.telegram.org 链接:
   // - 若自带负号完整群 ID（如 web.telegram.org/a/#-1001234567890 或 #-123456），直接提取该负数 ID；
-  // - 若为私有群内部数字（如 #c123456 或纯正整数），拼 -100 前缀。
-  const webFullMatch = cleaned.match(/web\.telegram\.org\/[^#]*#(-\d{1,18})/i)
+  // - 若为私有群内部数字（如 #c123456 或纯正整数），拼 -100 前缀；
+  // - 数字后同样要求非数字，避免超长数字被截断成另一个群号。
+  const webFullMatch = cleaned.match(/web\.telegram\.org\/[^#]*#(-\d{1,18})(?![0-9])/i)
   if (webFullMatch && webFullMatch[1]) {
     return webFullMatch[1]
   }
-  const webInternalMatch = cleaned.match(/web\.telegram\.org\/[^#]*#(?:c)?(\d{1,18})/i)
+  const webInternalMatch = cleaned.match(/web\.telegram\.org\/[^#]*#(?:c)?(\d{1,18})(?![0-9])/i)
   if (webInternalMatch && webInternalMatch[1]) {
     return `-100${webInternalMatch[1]}`
   }
-
-  // 2. 统一 Unicode 减号为 ASCII '-'
-  cleaned = cleaned.replace(/[\u2212\u2013\u2014\uFF0D]/g, '-')
 
   // 3. 截断话题后缀（如 :42）
   const topicIdx = cleaned.indexOf(':')

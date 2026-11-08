@@ -296,6 +296,92 @@ test('前端设置组件：删空草稿不被服务端旧值覆盖，且校验�
   const clientCode = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   // 确保移除了容易导致清空失败的 else if 兜底
   assert.ok(!clientCode.includes('else if (account.freeChatGroups && !freeChatGroupsDraft)'), '不应存在清空后强制回填的兜底')
-  // 确保前端警告正则包含 (?:-|c)? 分支
-  assert.ok(clientCode.includes('#(?:-|c)?\\d+'), '前端警告正则应支持完整负数群号与 #c 内部 ID')
+  // 确保前端校验函数支持完整负数群号、#c 内部 ID，并拒绝超长数字
+  const isValid = extractClientFunction('isValidFreeChatGroupToken')
+  assert.equal(isValid('https://web.telegram.org/k/#c7654321'), true, '前端校验应支持 #c 内部 ID')
+  assert.equal(isValid('https://web.telegram.org/a/#-1234567890123456789012'), false, '前端校验应拒绝超长数字')
+})
+
+/** 从前端 bundle 里切出模块级函数源码，保证测的是产品代码而不是复制品。 */
+function extractClientFunctionSource(name) {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const anchor = `    function ${name}(`
+  const start = source.indexOf(anchor)
+  assert.ok(start >= 0, `必须找到前端函数 ${name}`)
+  let depth = 0
+  for (let i = source.indexOf('{', start); i < source.length; i++) {
+    if (source[i] === '{') depth += 1
+    else if (source[i] === '}' && (depth -= 1) === 0) {
+      return source.slice(start, i + 1)
+    }
+  }
+  throw new Error(`无法切出前端函数 ${name}`)
+}
+
+function extractClientFunction(name) {
+  return new Function(`${extractClientFunctionSource(name)}; return ${name};`)()
+}
+
+const UNICODE_MINUS = String.fromCharCode(0x2212)
+
+test('链接解析拒绝超长数字，且全角负号链接与 ASCII 负号等价', () => {
+  // 数字长度越界时整条输入无效，绝不能截断成另一个群号
+  assert.deepEqual(parseChatIdList('https://web.telegram.org/a/#-1234567890123456789012'), [])
+  assert.deepEqual(parseChatIdList('https://t.me/c/1234567890123456789012/1'), [])
+  // 全角负号写在链接里也应被归一化
+  assert.deepEqual(
+    parseChatIdList('https://web.telegram.org/a/#' + UNICODE_MINUS + '100987654321'),
+    parseChatIdList('https://web.telegram.org/a/#-100987654321'),
+  )
+})
+
+test('前端群号校验与后端解析逐项一致（两套规则不得漂移）', () => {
+  const isValid = extractClientFunction('isValidFreeChatGroupToken')
+  const corpus = [
+    '-1001', UNICODE_MINUS + '1001', '-1001:42', '-1001:42:7',
+    'https://t.me/c/1234567890/42',
+    'https://t.me/c/1005555/1',
+    'https://t.me/c/1234567890?start=1',
+    'https://t.me/c/1234567890abc',
+    'https://t.me/c/1234567890123456789012/1',
+    'https://web.telegram.org/a/#-100987654321',
+    'https://web.telegram.org/a/#-123456',
+    'https://web.telegram.org/k/#c7654321',
+    'https://web.telegram.org/a/#123456789',
+    'https://web.telegram.org/a/#' + UNICODE_MINUS + '100987654321',
+    'https://web.telegram.org/a/#-1234567890123456789012',
+    'https://t.me/somepublicname',
+    'tg://privatepost?channel=1&post=2',
+    'abc', '群号：-1001', 'text-1001suffix',
+  ]
+  for (const item of corpus) {
+    const front = isValid(item)
+    const parsed = parseChatIdList(item)
+    assert.equal(front, parsed.length > 0, `判定不一致：${item}（前端 ${front} / 后端 ${JSON.stringify(parsed)}）`)
+  }
+})
+
+test('部分条目无法识别时能统计出来（不再静默丢弃）', () => {
+  const isValid = extractClientFunction('isValidFreeChatGroupToken')
+  const issues = new Function('isValidFreeChatGroupToken', `${extractClientFunctionSource('freeChatGroupTokenIssues')}; return freeChatGroupTokenIssues;`)(isValid)
+  assert.deepEqual(issues('-1001, abc'), { total: 2, invalid: 1 })
+  assert.deepEqual(issues('abc'), { total: 1, invalid: 1 })
+  assert.deepEqual(issues(' -1001，，https://t.me/c/1234567890/42 '), { total: 2, invalid: 0 })
+  assert.deepEqual(issues('-1001, https://t.me/c/1234567890abc'), { total: 2, invalid: 1 })
+  assert.deepEqual(issues(''), { total: 0, invalid: 0 })
+  assert.deepEqual(issues(undefined), { total: 0, invalid: 0 })
+})
+
+test('部分无效与全部无效的提示文案双语齐备，并已接到设置面板', () => {
+  const clientCode = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const locales = new Function(
+    clientCode.slice(clientCode.indexOf('    const IM_LOCALES ='), clientCode.indexOf('    const h = React.createElement;')) + '; return IM_LOCALES;',
+  )()
+  for (const lang of ['zh', 'en']) {
+    assert.equal(typeof locales[lang]['account.telegramFreeChatGroupsPartial'], 'string', `${lang} 缺少部分无效提示`)
+    assert.equal(typeof locales[lang]['account.telegramFreeChatGroupsInvalid'], 'string', `${lang} 缺少全部无效提示`)
+  }
+  const inspector = clientCode.slice(clientCode.indexOf('function AccountInspector'), clientCode.indexOf('function AccountRemarkEditor'))
+  assert.match(inspector, /account\.telegramFreeChatGroupsPartial/, '面板必须在存在无效条目时提示')
+  assert.match(inspector, /freeChatGroupTokenIssues/, '面板必须复用统一的前端判定函数')
 })
