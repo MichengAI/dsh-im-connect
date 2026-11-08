@@ -256,8 +256,11 @@ export class ProgressTracker {
   }
 }
 
-type TypingGroup = { users: number; scope: AbortController; timer?: ReturnType<typeof setInterval>; pending?: Promise<void> }
+type TypingGroup = { users: number; scope: AbortController; timer?: ReturnType<typeof setInterval>; retry?: ReturnType<typeof setTimeout>; pending?: Promise<void> }
 const typingGroups = new WeakMap<ChannelAdapter, Map<string, TypingGroup>>()
+
+/** 一次心跳失败后的补发延迟：网络抖一下不该干等到下一个 4 秒点。 */
+const TYPING_RETRY_AFTER_FAILURE_MS = 1200
 
 /** 同一账号同一聊天只有一个 typing 定时器；旧任务结束不能停掉新任务。 */
 function acquireTyping(channel: ChannelAdapter, chatId: string,
@@ -274,16 +277,24 @@ function acquireTyping(channel: ChannelAdapter, chatId: string,
     const pulse = () => {
       if (current.pending || current.scope.signal.aborted || chats!.get(chatId) !== current) return
       // pending 必须跟随有界等待，而不是可能永不结束的旧 SDK 请求。
+      let failed = false
       const pending = safely(async signal => {
         const guard = AbortSignal.any([signal, current.scope.signal])
         await fileOperation(Promise.resolve().then(() => {
           guard.throwIfAborted()
           if (chats!.get(chatId) !== current || current.users === 0) return
-          return channel.sendAction!(chatId, 'typing', guard)
+          return channel.sendAction!(chatId, 'typing', guard).catch((error: unknown) => { failed = true; throw error })
         }), guard)
       }, typingBudget)
       current.pending = pending
-      void pending.finally(() => { if (current.pending === pending) current.pending = undefined })
+      void pending.finally(() => {
+        if (current.pending === pending) current.pending = undefined
+        // 抖动导致的单次失败：隔 1.2 秒补一次，不让提示空窗撑到下一个整点。
+        if (!failed || current.scope.signal.aborted || chats!.get(chatId) !== current) return
+        if (current.retry) clearTimeout(current.retry)
+        current.retry = setTimeout(pulse, TYPING_RETRY_AFTER_FAILURE_MS)
+        current.retry.unref?.()
+      })
     }
     pulse()
     if (channel.typingIntervalMs) {
@@ -299,6 +310,7 @@ function acquireTyping(channel: ChannelAdapter, chatId: string,
     released = true
     if (--current.users > 0) return
     if (current.timer) clearInterval(current.timer)
+    if (current.retry) clearTimeout(current.retry)
     current.scope.abort()
     if (chats!.get(chatId) === current) chats!.delete(chatId)
     // 等本轮 start 返回后再 stop，且不打断已启动的新一组。
