@@ -463,9 +463,20 @@ def execute(paths, folder, delay):
         release_pause(paths)
 
 
+def reload_stack(paths, delay):
+    """Apply a freshly built workspace build: pause the watchdog, restart, release."""
+    build_status(paths)
+    restart = load_restart(paths, delay)
+    pause_watchdog(paths)
+    try:
+        restart.main()
+    finally:
+        release_pause(paths)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['prepare', 'dry-run', 'execute', 'verify'])
+    parser.add_argument('command', choices=['prepare', 'dry-run', 'execute', 'verify', 'reload'])
     parser.add_argument('--folder', type=Path)
     parser.add_argument('--delay', type=int, default=30)
     args = parser.parse_args()
@@ -473,6 +484,8 @@ def main():
     folder = args.folder
     if args.command == 'verify':
         print(json.dumps(verify(paths), indent=2)); return 0
+    if args.command == 'reload':
+        reload_stack(paths, args.delay); return 0
     if folder is None:
         parser.error('--folder is required')
     folder = folder.resolve()

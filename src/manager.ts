@@ -9,6 +9,7 @@ import { connectionState, type ConnectionState } from './channels/connection-sta
 import { type DiagnosticCheck, DiagnosticError, probe } from './channels/diagnostics.js'
 import { fileOperation } from './engine/abort.js'
 import { parseAdditionalImageHosts } from './channels/image-host-policy.js'
+import { parseChatIdList } from './channels/mention-policy.js'
 import { CHANNEL_META, CHANNEL_ORDER, channelSupportsSegmentReply, supportsQr } from './channels/meta.js'
 import { PairingHub } from './channels/qr/hub.js'
 import type { ChannelId, SessionRecord } from './engine/session-id.js'
@@ -28,6 +29,20 @@ const MAX_API_BODY_BYTES = 1024 * 1024
 const ACCOUNT_REMARK_LIMIT = 40
 
 type ChannelProxyMode = 'inherit' | 'direct' | 'custom'
+type ThinkingDisplayMode = 'off' | 'collapsed'
+
+/** Only exact negative Telegram group IDs are accepted; never silently discard invalid entries. */
+function normalizeFreeChatGroups(input: unknown): string[] | undefined {
+  // HTTP input is already bounded by MAX_API_BODY_BYTES; retain at most 100 unique IDs.
+  if (!Array.isArray(input)) return undefined
+  const groups = new Set<string>()
+  for (const value of input) {
+    if (typeof value !== 'string' || !/^-[1-9]\d{0,19}$/.test(value.trim())) return undefined
+    groups.add(value.trim())
+    if (groups.size > 100) return undefined
+  }
+  return [...groups]
+}
 
 const PROXY_SUPPORTED_PLATFORMS = new Set<ChannelId>(['telegram', 'discord'])
 function supportsProxy(platform: ChannelId): boolean {
@@ -180,6 +195,10 @@ export interface ChannelState {
   permission?: PermissionPreset
   commandPermissions?: CommandPermissions
   privateAccess?: 'approved' | 'all'
+  /** Undefined preserves legacy adapter configuration; [] explicitly disables bypass. */
+  freeChatGroups?: string[]
+  /** Undefined follows the existing plugin-level thinking configuration. */
+  thinkingDisplayMode?: ThinkingDisplayMode
   /** 普通消息的默认发送方式；缺省为排队发送。 */
   sendMode?: SendMode
   /** 分段回复：覆盖插件级默认值；缺省时跟随插件配置。 */
@@ -211,6 +230,10 @@ export interface AccountView {
   permission: PermissionPreset
   commandPermissions: CommandPermissions
   privateAccess: 'approved' | 'all'
+  freeChatGroups: string[]
+  /** Legacy all-group bypass remains effective until an explicit selected-group save. */
+  legacyAllGroupsBypass: boolean
+  thinkingDisplayMode: ThinkingDisplayMode
   sendMode: SendMode
   segmentReply: boolean
   /** 该渠道是否已开放分段回复；未开放的渠道不展示开关。 */
@@ -434,6 +457,11 @@ export class ChannelManager {
       agentPreset: state.agentPreset || this.engineConfig.agentPreset || 'standard',
       commandPermissions: normalizeCommandPermissions(state.commandPermissions),
       privateAccess: state.privateAccess === 'all' ? 'all' : 'approved',
+      freeChatGroups: platform === 'telegram' ? this.accountFreeChatGroups(state) : [],
+      legacyAllGroupsBypass: platform === 'telegram' && state.freeChatGroups === undefined && config.mentionPolicy === 'always',
+      thinkingDisplayMode: platform === 'telegram'
+        ? state.thinkingDisplayMode ?? this.engineConfig.thinkingDisplay?.mode ?? 'off'
+        : 'off',
       sendMode: normalizeSendMode(state.sendMode),
       segmentReply: segmentSupported && (state.segmentReply ?? this.engineConfig.segmentReply) === true,
       segmentReplySupported: segmentSupported,
@@ -505,6 +533,8 @@ export class ChannelManager {
       agentPreset: normalized.settings.agentPreset,
       commandPermissions: normalized.settings.commandPermissions,
       privateAccess: normalized.settings.privateAccess,
+      ...(normalized.settings.freeChatGroups !== undefined ? { freeChatGroups: normalized.settings.freeChatGroups } : {}),
+      ...(normalized.settings.thinkingDisplayMode !== undefined ? { thinkingDisplayMode: normalized.settings.thinkingDisplayMode } : {}),
       sendMode: normalized.settings.sendMode,
       ...(normalized.settings.segmentReply !== undefined ? { segmentReply: normalized.settings.segmentReply } : {}),
       ...(normalized.settings.segmentDelayMinSecs !== undefined ? { segmentDelayMinSecs: normalized.settings.segmentDelayMinSecs } : {}),
@@ -1035,6 +1065,9 @@ export class ChannelManager {
       }
       const normalized = await this.normalizeAccountSettings(platform, input, state)
       if (!normalized.ok) return normalized
+      const freeChatGroupsChanged = platform === 'telegram' && input.freeChatGroups !== undefined
+        && (JSON.stringify(this.accountFreeChatGroups(state)) !== JSON.stringify(normalized.settings.freeChatGroups)
+          || state.freeChatGroups === undefined && state.config?.mentionPolicy === 'always')
       const previousCwd = normalizeWorkspacePath(state.cwd) ?? this.currentWorkspace()
       const previousPreset = state.agentPreset || this.engineConfig.agentPreset || 'standard'
       const presetChanged = previousPreset !== normalized.settings.agentPreset
@@ -1055,6 +1088,8 @@ export class ChannelManager {
       state.permission = normalized.settings.permission
       state.commandPermissions = normalized.settings.commandPermissions
       state.privateAccess = normalized.settings.privateAccess
+      if (normalized.settings.freeChatGroups !== undefined) state.freeChatGroups = normalized.settings.freeChatGroups
+      if (normalized.settings.thinkingDisplayMode !== undefined) state.thinkingDisplayMode = normalized.settings.thinkingDisplayMode
       // 发送方式按注入时机读取，不需要重载会话。
       state.sendMode = normalized.settings.sendMode
       if (normalized.settings.sessionIdleMinutes !== undefined) state.sessionIdleMinutes = normalized.settings.sessionIdleMinutes
@@ -1090,7 +1125,7 @@ export class ChannelManager {
       }
       this.flush()
       if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
-      if (proxyChanged && this.running.has(accountId)) await this.startOne(accountId)
+      if ((proxyChanged || freeChatGroupsChanged) && this.running.has(accountId)) await this.startOne(accountId)
       return { ok: true, account: this.accountView(accountId, state) }
     })
   }
@@ -1407,6 +1442,12 @@ export class ChannelManager {
       const value = await this.vault.resolve(ref)
       if (value) out[key] = value
     }
+    const state = this.store.channels[id]
+    if (platform === 'telegram' && state?.freeChatGroups !== undefined) {
+      out.freeChatGroups = this.accountFreeChatGroups(state).join('\n')
+      // An explicit list (including []) replaces legacy all-group bypass, never widens it.
+      delete out.mentionPolicy
+    }
     if (platform === 'weixin') {
       const token = await this.vault.resolve(credentialRef(id, 'botToken'))
       if (token) out.botToken = token
@@ -1514,7 +1555,7 @@ export class ChannelManager {
     return ordinal
   }
 
-  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all'; sendMode: SendMode; sessionIdleMinutes?: number; segmentReply?: boolean; segmentDelayMinSecs?: number; segmentDelayMaxSecs?: number } } | { ok: false; error: string }> {
+  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all'; sendMode: SendMode; freeChatGroups?: string[]; thinkingDisplayMode?: ThinkingDisplayMode; sessionIdleMinutes?: number; segmentReply?: boolean; segmentDelayMinSecs?: number; segmentDelayMaxSecs?: number } } | { ok: false; error: string }> {
     const agentPreset = input.agentPreset ?? previous.agentPreset ?? this.engineConfig.agentPreset ?? 'standard'
     if (typeof agentPreset !== 'string' || !agentPreset.trim()) return { ok: false, error: '请选择 Agent 预设' }
     if (input.agentPreset !== undefined) {
@@ -1536,6 +1577,12 @@ export class ChannelManager {
     const permission = normalizePermission(input.permission ?? previous.permission ?? this.currentPermission(), this.permissionPresets().names)
     if (!permission) return { ok: false, error: '请选择权限' }
     const privateAccess = input.privateAccess === 'all' || (input.privateAccess === undefined && previous.privateAccess === 'all') ? 'all' : 'approved'
+    const freeChatGroupsInput = input.freeChatGroups === undefined ? previous.freeChatGroups : input.freeChatGroups
+    const freeChatGroups = freeChatGroupsInput === undefined ? undefined : normalizeFreeChatGroups(freeChatGroupsInput)
+    if (freeChatGroupsInput !== undefined && freeChatGroups === undefined) return { ok: false, error: '群聊免 @ 配置无效：请填写最多 100 个负整数 Telegram 群 ID' }
+    const thinkingDisplayMode = input.thinkingDisplayMode === undefined ? previous.thinkingDisplayMode : input.thinkingDisplayMode
+    if (thinkingDisplayMode !== undefined && thinkingDisplayMode !== 'off' && thinkingDisplayMode !== 'collapsed') return { ok: false, error: '思考过程展示模式无效' }
+    if (platform !== 'telegram' && ((freeChatGroups?.length ?? 0) > 0 || thinkingDisplayMode === 'collapsed')) return { ok: false, error: '当前渠道不支持群聊免 @ 或思考过程展示' }
     const sendMode = normalizeSendMode(input.sendMode === undefined ? previous.sendMode : input.sendMode)
     const sessionIdleMinutes = normalizeIdleMinutes(input.sessionIdleMinutes) ?? previous.sessionIdleMinutes
     // 未传就从状态里沿用；显式传布尔值才覆盖，避免旧客户端保存时把开关打回默认。
@@ -1554,7 +1601,7 @@ export class ChannelManager {
     if ([...trimmed].length > ACCOUNT_REMARK_LIMIT) return { ok: false, error: `账号备注不能超过 ${ACCOUNT_REMARK_LIMIT} 个字符` }
     if (/[\u0000-\u001F\u007F]/.test(trimmed)) return { ok: false, error: '账号备注不能包含换行或控制字符' }
     const name = trimmed || autoAccountName(platform, nameOrdinal)
-    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, sendMode, sessionIdleMinutes, segmentReply, segmentDelayMinSecs, segmentDelayMaxSecs, commandPermissions } }
+    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, sendMode, freeChatGroups, thinkingDisplayMode, sessionIdleMinutes, segmentReply, segmentDelayMinSecs, segmentDelayMaxSecs, commandPermissions } }
   }
 
   private accountIdFor(platform: ChannelId, config: Record<string, string>): string {
@@ -1596,6 +1643,12 @@ export class ChannelManager {
     return [{ id: this.engineConfig.agentPreset || 'standard' }]
   }
 
+  private accountFreeChatGroups(state: ChannelState): string[] {
+    return state.freeChatGroups !== undefined
+      ? normalizeFreeChatGroups(state.freeChatGroups) ?? []
+      : parseChatIdList(state.config?.freeChatGroups)
+  }
+
   private accountEngineConfig(accountId: string): EngineConfig {
     const state = this.store.channels[accountId]
     if (!state) return this.engineConfig
@@ -1607,6 +1660,9 @@ export class ChannelManager {
       provider: assistant?.provider ?? this.engineConfig.provider,
       model: assistant?.model ?? this.engineConfig.model,
       reasoningEffort: assistant?.reasoningEffort,
+      ...(this.platformOf(accountId, state) === 'telegram' && state.thinkingDisplayMode !== undefined
+        ? { thinkingDisplay: { ...this.engineConfig.thinkingDisplay, mode: state.thinkingDisplayMode } }
+        : {}),
       permissionPreset: normalizePermission(state.permission, this.permissionPresets().names) ?? this.engineConfig.permissionPreset,
       sendMode: normalizeSendMode(state.sendMode),
       // 只有已验证逐条投递的渠道才真正生效，其他渠道即使旧配置里开了也不切分。

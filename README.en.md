@@ -273,13 +273,14 @@ Native configuration options are provided here. Their values are persisted in `c
 
 ### 4. Telegram group trigger policy (`mentionPolicy` / `freeChatGroups`)
 - **Default**: `addressed` — in groups the bot only reacts to an @mention, a reply to it, or a direct message.
-- **What it does**: to let a group chat with the bot without @mentioning it, relax the trigger in that account's `channels.json`:
+- **Account UI**: open Settings → IM Assistant → Telegram → account settings. Choose selected groups under “Group mention bypass” and enter their Telegram group IDs. Turning it off clears that account's bypass list; authorization remains unchanged.
+- **Legacy configuration**: existing deployments can still configure the trigger in that account's `channels.json`:
   ```json
   {
     "channels": {
       "<account id>": {
         "config": {
-          "mentionPolicy": "always",
+          "mentionPolicy": "addressed",
           "freeChatGroups": "-1001234567890, -5496760438"
         }
       }
@@ -290,10 +291,11 @@ Native configuration options are provided here. Their values are persisted in `c
   - `freeChatGroups`: relax only the listed groups (chat ids separated by commas/whitespace); other groups keep the default;
   - Both only decide whether a message reaches the agent — direct-message admission, tool approvals and command permissions are unchanged.
 - **Platform prerequisite**: with Telegram privacy mode the bot only receives mentions, replies and commands. Make the bot a group administrator, or run `setprivacy` → `Disable` in @BotFather, so plain group messages reach the plugin.
-- **UI**: configured through `channels.json` for now; the management panel does not expose these switches yet.
+- **Persistence**: the account UI saves `freeChatGroups` as an array of at most 100 unique negative integer group IDs (1–20 digits after the minus sign). An explicitly saved list (including an empty list when disabled) overrides the legacy `config.mentionPolicy: "always"`. An active legacy all-groups policy is visibly identified, not mislabeled as off; changing unrelated settings leaves it intact. Choose Off or selected groups to replace it. Older clients that omit the fields preserve existing settings.
 
 ### Collapsible thinking message (`thinkingDisplay`)
-- **Default**: off (`mode: 'off'`).
+- **Default**: off (`mode: 'off'`); accounts with an existing plugin-level configuration show their effective mode.
+- **Account UI**: choose Off or Collapsible under “Thinking display” in Telegram account settings. The per-account `thinkingDisplayMode: "off" | "collapsed"` does not affect other accounts or model reasoning effort.
 - **What it does**: when enabled, the model's reasoning is sent as a separate Telegram collapsible quote (`<blockquote expandable>`) — about three lines collapsed, tap "show more" to expand. The same message is edited in place during the turn and retitled "🧠 Thought process" when the turn ends.
 - **Example** (plugin config slot):
   ```yaml
@@ -308,7 +310,7 @@ Native configuration options are provided here. Their values are persisted in `c
 - **Resources and lifecycle**: off/unsupported channels retain no raw reasoning. When enabled, each turn retains at most a 4096 UTF-16-unit prefix plus a scalar character count. Pending refreshes coalesce to the latest snapshot; cancellation, rebinding, muting, unloading and turn replacement prevent stale output.
 - **Ranges**: `minChars` 0–4096 (also applied on final), `intervalMs` 1000–60000, `maxChars` 200–4096. Finite out-of-range values are clamped, nonfinite values use defaults. HTML escaping, labels, wrappers and truncation notes all fit the budget without splitting emoji surrogate pairs.
 - **Fallback**: only a definite HTML entity rejection switches to plain text, which persists for later edits in that turn. Unknown network outcomes, authentication failures and rate limits do not trigger a format-switch resend.
-- **Migration**: the old local `showReasoning` patch is not migrated automatically; explicitly choose `thinkingDisplay.mode: collapsed`. Consult the web session for omitted reasoning if retained by the host. Configuration is currently plugin-wide; the account UI has no independent toggle.
+- **Migration**: the old local `showReasoning` patch is not migrated automatically. Explicitly select Collapsible in the account UI, or set plugin-level `thinkingDisplay.mode: collapsed`. An explicitly saved account mode takes precedence; throttling and size parameters continue to inherit plugin-level configuration. Consult the web session for omitted reasoning if retained by the host.
 
 ## Usage
 
