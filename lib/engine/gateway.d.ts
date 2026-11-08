@@ -16,9 +16,10 @@ export interface DeliveryOutcome {
     definite?: boolean;
 }
 /**
- * 平台是否已经明确答复「本次发送没有送达」。
+ * 是否有明确证据证明本次发送未落地。
  *
- * 只认渠道显式抛出的 {@link DeliveryRejected}（例如微信
+ * {@link DeliveryUnavailable} 只用于适配器证明连接建立前失败、请求尚未提交。
+ * 另一类是渠道显式抛出的 {@link DeliveryRejected}（例如微信
  * `/ilink/bot/sendmessage ret=-2 … prepare failed`、HTTP 429/503）：
  * 这类响应说明请求到达平台但未被受理，重发不会让用户收到两条。
  *
