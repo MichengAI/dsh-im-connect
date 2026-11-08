@@ -1,4 +1,14 @@
 # Changelog
+
+## [1.0.29] - 2026-11-08
+
+### Telegram group mention policy & visual configuration
+
+- Telegram group mention policy: support choosing group chat trigger policy in account settings — "Mention or reply only (default)", "Always reply to all group messages", and "Free chat in specific groups only" (#62).
+- Visual configuration for group whitelist: when choosing specific groups, enter group IDs directly in the visual settings panel. Draft inputs are retained when toggling between policies to prevent accidental input loss.
+- Smart group ID parsing and link tolerance: support pasting Telegram Web group URLs directly (e.g. `web.telegram.org` and private links `t.me/c/...`), automatically normalize Unicode full-width minus signs, dashes, and topic suffixes, and provide real-time validation warnings for unrecognized entries.
+- Group ID discovery guide: add clear instructions in README for discovering Telegram group IDs via browser address bar or query bots.
+
 ## [1.0.28] - 2026-11-06
 
 ### Telegram delivery reliability
