@@ -185,14 +185,18 @@ test('Telegram 群聊策略仅在 Telegram 设置中渲染，支持三态、群�
   const inspector = client.slice(client.indexOf('function AccountInspector'), client.indexOf('function AccountRemarkEditor'))
   assert.match(inspector, /account\.platform === "telegram"/)
   assert.match(inspector, /ima-mention-policy-settings/)
-  assert.match(inspector, /ima-thinking-display-settings/)
   assert.match(inspector, /account\.telegramGroupPolicy/)
   assert.match(inspector, /account\.telegramFreeChatGroups/)
-  assert.match(inspector, /account\.telegramThinkingDisplay/)
   assert.match(inspector, /account\.telegramFreeChatGroupsInvalid/)
   assert.match(inspector, /value: "addressed"/)
   assert.match(inspector, /value: "custom"/)
   assert.match(inspector, /value: "always"/)
+
+  const picker = client.slice(client.indexOf('function AccountSettingsPicker'), client.indexOf('function AccountInspector'))
+  assert.match(picker, /props\.thinkingDisplaySupported/)
+  assert.match(picker, /account\.telegramThinkingDisplay/)
+  assert.match(picker, /value: "collapsed"/)
+  assert.match(picker, /value: "off"/)
 })
 
 function mockFetch(handler) {
