@@ -1,4 +1,5 @@
 node_modules/
+.local/
 dist/
 docs/*
 !docs/01-当前工作/

@@ -12,6 +12,7 @@ import type { TopicMode } from './engine/topic-title.js'
 import { createRotatingFileAppender } from './engine/file-log.js'
 import { registerPluginUpdater } from './plugin-updater.js'
 import { withReplyLocale } from './engine/command-locale.js'
+import { captureWorkspaceRuntime } from './workspace-runtime.js'
 
 export const name = 'dsh-im-connect'
 export const inject = [
@@ -99,6 +100,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     thinkingDisplay: config.thinkingDisplay,
   }
 
+  captureWorkspaceRuntime(import.meta.url, log)
   const applyStarted = Date.now()
   const manager = new ChannelManager({ ctx, stateDir, log, engineConfig, hostUpdateDisabled })
   log(`[boot] ChannelManager 构造 ${Date.now() - applyStarted}ms`)

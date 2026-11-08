@@ -41,7 +41,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-client.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "workspace:build": "node scripts/workspace-dev.mjs build",
+    "workspace:status": "node scripts/workspace-dev.mjs status"
   },
   "license": "Apache-2.0",
   "engines": {
