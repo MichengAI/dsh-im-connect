@@ -2168,10 +2168,8 @@ window.__ModuleLoader__.load({
           accountIdRef.current = account.id;
           setFreeChatGroupsDraft(account.freeChatGroups || "");
           setMentionPolicyDraft(account.mentionPolicy === "always" ? "always" : (account.freeChatGroups ? "custom" : "addressed"));
-        } else if (account.freeChatGroups && !freeChatGroupsDraft) {
-          setFreeChatGroupsDraft(account.freeChatGroups);
         }
-      }, [account.id, account.freeChatGroups, account.mentionPolicy, freeChatGroupsDraft]);
+      }, [account.id, account.freeChatGroups, account.mentionPolicy]);
       useEffect(() => {
         setProxyUrlDraft(account.proxyUrl || "");
       }, [account.id, account.proxyUrl]);
@@ -2345,7 +2343,7 @@ window.__ModuleLoader__.load({
               freeChatGroupsDraft.trim() &&
               !freeChatGroupsDraft.split(/[\s,，]+/).some((item) => {
                 const cleaned = item.trim().replace(/[\u2212\u2013\u2014\uFF0D]/g, "-");
-                return /^-?\d{1,20}$/.test(cleaned.split(":")[0]) || /t\.me\/c\/\d+/i.test(cleaned) || /web\.telegram\.org\/[^#]*#-?\d+/i.test(cleaned);
+                return /^-?\d{1,20}$/.test(cleaned.split(":")[0]) || /t\.me\/c\/\d+/i.test(cleaned) || /web\.telegram\.org\/[^#]*#(?:-|c)?\d+/i.test(cleaned);
               })
             ) && h("div", { className: "ima-picker-note warning" }, t("account.telegramFreeChatGroupsInvalid")),
             h("div", { className: "ima-picker-note" }, t("account.telegramGroupPolicyNote")),

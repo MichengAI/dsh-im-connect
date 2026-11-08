@@ -50,8 +50,8 @@ test('群号列表解析支持逗号、中文逗号与空白分隔，且支持Un
   assert.deepEqual(parseChatIdList('\u22121001234567890, \uFF0D987654321, \u2013111, \u2014222'), ['-1001234567890', '-987654321', '-111', '-222'])
   // 2. 论坛话题后缀截断
   assert.deepEqual(parseChatIdList('-1001234567890:42, -5496760438:100'), ['-1001234567890', '-5496760438'])
-  // 3. Telegram Web 私有群链接解析为超级群 ID -100...（以 100 开头的内部 ID 亦正确保留为 -1001005555）
-  assert.deepEqual(parseChatIdList('https://t.me/c/1234567890/42, https://t.me/c/1005555/1, https://web.telegram.org/a/#-100987654321'), ['-1001234567890', '-1001005555', '-100987654321'])
+  // 3. Telegram Web 私有群链接解析为超级群 ID -100...（含以 100 开头的内部 ID 与 #c 内部 ID）
+  assert.deepEqual(parseChatIdList('https://t.me/c/1234567890/42, https://t.me/c/1005555/1, https://web.telegram.org/a/#-100987654321, https://web.telegram.org/k/#c7654321'), ['-1001234567890', '-1001005555', '-100987654321', '-1007654321'])
   // 4. 重复群号自动去重
   assert.deepEqual(parseChatIdList('-1001, -1001, \u22121001'), ['-1001'])
   assert.deepEqual(parseChatIdList(undefined), [])
@@ -290,4 +290,12 @@ test('Telegram 真实入站长轮询：默认策略 vs 白名单 freeChatGroups 
     restore()
     rmSync(stateDir, { recursive: true, force: true })
   }
+})
+
+test('前端设置组件：删空草稿不被服务端旧值覆盖，且校验正则支持 #c 链接', () => {
+  const clientCode = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  // 确保移除了容易导致清空失败的 else if 兜底
+  assert.ok(!clientCode.includes('else if (account.freeChatGroups && !freeChatGroupsDraft)'), '不应存在清空后强制回填的兜底')
+  // 确保前端警告正则包含 (?:-|c)? 分支
+  assert.ok(clientCode.includes('#(?:-|c)?\\d+'), '前端警告正则应支持完整负数群号与 #c 内部 ID')
 })
