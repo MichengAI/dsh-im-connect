@@ -23,7 +23,7 @@ export interface InboundAddressInput {
 export declare function isInboundAddressed(input: InboundAddressInput): boolean;
 /**
  * 解析渠道配置里的群号列表：支持逗号、中文逗号、空白分隔，非法项直接丢弃。
- * 渠道配置是字符串键值对，因此这里只接受纯数字（可带负号）的群 id。
+ * 渠道配置是字符串键值对，支持 Unicode 负号、话题后缀剥离与 Telegram Web 链接提取。
  */
 export declare function parseChatIdList(raw: unknown): string[];
 //# sourceMappingURL=mention-policy.d.ts.map

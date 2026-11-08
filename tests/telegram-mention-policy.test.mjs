@@ -41,11 +41,19 @@ test('freeChatGroups 中的空白项与非法项被忽略', () => {
   assert.equal(isInboundAddressed({ ...base, freeChatGroups: ['not-a-chat'] }), false)
 })
 
-test('群号列表解析支持逗号、中文逗号与空白分隔', () => {
+test('群号列表解析支持逗号、中文逗号与空白分隔，且支持Unicode负号、话题后缀与Web链接提取', () => {
   assert.deepEqual(parseChatIdList('-1001, -5496760438'), ['-1001', '-5496760438'])
   assert.deepEqual(parseChatIdList('-1001，-5496760438'), ['-1001', '-5496760438'])
   assert.deepEqual(parseChatIdList(' -1001\n-5496760438 '), ['-1001', '-5496760438'])
   assert.deepEqual(parseChatIdList('abc, 123'), ['123'])
+  // 1. 全角负号 U+2212、U+FF0D 与破折号 U+2013、U+2014 转换为 ASCII -
+  assert.deepEqual(parseChatIdList('\u22121001234567890, \uFF0D987654321, \u2013111, \u2014222'), ['-1001234567890', '-987654321', '-111', '-222'])
+  // 2. 论坛话题后缀截断
+  assert.deepEqual(parseChatIdList('-1001234567890:42, -5496760438:100'), ['-1001234567890', '-5496760438'])
+  // 3. Telegram Web 私有群链接解析为超级群 ID -100...
+  assert.deepEqual(parseChatIdList('https://t.me/c/1234567890/42, https://web.telegram.org/a/#-100987654321'), ['-1001234567890', '-100987654321'])
+  // 4. 重复群号自动去重
+  assert.deepEqual(parseChatIdList('-1001, -1001, \u22121001'), ['-1001'])
   assert.deepEqual(parseChatIdList(undefined), [])
   assert.deepEqual(parseChatIdList(''), [])
   assert.deepEqual(parseChatIdList(null), [])
@@ -163,13 +171,14 @@ test('非 Telegram 账号忽略群聊触发策略配置', async t => {
   assert.equal(saved.account.freeChatGroups, undefined)
 })
 
-test('Telegram 群聊策略仅在 Telegram 设置中渲染，支持三态与群号输入', () => {
+test('Telegram 群聊策略仅在 Telegram 设置中渲染，支持三态、群号输入与格式警告', () => {
   const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
   const inspector = client.slice(client.indexOf('function AccountInspector'), client.indexOf('function AccountRemarkEditor'))
   assert.match(inspector, /account\.platform === "telegram"/)
   assert.match(inspector, /ima-mention-policy-settings/)
   assert.match(inspector, /account\.telegramGroupPolicy/)
   assert.match(inspector, /account\.telegramFreeChatGroups/)
+  assert.match(inspector, /account\.telegramFreeChatGroupsInvalid/)
   assert.match(inspector, /value: "addressed"/)
   assert.match(inspector, /value: "custom"/)
   assert.match(inspector, /value: "always"/)
