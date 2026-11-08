@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { isInboundAddressed, parseChatIdList } from '../lib/channels/mention-policy.js'
+import { createTelegramChannel } from '../lib/channels/telegram.js'
 import { createChannelAdapter } from '../lib/channels/factory.js'
+import { ChannelManager } from '../lib/manager.js'
 
 const base = { direct: false, chatId: '-1001', replyToBot: false, mentioned: false }
 
@@ -43,6 +48,14 @@ test('群号列表解析支持逗号、中文逗号与空白分隔', () => {
   assert.deepEqual(parseChatIdList('abc, 123'), ['123'])
   assert.deepEqual(parseChatIdList(undefined), [])
   assert.deepEqual(parseChatIdList(''), [])
+  assert.deepEqual(parseChatIdList(null), [])
+  assert.deepEqual(parseChatIdList(12345), [])
+  assert.deepEqual(parseChatIdList({}), [])
+})
+
+test('mentionPolicy=always 优先级高于 freeChatGroups', () => {
+  // 当 policy 为 always 时，即使当前群不在 freeChatGroups 白名单中，依然算 addressed
+  assert.equal(isInboundAddressed({ ...base, chatId: '-9999', policy: 'always', freeChatGroups: ['-1001'] }), true)
 })
 
 test('工厂把配置字符串传给 Telegram 渠道后仍能创建实例', () => {
@@ -53,4 +66,219 @@ test('工厂把配置字符串传给 Telegram 渠道后仍能创建实例', () =
   }, () => undefined, process.cwd())
   assert.ok(channel, 'telegram 渠道应创建成功')
   assert.equal(channel.id, 'telegram')
+})
+
+function makeManager(t, stateDir = mkdtempSync(join(tmpdir(), 'im-connect-mention-'))) {
+  const manager = new ChannelManager({
+    ctx: { permissionPresets: { names: ['review'], defaultPreset: 'review', optionOf: value => ({ value, name: value }) } },
+    stateDir,
+    log: () => undefined,
+    engineConfig: { cwd: stateDir, provider: 'test', model: 'test', agentPreset: 'standard', mergeTimeoutSecs: 5, permissionPreset: 'review' },
+  })
+  manager.startOne = async () => undefined
+  t.after(() => { manager.disposeApi(); rmSync(stateDir, { recursive: true, force: true }) })
+  return manager
+}
+
+test('ChannelManager 反显、保存与更新 Telegram 群聊触发策略', async t => {
+  const manager = makeManager(t)
+  const created = await manager.connect('telegram', { token: 'test-token' }, {
+    provider: 'test', model: 'test', cwd: tmpdir(), permission: 'review', privateAccess: 'approved',
+  })
+  assert.equal(created.ok, true)
+
+  // 1. 初始状态：未配置时默认 addressed，freeChatGroups 为空字符串
+  let account = manager.list().flatMap(c => c.accounts).find(a => a.id === created.accountId)
+  assert.equal(account.mentionPolicy, 'addressed')
+  assert.equal(account.freeChatGroups, '')
+
+  // 2. 更新为指定群免 @
+  let saved = await manager.updateAccount(created.accountId, {
+    mentionPolicy: 'addressed',
+    freeChatGroups: '-1001234567890, -5496760438',
+  })
+  assert.equal(saved.ok, true)
+  assert.equal(saved.account.mentionPolicy, 'addressed')
+  assert.equal(saved.account.freeChatGroups, '-1001234567890, -5496760438')
+
+  // 3. 更新为所有群均免 @
+  saved = await manager.updateAccount(created.accountId, {
+    mentionPolicy: 'always',
+    freeChatGroups: '',
+  })
+  assert.equal(saved.ok, true)
+  assert.equal(saved.account.mentionPolicy, 'always')
+  assert.equal(saved.account.freeChatGroups, '')
+
+  // 4. 切回默认 addressed 且清明白名单
+  saved = await manager.updateAccount(created.accountId, {
+    mentionPolicy: 'addressed',
+    freeChatGroups: '',
+  })
+  assert.equal(saved.ok, true)
+  assert.equal(saved.account.mentionPolicy, 'addressed')
+  assert.equal(saved.account.freeChatGroups, '')
+})
+
+test('运行中的 Telegram 账号在群聊策略变更时会触发 startOne 重启', async t => {
+  const manager = makeManager(t)
+  const created = await manager.connect('telegram', { token: 'test-token' }, {
+    provider: 'test', model: 'test', cwd: tmpdir(), permission: 'review', privateAccess: 'approved',
+  })
+  assert.equal(created.ok, true)
+
+  let restartCount = 0
+  manager.startOne = async () => {
+    restartCount++
+  }
+  // 模拟当前账号处于运行状态
+  manager.running.set(created.accountId, { status: () => 'connected', stop: async () => undefined })
+
+  // 策略变更：addressed -> always
+  await manager.updateAccount(created.accountId, { mentionPolicy: 'always' })
+  assert.equal(restartCount, 1, '策略变更应触发重启')
+
+  // 策略未变：再次保存 always，不触发重启
+  await manager.updateAccount(created.accountId, { mentionPolicy: 'always' })
+  assert.equal(restartCount, 1, '策略未变不应重复重启')
+
+  // 白名单变更：freeChatGroups 变更应触发重启
+  await manager.updateAccount(created.accountId, { freeChatGroups: '-100111' })
+  assert.equal(restartCount, 2, '白名单变更应触发重启')
+})
+
+test('非 Telegram 账号忽略群聊触发策略配置', async t => {
+  const manager = makeManager(t)
+  const created = await manager.connect('qq', { appId: 'test-app', appSecret: 'test-secret' }, {
+    provider: 'test', model: 'test', cwd: tmpdir(), permission: 'review', privateAccess: 'approved',
+  })
+  assert.equal(created.ok, true)
+
+  const saved = await manager.updateAccount(created.accountId, {
+    mentionPolicy: 'always',
+    freeChatGroups: '-100123',
+  })
+  assert.equal(saved.ok, true)
+  assert.equal(saved.account.mentionPolicy, undefined)
+  assert.equal(saved.account.freeChatGroups, undefined)
+})
+
+test('Telegram 群聊策略仅在 Telegram 设置中渲染，支持三态与群号输入', () => {
+  const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  const inspector = client.slice(client.indexOf('function AccountInspector'), client.indexOf('function AccountRemarkEditor'))
+  assert.match(inspector, /account\.platform === "telegram"/)
+  assert.match(inspector, /ima-mention-policy-settings/)
+  assert.match(inspector, /account\.telegramGroupPolicy/)
+  assert.match(inspector, /account\.telegramFreeChatGroups/)
+  assert.match(inspector, /value: "addressed"/)
+  assert.match(inspector, /value: "custom"/)
+  assert.match(inspector, /value: "always"/)
+})
+
+function mockFetch(handler) {
+  const previous = globalThis.fetch
+  globalThis.fetch = handler
+  return () => { globalThis.fetch = previous }
+}
+
+test('Telegram 真实入站长轮询：默认策略 vs 白名单 freeChatGroups vs 全局 always', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'dsh-telegram-mention-poll-'))
+  let queue = []
+  let pendingPoll = null
+  const pushUpdate = (item) => {
+    if (pendingPoll) {
+      const cb = pendingPoll
+      pendingPoll = null
+      cb([item])
+    } else {
+      queue.push(item)
+    }
+  }
+
+  const restore = mockFetch(async (url, init) => {
+    const method = String(url).split('/').pop()
+    if (method === 'getMe') return { json: async () => ({ ok: true, result: { id: 99, username: 'test_bot', is_bot: true } }) }
+    if (method === 'getWebhookInfo') return { json: async () => ({ ok: true, result: { url: '' } }) }
+    if (method === 'getUpdates') {
+      if (queue.length > 0) {
+        const items = queue
+        queue = []
+        return { json: async () => ({ ok: true, result: items }) }
+      }
+      return new Promise((resolve, reject) => {
+        const onAbort = () => reject(init.signal.reason)
+        init.signal.addEventListener('abort', onAbort, { once: true })
+        pendingPoll = (items) => {
+          init.signal.removeEventListener('abort', onAbort)
+          resolve({ json: async () => ({ ok: true, result: items }) })
+        }
+      })
+    }
+    return { json: async () => ({ ok: true, result: {} }) }
+  })
+
+  try {
+    // 1. 默认策略：普通群消息 addressed 为 false
+    const channelDefault = createTelegramChannel({ token: 'test-token', stateDir }, () => undefined)
+    const received1 = []
+    channelDefault.setMessageHandler(msg => received1.push(msg))
+    await channelDefault.start()
+
+    pushUpdate({
+      update_id: 1,
+      message: { message_id: 101, chat: { id: -100123, type: 'supergroup' }, from: { id: 1, username: 'bob' }, text: 'plain message' }
+    })
+    await new Promise(r => setTimeout(r, 60))
+    assert.equal(received1.length, 1)
+    assert.equal(received1[0].addressed, false, '默认策略下群普通消息 addressed 应为 false')
+    await channelDefault.stop()
+
+    // 2. 指定群白名单：-100123 命中，-100999 未命中
+    const channelCustom = createTelegramChannel({
+      token: 'test-token',
+      stateDir,
+      freeChatGroups: ['-100123']
+    }, () => undefined)
+    const received2 = []
+    channelCustom.setMessageHandler(msg => received2.push(msg))
+    await channelCustom.start()
+
+    pushUpdate({
+      update_id: 2,
+      message: { message_id: 102, chat: { id: -100123, type: 'supergroup' }, from: { id: 1, username: 'bob' }, text: 'msg in free group' }
+    })
+    pushUpdate({
+      update_id: 3,
+      message: { message_id: 103, chat: { id: -100999, type: 'supergroup' }, from: { id: 2, username: 'charlie' }, text: 'msg in other group' }
+    })
+    await new Promise(r => setTimeout(r, 60))
+    assert.equal(received2.length, 2)
+    assert.equal(received2[0].chatId, '-100123')
+    assert.equal(received2[0].addressed, true, '命中白名单群的普通消息 addressed 应为 true')
+    assert.equal(received2[1].chatId, '-100999')
+    assert.equal(received2[1].addressed, false, '未命中白名单群的普通消息 addressed 应为 false')
+    await channelCustom.stop()
+
+    // 3. 全局 always 策略：任意群普通消息 addressed 均为 true
+    const channelAlways = createTelegramChannel({
+      token: 'test-token',
+      stateDir,
+      mentionPolicy: 'always'
+    }, () => undefined)
+    const received3 = []
+    channelAlways.setMessageHandler(msg => received3.push(msg))
+    await channelAlways.start()
+
+    pushUpdate({
+      update_id: 4,
+      message: { message_id: 104, chat: { id: -100999, type: 'supergroup' }, from: { id: 2, username: 'charlie' }, text: 'msg in always mode' }
+    })
+    await new Promise(r => setTimeout(r, 60))
+    assert.equal(received3.length, 1)
+    assert.equal(received3[0].addressed, true, 'always 模式下群普通消息 addressed 应为 true')
+    await channelAlways.stop()
+  } finally {
+    restore()
+    rmSync(stateDir, { recursive: true, force: true })
+  }
 })

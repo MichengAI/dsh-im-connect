@@ -73,6 +73,8 @@ export interface AccountView {
     proxyMode: ChannelProxyMode;
     proxyConfigured: boolean;
     proxyUrl?: string;
+    mentionPolicy?: 'addressed' | 'always';
+    freeChatGroups?: string;
     lastCheckedAt?: string;
 }
 interface AccountDiagnosticResult {

@@ -273,24 +273,34 @@ dsh --profile web --dump-config
 
 ### 4. Telegram 群聊触发策略 (`mentionPolicy` / `freeChatGroups`)
 - **默认状态**：`addressed`（群里只有 @bot、回复 bot 或私聊才会处理）
-- **功能说明**：群聊希望「不 @ 也能直接聊」时，可在该账号的 `channels.json` 配置里放宽触发条件：
-  ```json
-  {
-    "channels": {
-      "<账号 id>": {
-        "config": {
-          "mentionPolicy": "always",
-          "freeChatGroups": "-1001234567890, -5496760438"
+- **功能说明**：群聊希望「不 @ 也能直接聊」时，可直接在「设置 → IM助理 → Telegram 账号详情」中配置群聊触发策略，亦可在 `channels.json` 中配置：
+  - **场景 A（仅特定群免 @）**：仅配置 `freeChatGroups`，未列出的群保持默认：
+    ```json
+    {
+      "channels": {
+        "<账号 id>": {
+          "config": {
+            "freeChatGroups": "-1001234567890, -5496760438"
+          }
         }
       }
     }
-  }
-  ```
-  - `mentionPolicy: "always"`：该账号下所有群的普通消息都触发；
-  - `freeChatGroups`：只放宽列出的群（群 id，支持逗号/中文逗号/空白分隔），其余群保持默认；
+    ```
+  - **场景 B（所有群均免 @）**：配置 `mentionPolicy` 为 `always`（此模式下无需配置 `freeChatGroups`）：
+    ```json
+    {
+      "channels": {
+        "<账号 id>": {
+          "config": {
+            "mentionPolicy": "always"
+          }
+        }
+      }
+    }
+    ```
   - 这两项只影响「这条消息要不要送进 agent」，不改变私聊准入、工具审批与命令权限。
 - **平台侧前提**：Telegram 隐私模式下 bot 只能收到提及、回复与命令。要让普通群消息到达插件，需把 bot 设为该群管理员，或在 @BotFather 里 `setprivacy` → `Disable`。
-- **界面支持**：当前通过 `channels.json` 配置生效，管理面板暂未提供开关。
+- **界面支持**：可在「设置 → IM助理」展开 Telegram 账号详情，直接通过下拉选择与群号输入框进行可视化配置。
 
 ## 使用
 

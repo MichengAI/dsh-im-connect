@@ -273,24 +273,34 @@ Native configuration options are provided here. Their values are persisted in `c
 
 ### 4. Telegram group trigger policy (`mentionPolicy` / `freeChatGroups`)
 - **Default**: `addressed` — in groups the bot only reacts to an @mention, a reply to it, or a direct message.
-- **What it does**: to let a group chat with the bot without @mentioning it, relax the trigger in that account's `channels.json`:
-  ```json
-  {
-    "channels": {
-      "<account id>": {
-        "config": {
-          "mentionPolicy": "always",
-          "freeChatGroups": "-1001234567890, -5496760438"
+- **What it does**: to let a group chat with the bot without @mentioning it, configure the trigger policy directly in **Settings → IM Assistant → Telegram Account Details**, or in `channels.json`:
+  - **Scenario A (specific groups only)**: configure `freeChatGroups` only; other groups keep default:
+    ```json
+    {
+      "channels": {
+        "<account id>": {
+          "config": {
+            "freeChatGroups": "-1001234567890, -5496760438"
+          }
         }
       }
     }
-  }
-  ```
-  - `mentionPolicy: "always"`: every plain group message triggers the bot for this account;
-  - `freeChatGroups`: relax only the listed groups (chat ids separated by commas/whitespace); other groups keep the default;
+    ```
+  - **Scenario B (all groups)**: configure `mentionPolicy` as `always` (no need to configure `freeChatGroups` in this mode):
+    ```json
+    {
+      "channels": {
+        "<account id>": {
+          "config": {
+            "mentionPolicy": "always"
+          }
+        }
+      }
+    }
+    ```
   - Both only decide whether a message reaches the agent — direct-message admission, tool approvals and command permissions are unchanged.
 - **Platform prerequisite**: with Telegram privacy mode the bot only receives mentions, replies and commands. Make the bot a group administrator, or run `setprivacy` → `Disable` in @BotFather, so plain group messages reach the plugin.
-- **UI**: configured through `channels.json` for now; the management panel does not expose these switches yet.
+- **UI**: configure visually by expanding Telegram account details in **Settings → IM Assistant** with policy select and group ID inputs.
 
 ## Usage
 
