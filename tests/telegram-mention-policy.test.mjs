@@ -199,6 +199,83 @@ test('Telegram 群聊策略仅在 Telegram 设置中渲染，支持三态、群�
   assert.match(picker, /value: "off"/)
 })
 
+test('AccountSettingsPicker 真实运行时：thinkingDisplay 下拉选项及双向状态与事件映射', () => {
+  const client = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  const pickerSource = client.slice(
+    client.indexOf('function AccountSettingsPicker'),
+    client.indexOf('function AccountInspector')
+  )
+
+  const h = (type, props, ...children) => ({ type, props, children })
+  const fallbackT = (k) => k
+  const useState = (init) => [init, () => {}]
+  const useMemo = (fn) => fn()
+  const useEffect = () => {}
+
+  const fn = new Function('h', 'Select', 'Button', 'PlusIcon', 'IconInfoOutline', 'Input', 'Modal', 'Checkbox', 'permissionT', 'fallbackT', 'HostTooltip', 'useState', 'useMemo', 'useEffect', `
+    ${pickerSource}
+    return AccountSettingsPicker;
+  `)
+
+  const Component = fn(h, 'Select', 'Button', 'PlusIcon', 'IconInfoOutline', 'Input', 'Modal', 'Checkbox', fallbackT, fallbackT, null, useState, useMemo, useEffect)
+
+  function findSelects(node) {
+    const list = []
+    if (!node) return list
+    if (node.type === 'Select') list.push(node)
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) {
+        list.push(...findSelects(c))
+      }
+    }
+    return list
+  }
+
+  // 1. 当 thinkingDisplaySupported 为 false 时，不渲染该下拉框
+  const treeDisabled = Component({
+    value: { thinkingDisplay: true },
+    onChange: () => {},
+    thinkingDisplaySupported: false,
+    segmentReplySupported: false,
+  })
+  const selectDisabled = findSelects(treeDisabled).find(s => s.props['aria-label'] === 'account.telegramThinkingDisplay')
+  assert.equal(selectDisabled, undefined, '不支持时不得渲染 thinkingDisplay 下拉')
+
+  // 2. 当 thinkingDisplay 为 true 时，选中 collapsed 并具有双向事件
+  let updated = null
+  const treeEnabled = Component({
+    value: { thinkingDisplay: true },
+    onChange: (patch) => { updated = patch },
+    thinkingDisplaySupported: true,
+    segmentReplySupported: false,
+  })
+  const selectEnabled = findSelects(treeEnabled).find(s => s.props['aria-label'] === 'account.telegramThinkingDisplay')
+  assert.ok(selectEnabled, '支持时必须渲染 thinkingDisplay 下拉')
+  assert.equal(selectEnabled.props.value, 'collapsed')
+  assert.deepEqual(selectEnabled.props.options, [
+    { value: 'off', label: 'account.telegramThinkingDisplayOff' },
+    { value: 'collapsed', label: 'account.telegramThinkingDisplayCollapsed' },
+  ])
+
+  // 3. 触发 onChange("off") -> 回传 false
+  selectEnabled.props.onChange('off')
+  assert.deepEqual(updated, { thinkingDisplay: false })
+
+  // 4. 触发 onChange("collapsed") -> 回传 true
+  selectEnabled.props.onChange('collapsed')
+  assert.deepEqual(updated, { thinkingDisplay: true })
+
+  // 5. 当 thinkingDisplay 为 false 时，选中 off
+  const treeOff = Component({
+    value: { thinkingDisplay: false },
+    onChange: () => {},
+    thinkingDisplaySupported: true,
+    segmentReplySupported: false,
+  })
+  const selectOff = findSelects(treeOff).find(s => s.props['aria-label'] === 'account.telegramThinkingDisplay')
+  assert.equal(selectOff.props.value, 'off')
+})
+
 function mockFetch(handler) {
   const previous = globalThis.fetch
   globalThis.fetch = handler

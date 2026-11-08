@@ -2175,7 +2175,6 @@ window.__ModuleLoader__.load({
         account.mentionPolicy === "always" ? "always" : (account.freeChatGroups ? "custom" : "addressed")
       );
       const [freeChatGroupsDraft, setFreeChatGroupsDraft] = useState(account.freeChatGroups || "");
-      const [thinkingDisplayDraft, setThinkingDisplayDraft] = useState(Boolean(account.thinkingDisplay));
       const accountIdRef = useRef(account.id);
       const [note, setNote] = useState("");
       const [checkResult, setCheckResult] = useState(null);
@@ -2223,9 +2222,8 @@ window.__ModuleLoader__.load({
           accountIdRef.current = account.id;
           setFreeChatGroupsDraft(account.freeChatGroups || "");
           setMentionPolicyDraft(account.mentionPolicy === "always" ? "always" : (account.freeChatGroups ? "custom" : "addressed"));
-          setThinkingDisplayDraft(Boolean(account.thinkingDisplay));
         }
-      }, [account.id, account.freeChatGroups, account.mentionPolicy, account.thinkingDisplay]);
+      }, [account.id, account.freeChatGroups, account.mentionPolicy]);
       useEffect(() => {
         setProxyUrlDraft(account.proxyUrl || "");
       }, [account.id, account.proxyUrl]);
@@ -2266,6 +2264,8 @@ window.__ModuleLoader__.load({
           }
           if (Object.prototype.hasOwnProperty.call(patch, "thinkingDisplay")) {
             payload.thinkingDisplay = patch.thinkingDisplay;
+          } else if (typeof draft.thinkingDisplay === "boolean") {
+            payload.thinkingDisplay = draft.thinkingDisplay;
           }
         }
         return onSave(account.id, payload).then((ok) => {

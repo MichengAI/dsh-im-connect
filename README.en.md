@@ -271,7 +271,6 @@ Native configuration options are provided here. Their values are persisted in `c
   - **Channels Tab Preserved**: Filtering applies only to the official workspace tree. All channel sessions remain fully available and accessible at any time under the sidebar's **Channels** tab;
   - **Lightweight Pipeline Collaboration**: Implemented via the `NativeTabRegistry.sessionFilters` inter-plugin protocol without invasive host hijacking. Toggling takes effect immediately and interoperates smoothly with Automation and Archive Manager. Non-supporting host shells degrade gracefully with a one-time warning.
 
-<<<<<<< HEAD
 ### 4. Telegram group trigger policy (`mentionPolicy` / `freeChatGroups`)
 - **Default**: `addressed` — in groups the bot only reacts to an @mention, a reply to it, or a direct message.
 - **What it does**: to let a group chat with the bot without @mentioning it, configure the trigger policy directly in **Settings → IM Assistant → Telegram Account Details**, or in `channels.json`:
@@ -318,7 +317,7 @@ Native configuration options are provided here. Their values are persisted in `c
     intervalMs: 2000  # minimum interval between refreshes
     maxChars: 3500    # per-message cap; longer text is truncated and noted
   ```
-- **Channel and UI support**: implemented for Telegram; can be enabled in **Settings → IM Assistant → Telegram Account** via the "Show thinking process" switch. Other channels ignore the setting and keep the existing status line.
+- **Channel and UI support**: implemented for Telegram; can be enabled in **Settings → IM Assistant → Telegram Account** by selecting **Collapsed** in the **Show thinking process** dropdown. Other channels ignore the setting and keep the existing status line.
 - **Boundaries and privacy**: collapsing is client-side display, not access control; everyone who can read the group message can expand the reasoning. Enable only where sharing reasoning is intentional. Thinking is not counted as final-answer delivery or included in automatic recovery.
 - **Resources and lifecycle**: off/unsupported channels retain no raw reasoning. When enabled, each turn retains at most a 4096 UTF-16-unit prefix plus a scalar character count. Pending refreshes coalesce to the latest snapshot; cancellation, rebinding, muting, unloading and turn replacement prevent stale output.
 - **Ranges**: `minChars` 0–4096 (also applied on final), `intervalMs` 1000–60000, `maxChars` 200–4096. Finite out-of-range values are clamped, nonfinite values use defaults. HTML escaping, labels, wrappers and truncation notes all fit the budget without splitting emoji surrogate pairs.
