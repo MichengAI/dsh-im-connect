@@ -301,6 +301,10 @@ dsh --profile web --dump-config
   - 这两项只影响「这条消息要不要送进 agent」，不改变私聊准入、工具审批与命令权限。
 - **平台侧前提**：Telegram 隐私模式下 bot 只能收到提及、回复与命令。要让普通群消息到达插件，需把 bot 设为该群管理员，或在 @BotFather 里 `setprivacy` → `Disable`。
 - **界面支持**：可在「设置 → IM助理」展开 Telegram 账号详情，直接通过下拉选择与群号输入框进行可视化配置。
+- **如何获取群 ID**：
+  - **方法 1（推荐）**：在电脑浏览器打开 Telegram Web 网页版进入群聊，直接复制地址栏 URL（如 `https://web.telegram.org/a/#-1001234567890`，或私有群链接 `https://t.me/c/1234567890`），可直接粘贴至输入框自动解析；
+  - **方法 2**：在群里随便发一条消息，转发给官方查询机器人（如 `@userinfobot`），复制其回复中 `Forwarded from chat` 的 `Id` 数字（以负号开头）；
+  - **方法 3**：通过 Bot 原生接口查询 `https://api.telegram.org/bot<TOKEN>/getUpdates`，找到 `"chat":{"id": -100xxxxxxxxxx}`。
 
 ## 使用
 

@@ -301,6 +301,10 @@ Native configuration options are provided here. Their values are persisted in `c
   - Both only decide whether a message reaches the agent — direct-message admission, tool approvals and command permissions are unchanged.
 - **Platform prerequisite**: with Telegram privacy mode the bot only receives mentions, replies and commands. Make the bot a group administrator, or run `setprivacy` → `Disable` in @BotFather, so plain group messages reach the plugin.
 - **UI**: configure visually by expanding Telegram account details in **Settings → IM Assistant** with policy select and group ID inputs.
+- **How to find Group IDs**:
+  - **Option 1 (Recommended)**: Open Telegram Web in your browser, enter the group, and copy the address bar URL (e.g. `https://web.telegram.org/a/#-1001234567890` or private group link `https://t.me/c/1234567890`). You can paste it directly into the input field;
+  - **Option 2**: Send any message in the group, forward it to a query bot (such as `@userinfobot`), and copy the chat `Id` (starts with a minus sign);
+  - **Option 3**: Call `https://api.telegram.org/bot<TOKEN>/getUpdates` directly in your browser and check `"chat":{"id": -100xxxxxxxxxx}`.
 
 ## Usage
 

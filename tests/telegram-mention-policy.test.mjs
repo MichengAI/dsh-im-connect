@@ -50,8 +50,8 @@ test('群号列表解析支持逗号、中文逗号与空白分隔，且支持Un
   assert.deepEqual(parseChatIdList('\u22121001234567890, \uFF0D987654321, \u2013111, \u2014222'), ['-1001234567890', '-987654321', '-111', '-222'])
   // 2. 论坛话题后缀截断
   assert.deepEqual(parseChatIdList('-1001234567890:42, -5496760438:100'), ['-1001234567890', '-5496760438'])
-  // 3. Telegram Web 私有群链接解析为超级群 ID -100...
-  assert.deepEqual(parseChatIdList('https://t.me/c/1234567890/42, https://web.telegram.org/a/#-100987654321'), ['-1001234567890', '-100987654321'])
+  // 3. Telegram Web 私有群链接解析为超级群 ID -100...（以 100 开头的内部 ID 亦正确保留为 -1001005555）
+  assert.deepEqual(parseChatIdList('https://t.me/c/1234567890/42, https://t.me/c/1005555/1, https://web.telegram.org/a/#-100987654321'), ['-1001234567890', '-1001005555', '-100987654321'])
   // 4. 重复群号自动去重
   assert.deepEqual(parseChatIdList('-1001, -1001, \u22121001'), ['-1001'])
   assert.deepEqual(parseChatIdList(undefined), [])

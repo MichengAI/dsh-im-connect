@@ -2121,6 +2121,7 @@ window.__ModuleLoader__.load({
         account.mentionPolicy === "always" ? "always" : (account.freeChatGroups ? "custom" : "addressed")
       );
       const [freeChatGroupsDraft, setFreeChatGroupsDraft] = useState(account.freeChatGroups || "");
+      const accountIdRef = useRef(account.id);
       const [note, setNote] = useState("");
       const [checkResult, setCheckResult] = useState(null);
       const [checkFailed, setCheckFailed] = useState(false);
@@ -2160,10 +2161,17 @@ window.__ModuleLoader__.load({
         saveSeq.current += 1;
         setDraft(account);
         setProxyModeDraft(account.proxyMode || "inherit");
-        setMentionPolicyDraft(account.mentionPolicy === "always" ? "always" : (account.freeChatGroups ? "custom" : "addressed"));
-        setFreeChatGroupsDraft(account.freeChatGroups || "");
         setNote("");
-      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, account.proxyMode, account.proxyConfigured, account.mentionPolicy, account.freeChatGroups, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort]);
+      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort]);
+      useEffect(() => {
+        if (accountIdRef.current !== account.id) {
+          accountIdRef.current = account.id;
+          setFreeChatGroupsDraft(account.freeChatGroups || "");
+          setMentionPolicyDraft(account.mentionPolicy === "always" ? "always" : (account.freeChatGroups ? "custom" : "addressed"));
+        } else if (account.freeChatGroups && !freeChatGroupsDraft) {
+          setFreeChatGroupsDraft(account.freeChatGroups);
+        }
+      }, [account.id, account.freeChatGroups, account.mentionPolicy, freeChatGroupsDraft]);
       useEffect(() => {
         setProxyUrlDraft(account.proxyUrl || "");
       }, [account.id, account.proxyUrl]);
