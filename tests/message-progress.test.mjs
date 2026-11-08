@@ -113,6 +113,16 @@ test('typing timeout releases bounded pending; ignored-abort old settlement cann
   f.pulse(); await tick(); assert.equal(requests.length, 3)
 })
 
+test('typing retries shortly after a failed pulse instead of waiting for the next interval', async t => {
+  const requests = []
+  const f = typingFixture(t, (_chat, _action, signal) => new Promise((resolve, reject) => requests.push({ resolve, reject, signal })))
+  f.make(); await tick()
+  assert.equal(requests.length, 1)
+  requests[0].reject(new Error('network jitter')); await tick()
+  await new Promise(resolve => setTimeout(resolve, 1400))
+  assert.equal(requests.length, 2, 'a jitter failure must be retried before the 4s interval')
+})
+
 test('typing budget covers a cold round trip instead of cancelling before delivery', async t => {
   let signal
   let settled = false

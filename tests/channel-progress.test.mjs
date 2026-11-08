@@ -66,7 +66,8 @@ test('Telegram 使用固定 emoji 并在取消时清除回应，保留原消息 
   assert.deepEqual(calls[0].body, { chat_id: 'chat', message_id: 123, reaction: [{ type: 'emoji', emoji: '👀' }] })
   assert.deepEqual(calls[1].body.reaction, [])
   assert.equal(await channel.addStatusReaction(message, 'cancelled', 'ignored', signal()), undefined)
-  assert.equal(channel.typingIntervalMs, 5000)
+  assert.equal(channel.typingIntervalMs, 4000)
+  assert.ok(channel.typingIntervalMs < 5000, 'renew before Telegram typing expires')
 })
 
 test('Telegram 菜单发送原生按钮，回调仅携带不透明 token', async t => {
