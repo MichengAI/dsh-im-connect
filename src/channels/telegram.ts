@@ -229,8 +229,10 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
    * 这里用令牌桶提前刹车：事后按 retry_after 退避只会一边被罚一边继续排队。
    */
   const PRIVATE_BURST = 10
-  const GROUP_BURST = 5
-  const GROUP_MESSAGES_PER_MINUTE = 20
+  const GROUP_BURST = 4
+  // 官方口径是 20 条/分钟；留 20% 余量，因为 editMessageText 也占额度，
+  // 贴着上限跑会持续吃到 1–8 秒的小额 429，反复重试反而更容易堆出大限流。
+  const GROUP_MESSAGES_PER_MINUTE = 16
   const PRIVATE_MESSAGES_PER_SECOND = 1
   const MESSAGE_MUTATIONS = new Set(['sendMessage', 'sendRichMessage', 'editMessageText'])
   const messageBuckets = new Map<string, { tokens: number; at: number }>()
@@ -932,12 +934,15 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       const flush = async (nextBody: string, allowSend: boolean) => {
         const next = compose(nextBody)
         if (next === current.last) return
+        // 流式中间态不抢配额：抢不到就跳过这一版，下一次 schedule 会带着最新正文再来。
+        // 只有收口（allowSend）才值得排队等配额，否则用户会收不到最终回复。
+        const budget = { bulk: !allowSend }
         // last 只在发送成功后更新：失败时保留旧值，finish 才能靠 sendMessage 兜底送出全文
         try {
           const markdown = richDisabled ? undefined : toTelegramRichMarkdown(next)
           if (markdown !== undefined) {
             try {
-              await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, rich_message: { markdown } })
+              await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, rich_message: { markdown } }, 30_000, undefined, budget)
               current.last = next
               return
             } catch (error) {
@@ -951,7 +956,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
               if (richUnsupported(error)) richDisabled = true
             }
           }
-          await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, text: next })
+          await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, text: next }, 30_000, undefined, budget)
           current.last = next
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error)
