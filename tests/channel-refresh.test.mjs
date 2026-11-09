@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 // Exercise the shipped request wrapper and refresh store with deferred fetches.
-const source = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8').replaceAll(String.fromCharCode(13, 10), String.fromCharCode(10))
 function block(start, end) {
   const a = source.indexOf(start), b = source.indexOf(end, a)
   assert.ok(a >= 0 && b > a, `missing refresh block: ${start}`)
