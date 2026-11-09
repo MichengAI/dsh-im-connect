@@ -345,7 +345,7 @@ test('插入频道页签 render 注入的 openSession 在运行时将行点击�
       if (opener) opener.open(id, hostOpen)
     },
     (id, hostOpen) => listedCalls.push({ id, hostOpen }),
-    (id) => id,
+    (id, byId) => (byId && byId[id] && byId[id].id) || id,
   )
 
   const code = extractBlock(client, '        const insertChannelTab = (entry) => {', '        const sync = () => {\n          if (syncing) return;', '插入频道页签')
@@ -408,4 +408,15 @@ test('插入频道页签 render 注入的 openSession 在运行时将行点击�
   assert.equal(listedCalls[0].id, 'im:wx:456')
   assert.equal(listedCalls[0].hostOpen, hostOpen)
   assert.equal(hostCalls.length, 0, '简易注册表下同样走 IM 打开链路')
+
+  // 3. 验证 createImSessionOpener 接收静态对象映射分支（侧栏传参形态）
+  const staticObjectOpener = createImSessionOpener(
+    [],
+    hostOpen,
+    { 'im:wx:789': { id: 'host-session-789' } },
+  )
+  staticObjectOpener('im:wx:789')
+  assert.equal(listedCalls.length, 2)
+  assert.equal(listedCalls[1].id, 'host-session-789')
+  assert.equal(listedCalls[1].hostOpen, hostOpen)
 })
