@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "IM Connect",
-    "description": "Connect major messaging platforms to local DeepSeek Harness agents."
+    "description": "Connect major messaging platforms to local DeepSeek Harness agents.",
+    "detail": "README.en.md"
   }
 }

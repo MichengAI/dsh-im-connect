@@ -240,7 +240,7 @@ The configuration output should contain `im-connect`. Restart DSH Web and hard-r
 The plugin follows standard DSH bundle configuration conventions. Options are located at:
 > **Sidebar → Plugins → Click `@michengai/dsh-im-connect`** (the host's `plugins.bundle.config` slot).
 
-Native configuration options are provided here. Their values are persisted in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `location` and `taskTreeSessions` are managed through this UI, while `onlineUpdate` is also subject to the host lock described below:
+Native configuration options are provided here. Their values are persisted in `channels.json` under the plugin's `stateDir` and survive restarts; they are not equivalent Cordis YAML options. `location` and `taskTreeSessions` are managed through this UI:
 
 ### 1. Entry Location (`location`)
 - **Default**: Settings only (`settings`)
@@ -250,20 +250,7 @@ Native configuration options are provided here. Their values are persisted in `c
   - **Settings only (`settings`)**: Unregisters the sidebar icon (gracefully switching active views if currently open) and retains only the entry in **Settings → IM Assistant**.
 - **Effect**: Clicking the sidebar icon opens the IM Assistant management page directly in the primary workspace with a **960px centered container** (matching host plugin manager conventions). This eliminates vertical scrolling constraints in narrow settings dialogs; state is synchronized live across both entry points.
 
-### 2. Online Updates (`onlineUpdate` / `updater`)
-- **Default**: Enabled (`true`)
-- **Description**: Controls whether the plugin checks for and installs updates from npm.
-- **Effect**:
-  - **Dynamic UI Sync**: Disabling the toggle hides the **Check for updates** button and version badge in the header immediately without requiring a full page reload;
-  - **Endpoint Guard**: When disabled, the update API route returns `HTTP 403` for all check and install requests, preventing unreviewed updates;
-  - **Host / Platform Lock**: For curated plugin indexes (such as VibeDev) or restricted enterprise environments, this can be locked directly via Cordis configuration (bundle patch) without needing UI interaction:
-    ```yaml
-    updater: false # or onlineUpdate: false
-    ```
-    Once configured, the updater is disabled at startup, the update action stays hidden, and the online-update switch is disabled. The host lock takes precedence over the user's choice in `channels.json` and cannot be lifted through the UI. Removing the host lock restores the saved user preference.
-  - **Update Modes**: When a newer release is available, **Update automatically** runs only when the DSH CLI or Desktop update service is available; otherwise, the dialog provides a profile-specific manual command to copy and run.
-
-### 3. Show IM Sessions in Task Tree (`taskTreeSessions`)
+### 2. Show IM Sessions in Task Tree (`taskTreeSessions`)
 - **Default**: Disabled (`false`, hides IM sessions in the workspace task tree by default to keep daily workspaces clean)
 - **Description**: Controls whether messaging channel sessions appear in the official workspace task tree.
 - **Effect**:

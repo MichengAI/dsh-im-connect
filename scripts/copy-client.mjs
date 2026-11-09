@@ -108,24 +108,17 @@ function assertClientSymbols(sourceText) {
 const apiBase = readFileSync("lib/api-base.js", "utf8")
   .replace(/^export /gm, "")
   .replace(/^\/\/# sourceMappingURL=.*$/gm, "");
-const rawHelper = readFileSync("src/plugin-update-ui.js", "utf8");
-const helper = rawHelper.replace('import { resolveApiUrl } from "../lib/api-base.js";', "").split("\nexport")[0]
-  .replaceAll("const CSS =", "const PLUGIN_UPDATE_CSS =")
-  .replaceAll("function ensureStyle(", "function ensurePluginUpdateStyle(")
-  .replaceAll("textContent = CSS;", "textContent = PLUGIN_UPDATE_CSS;")
-  .replaceAll("ensureStyle()", "ensurePluginUpdateStyle()");
 
 const client = readFileSync("client.js", "utf8").replaceAll("\r\n", "\n");
 const start = client.indexOf("    var module = { exports: {} };");
 const end = client.lastIndexOf("    return module.exports;");
 if (start < 0 || end < 0) throw new Error("client.js ModuleLoader factory not found");
 const clientBody = client.slice(start, end + "    return module.exports;".length);
-assertClientSymbols(["function factory(require) {", apiBase, helper, clientBody, "}"].join("\n"));
+assertClientSymbols(["function factory(require) {", apiBase, clientBody, "}"].join("\n"));
 
 writeFileSync("lib/client.js", [
   'window.__ModuleLoader__.load({ id: "@michengai/dsh-im-connect", factory: (require) => {',
   apiBase,
-  helper,
   clientBody,
   "} });",
   "",

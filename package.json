@@ -14,6 +14,7 @@
     "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json",
+    "./icon": "./assets/icon.svg",
     "./locale/*.json": "./locale/*.json"
   },
   "files": [
@@ -38,6 +39,24 @@
     "url": "https://github.com/MichengAI/dsh-im-connect/issues"
   },
   "homepage": "https://github.com/MichengAI/dsh-im-connect#readme",
+  "author": {
+    "name": "MichengAI",
+    "url": "https://github.com/MichengAI"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "im",
+    "messaging",
+    "telegram",
+    "dingtalk",
+    "feishu",
+    "lark",
+    "wecom",
+    "qqbot",
+    "ai-agent"
+  ],
+  "icon": "./assets/icon.svg",
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-client.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
@@ -90,6 +109,7 @@
     "@deepseek-ai/dsh-llm": "0.2.2-rc.1"
   },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -106,6 +126,5 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
-  },
-  "icon": "assets/icon.svg"
+  }
 }

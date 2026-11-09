@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "IM Connect",
-    "description": "将主流即时通讯平台接入本机 DeepSeek Harness。"
+    "description": "将主流即时通讯平台接入本机 DeepSeek Harness。",
+    "detail": "README.zh-CN.md"
   }
 }
