@@ -7016,19 +7016,36 @@ window.__ModuleLoader__.load({
               label: t("rail.channels"),
               order: 20,
               matchSession: isChannelSession,
-              render: (props) => h(ImSidebarFallbackBoundary, {
-                officialTree: () => h(ChannelUnavailable, { t }),
-                hostProps: props,
-              }, h(ChannelOfficialView, Object.assign({}, props, {
-                officialTree: registry.officialTree,
-                hostProps: props,
-                hostT: props.officialT || props.t,
-                t,
-                openChannelSettings,
-                openImSettings,
-                archiveSession: props.archiveSession || ((id, options) => archiveHostSession(ctx, id, options)),
-                unarchiveSession: props.unarchiveSession || ((id) => unarchiveHostSession(ctx, id)),
-              }))),
+              render: (props) => {
+                const hostOpen = typeof props.openSession === "function"
+                  ? props.openSession
+                  : (typeof props.open === "function" ? props.open : undefined);
+                const openSession = (id) => {
+                  if (registry && Array.isArray(registry.sessionOpeners)
+                    && registry.sessionOpeners.some((item) => item && item.id === "im-connect")) {
+                    openRegisteredSession(id, registry, hostOpen);
+                    return;
+                  }
+                  let byId;
+                  try { byId = ctx.sessions && ctx.sessions.list && ctx.sessions.list.getSnapshot ? ctx.sessions.list.getSnapshot().byId : undefined; } catch { byId = undefined; }
+                  openListedSession(resolveHostSessionId(id, byId), hostOpen);
+                };
+                return h(ImSidebarFallbackBoundary, {
+                  officialTree: () => h(ChannelUnavailable, { t }),
+                  hostProps: props,
+                }, h(ChannelOfficialView, Object.assign({}, props, {
+                  officialTree: registry.officialTree,
+                  hostProps: props,
+                  hostT: props.officialT || props.t,
+                  t,
+                  openSession,
+                  open: openSession,
+                  openChannelSettings,
+                  openImSettings,
+                  archiveSession: props.archiveSession || ((id, options) => archiveHostSession(ctx, id, options)),
+                  unarchiveSession: props.unarchiveSession || ((id) => unarchiveHostSession(ctx, id)),
+                })));
+              },
             });
           };
           refreshInsertedTab();
