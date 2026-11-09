@@ -601,6 +601,10 @@ test('设置导航图标走通用 mask 注入，不改宿主 svg 内容', () => 
   assert.equal(applySettingsNavIcon(mobileSidebarButton, () => 'IM 助理'), false, '侧栏按钮不重复打 marker')
   assert.equal(mobileSidebarButton.hasAttribute('data-ima-nav-icon'), false)
 
+  // 必须精确限定属性，不得无差别清空侧栏行的所有伪元素（保护侧栏拖拽线等自身样式）
+  assert.match(client, /\.dcu-sb-row\[\$\{NAV_ICON_MARKER\}\]::before\{content:none!important\}/)
+  assert.doesNotMatch(client, /\.dcu-sb-row::before\{content:none!important\}/, '不得包含无属性限定的侧栏行伪元素清空规则')
+
   // 必须兼容 Alpha/新版的全屏快捷键设置面板选择器与固化 SVG 遮罩
   assert.match(client, /\[data-shortcut-modal="settings"\] nav button/, '必须兼容宿主新版设置工作台选择器')
   assert.match(client, /\.slots\.inject\("settings\.section\.icon"/, '必须通过 inject 声明式门控注册图标插槽')

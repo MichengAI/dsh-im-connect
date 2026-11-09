@@ -5787,6 +5787,18 @@ window.__ModuleLoader__.load({
       }
     }
 
+    function createImSessionOpener(registry, hostOpen, getSessionById) {
+      return (id) => {
+        if (registry && Array.isArray(registry.sessionOpeners)
+          && registry.sessionOpeners.some((item) => item && item.id === "im-connect")) {
+          openRegisteredSession(id, registry, hostOpen);
+          return;
+        }
+        const byId = typeof getSessionById === "function" ? getSessionById() : getSessionById;
+        openListedSession(resolveHostSessionId(id, byId), hostOpen);
+      };
+    }
+
     function createNativeTabRegistry(officialTree) {
       const tabs = new Map();
       const sessionFilters = [];
@@ -5926,18 +5938,10 @@ window.__ModuleLoader__.load({
         previousCurrentId.current = followed.previousId;
         if (followed.tab) setTab(followed.tab);
       }, [currentId, extraTabs, membershipRevision]);
-      const hostOpen = props.openSession || props.open;
-      const openListed = (id) => {
-        openListedSession(resolveHostSessionId(id, sessionById), hostOpen);
-      };
-      const openSession = (id) => {
-        if (nativeTabs && Array.isArray(nativeTabs.sessionOpeners)
-          && nativeTabs.sessionOpeners.some((item) => item && item.id === "im-connect")) {
-          openRegisteredSession(id, nativeTabs, hostOpen);
-          return;
-        }
-        openListed(id);
-      };
+      const hostOpen = typeof props.openSession === "function"
+        ? props.openSession
+        : (typeof props.open === "function" ? props.open : undefined);
+      const openSession = createImSessionOpener(nativeTabs, hostOpen, sessionById);
       const safeExpandSidebar = useCallback(() => {}, []);
       const rawUseWorkspaceShortcuts = typeof props.useWorkspaceShortcuts === "function" ? props.useWorkspaceShortcuts : undefined;
       const useIsolatedWorkspaceShortcuts = useCallback((select, equals) => {
@@ -6612,7 +6616,7 @@ window.__ModuleLoader__.load({
       const QUEUE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${QUEUE_ICON_PATHS}</svg>`;
       const QUEUE_ICON_MASK = `url("data:image/svg+xml,${encodeURIComponent(QUEUE_ICON_SVG)}")`;
 
-      const NAV_ICON_CSS = `[${NAV_ICON_MARKER}]>svg{display:none!important}[${NAV_ICON_MARKER}]::before{content:'';flex:none;width:16px;height:16px;background-color:currentColor;-webkit-mask:${QUEUE_ICON_MASK} center/contain no-repeat;mask:${QUEUE_ICON_MASK} center/contain no-repeat;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:16px 16px;mask-size:16px 16px}.dcu-sb-row[${NAV_ICON_MARKER}]::before,.dcu-sb-row::before{content:none!important}`;
+      const NAV_ICON_CSS = `[${NAV_ICON_MARKER}]>svg{display:none!important}[${NAV_ICON_MARKER}]::before{content:'';flex:none;width:16px;height:16px;background-color:currentColor;-webkit-mask:${QUEUE_ICON_MASK} center/contain no-repeat;mask:${QUEUE_ICON_MASK} center/contain no-repeat;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:16px 16px;mask-size:16px 16px}.dcu-sb-row[${NAV_ICON_MARKER}]::before{content:none!important}`;
 
       function ensureNavIconStyle(doc) {
         const targetDoc = doc || (typeof document !== "undefined" ? document : null);
@@ -6638,10 +6642,10 @@ window.__ModuleLoader__.load({
       function isSidebarNavButton(button) {
         if (!button) return false;
         if (typeof button.matches === "function") {
-          if (button.matches('.dcu-sb-row, [data-dcu-panel-id], nav[class*="panelList"] button')) return true;
+          if (button.matches('.dcu-sb-row, [data-dcu-panel-id], button[class*="panelRow"]')) return true;
         }
         if (typeof button.closest === "function") {
-          if (button.closest('.dcu-sidebar-nav-root, .dcu-sb-root, nav[class*="panelList"], [data-dcu-managed], [data-dcu-sidebar-active]')) return true;
+          if (button.closest('.dcu-sidebar-nav-root, .dcu-sb-root, [data-dcu-managed], [data-dcu-sidebar-active], [data-slot="sidebar"], div[class*="SidebarRoot_root"]')) return true;
         }
         const cls = String(button.className || "");
         if (cls.includes("dcu-sb-row") || cls.includes("panelRow")) return true;
@@ -7020,16 +7024,9 @@ window.__ModuleLoader__.load({
                 const hostOpen = typeof props.openSession === "function"
                   ? props.openSession
                   : (typeof props.open === "function" ? props.open : undefined);
-                const openSession = (id) => {
-                  if (registry && Array.isArray(registry.sessionOpeners)
-                    && registry.sessionOpeners.some((item) => item && item.id === "im-connect")) {
-                    openRegisteredSession(id, registry, hostOpen);
-                    return;
-                  }
-                  let byId;
-                  try { byId = ctx.sessions && ctx.sessions.list && ctx.sessions.list.getSnapshot ? ctx.sessions.list.getSnapshot().byId : undefined; } catch { byId = undefined; }
-                  openListedSession(resolveHostSessionId(id, byId), hostOpen);
-                };
+                const openSession = createImSessionOpener(registry, hostOpen, () => {
+                  try { return ctx.sessions && ctx.sessions.list && ctx.sessions.list.getSnapshot ? ctx.sessions.list.getSnapshot().byId : undefined; } catch { return undefined; }
+                });
                 return h(ImSidebarFallbackBoundary, {
                   officialTree: () => h(ChannelUnavailable, { t }),
                   hostProps: props,

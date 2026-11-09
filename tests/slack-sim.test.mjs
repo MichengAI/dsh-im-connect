@@ -148,7 +148,7 @@ const dmEvent = (text, ts = '1700000000.000100') => ({
 test('Socket Mode：确认事件、驱动引擎，回复回到原私聊', async (t) => {
   const sim = await slackSimulator()
   const { channel, messages } = await startChannel(t, sim)
-  assert.equal(channel.status(), '长连接已建立')
+  await waitFor(() => channel.status() === '长连接已建立')
   assert.deepEqual(sim.opened, ['Bearer xapp-sim'])
 
   sim.send(dmEvent('你好'))

@@ -308,10 +308,10 @@ test('原生侧栏外壳与插入页签都接官方树', () => {
 })
 
 test('向外壳插入频道页签时注入 IM 会话打开器，不直接透传宿主原生 openSession', () => {
-  assert.match(client, /const insertChannelTab = \([\s\S]*?openSession,/)
-  assert.match(client, /const insertChannelTab = \([\s\S]*?open:\s*openSession/)
-  assert.match(client, /openRegisteredSession\(id, registry, hostOpen\)/)
-  assert.match(client, /openListedSession\(resolveHostSessionId\(id, byId\), hostOpen\)/)
+  assert.match(client, /function createImSessionOpener\(/)
+  assert.match(client, /openSession\s*=\s*createImSessionOpener\(registry,\s*hostOpen/)
+  assert.match(client, /openRegisteredSession\(id,\s*registry,\s*hostOpen\)/)
+  assert.match(client, /openListedSession\(resolveHostSessionId\(id,\s*byId\),\s*hostOpen\)/)
 })
 
 test('插入频道页签 render 注入的 openSession 在运行时将行点击路由至 IM 链路', () => {
@@ -334,10 +334,24 @@ test('插入频道页签 render 注入的 openSession 在运行时将行点击�
   let removeInsertedOpener = () => {}
   let stopInsertedTabLocale = () => {}
   const clearInsertedTab = () => {}
+
+  const openerCode = extractBlock(client, '    function createImSessionOpener', '    function createNativeTabRegistry', '统一会话打开器')
+  const createImSessionOpener = new Function(
+    'openRegisteredSession', 'openListedSession', 'resolveHostSessionId',
+    `${openerCode}; return createImSessionOpener;`,
+  )(
+    (id, reg, hostOpen) => {
+      const opener = reg.sessionOpeners.find(o => o.id === 'im-connect')
+      if (opener) opener.open(id, hostOpen)
+    },
+    (id, hostOpen) => listedCalls.push({ id, hostOpen }),
+    (id) => id,
+  )
+
   const code = extractBlock(client, '        const insertChannelTab = (entry) => {', '        const sync = () => {\n          if (syncing) return;', '插入频道页签')
   const fn = new Function(
     'findNativeTabRegistry', 'installSessionOpener', 'ensureFilter', 't', 'isChannelSession',
-    'openRegisteredSession', 'openListedSession', 'resolveHostSessionId', 'ctx', 'h',
+    'openRegisteredSession', 'openListedSession', 'resolveHostSessionId', 'createImSessionOpener', 'ctx', 'h',
     'ImSidebarFallbackBoundary', 'ChannelUnavailable', 'ChannelOfficialView',
     'openChannelSettings', 'openImSettings', 'archiveHostSession', 'unarchiveHostSession',
     'subscribeLocale', 'subscribeChannelMembership',
@@ -355,6 +369,7 @@ test('插入频道页签 render 注入的 openSession 在运行时将行点击�
     },
     (id, hostOpen) => listedCalls.push({ id, hostOpen }),
     (id) => id,
+    createImSessionOpener,
     { sessions: { list: { getSnapshot: () => ({ byId: {} }) } } },
     fakeH,
     function Boundary() {},

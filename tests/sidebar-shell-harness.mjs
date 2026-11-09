@@ -38,6 +38,7 @@ export function createImShellHarness(storage, source = readFileSync(new URL('../
     currentSessionId: snapshot => snapshot.current ?? null,
     applySessionFilters: value => value, resolveHostSessionId: id => id,
     openRegisteredSession() {}, openListedSession() {}, ensureStyle() {},
+    createImSessionOpener: () => () => {},
     h: (type, props, ...children) => ({ type, props: { ...props, children } }),
     HostSegmentedTabs: 'segmented-tabs', IconFolderClose: 'folder', IconQueueOutline: 'queue', IconClockOutline: 'clock',
     ChannelOfficialView: 'channel-view', ChannelUnavailable: 'unavailable',
