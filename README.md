@@ -262,7 +262,9 @@ dsh --profile web --dump-config
 - **默认状态**：未锁定（`undefined`）
 - **功能说明**：针对企业内网、离线环境或精选插件分发平台，支持直接在 Cordis 配置文件（如 `cordis.patch.yml`）中显式声明锁定禁用更新服务：
   ```yaml
-  updater: false # 或 onlineUpdate: false
+  - id: im-connect
+    config:
+      updater: false # 或 onlineUpdate: false
   ```
   锁定后插件自身的更新端点自动关闭（返回 HTTP 403），版本升级统一交由 DSH 官方插件管理与市场机制负责。
 

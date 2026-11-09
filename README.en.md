@@ -262,7 +262,9 @@ Native configuration options are provided here. Their values are persisted in `c
 - **Default**: Unlocked (`undefined`)
 - **Description**: For enterprise intranets, offline environments, or curated plugin distribution platforms, update endpoints can be explicitly locked and disabled directly in Cordis configuration (e.g. `cordis.patch.yml`):
   ```yaml
-  updater: false # or onlineUpdate: false
+  - id: im-connect
+    config:
+      updater: false # or onlineUpdate: false
   ```
   Once locked, plugin update endpoints are disabled (returning HTTP 403), delegating lifecycle and updates entirely to official DSH plugin management and market mechanisms.
 
