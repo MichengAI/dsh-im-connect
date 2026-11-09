@@ -291,6 +291,10 @@ Native configuration options are provided here. Their values are persisted in `c
   - `freeChatGroups`: relax only the listed groups (chat ids separated by commas/whitespace); other groups keep the default;
   - Both only decide whether a message reaches the agent — direct-message admission, tool approvals and command permissions are unchanged.
 - **Platform prerequisite**: with Telegram privacy mode the bot only receives mentions, replies and commands. Make the bot a group administrator, or run `setprivacy` → `Disable` in @BotFather, so plain group messages reach the plugin.
+- **How to find Group IDs**:
+  - **Option 1 (Recommended)**: open Telegram Web in your browser, enter the group, and copy the address bar URL (e.g. `https://web.telegram.org/a/#-1001234567890` or the private group link `https://t.me/c/1234567890`). Paste it directly into the group ID input; it is normalized to the numeric ID before saving;
+  - **Option 2**: send any message in the group, forward it to a query bot (such as `@userinfobot`), and copy the chat `Id` (starts with a minus sign);
+  - **Option 3**: call `https://api.telegram.org/bot<TOKEN>/getUpdates` directly in your browser and check `"chat":{"id": -100xxxxxxxxxx}`.
 - **Persistence**: the account UI saves `freeChatGroups` as an array of at most 100 unique negative integer group IDs (1–20 digits after the minus sign). An explicitly saved list (including an empty list when disabled) overrides the legacy `config.mentionPolicy: "always"`. An active legacy all-groups policy is visibly identified, not mislabeled as off; changing unrelated settings leaves it intact. Choose Off or selected groups to replace it. Older clients that omit the fields preserve existing settings.
 
 ### Collapsible thinking message (`thinkingDisplay`)

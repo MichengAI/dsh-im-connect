@@ -291,6 +291,10 @@ dsh --profile web --dump-config
   - `freeChatGroups`：只放宽列出的群（群 id，支持逗号/中文逗号/空白分隔），其余群保持默认；
   - 这两项只影响「这条消息要不要送进 agent」，不改变私聊准入、工具审批与命令权限。
 - **平台侧前提**：Telegram 隐私模式下 bot 只能收到提及、回复与命令。要让普通群消息到达插件，需把 bot 设为该群管理员，或在 @BotFather 里 `setprivacy` → `Disable`。
+- **如何获取群 ID**：
+  - **方式一（推荐）**：在浏览器打开 Telegram 网页版，进入目标群，复制地址栏链接（如 `https://web.telegram.org/a/#-1001234567890` 或私有群链接 `https://t.me/c/1234567890`），直接粘贴到群号输入框；保存前会自动归一化为纯数字群 ID；
+  - **方式二**：在群里发送任意消息，转发给查询机器人（如 `@userinfobot`），复制返回的 chat `Id`（以负号开头）；
+  - **方式三**：在浏览器直接调用 `https://api.telegram.org/bot<TOKEN>/getUpdates`，查看 `"chat":{"id": -100xxxxxxxxxx}`。
 - **保存与迁移**：菜单中的 `freeChatGroups` 是账号级数组，支持去重后最多 100 个负整数群 ID（负号后 1–20 位）。菜单明确保存名单（包括关闭时的空名单）后，以该名单为准，不再沿用旧 `config.mentionPolicy: "always"`。旧版全群免 @ 仍在生效时，菜单会如实标注，选择关闭或指定群才能收敛；仅修改其他设置不会改变旧策略。旧客户端省略新字段时保留既有设置。
 
 ### 思考过程折叠消息 (`thinkingDisplay`)

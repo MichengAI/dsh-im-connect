@@ -1,4 +1,22 @@
 # Changelog
+
+## [1.0.30] - 2026-11-08
+
+### Telegram collapsible thinking message & visual settings
+
+- Collapsible thinking messages in Telegram: support sending the model's reasoning chain as a native collapsible quote block (`<blockquote expandable>`), allowing chat participants to tap and expand the thought process (#63).
+- Visual dropdown setting: add a native "Show thinking process" dropdown (Off / Collapsed) in **Settings → IM Assistant → Telegram Account**, allowing quick per-account toggling or falling back to plugin defaults.
+- Harmonized form layout: place the thinking process setting next to "Idle session rotation" in a balanced two-column grid with an inline privacy and display guidance tooltip.
+
+## [1.0.29] - 2026-11-08
+
+### Telegram group mention policy & visual configuration
+
+- Telegram group mention policy: support choosing group chat trigger policy in account settings — "Mention or reply only (default)", "Always reply to all group messages", and "Free chat in specific groups only" (#62).
+- Visual configuration for group whitelist: when choosing specific groups, enter group IDs directly in the visual settings panel. Draft inputs are retained when toggling between policies to prevent accidental input loss.
+- Smart group ID parsing and link tolerance: support pasting Telegram Web group URLs directly (e.g. `web.telegram.org` and private links `t.me/c/...`), automatically normalize Unicode full-width minus signs, dashes, and topic suffixes, and provide real-time validation warnings for unrecognized entries.
+- Group ID discovery guide: add clear instructions in README for discovering Telegram group IDs via browser address bar or query bots.
+
 ## [1.0.28] - 2026-11-06
 
 ### Telegram delivery reliability
