@@ -8,7 +8,9 @@
 
   **Connect Feishu, Lark, DingTalk, WeCom, WeChat, QQ, Telegram, Discord, and Slack to local DeepSeek Harness**
 
-  [简体中文](README.zh-CN.md) · [English](README.en.md) · [日本語](README.ja.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Русский](README.ru.md) · [Português](README.pt.md) · [Changelog](CHANGELOG.md) · [QQ reference notes](docs/01-当前工作/I022-QQ直接引用接入/00-迭代总览.md) · [Apache-2.0](LICENSE)
+  [简体中文](README.zh-CN.md) · [English](README.en.md) · [日本語](README.ja.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Русский](README.ru.md) · [Português](README.pt.md)
+
+  [Changelog](CHANGELOG.md) · [License](LICENSE)
 
   [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-im-connect.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-im-connect)

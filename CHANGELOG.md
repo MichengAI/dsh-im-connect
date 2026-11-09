@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.33] - 2026-11-09
+
+### Clean header navigation & documentation streamlining
+
+- Two-tier navigation layout: split the README header links into two clean rows — the top row focuses on 8-language switching, while the second row clearly presents the Changelog and License.
+- Prune internal handover links: remove internal development handover links from public documentation for a cleaner and more professional presentation.
+
 ## [1.0.32] - 2026-11-09
 
 ### Full multi-language README documentation & language navigation
