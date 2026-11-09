@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.34] - 2026-11-09
+
+### Mobile sidebar interaction & channel session routing improvements
+
+- Fix session opening from inserted channel tabs on mobile: clicking an IM channel session row in mobile drawers or external sidebar shells now properly restores and switches into the IM conversation, instead of falling back to a regular task session (#65).
+- Fix duplicate icon display in mobile drawer navigation: when viewing sidebar shortcuts within mobile drawer sheets, the IM assistant entry cleanly displays its single icon with natural spacing, avoiding duplicate icon rendering.
+
 ## [1.0.33] - 2026-11-09
 
 ### Clean header navigation & documentation streamlining
