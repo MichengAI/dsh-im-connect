@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.31] - 2026-11-09
+
+### Full 8-language i18n & streamlined plugin management
+
+- Native 8-language support: provide full interface and manifest localization across Simplified Chinese, English, Japanese, Spanish, French, German, Russian, and Portuguese (Brazil), offering a seamless native experience across all supported host locales.
+- Document fallback for global users: align plugin detail pages with host language fallbacks, ensuring non-Chinese environments display the comprehensive English documentation.
+- Streamlined settings experience: remove obsolete update controls and buttons from the settings header, fully delegating plugin lifecycles and updates to the official DSH plugin manager.
+
 ## [1.0.30] - 2026-11-08
 
 ### Telegram collapsible thinking message & visual settings
