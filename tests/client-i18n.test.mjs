@@ -15,6 +15,23 @@ test('全部 8 门内置语言词条键完全一致', () => {
   }
 })
 
+test('8 门内置语言占位符集合逐键完全一致且值非空', () => {
+  const extractPlaceholders = (str) => {
+    const matches = str.match(/\{[A-Za-z0-9_]+\}/g)
+    return matches ? matches.sort() : []
+  }
+
+  for (const key of Object.keys(IM_LOCALES.zh)) {
+    const zhPlaceholders = extractPlaceholders(IM_LOCALES.zh[key])
+    for (const lang of ['en', 'ja', 'es', 'fr', 'de', 'ru', 'pt']) {
+      const val = IM_LOCALES[lang][key]
+      assert.ok(typeof val === 'string' && val.trim().length > 0, `${lang}.${key} 为空或非字符串`)
+      const langPlaceholders = extractPlaceholders(val)
+      assert.deepEqual(langPlaceholders, zhPlaceholders, `${lang}.${key} 占位符与 zh 不一致`)
+    }
+  }
+})
+
 test('手动配置字段有全部 8 门内置语言标签', () => {
   for (const lang of ['zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt']) {
     for (const key of ['field.dingtalk.clientId', 'field.dingtalk.clientSecret', 'field.wecom.botId', 'field.wecom.secret', 'field.qq.appId', 'field.qq.appSecret', 'field.telegram.token', 'field.discord.token', 'field.slack.token', 'field.slack.appToken']) {

@@ -82,31 +82,3 @@ test('IM 主样式表归属本插件，不会被其它插件重载整批删除',
   ensureStyle()
   assert.equal(style.getAttribute('data-plugin'), OWNER)
 })
-
-test('IM 更新提示样式表归属本插件，且不抢走其它插件已经声明的同一张表', () => {
-  const source = readFileSync(new URL('../src/plugin-update-ui.js', import.meta.url), 'utf8')
-  const styles = []
-  const document = documentFor(styles)
-  const ensureStyle = new Function('document', 'HTMLStyleElement', `const STYLE_ID = "michengai-plugin-update-ui";\nconst CSS = ".mpi{}";\n${extractFunction(source, 'function ensureStyle() {')}\nreturn ensureStyle`)(document, StyleElement)
-  ensureStyle()
-  const style = document.getElementById('michengai-plugin-update-ui')
-  assert.equal(style.getAttribute('data-plugin'), OWNER)
-  claimUntagged(styles, 'dsh-automation')
-  removeOwned(styles, 'dsh-automation')
-  assert.equal(document.getElementById('michengai-plugin-update-ui'), style)
-
-  style.remove()
-  const untagged = document.createElement('style')
-  untagged.id = 'michengai-plugin-update-ui'
-  document.head.append(untagged)
-  ensureStyle()
-  assert.equal(untagged.getAttribute('data-plugin'), OWNER)
-
-  untagged.remove()
-  const shared = document.createElement('style')
-  shared.id = 'michengai-plugin-update-ui'
-  shared.setAttribute('data-plugin', '@michengai/dsh-automation')
-  document.head.append(shared)
-  ensureStyle()
-  assert.equal(shared.getAttribute('data-plugin'), '@michengai/dsh-automation')
-})

@@ -44,9 +44,6 @@ window.__ModuleLoader__.load({
     const IconChevronRightOutline = pickHostIcon("IconChevronRightOutlineRegular");
     const IconPlusOutline = pickHostIcon("IconPlusOutlineRegular");
     const IconEditOutline = pickHostIcon("IconEditOutlineRegular");
-    const IconRefreshOutline = pickHostIcon("IconRefreshOutlineRegular");
-    const IconDownloadOutline = pickHostIcon("IconDownloadOutlineRegular");
-    const IconCopyOutline = pickHostIcon("IconCopyOutlineRegular");
     const IconLoadingOutline = pickHostIcon("IconLoadingOutlineRegular");
     function alertIcon(type) {
       if (type === "success") return h(IconCheckCircleOutline, { size: 14 });

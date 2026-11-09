@@ -3,7 +3,6 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { handlePluginUpdateEscape, manualPluginUpdateCommand } from '../src/plugin-update-ui.js'
 import { isDshCliEntry, isNewerVersion, isTrustedUpdateRequest, mergeMinimumReleaseAgeExclude, PLUGIN_UPDATE_HEADER, recordReleaseAgeExclude, resolveUpdateRuntime, shouldNotifyParent } from '../lib/plugin-updater.js'
 
 test('IM 独立更新只接受同源专用请求', () => {
@@ -15,21 +14,9 @@ test('IM 独立更新只接受同源专用请求', () => {
   assert.equal(isTrustedUpdateRequest({ headers: { origin: 'http://localhost:3000', host: 'localhost:3000' } }), false)
   assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', host: '127.0.0.1:19387' }, socket: { remoteAddress: '::1' } }), true)
   assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', origin: 'http://localhost:3000', host: 'localhost:3000' }, socket: { remoteAddress: '192.168.1.8' } }), false)
-  assert.equal(manualPluginUpdateCommand('web', '@michengai/dsh-im-connect', '0.1.35'), 'dsh plugin --profile web add @michengai/dsh-im-connect@0.1.35 --registry=https://registry.npmjs.org/')
   assert.equal(isDshCliEntry('C:/tools/dsh/lib/bin.js', { name: '@deepseek-ai/dsh', bin: { dsh: 'lib/bin.js' } }, 'C:/tools/dsh'), true)
   assert.equal(isDshCliEntry('C:/tools/dsh/lib/bin.js', { name: '@deepseek-ai/dsh', bin: { dsh: 'lib/other.js' } }, 'C:/tools/dsh'), false)
   assert.equal(isDshCliEntry('C:/tools/dsh/lib/bin.js', { name: 'other-cli', bin: { dsh: 'lib/bin.js' } }, 'C:/tools/dsh'), false)
-})
-
-test('IM 更新弹窗消费 ESC，避免继续关闭底层设置页', () => {
-  const calls = []
-  assert.equal(handlePluginUpdateEscape({
-    key: 'Escape',
-    preventDefault: () => calls.push('prevent'),
-    stopPropagation: () => calls.push('stop'),
-    stopImmediatePropagation: () => calls.push('stopImmediate'),
-  }, () => calls.push('close')), true)
-  assert.deepEqual(calls, ['prevent', 'stop', 'stopImmediate', 'close'])
 })
 
 test('IM 客户端设置页面不再绑定自身更新入口', async () => {
