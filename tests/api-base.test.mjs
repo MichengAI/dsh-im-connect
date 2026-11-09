@@ -11,7 +11,6 @@ import { readFile } from 'node:fs/promises'
 import React from 'react'
 import ReactDOM from 'react-dom'
 import ReactDOMClient from 'react-dom/client'
-import { resolveApiUrl as sharedResolveApiUrl } from '../lib/api-base.js'
 
 const bundleSource = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
 const clientSource = await readFile(new URL('../client.js', import.meta.url), 'utf8')
