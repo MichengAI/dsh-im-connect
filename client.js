@@ -6612,7 +6612,7 @@ window.__ModuleLoader__.load({
       const QUEUE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${QUEUE_ICON_PATHS}</svg>`;
       const QUEUE_ICON_MASK = `url("data:image/svg+xml,${encodeURIComponent(QUEUE_ICON_SVG)}")`;
 
-      const NAV_ICON_CSS = `[${NAV_ICON_MARKER}]>svg{display:none!important}[${NAV_ICON_MARKER}]::before{content:'';flex:none;width:16px;height:16px;background-color:currentColor;-webkit-mask:${QUEUE_ICON_MASK} center/contain no-repeat;mask:${QUEUE_ICON_MASK} center/contain no-repeat;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:16px 16px;mask-size:16px 16px}`;
+      const NAV_ICON_CSS = `[${NAV_ICON_MARKER}]>svg{display:none!important}[${NAV_ICON_MARKER}]::before{content:'';flex:none;width:16px;height:16px;background-color:currentColor;-webkit-mask:${QUEUE_ICON_MASK} center/contain no-repeat;mask:${QUEUE_ICON_MASK} center/contain no-repeat;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:16px 16px;mask-size:16px 16px}.dcu-sb-row[${NAV_ICON_MARKER}]::before,.dcu-sb-row::before{content:none!important}`;
 
       function ensureNavIconStyle(doc) {
         const targetDoc = doc || (typeof document !== "undefined" ? document : null);
@@ -6635,6 +6635,20 @@ window.__ModuleLoader__.load({
         return String(label ?? "").trim();
       }
 
+      function isSidebarNavButton(button) {
+        if (!button) return false;
+        if (typeof button.matches === "function") {
+          if (button.matches('.dcu-sb-row, [data-dcu-panel-id], nav[class*="panelList"] button')) return true;
+        }
+        if (typeof button.closest === "function") {
+          if (button.closest('.dcu-sidebar-nav-root, .dcu-sb-root, nav[class*="panelList"], [data-dcu-managed], [data-dcu-sidebar-active]')) return true;
+        }
+        const cls = String(button.className || "");
+        if (cls.includes("dcu-sb-row") || cls.includes("panelRow")) return true;
+        if (typeof button.hasAttribute === "function" && button.hasAttribute("data-dcu-panel-id")) return true;
+        return false;
+      }
+
       function isOwnNavRow(rowText, wantedLabel) {
         const normRow = String(rowText ?? "").replace(/\s+/g, "").toLowerCase();
         if (normRow.length === 0) return false;
@@ -6647,11 +6661,21 @@ window.__ModuleLoader__.load({
       }
 
       function applySettingsNavIcon(button, wantedLabel) {
+        if (isSidebarNavButton(button)) {
+          if (button.hasAttribute(NAV_ICON_MARKER)) {
+            button.removeAttribute(NAV_ICON_MARKER);
+            return true;
+          }
+          return false;
+        }
         const isOwn = isOwnNavRow(getNavButtonText(button), typeof wantedLabel === "function" ? wantedLabel() : wantedLabel);
         if (isOwn) {
-          const hasSlotIcon = Array.from((button && button.children) || []).some((child) =>
-            child.tagName === "SPAN" && child.className && String(child.className).includes("navIcon")
-          ) || Boolean(button && typeof button.querySelector === "function" && button.querySelector('span[class*="navIcon"]'));
+          const hasSlotIcon = Array.from((button && button.children) || []).some((child) => {
+            if (!child || child.tagName !== "SPAN") return false;
+            const cls = String(child.className || "");
+            const ariaHidden = typeof child.getAttribute === "function" ? child.getAttribute("aria-hidden") : null;
+            return cls.includes("navIcon") || cls.includes("glyph") || cls.includes("dcu-sb-") || ariaHidden === "true";
+          }) || Boolean(button && typeof button.querySelector === "function" && button.querySelector('span[class*="navIcon"], span[class*="glyph"], [class*="dcu-sb-glyph"]'));
           if (hasSlotIcon) {
             if (button.hasAttribute(NAV_ICON_MARKER)) {
               button.removeAttribute(NAV_ICON_MARKER);

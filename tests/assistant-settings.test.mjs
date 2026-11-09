@@ -566,6 +566,41 @@ test('设置导航图标走通用 mask 注入，不改宿主 svg 内容', () => 
   assert.equal(newHostButton.hasAttribute('data-ima-nav-icon'), false)
   assert.equal(applySettingsNavIcon(newHostButton, () => 'IM 助理'), false, '新宿主下不重复打 marker')
 
+  // 移动端抽屉/侧栏入口防御：在移动端 role="dialog" 抽屉下，侧栏按钮绝不能被打上 marker，且已有残留必须自愈清理
+  const sidebarGlyph = {
+    tagName: 'SPAN',
+    className: 'dcu-sb-glyph',
+    getAttribute(name) { return name === 'aria-hidden' ? 'true' : null },
+  }
+  const sidebarTitle = { textContent: 'IM 助理' }
+  const mobileSidebarButton = {
+    className: 'dcu-sb-row dcu-sb-more-item',
+    textContent: 'IM 助理',
+    attributes: new Map([['data-ima-nav-icon', '']]),
+    children: [sidebarGlyph, sidebarTitle],
+    closest(selector) {
+      if (selector.includes('.dcu-sb-root') || selector.includes('.dcu-sidebar-nav-root')) return {}
+      return null
+    },
+    matches(selector) {
+      return selector.includes('.dcu-sb-row')
+    },
+    querySelector(selector) {
+      if (selector === 'span') return sidebarTitle
+      if (selector.includes('glyph') || selector.includes('dcu-sb-glyph')) return sidebarGlyph
+      return null
+    },
+    hasAttribute(name) { return this.attributes.has(name) },
+    getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null },
+    setAttribute(name, value) { this.attributes.set(name, String(value)) },
+    removeAttribute(name) { this.attributes.delete(name) },
+  }
+
+  assert.equal(applySettingsNavIcon(mobileSidebarButton, () => 'IM 助理'), true, '侧边栏按钮即使位于移动端 dialog 抽屉下也必须清除残留 marker')
+  assert.equal(mobileSidebarButton.hasAttribute('data-ima-nav-icon'), false)
+  assert.equal(applySettingsNavIcon(mobileSidebarButton, () => 'IM 助理'), false, '侧栏按钮不重复打 marker')
+  assert.equal(mobileSidebarButton.hasAttribute('data-ima-nav-icon'), false)
+
   // 必须兼容 Alpha/新版的全屏快捷键设置面板选择器与固化 SVG 遮罩
   assert.match(client, /\[data-shortcut-modal="settings"\] nav button/, '必须兼容宿主新版设置工作台选择器')
   assert.match(client, /\.slots\.inject\("settings\.section\.icon"/, '必须通过 inject 声明式门控注册图标插槽')
