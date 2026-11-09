@@ -230,15 +230,17 @@ test('Telegram expired album metadata cannot authorize or replay old pictures', 
   assert.equal(messages.length, 1)
 })
 
-test('Telegram rejects oversized unadmitted album before downloading any picture', async () => {
+test('Telegram delivers authorized pending album after the unaddressed buffer cap', async () => {
+  // 20 个未触发成员进入持久缓冲（唯一 update_id 上限），第 21 条带 @ 触发时，已授权 pending 必须交付，
+  // 不再像旧实现那样“清空缓冲只发提示”。缓冲上限只约束未触发阶段的增长。
   const base = { chat: { id: -123, type: 'group' }, media_group_id: 'album', photo: [{ file_id: 'p', width: 1, height: 1 }] }
-  const { calls, replies, messages } = await receive({}, { messages: [
+  const { calls, messages } = await receive({}, { messages: [
     ...Array.from({ length: 20 }, () => ({ ...base })),
     { ...base, caption: '@test_bot', caption_entities: [{ type: 'mention', offset: 0, length: 9 }] },
   ] })
-  assert.equal(calls.filter(call => call.url.endsWith('/getFile')).length, 0)
-  assert.equal(messages.length, 0)
-  assert.match(replies[0], /相册图片过多/)
+  assert.equal(calls.filter(call => call.url.endsWith('/getFile')).length, 21)
+  assert.equal(messages.length, 21)
+  assert.equal(messages.every(message => message.addressed), true)
 })
 
 test('英文全局语言下，Telegram 图片接收失败提示为英文', async () => {

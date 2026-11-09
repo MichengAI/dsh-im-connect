@@ -5,10 +5,13 @@ import { notice } from '../engine/command-locale.js'
 import { diagnosticJson, DiagnosticError, probe, requireDiagnostic } from './diagnostics.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream, ThinkingOptions } from '../engine/types.js'
 import { fileForm } from './file-send.js'
+import { readFileSync } from 'node:fs'
+import { basename } from 'node:path'
+import { backupCorruptFileSync, writeFileAtomicSync } from '../engine/atomic-file.js'
 import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
-import { retryTelegram } from './telegram-retry.js'
+import { isTelegramTransient, retryTelegram } from './telegram-retry.js'
 import { isInboundAddressed, type MentionPolicy } from './mention-policy.js'
 import { renderThinkingBlock } from './thinking-block.js'
 import { createTelegramThinkingControls } from './telegram-thinking-controls.js'
@@ -56,6 +59,23 @@ interface TgUpdate {
 }
 
 const API = 'https://api.telegram.org'
+
+/** 相册成员可能在后续批次里才拿到 @/回复触发；这段时间内保持待投递，并随渠道重启恢复。 */
+const ALBUM_TTL_MS = 30_000
+/** 入站图片是幂等 GET：单次网络抖动不应让整条消息消失，按短退避重试。 */
+const MEDIA_RETRY_DELAYS_MS = [500, 1500, 3000] as const
+
+interface AlbumEntry {
+  expires: number
+  addressed: boolean
+  pending: TgUpdate[]
+  /** 唯一 update_id（跨重试/start-stop/重启稳定），旧格式由 pending 推导。 */
+  ids: number[]
+}
+interface PersistedAlbums {
+  version: 1
+  albums: Record<string, AlbumEntry>
+}
 
 /**
  * 状态表情的总预算。冷连接（刚启动、连接被平台关掉之后）的 TLS 握手 + 请求
@@ -196,8 +216,12 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     dispatcher = new ProxyAgent(proxyUrl.toString())
   } else if (proxyMode !== 'inherit') throw new Error('Telegram 代理模式无效')
   const fetchTelegram: typeof fetch = (input, init) => fetch(input, dispatcher ? { ...init, dispatcher } as RequestInit : init)
-  const cursorFile = new JsonStateFile(config.stateDir ? `${config.stateDir.replace(/[\\/]$/, '')}/cursor.json` : '', { offset: 0 })
+  const stateDir = config.stateDir ? config.stateDir.replace(/[\\/]$/, '') : ''
+  const cursorFile = new JsonStateFile(stateDir ? `${stateDir}/cursor.json` : '', { offset: 0 })
   const persist = Boolean(config.stateDir)
+  // 未触发但尚未收口的相册成员：cursor 已前进，因此必须独立持久化，stop/崩溃/重启后才能补投。
+  // 内含 caption/file_id 等消息元数据（不落文件内容），按 0600 写到渠道 stateDir，30s 后过期。
+  const albumFile = persist ? `${stateDir}/album-pending.json` : ''
 
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   /** 话题改名回调；由引擎通过 setTopicEditHandler 注入。 */
@@ -209,9 +233,27 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   let username = ''
   let lifecycle: AbortController | undefined
   let pollTask: Promise<void> | undefined
+  /** 每代轮询一个纪元；旧循环在新 start/stop 后必须自行退出，不能共享 getUpdates。 */
+  let pollEpoch = 0
+  /** start/stop 状态迁移串行化；stop 的 abort 在入队前同步执行，保证能打断挂起的 start。 */
+  let operationSeq = 0
+  let lastOperation: 'start' | 'stop' = 'stop'
+  let transition: Promise<void> = Promise.resolve()
   // Only metadata is buffered until an album member mentions this bot. Scope
   // admission to chat + sender + album, and bound both lifetime and entry count.
-  const albumAccess = new Map<string, { expires: number; addressed: boolean; pending: TgUpdate[]; count: number }>()
+  // 边界（非全链路不丢不重）：本渠道只保证“已提交 cursor 前不静默丢”；跨崩溃仍受 gateway/seen
+  // 语义限制；单个媒体持续失败会阻塞同批后续消息（已知取舍），状态显示为“媒体待恢复”，网络恢复后继续。
+  const albumAccess = new Map<string, AlbumEntry>()
+  // 本进程内已交给 handler 的相册成员（album key + update id）：删除落盘失败重试时只重试删除，
+  // 不重复下载/分发；跨重启不宣称 exactly-once（由网关 seen 语义兜底，见报告边界）。
+  const albumDelivered = new Map<string, Set<number>>()
+  let albumPersistFailed = false
+  /** 相册缓冲文件损坏/不可读是持久异常，必须显式暴露，不能被下一次轮询成功掩掉。 */
+  let albumStateError = ''
+  /** 容量 fail-closed 是瞬时状态；容量恢复或成功 prune 后必须回到“轮询中”。 */
+  let albumCapacityBlocked = false
+  /** 有入站媒体因临时网络错误等待恢复；此时 status 显示“媒体待恢复”。 */
+  let mediaRecovery = false
 
   // Rich message 是较新的 Bot API 方法；一旦确认不可用就一直走纯文本，避免每条消息都先失败一次。
   let richDisabled = false
@@ -562,44 +604,364 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     })
   }
 
-  async function downloadImages(message: NonNullable<TgUpdate['message']>): Promise<ImMedia[]> {
-    const photo = message.photo?.length ? message.photo.reduce((best, candidate) => candidate.width * candidate.height > best.width * best.height ? candidate : best) : undefined
-    const document = message.document
-    const image = photo ?? document
-    if (!image) return []
-    if ((image.file_size ?? 0) > MAX_CHANNEL_IMAGE_BYTES) throw new Error('图片超过大小限制')
-    const file = await api<{ file_path?: string; file_size?: number }>('getFile', { file_id: image.file_id })
-    if (!file.file_path || !/^[a-zA-Z0-9_/-]+\.[a-zA-Z0-9]+$/.test(file.file_path)
-      || file.file_path.split('/').some(part => !part || part === '.' || part === '..')
-      || (file.file_size ?? 0) > MAX_CHANNEL_IMAGE_BYTES) throw new Error('图片文件无效或超过大小限制')
-    // The bot token must never follow a redirect or a caller-provided download URL.
-    const response = await fetchTelegram(`${API}/file/bot${token}/${file.file_path}`, {
-      redirect: 'error', signal: timeoutSignal(30_000, lifecycle?.signal),
+  /** 永久性接收失败（尺寸/格式/平台 4xx）：提示用户重发，游标可以前进。 */
+  function permanentMediaError(message: string): Error {
+    return Object.assign(new Error(message), { permanent: true })
+  }
+  /** 只有确定是临时传输错误才值得重试；其余（含无法识别的本地错误）按永久失败提示重发。 */
+  function isPermanentMediaError(error: unknown): boolean {
+    return !isTelegramTransient(error)
+  }
+  /** 入站媒体是幂等 GET：仅临时网络错误退避重试，取消信号贯穿每次尝试。 */
+  function retryMedia<T>(method: string, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    return retryTelegram(operation, {
+      edit: true,
+      method,
+      budgetMs: 20_000,
+      delaysMs: MEDIA_RETRY_DELAYS_MS,
+      signal: lifecycle?.signal,
     })
-    if (!response.ok || !response.body) throw new Error('图片下载失败')
+  }
+  async function downloadFileBytes(filePath: string, signal: AbortSignal): Promise<Buffer> {
+    // The bot token must never follow a redirect or a caller-provided download URL.
+    const response = await fetchTelegram(`${API}/file/bot${token}/${filePath}`, {
+      redirect: 'error', signal: timeoutSignal(30_000, signal),
+    })
+    if (!response.ok || !response.body) {
+      await response.body?.cancel().catch(() => undefined)
+      throw Object.assign(new Error('图片下载失败'), { status: response.status || 502 })
+    }
     const reader = response.body.getReader()
     const chunks: Uint8Array[] = []
     let size = 0
     try {
-      if (Number(response.headers.get('content-length')) > MAX_CHANNEL_IMAGE_BYTES) throw new Error('图片超过大小限制')
+      if (Number(response.headers.get('content-length')) > MAX_CHANNEL_IMAGE_BYTES) throw permanentMediaError('图片超过大小限制')
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         size += value.length
-        if (size > MAX_CHANNEL_IMAGE_BYTES) throw new Error('图片超过大小限制')
+        if (size > MAX_CHANNEL_IMAGE_BYTES) throw permanentMediaError('图片超过大小限制')
         chunks.push(value)
       }
-      const media = document && !document.mime_type?.startsWith('image/') ? fileMedia(Buffer.concat(chunks), document.file_name) : imageMedia(Buffer.concat(chunks))
-      const name = document?.file_name?.replace(/\\/g, '/').split('/').pop()
-      return [{ ...media, ...(name ? { name } : {}) }]
+      return Buffer.concat(chunks)
     } finally {
       await reader.cancel().catch(() => undefined)
       reader.releaseLock()
     }
   }
+  async function downloadImages(message: NonNullable<TgUpdate['message']>): Promise<ImMedia[]> {
+    const photo = message.photo?.length ? message.photo.reduce((best, candidate) => candidate.width * candidate.height > best.width * best.height ? candidate : best) : undefined
+    const document = message.document
+    const image = photo ?? document
+    if (!image) return []
+    if ((image.file_size ?? 0) > MAX_CHANNEL_IMAGE_BYTES) throw permanentMediaError('图片超过大小限制')
+    const file = await retryMedia('getFile', signal => api<{ file_path?: string; file_size?: number }>('getFile', { file_id: image.file_id }, 30_000, { signal }))
+    const filePath = file.file_path
+    if (!filePath || !/^[a-zA-Z0-9_/-]+\.[a-zA-Z0-9]+$/.test(filePath)
+      || filePath.split('/').some(part => !part || part === '.' || part === '..')
+      || (file.file_size ?? 0) > MAX_CHANNEL_IMAGE_BYTES) throw permanentMediaError('图片文件无效或超过大小限制')
+    const bytes = await retryMedia('downloadFile', signal => downloadFileBytes(filePath, signal))
+    const media = document && !document.mime_type?.startsWith('image/') ? fileMedia(bytes, document.file_name) : imageMedia(bytes)
+    const name = document?.file_name?.replace(/\\/g, '/').split('/').pop()
+    return [{ ...media, ...(name ? { name } : {}) }]
+  }
 
-  async function pollLoop(): Promise<void> {
-    while (!stopped) {
+  type UpdateOutcome = 'committed' | 'retry'
+
+  function threadParam(message: NonNullable<TgUpdate['message']>): Record<string, number> {
+    return message.message_thread_id !== undefined ? { message_thread_id: message.message_thread_id } : {}
+  }
+
+  function albumKey(message: NonNullable<TgUpdate['message']>): string | undefined {
+    if (message.chat.type === 'private' || !message.media_group_id || !message.from?.id) return undefined
+    return `${message.chat.id}:${message.from.id}:${message.media_group_id}`
+  }
+
+  function pruneAlbums(now = Date.now()): boolean {
+    let changed = false
+    for (const [key, album] of albumAccess) {
+      // 未触发相册按 30s TTL 淘汰；已授权且有待投递成员的网络重试不受 TTL 影响（恢复后必须交付）。
+      if (album.expires > now) continue
+      if (album.addressed && album.pending.length > 0) continue
+      albumAccess.delete(key)
+      albumDelivered.delete(key)
+      changed = true
+    }
+    return changed
+  }
+
+  /** 相册缓冲是游标的前置条件：写失败必须返回 false，让调用方回退本批且不推进游标。 */
+  function persistAlbums(): boolean {
+    if (!albumFile) return true
+    try {
+      writeFileAtomicSync(albumFile, `${JSON.stringify({ version: 1, albums: Object.fromEntries(albumAccess) })}\n`, 0o600)
+      if (albumPersistFailed) { albumPersistFailed = false; log('[telegram] 相册缓冲恢复可写') }
+      return true
+    } catch {
+      if (!albumPersistFailed) { albumPersistFailed = true; log('[telegram] 相册缓冲落盘失败，暂停推进游标并退避重试') }
+      return false
+    }
+  }
+
+  /** 损坏缓冲不能静默丢：隔离原文件、显式报错、且不加载任何旧条目（避免误授权旧媒体）。 */
+  function quarantineAlbums(reason: string): void {
+    albumAccess.clear()
+    albumDelivered.clear()
+    let backup: string | undefined
+    try { backup = backupCorruptFileSync(albumFile) } catch { /* 隔离失败仍继续按空缓冲运行并报错 */ }
+    albumStateError = '相册缓冲文件损坏，已隔离'
+    log(`[telegram] 相册缓冲文件损坏（${reason}），已隔离${backup ? `：${basename(backup)}` : ''}`)
+  }
+
+  function validAlbumIds(value: unknown): value is number[] {
+    return Array.isArray(value) && value.every(id => Number.isSafeInteger(id))
+  }
+
+  /**
+   * 重启后恢复尚未收口的相册成员。
+   * - 旧格式没有 ids：从 pending 的唯一 update_id 推导，忽略旧 count（旧 count 把重试次数也算进去）。
+   * - 未授权条目仍按 30s TTL 丢弃；已授权且有待投递成员的条目必须保留。
+   * - 只有 ENOENT 视为“文件不存在”；其他 IO 错误向上抛出，start 失败但不覆盖旧文件。
+   */
+  function loadAlbums(): void {
+    albumAccess.clear()
+    albumDelivered.clear()
+    if (!albumFile) return
+    let text: string
+    try { text = readFileSync(albumFile, 'utf8') }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      albumStateError = '相册缓冲不可读'
+      log('[telegram] 相册缓冲不可读，暂停启动以免覆盖旧状态')
+      throw new Error('相册缓冲不可读')
+    }
+    let parsed: Partial<PersistedAlbums> | undefined
+    try { parsed = JSON.parse(text) as Partial<PersistedAlbums> }
+    catch { quarantineAlbums('解析失败'); return }
+    if (!parsed || parsed.version !== 1 || typeof parsed.albums !== 'object' || parsed.albums === null) {
+      quarantineAlbums('结构无效')
+      return
+    }
+    const entries: Array<[string, AlbumEntry]> = []
+    for (const [key, raw] of Object.entries(parsed.albums)) {
+      const entry = raw as Partial<AlbumEntry> | undefined
+      if (!entry || typeof entry.expires !== 'number' || !Number.isFinite(entry.expires)
+        || typeof entry.addressed !== 'boolean' || !Array.isArray(entry.pending)
+        || entry.pending.some(update => !update || typeof update.update_id !== 'number' || !update.message)
+        || (entry.ids !== undefined && !validAlbumIds(entry.ids))) {
+        quarantineAlbums('条目无效')
+        return
+      }
+      const ids = entry.ids !== undefined ? [...new Set(entry.ids)] : [...new Set(entry.pending.map(update => update.update_id))]
+      entries.push([key, { expires: entry.expires, addressed: entry.addressed, pending: entry.pending, ids }])
+    }
+    const now = Date.now()
+    let changed = false
+    for (const [key, entry] of entries) {
+      if (entry.expires <= now && !(entry.addressed && entry.pending.length > 0)) { changed = true; continue }
+      albumAccess.set(key, entry)
+    }
+    if (changed || entries.length !== albumAccess.size) persistAlbums()
+  }
+
+  async function deliverMessage(delivery: TgUpdate, direct: boolean, addressed: boolean): Promise<UpdateOutcome> {
+    const message = delivery.message!
+    let text = message.text ?? message.caption ?? ''
+    if (username) text = text.replace(new RegExp(`@${username}\\b`, 'ig'), '').trim()
+    let media: ImMedia[] = []
+    if (addressed) {
+      try {
+        media = await downloadImages(message)
+        mediaRecovery = false
+      }
+      catch (error) {
+        if (stopped) return 'retry'
+        if (!isPermanentMediaError(error)) {
+          // 临时断网：不提交游标，下一次 getUpdates 重新取回同一条消息。
+          mediaRecovery = true
+          log('[telegram] 图片接收失败（网络），稍后重试')
+          return 'retry'
+        }
+        mediaRecovery = false
+        // Do not expose a token-bearing download URL through error messages.
+        log('[telegram] 图片接收失败')
+        await api('sendMessage', { chat_id: message.chat.id, ...threadParam(message), text: config.host ? notice(config.host, '图片接收失败，请检查图片格式和大小后重新发送完整消息。') : '图片接收失败，请检查图片格式和大小后重新发送完整消息。' }).catch(() => log('[telegram] 图片失败提示发送失败'))
+        // A failed image caption must never turn into a text command.
+        return 'committed'
+      }
+    }
+    if (stopped) return 'retry'
+    void handler?.({
+      chatId: telegramChatId(message.chat.id, message.message_thread_id),
+      userId: message.from ? String(message.from.id) : undefined,
+      username: message.from?.username ?? message.from?.first_name,
+      text,
+      ...(media.length ? { media } : {}),
+      kind: direct ? 'dm' : 'group',
+      addressed,
+      messageId: String(delivery.update_id),
+      platformMessageId: String(message.message_id),
+    })
+    return 'committed'
+  }
+
+  async function processUpdate(update: TgUpdate): Promise<UpdateOutcome> {
+    if (update.callback_query) {
+      const callback = update.callback_query
+      if (latestThinking.consume(callback)) {
+        void api('answerCallbackQuery', { callback_query_id: callback.id }).catch(() => log('[telegram] 按钮回执失败'))
+        return 'committed'
+      }
+      await api('answerCallbackQuery', { callback_query_id: callback.id }).catch(() => log('[telegram] 按钮回执失败'))
+      if (callback.data && callback.message) await handler?.({
+        chatId: telegramChatId(callback.message.chat.id, callback.message.message_thread_id),
+        userId: String(callback.from.id),
+        kind: callback.message.chat.type === 'private' ? 'dm' : 'group',
+        addressed: true,
+        text: '',
+        actionToken: callback.data,
+        messageId: `callback:${callback.id}`,
+      })
+      return 'committed'
+    }
+    const message = update.message
+    if (!message || message.from?.is_bot) return 'committed'
+    if (!['private', 'group', 'supergroup'].includes(message.chat.type)) return 'committed'
+    // 话题改名是服务消息，不是对话内容：上报后直接结束，
+    // 绝不能送进 agent，否则会产生一个没有输入的空回合。
+    if (message.forum_topic_edited) {
+      onTopicEdited?.(telegramChatId(message.chat.id, message.message_thread_id), message.forum_topic_edited.name ?? '')
+      return 'committed'
+    }
+    const direct = message.chat.type === 'private'
+    let addressed = isInboundAddressed({
+      direct,
+      chatId: message.chat.id,
+      replyToBot: String(message.reply_to_message?.from?.id ?? '') === botId,
+      mentioned: mentioned(message),
+      policy: config.mentionPolicy,
+      freeChatGroups: config.freeChatGroups,
+    })
+    let deliveries: TgUpdate[] = [update]
+    let idsDirty = false
+    const key = albumKey(message)
+    if (key) {
+      const now = Date.now()
+      if (pruneAlbums(now)) {
+        // 成功的 prune 让容量重新可用：瞬时容量错误必须回到正常状态。
+        albumCapacityBlocked = false
+        persistAlbums()
+      }
+      let album = albumAccess.get(key)
+      if (!album) {
+        if (albumAccess.size >= 64) {
+          // 容量淘汰只能淘汰“无待投递”的空条目；已授权待投递成员绝不能被淘汰。
+          const evictable = [...albumAccess].find(([, candidate]) => candidate.pending.length === 0)
+          if (!evictable) {
+            albumCapacityBlocked = true
+            log('[telegram] 相册缓冲容量已满且没有可淘汰的空条目，暂停推进')
+            return 'retry'
+          }
+          albumAccess.delete(evictable[0])
+          if (!persistAlbums()) {
+            albumAccess.set(evictable[0], evictable[1])
+            return 'retry'
+          }
+          albumDelivered.delete(evictable[0])
+        }
+        album = { expires: now + ALBUM_TTL_MS, addressed: false, pending: [], ids: [] }
+        albumAccess.set(key, album)
+      }
+      albumCapacityBlocked = false
+      album.addressed ||= addressed
+      addressed = album.addressed
+      // 唯一 update_id 计数：重试/start-stop/重启都不会把同一条消息算成多个成员。
+      const known = album.ids.includes(update.update_id)
+      if (!album.addressed && !known && album.ids.length >= 20) {
+        // 未授权相册只限制“待触发缓冲”的唯一成员数；显式丢弃新成员，绝不清空已缓冲内容。
+        log('[telegram] 相册缓冲达到唯一成员上限，丢弃新成员（不会清空既有缓冲）')
+        return 'committed'
+      }
+      const previousIds = album.ids
+      const previousPending = album.pending
+      if (!known) {
+        album.ids = [...album.ids, update.update_id]
+        idsDirty = true
+        // 计数是容量/上限的持久依据；先尝试落盘，失败则最多留到本批结束前再试，
+        // 不阻塞已经授权 pending 的投递（媒体安全由 pending 落盘保证）。
+        if (persistAlbums()) idsDirty = false
+      }
+      if (!addressed) {
+        if (!album.pending.some(entry => entry.update_id === update.update_id)) album.pending = [...album.pending, update]
+        // 缓冲/唯一计数写入失败不能继续提交游标，否则崩溃/重启后该成员永久丢失。
+        if (!persistAlbums()) { album.ids = previousIds; album.pending = previousPending; return 'retry' }
+        return 'committed'
+      }
+      const pending = album.pending.filter(entry => entry.update_id !== update.update_id)
+      if (pending.length !== previousPending.length) {
+        album.pending = pending
+        if (!persistAlbums()) { album.ids = previousIds; album.pending = previousPending; return 'retry' }
+        idsDirty = false
+      }
+      deliveries = [...pending, update]
+    }
+    for (let index = 0; index < deliveries.length; index += 1) {
+      const delivery = deliveries[index]!
+      const deliveryKey = albumKey(delivery.message!)
+      const alreadyDelivered = deliveryKey ? albumDelivered.get(deliveryKey)?.has(delivery.update_id) === true : false
+      if (!alreadyDelivered) {
+        const outcome = await deliverMessage(delivery, direct, addressed)
+        if (outcome === 'retry') {
+          // 本批已确认的部分不重放；未投递的相册成员回到持久化缓冲，等下次带触发条件的批次。
+          if (deliveryKey) {
+            const album = albumAccess.get(deliveryKey)
+            if (album) {
+              for (const remaining of deliveries.slice(index)) {
+                if (!album.pending.some(entry => entry.update_id === remaining.update_id)) album.pending.push(remaining)
+              }
+              if (!persistAlbums()) log('[telegram] 相册状态回退未落盘，重试可能重复分发，依赖网关 seen 去重')
+            }
+          }
+          return 'retry'
+        }
+        if (deliveryKey) {
+          let ids = albumDelivered.get(deliveryKey)
+          if (!ids) albumDelivered.set(deliveryKey, ids = new Set())
+          ids.add(delivery.update_id)
+        }
+      }
+      if (deliveryKey) {
+        const album = albumAccess.get(deliveryKey)
+        if (album) {
+          const previous = album.pending
+          const next = previous.filter(entry => entry.update_id !== delivery.update_id)
+          if (next.length !== previous.length) {
+            album.pending = next
+            // 已分发成员的删除也必须落盘：失败时只恢复并重试删除，已分发集合保证不重复下载/分发。
+            if (!persistAlbums()) {
+              album.pending = previous
+              log('[telegram] 相册已分发成员删除落盘失败，仅重试删除（不会重复下载/分发）')
+              return 'retry'
+            }
+            idsDirty = false
+          }
+        }
+      }
+    }
+    // 触发消息的唯一计数在投递完成后必须持久化，否则 cursor 提交会丢掉容量计数。
+    if (idsDirty && !persistAlbums()) return 'retry'
+    return 'committed'
+  }
+
+  /**
+   * 处理一条 update 后才推进并持久化游标：
+   * - 文本/回调/永久失败：提交，下一批从下一条开始；
+   * - 临时网络失败/相册待投递：不提交，下一次 getUpdates 从该条重试，避免静默丢失。
+   * 已提交的前序 update 不会因后续失败被整批重放。
+   */
+  async function pollLoop(epoch: number): Promise<void> {
+    while (!stopped && epoch === pollEpoch) {
+      let retry = false
       try {
         const updates = await api<TgUpdate[]>('getUpdates', {
           offset,
@@ -608,111 +970,26 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         }, 35_000)
         lastError = ''
         for (const update of updates) {
-          if (stopped) break
-          // Telegram offset 是 at-most-once 取舍：先确认游标可避免崩溃重启后重复驱动 agent，代价是极端情况下丢一条未完成消息。
+          if (stopped || epoch !== pollEpoch) return
+          const outcome = await processUpdate(update)
+          if (stopped || epoch !== pollEpoch) return
+          if (outcome === 'retry') { retry = true; break }
           offset = update.update_id + 1
           if (persist) cursorFile.write({ offset })
-          if (update.callback_query) {
-            const callback = update.callback_query
-            if (latestThinking.consume(callback)) {
-              void api('answerCallbackQuery', { callback_query_id: callback.id }).catch(() => log('[telegram] 按钮回执失败'))
-              continue
-            }
-            await api('answerCallbackQuery', { callback_query_id: callback.id }).catch(() => log('[telegram] 按钮回执失败'))
-            if (callback.data && callback.message) await handler?.({
-              chatId: telegramChatId(callback.message.chat.id, callback.message.message_thread_id),
-              userId: String(callback.from.id),
-              kind: callback.message.chat.type === 'private' ? 'dm' : 'group',
-              addressed: true,
-              text: '',
-              actionToken: callback.data,
-              messageId: `callback:${callback.id}`,
-            })
-            continue
-          }
-          const message = update.message
-          if (!message || message.from?.is_bot) continue
-          if (!['private', 'group', 'supergroup'].includes(message.chat.type)) continue
-          // 话题改名是服务消息，不是对话内容：上报后直接结束，
-          // 绝不能送进 agent，否则会产生一个没有输入的空回合。
-          if (message.forum_topic_edited) {
-            onTopicEdited?.(telegramChatId(message.chat.id, message.message_thread_id), message.forum_topic_edited.name ?? '')
-            continue
-          }
-          const direct = message.chat.type === 'private'
-          let addressed = isInboundAddressed({
-            direct,
-            chatId: message.chat.id,
-            replyToBot: String(message.reply_to_message?.from?.id ?? '') === botId,
-            mentioned: mentioned(message),
-            policy: config.mentionPolicy,
-            freeChatGroups: config.freeChatGroups,
-          })
-          let deliveries = [update]
-          if (!direct && message.media_group_id && message.from?.id) {
-            const now = Date.now()
-            for (const [key, album] of albumAccess) if (album.expires <= now) albumAccess.delete(key)
-            const key = `${message.chat.id}:${message.from.id}:${message.media_group_id}`
-            let album = albumAccess.get(key)
-            if (!album) {
-              if (albumAccess.size >= 64) albumAccess.delete(albumAccess.keys().next().value!)
-              album = { expires: now + 30_000, addressed: false, pending: [], count: 0 }
-              albumAccess.set(key, album)
-            }
-            album.addressed ||= addressed
-            addressed = album.addressed
-            if (++album.count > 20) {
-              album.pending = []
-              if (addressed) {
-                const threadParam = message.message_thread_id !== undefined ? { message_thread_id: message.message_thread_id } : {}
-                await api('sendMessage', { chat_id: message.chat.id, ...threadParam, text: config.host ? notice(config.host, '相册图片过多，请分批发送。') : '相册图片过多，请分批发送。' }).catch(() => undefined)
-              }
-              continue
-            }
-            if (!addressed) { album.pending.push(update); continue }
-            deliveries = [...album.pending, update]
-            album.pending = []
-          }
-          for (const delivery of deliveries) {
-            if (stopped) break
-            const message = delivery.message!
-            let text = message.text ?? message.caption ?? ''
-            if (username) text = text.replace(new RegExp(`@${username}\\b`, 'ig'), '').trim()
-            let media: ImMedia[] = []
-            if (addressed) {
-              try { media = await downloadImages(message) }
-              catch {
-                if (stopped) break
-                // Do not expose a token-bearing download URL through error messages.
-                log('[telegram] 图片接收失败')
-                const threadParam = message.message_thread_id !== undefined ? { message_thread_id: message.message_thread_id } : {}
-                await api('sendMessage', { chat_id: message.chat.id, ...threadParam, text: config.host ? notice(config.host, '图片接收失败，请检查图片格式和大小后重新发送完整消息。') : '图片接收失败，请检查图片格式和大小后重新发送完整消息。' }).catch(() => log('[telegram] 图片失败提示发送失败'))
-                // A failed image caption must never turn into a text command.
-                continue
-              }
-            }
-            if (stopped) break
-            void handler?.({
-              chatId: telegramChatId(message.chat.id, message.message_thread_id),
-              userId: message.from ? String(message.from.id) : undefined,
-              username: message.from?.username ?? message.from?.first_name,
-              text,
-              ...(media.length ? { media } : {}),
-              kind: direct ? 'dm' : 'group',
-              addressed,
-              messageId: String(delivery.update_id),
-              platformMessageId: String(message.message_id),
-            })
-          }
         }
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error)
         log(`[telegram] 轮询错误: ${lastError}`)
-        if (stopped) break
+        if (stopped || epoch !== pollEpoch) break
         // 409 是「同一个 bot token 还有另一个实例在 getUpdates」：3s 一次的抢轮询只会放大冲突，
         // 也把真正的原因淹在日志里。退到 15s 复查，等另一个实例自己让出。
         const conflicting = /Conflict|terminated by other getUpdates/i.test(lastError)
         await sleepWithSignal(conflicting ? 15_000 : 3000, lifecycle?.signal).catch(() => undefined)
+        continue
+      }
+      if (retry && !stopped && epoch === pollEpoch) {
+        log('[telegram] 媒体接收未完成，稍后重试该消息')
+        await sleepWithSignal(3000, lifecycle?.signal).catch(() => undefined)
       }
     }
   }
@@ -722,18 +999,25 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
    * 这里只兜住循环自身意外退出的情况——否则 channels.json 里会一直显示「轮询中」，
    * 实际却再也没有 getUpdates 在跑。
    */
-  async function supervisePoll(): Promise<void> {
-    while (!stopped) {
+  async function supervisePoll(epoch: number): Promise<void> {
+    while (!stopped && epoch === pollEpoch) {
       try {
-        await pollLoop()
+        await pollLoop(epoch)
         return
       } catch (error) {
-        if (stopped) return
+        if (stopped || epoch !== pollEpoch) return
         lastError = error instanceof Error ? error.message : String(error)
         log(`[telegram] 轮询循环退出: ${lastError}，5s 后重启`)
         await sleepWithSignal(5000, lifecycle?.signal).catch(() => undefined)
       }
     }
+  }
+
+  /** start/stop 串行化：后一次操作在队列中覆盖前一次，避免 lifecycle/pollTask 互相覆盖。 */
+  function serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const result = transition.then(operation, operation)
+    transition = result.then(() => undefined, () => undefined)
+    return result
   }
 
   return {
@@ -745,32 +1029,62 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     replyStatus: true,
     interactionRetryRequiresDefinite: true,
     async start() {
-      clearThinking()
-      albumAccess.clear()
-      rateLimitedUntil.clear()
-      lifecycle?.abort()
-      lifecycle = new AbortController()
-      stopped = false
-      const me = await api<{ id: number; username?: string; is_bot: boolean }>('getMe', {})
-      botId = String(me.id)
-      username = me.username ?? ''
-      const hook = await api<{ url?: string }>('getWebhookInfo', {})
-      if (hook.url) throw Object.assign(new Error('该 Telegram 机器人已配置 Webhook，请先在原服务中移除。'), { code: 'webhook-configured' })
-      log('[telegram] 开始长轮询')
-      pollTask = supervisePoll().catch((error) => {
-        if (!stopped) log(`[telegram] 轮询循环退出: ${error instanceof Error ? error.message : String(error)}`)
+      lastOperation = 'start'
+      const seq = ++operationSeq
+      return serialize(async () => {
+        // A concurrent later start owns the transition; only a later stop turns this into a real abort.
+        if (seq !== operationSeq) {
+          if (lastOperation === 'stop') throw new DOMException('Telegram start superseded', 'AbortError')
+          return
+        }
+        // Single-flight: a second start while the poll loop is live must not fork getUpdates.
+        if (pollTask && !stopped) return
+        clearThinking()
+        rateLimitedUntil.clear()
+        const previous = lifecycle
+        previous?.abort()
+        const controller = new AbortController()
+        lifecycle = controller
+        stopped = false
+        try {
+          const me = await api<{ id: number; username?: string; is_bot: boolean }>('getMe', {})
+          botId = String(me.id)
+          username = me.username ?? ''
+          const hook = await api<{ url?: string }>('getWebhookInfo', {})
+          if (hook.url) throw Object.assign(new Error('该 Telegram 机器人已配置 Webhook，请先在原服务中移除。'), { code: 'webhook-configured' })
+          loadAlbums()
+          mediaRecovery = false
+          log('[telegram] 开始长轮询')
+          const epoch = ++pollEpoch
+          pollTask = supervisePoll(epoch).catch((error) => {
+            if (!stopped && epoch === pollEpoch) log(`[telegram] 轮询循环退出: ${error instanceof Error ? error.message : String(error)}`)
+          })
+        } catch (error) {
+          if (lifecycle === controller) lifecycle = undefined
+          throw error
+        }
       })
     },
     async stop() {
       stopped = true
+      mediaRecovery = false
+      lastOperation = 'stop'
+      ++operationSeq
       clearThinking()
-      albumAccess.clear()
-      lifecycle?.abort()
-      await pollTask?.catch(() => undefined)
-      pollTask = undefined
-      lifecycle = undefined
-      if (dispatcher) await dispatcher.close().catch(() => dispatcher?.destroy())
-      if (persist) cursorFile.write({ offset })
+      const current = lifecycle
+      current?.abort()
+      await serialize(async () => {
+        if (pollTask) {
+          await pollTask.catch(() => undefined)
+          pollTask = undefined
+        }
+        if (lifecycle === current) lifecycle = undefined
+        if (dispatcher) await dispatcher.close().catch(() => dispatcher?.destroy())
+        if (persist) cursorFile.write({ offset })
+        albumAccess.clear()
+        albumDelivered.clear()
+        albumCapacityBlocked = false
+      })
     },
     canDeliverDeferred() { return !stopped },
     async send(chatId, text) {
@@ -1070,6 +1384,12 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         if (webhook.url) throw new DiagnosticError('webhook-conflict')
       })]
     },
-    status() { return stopped ? '已停止' : lastError ? '轮询异常（详情见本机日志）' : '轮询中' },
+    status() {
+      if (stopped) return '已停止'
+      if (albumStateError) return '轮询异常（详情见本机日志）'
+      if (mediaRecovery) return '媒体待恢复'
+      if (albumCapacityBlocked) return '轮询异常（详情见本机日志）'
+      return lastError ? '轮询异常（详情见本机日志）' : '轮询中'
+    },
   }
 }

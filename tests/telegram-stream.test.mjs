@@ -5,13 +5,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createTelegramChannel } from '../lib/channels/telegram.js'
 
+// 默认拦截所有真实网络：每个用例必须显式安装 fetch mock，漏 mock 时立即失败而不是打到 Telegram。
+const blockedFetch = (input) => {
+  throw new Error(`blocked unmocked network request: ${typeof input === 'string' ? input : input?.url ?? String(input)}`)
+}
+globalThis.fetch = blockedFetch
+
 function mockFetch(handler) {
   const previous = globalThis.fetch
   globalThis.fetch = handler
   return () => { globalThis.fetch = previous }
 }
 
-test('Telegram 长轮询解析入站消息并在分发前持久化 offset', async () => {
+test('Telegram 长轮询解析入站消息并在渠道完成分流后提交 offset', async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'dsh-telegram-poll-'))
   let pollCount = 0
   let secondPollAborted = false
@@ -37,8 +43,9 @@ test('Telegram 长轮询解析入站消息并在分发前持久化 offset', asyn
       }, { once: true })
     })
   })
+  let channel
   try {
-    const channel = createTelegramChannel({ token: 'test-token', stateDir }, () => undefined)
+    channel = createTelegramChannel({ token: 'test-token', stateDir }, () => undefined)
     assert.ok(channel)
     const received = new Promise((resolve) => channel.setMessageHandler((message) => resolve(message)))
     await channel.start()
@@ -46,10 +53,18 @@ test('Telegram 长轮询解析入站消息并在分发前持久化 offset', asyn
     assert.deepEqual(message, {
       chatId: '123', userId: '456', username: 'alice', text: 'hello', kind: 'dm', addressed: true, messageId: '41', platformMessageId: '7',
     })
+    // 渠道完成分流（已交给 handler）后提交 offset；这不等于宿主处理完成的持久 ack，崩溃语义见报告边界。
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        if (JSON.parse(readFileSync(join(stateDir, 'cursor.json'), 'utf8')).offset === 42) break
+      } catch { /* 首次写入前文件尚不存在 */ }
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
     assert.equal(JSON.parse(readFileSync(join(stateDir, 'cursor.json'), 'utf8')).offset, 42)
     await channel.stop()
     assert.equal(secondPollAborted, true)
   } finally {
+    await channel?.stop().catch(() => undefined)
     restore()
     rmSync(stateDir, { recursive: true, force: true })
   }
@@ -64,8 +79,9 @@ test('Telegram 流式只发一条占位，后续只编辑同一条', async () =>
     calls.push({ method, body })
     return { json: async () => ({ ok: true, result: { message_id: 88 } }) }
   })
+  let channel
   try {
-    const channel = createTelegramChannel({ token: 'test-token' }, () => undefined)
+    channel = createTelegramChannel({ token: 'test-token' }, () => undefined)
     const stream = await channel.beginReply('123')
     await stream.update('你')
     await stream.update('你好')
@@ -79,6 +95,7 @@ test('Telegram 流式只发一条占位，后续只编辑同一条', async () =>
     assert.equal(edits.at(-1).body.text, '你好，世界')
     assert.ok(edits.every((item) => item.body.message_id === 88))
   } finally {
+    await channel?.stop().catch(() => undefined)
     restore()
   }
 })
@@ -95,8 +112,9 @@ test('Telegram 占位消息确认不可编辑后收口仍能补发全文', async
     }
     return { json: async () => ({ ok: true, result: { message_id: 88 } }) }
   })
+  let channel
   try {
-    const channel = createTelegramChannel({ token: 'test-token' }, () => undefined)
+    channel = createTelegramChannel({ token: 'test-token' }, () => undefined)
     const stream = await channel.beginReply('123')
     await stream.update('部分答案')
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -104,6 +122,7 @@ test('Telegram 占位消息确认不可编辑后收口仍能补发全文', async
     const sends = calls.filter((item) => item.method === 'sendMessage').map((item) => item.body.text)
     assert.deepEqual(sends, ['…', '完整答案'])
   } finally {
+    await channel?.stop().catch(() => undefined)
     restore()
   }
 })
@@ -120,13 +139,15 @@ test('Telegram 中途编辑失败时不补发新消息', async () => {
     }
     return { json: async () => ({ ok: true, result: { message_id: 9 } }) }
   })
+  let channel
   try {
-    const channel = createTelegramChannel({ token: 'test-token' }, () => undefined)
+    channel = createTelegramChannel({ token: 'test-token' }, () => undefined)
     const stream = await channel.beginReply('123')
     await stream.update('abc')
     await new Promise((resolve) => setTimeout(resolve, 500))
     assert.equal(calls.filter((item) => item.method === 'sendMessage').length, 1)
   } finally {
+    await channel?.stop().catch(() => undefined)
     restore()
   }
 })
