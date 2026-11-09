@@ -8,7 +8,7 @@
 
   **把飞书、Lark、钉钉、企业微信、微信、QQ、Telegram、Discord、Slack 接到本机 DeepSeek Harness**
 
-  [English](README.en.md) · [更新日志](CHANGELOG.zh-CN.md) · [QQ 引用交接](docs/01-当前工作/I022-QQ直接引用接入/00-迭代总览.md) · [侧栏协作交接](docs/07-迭代归档/2026/I024-侧栏页签协作与渲染修复/00-迭代总览.md) · [Apache-2.0](LICENSE)
+  [English](README.en.md) · [日本語](README.ja.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Русский](README.ru.md) · [Português](README.pt.md) · [更新日志](CHANGELOG.zh-CN.md) · [QQ 引用交接](docs/01-当前工作/I022-QQ直接引用接入/00-迭代总览.md) · [侧栏协作交接](docs/07-迭代归档/2026/I024-侧栏页签协作与渲染修复/00-迭代总览.md) · [Apache-2.0](LICENSE)
 
   [![许可证：Apache-2.0](https://img.shields.io/badge/许可证-Apache--2.0-blue.svg)](LICENSE)
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-im-connect.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-im-connect)

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.32] - 2026-11-09
+
+### Full multi-language README documentation & language navigation
+
+- Dedicated documentation across 8 languages: provide comprehensive native README files for Japanese (`README.ja.md`), Spanish (`README.es.md`), French (`README.fr.md`), German (`README.de.md`), Russian (`README.ru.md`), and Portuguese (`README.pt.md`).
+- Accurate localized detail display: plugin marketplace and details view now match the host's active locale with its dedicated native manual.
+- Header language switcher: add an 8-language switcher navigation bar at the top of all README files for quick access.
+
 ## [1.0.31] - 2026-11-09
 
 ### Full 8-language i18n & streamlined plugin management

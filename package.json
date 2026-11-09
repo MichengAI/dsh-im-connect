@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-im-connect",
-  "version": "1.0.31",
+  "version": "1.0.32",
   "description": "DSH IM Connect — 将主流即时通讯平台接入本机 DeepSeek Harness · Connect major messaging platforms to local DeepSeek Harness agents",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
@@ -29,7 +29,13 @@
     "README.zh-CN.md",
     "SECURITY.md",
     "CHANGELOG.md",
-    "CHANGELOG.zh-CN.md"
+    "CHANGELOG.zh-CN.md",
+    "README.ja.md",
+    "README.es.md",
+    "README.fr.md",
+    "README.de.md",
+    "README.ru.md",
+    "README.pt.md"
   ],
   "repository": {
     "type": "git",

@@ -61,3 +61,19 @@ test('已下线的 ChannelCard / 空态 / 在线更新词条不再占词典', ()
     }
   }
 })
+
+test('8 门内置语言的清单描述与文档文件全部存在且映射一致', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  for (const lang of ['zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt']) {
+    const localePath = new URL(`../locale/${lang}.json`, import.meta.url)
+    const manifest = JSON.parse(readFileSync(localePath, 'utf8'))
+    assert.ok(manifest.meta?.title, `${lang} meta.title 缺失`)
+    assert.ok(manifest.meta?.description, `${lang} meta.description 缺失`)
+    assert.ok(manifest.meta?.detail, `${lang} meta.detail 缺失`)
+
+    const docPath = new URL(`../${manifest.meta.detail}`, import.meta.url)
+    const docContent = readFileSync(docPath, 'utf8')
+    assert.ok(docContent.trim().length > 100, `${manifest.meta.detail} 内容过短或为空`)
+    assert.ok(pkg.files.includes(manifest.meta.detail), `package.json files 缺少 ${manifest.meta.detail}`)
+  }
+})
