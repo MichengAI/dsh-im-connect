@@ -94,9 +94,10 @@ export interface DeliveryOutcome {
 }
 
 /**
- * 平台是否已经明确答复「本次发送没有送达」。
+ * 是否有明确证据证明本次发送未落地。
  *
- * 只认渠道显式抛出的 {@link DeliveryRejected}（例如微信
+ * {@link DeliveryUnavailable} 只用于适配器证明连接建立前失败、请求尚未提交。
+ * 另一类是渠道显式抛出的 {@link DeliveryRejected}（例如微信
  * `/ilink/bot/sendmessage ret=-2 … prepare failed`、HTTP 429/503）：
  * 这类响应说明请求到达平台但未被受理，重发不会让用户收到两条。
  *
@@ -105,7 +106,7 @@ export interface DeliveryOutcome {
  * 请求可能已经落地。这些都保持「送达未知」，只由用户用 `/delivery retry` 决定。
  */
 export function isDefiniteSendFailure(error: unknown): boolean {
-  return error instanceof DeliveryRejected
+  return error instanceof DeliveryRejected || error instanceof DeliveryUnavailable
 }
 
 interface AgentLike {
@@ -1118,7 +1119,17 @@ export class ImEngine {
     if (event.type !== 'turn/end') this.progress.event(id, event)
     const outcome: DeliveryOutcome = { ok: !skip, content: false }
     const deferEnd = event.type === 'turn/end' && this.replyFinalization.keys().includes(id)
-    const process = () => skip ? Promise.resolve() : this.processSessionEvent(session, event, outcome, trackedEnd)
+    const process = async () => {
+      if (event.type === 'assistant/message' && event.surfaceOp === 'append' && !invalid
+        && binding && channel && !this.router.isMuted(id)) {
+        const content = event.data?.message?.content
+        // Tool-call narration is not an authoritative final body to replay after a crash.
+        const text = Array.isArray(content) && content.some(part => part?.type === 'tool-call')
+          ? undefined : assistantText(content, channel.skipInterimText)
+        if (text) this.deferred.preserveText(id, turn, text)
+      }
+      if (!skip) await this.processSessionEvent(session, event, outcome, trackedEnd)
+    }
     let work: Promise<void>
     if (event.type === 'assistant/message') {
       // Start now, registering content before a synchronous turn/end; queue only its barrier.
