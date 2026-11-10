@@ -95,12 +95,11 @@ Gérée depuis le panneau **Extensions → @michengai/dsh-im-connect** :
 - **Défaut** : Désactivé (`false`)
 - **Fonction** : Isole les échanges de messagerie de l'arborescence principale de développement pour préserver la lisibilité de vos projets.
 
-
-### 4. Règle de déclenchement dans les groupes Telegram (`mentionPolicy` / `freeChatGroups`)
+### 3. Règle de déclenchement dans les groupes Telegram (`mentionPolicy` / `freeChatGroups`)
 - **Défaut** : `addressed` (répond uniquement aux mentions @ et aux réponses directes).
 - **Fonction** : Définissez une liste blanche de groupes pour autoriser les échanges continus sans mention explicite.
 
-### 5. Affichage repliable de la réflexion (`thinkingDisplay`)
+### 4. Affichage repliable de la réflexion (`thinkingDisplay`)
 - **Défaut** : Désactivé (`off`)
 - **Fonction** : Transmet le cheminement de pensée du modèle sous forme de bloc de citation repliable Telegram (`<blockquote expandable>`).
 

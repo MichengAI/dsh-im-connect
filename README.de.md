@@ -95,12 +95,11 @@ Erreichbar über die Verwaltung unter **Plugins → @michengai/dsh-im-connect**:
 - **Standard**: Deaktiviert (`false`)
 - **Funktion**: Filtert Messenger-Chats aus der Hauptbaumansicht heraus, um die Übersichtlichkeit im täglichen Entwicklungsalltag zu wahren.
 
-
-### 4. Auslöserichtlinie für Telegram-Gruppen (`mentionPolicy` / `freeChatGroups`)
+### 3. Auslöserichtlinie für Telegram-Gruppen (`mentionPolicy` / `freeChatGroups`)
 - **Standard**: `addressed` (reagiert nur auf @Erwähnungen oder direkte Antworten).
 - **Funktion**: Erlaubt die Festlegung von Whitelist-Gruppen für die direkte Kommunikation ohne @Erwähnung.
 
-### 5. Einklappbare Denkprozess-Anzeige (`thinkingDisplay`)
+### 4. Einklappbare Denkprozess-Anzeige (`thinkingDisplay`)
 - **Standard**: Aus (`off`)
 - **Funktion**: Übermittelt den Denkprozess des Modells auf Telegram als einklappbaren Zitatblock (`<blockquote expandable>`).
 

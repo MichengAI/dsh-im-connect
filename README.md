@@ -260,8 +260,7 @@ dsh --profile web --dump-config
   - **频道面板不受影响**：关闭仅作用于主任务树，在侧栏「频道」页签中依然完整保留并可随时点开、回复和复盘全部渠道会话；
   - **轻量管道协同**：基于 `NativeTabRegistry.sessionFilters` 标准协作协议实现，无需深度劫持宿主组件，切换即时生效，与定时插件及归档管理等第三方插件完全兼容。未支持该协议的外壳会自动安全降级并提示。
 
-
-### 4. Telegram 群聊触发策略 (`mentionPolicy` / `freeChatGroups`)
+### 3. Telegram 群聊触发策略 (`mentionPolicy` / `freeChatGroups`)
 - **默认状态**：`addressed`（群里只有 @bot、回复 bot 或私聊才会处理）
 - **功能说明**：群聊希望「不 @ 也能直接聊」时，可直接在「设置 → IM助理 → Telegram 账号详情」中配置群聊触发策略，亦可在 `channels.json` 中配置：
   - **场景 A（仅特定群免 @）**：仅配置 `freeChatGroups`，未列出的群保持默认：
@@ -296,7 +295,7 @@ dsh --profile web --dump-config
   - **方法 2**：在群里随便发一条消息，转发给官方查询机器人（如 `@userinfobot`），复制其回复中 `Forwarded from chat` 的 `Id` 数字（以负号开头）；
   - **方法 3**：通过 Bot 原生接口查询 `https://api.telegram.org/bot<TOKEN>/getUpdates`，找到 `"chat":{"id": -100xxxxxxxxxx}`。
 
-### 5. 思考过程折叠消息 (`thinkingDisplay`)
+### 4. 思考过程折叠消息 (`thinkingDisplay`)
 - **默认状态**：关闭（`mode: 'off'`）
 - **功能说明**：开启后，模型的思考过程会单独发成一条 Telegram「可折叠引用块」消息（`<blockquote expandable>`），默认只显示约三行，点「显示更多」展开；同一回合就地编辑，回合结束时标题变为「🧠 思考过程」。
 - **配置示例**（插件配置槽位）：

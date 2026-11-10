@@ -95,12 +95,11 @@ Acessível no painel em **Plugins → @michengai/dsh-im-connect**:
 - **Padrão**: Desativado (`false`)
 - **Função**: Oculta conversas de mensagens da árvore de tarefas principal, evitando poluição visual no espaço de trabalho diário.
 
-
-### 4. Política de acionamento em grupos do Telegram (`mentionPolicy` / `freeChatGroups`)
+### 3. Política de acionamento em grupos do Telegram (`mentionPolicy` / `freeChatGroups`)
 - **Padrão**: `addressed` (responde apenas a menções @ ou respostas diretas).
 - **Função**: Permite cadastrar grupos em lista branca para responder a todas as mensagens sem exigir menção.
 
-### 5. Bloco recolhível de raciocínio (`thinkingDisplay`)
+### 4. Bloco recolhível de raciocínio (`thinkingDisplay`)
 - **Padrão**: Desativado (`off`)
 - **Função**: Envia a cadeia de pensamento no Telegram dentro de uma citação expansível (`<blockquote expandable>`).
 

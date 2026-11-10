@@ -150,14 +150,13 @@ dsh plugin --profile web add @michengai/dsh-im-connect --registry=https://regist
 - **デフォルト**: 無効 (`false`)
 - **機能**: メインワークスペースのタスクツリーに IM セッションを表示するかどうかを切り替えます。無効にすることで、高頻度なチャットが通常の開発タスク一覧を圧迫するのを防ぎます。
 
-
-### 4. Telegram グループ起動ポリシー (`mentionPolicy` / `freeChatGroups`)
+### 3. Telegram グループ起動ポリシー (`mentionPolicy` / `freeChatGroups`)
 - **デフォルト**: `addressed`（ボットへの @メンションまたは返信時のみ応答）
 - **機能**: グループチャットで @メンションなしでも応答させたい場合、「設定 → IM アシスタント → Telegram アカウント詳細」から設定できます。
   - **特定グループのみ**: `freeChatGroups` にグループIDをカンマ区切りで入力します。
   - **すべてのグループ**: `mentionPolicy` を `always` に設定します。
 
-### 5. 思考プロセスの折りたたみ表示 (`thinkingDisplay`)
+### 4. 思考プロセスの折りたたみ表示 (`thinkingDisplay`)
 - **デフォルト**: オフ (`off`)
 - **機能**: モデルの思考プロセスを Telegram の折りたたみ引用ブロック（`<blockquote expandable>`）として送信し、タップで展開できるようにします。
 

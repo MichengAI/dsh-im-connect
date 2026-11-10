@@ -260,8 +260,7 @@ Native configuration options are provided here. Their values are persisted in `c
   - **Channels Tab Preserved**: Filtering applies only to the official workspace tree. All channel sessions remain fully available and accessible at any time under the sidebar's **Channels** tab;
   - **Lightweight Pipeline Collaboration**: Implemented via the `NativeTabRegistry.sessionFilters` inter-plugin protocol without invasive host hijacking. Toggling takes effect immediately and interoperates smoothly with Automation and Archive Manager. Non-supporting host shells degrade gracefully with a one-time warning.
 
-
-### 4. Telegram group trigger policy (`mentionPolicy` / `freeChatGroups`)
+### 3. Telegram group trigger policy (`mentionPolicy` / `freeChatGroups`)
 - **Default**: `addressed` — in groups the bot only reacts to an @mention, a reply to it, or a direct message.
 - **What it does**: to let a group chat with the bot without @mentioning it, configure the trigger policy directly in **Settings → IM Assistant → Telegram Account Details**, or in `channels.json`:
   - **Scenario A (specific groups only)**: configure `freeChatGroups` only; other groups keep default:
@@ -296,7 +295,7 @@ Native configuration options are provided here. Their values are persisted in `c
   - **Option 2**: Send any message in the group, forward it to a query bot (such as `@userinfobot`), and copy the chat `Id` (starts with a minus sign);
   - **Option 3**: Call `https://api.telegram.org/bot<TOKEN>/getUpdates` directly in your browser and check `"chat":{"id": -100xxxxxxxxxx}`.
 
-### 5. Collapsible thinking message (`thinkingDisplay`)
+### 4. Collapsible thinking message (`thinkingDisplay`)
 - **Default**: off (`mode: 'off'`).
 - **What it does**: when enabled, the model's reasoning is sent as a separate Telegram collapsible quote (`<blockquote expandable>`) — about three lines collapsed, tap "show more" to expand. The same message is edited in place during the turn and retitled "🧠 Thought process" when the turn ends.
 - **Example** (plugin config slot):

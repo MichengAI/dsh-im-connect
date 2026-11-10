@@ -95,12 +95,11 @@ Disponible desde el panel de administración en **Complementos → @michengai/ds
 - **Predeterminado**: Desactivado (`false`)
 - **Función**: Oculta las conversaciones de mensajería del árbol de tareas principal para evitar saturar el espacio de desarrollo diario.
 
-
-### 4. Política de activación en grupos de Telegram (`mentionPolicy` / `freeChatGroups`)
+### 3. Política de activación en grupos de Telegram (`mentionPolicy` / `freeChatGroups`)
 - **Predeterminado**: `addressed` (solo responde a menciones @ o respuestas directas al bot).
 - **Función**: Configure si desea que el bot responda a todos los mensajes o defina una lista blanca de grupos sin necesidad de mención.
 
-### 5. Mensaje de pensamiento plegable (`thinkingDisplay`)
+### 4. Mensaje de pensamiento plegable (`thinkingDisplay`)
 - **Predeterminado**: Desactivado (`off`)
 - **Función**: Envía la cadena de pensamiento del modelo en Telegram dentro de un bloque de cita plegable (`<blockquote expandable>`).
 
