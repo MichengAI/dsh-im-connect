@@ -95,15 +95,6 @@ Erreichbar über die Verwaltung unter **Plugins → @michengai/dsh-im-connect**:
 - **Standard**: Deaktiviert (`false`)
 - **Funktion**: Filtert Messenger-Chats aus der Hauptbaumansicht heraus, um die Übersichtlichkeit im täglichen Entwicklungsalltag zu wahren.
 
-### 3. Update-Sperre über Cordis-Konfiguration (`updater` / `onlineUpdate`)
-- **Standard**: Nicht gesperrt (`undefined`)
-- **Funktion**: Für isolierte Unternehmensnetzwerke kann der interne Update-Endpunkt über `cordis.patch.yml` dauerhaft deaktiviert werden:
-  ```yaml
-  - id: im-connect
-    config:
-      updater: false # oder onlineUpdate: false
-  ```
-  Nach der Sperrung liefert der Endpunkt HTTP 403 und überlässt die Versionsverwaltung vollständig dem offiziellen DSH-Paketmanager.
 
 ### 4. Auslöserichtlinie für Telegram-Gruppen (`mentionPolicy` / `freeChatGroups`)
 - **Standard**: `addressed` (reagiert nur auf @Erwähnungen oder direkte Antworten).

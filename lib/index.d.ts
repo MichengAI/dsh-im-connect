@@ -25,8 +25,6 @@ export interface PluginConfig {
     segmentDelayMaxSecs?: number;
     /** 思考过程折叠消息；缺省关闭，只有渠道实现 sendThinking 时才生效。 */
     thinkingDisplay?: EngineConfig['thinkingDisplay'];
-    updater?: boolean;
-    onlineUpdate?: boolean;
 }
 export declare const Config: Schema<PluginConfig>;
 export declare function apply(ctx: Context, config: PluginConfig): void;

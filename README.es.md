@@ -95,15 +95,6 @@ Disponible desde el panel de administración en **Complementos → @michengai/ds
 - **Predeterminado**: Desactivado (`false`)
 - **Función**: Oculta las conversaciones de mensajería del árbol de tareas principal para evitar saturar el espacio de desarrollo diario.
 
-### 3. Bloqueo de actualizaciones por configuración Cordis (`updater` / `onlineUpdate`)
-- **Predeterminado**: Sin bloqueo (`undefined`)
-- **Función**: Para entornos corporativos o sin conexión a Internet, deshabilite los puntos de enlace de actualización declarándolo en `cordis.patch.yml`:
-  ```yaml
-  - id: im-connect
-    config:
-      updater: false # o onlineUpdate: false
-  ```
-  Al bloquearse, el punto de actualización del complemento responde con HTTP 403, delegando el ciclo de vida al gestor oficial de DSH.
 
 ### 4. Política de activación en grupos de Telegram (`mentionPolicy` / `freeChatGroups`)
 - **Predeterminado**: `addressed` (solo responde a menciones @ o respuestas directas al bot).

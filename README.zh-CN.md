@@ -260,15 +260,6 @@ dsh --profile web --dump-config
   - **频道面板不受影响**：关闭仅作用于主任务树，在侧栏「频道」页签中依然完整保留并可随时点开、回复和复盘全部渠道会话；
   - **轻量管道协同**：基于 `NativeTabRegistry.sessionFilters` 标准协作协议实现，无需深度劫持宿主组件，切换即时生效，与定时插件及归档管理等第三方插件完全兼容。未支持该协议的外壳会自动安全降级并提示。
 
-### 3. Cordis 宿主级在线更新锁定 (`updater` / `onlineUpdate`)
-- **默认状态**：未锁定（`undefined`）
-- **功能说明**：针对企业内网、离线环境或精选插件分发平台，支持直接在 Cordis 配置文件（如 `cordis.patch.yml`）中显式声明锁定禁用更新服务：
-  ```yaml
-  - id: im-connect
-    config:
-      updater: false # 或 onlineUpdate: false
-  ```
-  锁定后插件自身的更新端点自动关闭（返回 HTTP 403），版本升级统一交由 DSH 官方插件管理与市场机制负责。
 
 ### 4. Telegram 群聊触发策略 (`mentionPolicy` / `freeChatGroups`)
 - **默认状态**：`addressed`（群里只有 @bot、回复 bot 或私聊才会处理）

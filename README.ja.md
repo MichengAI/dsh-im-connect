@@ -150,15 +150,6 @@ dsh plugin --profile web add @michengai/dsh-im-connect --registry=https://regist
 - **デフォルト**: 無効 (`false`)
 - **機能**: メインワークスペースのタスクツリーに IM セッションを表示するかどうかを切り替えます。無効にすることで、高頻度なチャットが通常の開発タスク一覧を圧迫するのを防ぎます。
 
-### 3. Cordis 構成による更新ロック (`updater` / `onlineUpdate`)
-- **デフォルト**: 未ロック (`undefined`)
-- **機能**: 企業の内部ネットワークやオフライン環境向けに、`cordis.patch.yml` でオンライン更新エンドポイントを明示的に無効化できます。
-  ```yaml
-  - id: im-connect
-    config:
-      updater: false # または onlineUpdate: false
-  ```
-  ロックされるとプラグイン自身の更新エンドポイントは自動的に無効（HTTP 403）となり、バージョン管理は DSH 公式のプラグイン管理システムに委任されます。
 
 ### 4. Telegram グループ起動ポリシー (`mentionPolicy` / `freeChatGroups`)
 - **デフォルト**: `addressed`（ボットへの @メンションまたは返信時のみ応答）

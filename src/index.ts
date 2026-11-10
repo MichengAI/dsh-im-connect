@@ -10,7 +10,6 @@ import { ChannelManager } from './manager.js'
 import type { EngineConfig } from './engine/types.js'
 import type { TopicMode } from './engine/topic-title.js'
 import { createRotatingFileAppender } from './engine/file-log.js'
-import { registerPluginUpdater } from './plugin-updater.js'
 import { withReplyLocale } from './engine/command-locale.js'
 
 export const name = 'dsh-im-connect'
@@ -43,8 +42,6 @@ export interface PluginConfig {
   segmentDelayMaxSecs?: number
   /** 思考过程折叠消息；缺省关闭，只有渠道实现 sendThinking 时才生效。 */
   thinkingDisplay?: EngineConfig['thinkingDisplay']
-  updater?: boolean
-  onlineUpdate?: boolean
 }
 
 export const Config: Schema<PluginConfig> = Schema.object({
@@ -65,12 +62,9 @@ export const Config: Schema<PluginConfig> = Schema.object({
     intervalMs: Schema.number().default(2000).description('两次思考消息刷新之间的最小间隔（毫秒）。'),
     maxChars: Schema.number().default(3500).description('单条思考消息允许的最大字符数。'),
   }).description('思考过程折叠消息；需要渠道实现 sendThinking（目前为 Telegram）。'),
-  updater: Schema.boolean(),
-  onlineUpdate: Schema.boolean(),
 })
 
 export function apply(ctx: Context, config: PluginConfig): void {
-  const hostUpdateDisabled = config.updater === false || config.onlineUpdate === false
   const permissionPresets = (ctx as Context & { permissionPresets: { defaultPreset: string } }).permissionPresets
   const stateDir = config.stateDir !== ''
     ? config.stateDir
@@ -100,7 +94,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
   }
 
   const applyStarted = Date.now()
-  const manager = new ChannelManager({ ctx, stateDir, log, engineConfig, hostUpdateDisabled })
+  const manager = new ChannelManager({ ctx, stateDir, log, engineConfig })
   log(`[boot] ChannelManager 构造 ${Date.now() - applyStarted}ms`)
   // 分段回复：把「用标记分隔多条消息」的规则挂进系统提示。
   // 只有本插件已绑定、且该账号开启了分段回复的会话才拿到这段说明，其余会话提示词不变。
@@ -138,12 +132,6 @@ export function apply(ctx: Context, config: PluginConfig): void {
       interpolate: false,
     })
   }, 'im-connect.segment-section')
-  ctx.effect(() => registerPluginUpdater(ctx, {
-    endpoint: '/api/michengai/dsh-im-connect/update',
-    packageName: '@michengai/dsh-im-connect',
-    manifestUrl: new URL('../package.json', import.meta.url),
-    isEnabled: async () => !hostUpdateDisabled && manager.isUpdateEnabled(),
-  }), 'im-connect.plugin-updater')
   ctx.effect(() => {
     manager.registerApi(ctx)
     // 卸载或初始化失败后不再恢复会话；保留一个完整异常链，避免后台拒绝终止宿主。

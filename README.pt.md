@@ -95,15 +95,6 @@ Acessível no painel em **Plugins → @michengai/dsh-im-connect**:
 - **Padrão**: Desativado (`false`)
 - **Função**: Oculta conversas de mensagens da árvore de tarefas principal, evitando poluição visual no espaço de trabalho diário.
 
-### 3. Bloqueio de atualizações via Cordis (`updater` / `onlineUpdate`)
-- **Padrão**: Desbloqueado (`undefined`)
-- **Função**: Para ambientes corporativos fechados, desative pontos de atualização em `cordis.patch.yml`:
-  ```yaml
-  - id: im-connect
-    config:
-      updater: false # ou onlineUpdate: false
-  ```
-  Ao bloquear, o endpoint retorna HTTP 403, delegando o ciclo de vida ao gerenciador oficial do DSH.
 
 ### 4. Política de acionamento em grupos do Telegram (`mentionPolicy` / `freeChatGroups`)
 - **Padrão**: `addressed` (responde apenas a menções @ ou respostas diretas).

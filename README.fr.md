@@ -95,15 +95,6 @@ Gérée depuis le panneau **Extensions → @michengai/dsh-im-connect** :
 - **Défaut** : Désactivé (`false`)
 - **Fonction** : Isole les échanges de messagerie de l'arborescence principale de développement pour préserver la lisibilité de vos projets.
 
-### 3. Verrouillage des mises à jour via Cordis (`updater` / `onlineUpdate`)
-- **Défaut** : Déverrouillé (`undefined`)
-- **Fonction** : Dans les réseaux d'entreprise ou isolés, désactivez les points de mise à jour dans `cordis.patch.yml` :
-  ```yaml
-  - id: im-connect
-    config:
-      updater: false # ou onlineUpdate: false
-  ```
-  Une fois verrouillé, le point d'accès renvoie HTTP 403 et délègue l'intégralité du cycle de vie au gestionnaire officiel de DSH.
 
 ### 4. Règle de déclenchement dans les groupes Telegram (`mentionPolicy` / `freeChatGroups`)
 - **Défaut** : `addressed` (répond uniquement aux mentions @ et aux réponses directes).
