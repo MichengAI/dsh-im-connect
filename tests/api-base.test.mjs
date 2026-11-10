@@ -83,12 +83,12 @@ test('页面地址不带结尾斜杠时也能保留完整前缀', () => {
   })
 })
 
-test('更新检查端点同样经 base 解析', () => {
+test('管理端点同样经 base 解析', () => {
   withBase('https://nas.example.com/app/dsh/', () => {
     assert.equal(
-      resolveApiUrl('/api/michengai/dsh-im-connect/update'),
-      'https://nas.example.com/app/dsh/api/michengai/dsh-im-connect/update',
-      'update endpoint resolves against the same base',
+      resolveApiUrl('/api/michengai/dsh-im-connect/sidebar-entry'),
+      'https://nas.example.com/app/dsh/api/michengai/dsh-im-connect/sidebar-entry',
+      'management endpoint resolves against the same base',
     )
   })
 })
