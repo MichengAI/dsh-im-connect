@@ -2,6 +2,18 @@ import type { ChannelAdapter, ImMessage, MessageStatus } from './types.js'
 import { replyText, withReplyLocale } from './command-locale.js'
 import { fileOperation } from './abort.js'
 
+/** 状态更新默认预算：只够一次请求，超时就放弃，正文不等它。 */
+const DEFAULT_STATUS_TIMEOUT_MS = 2000
+/** 终态（完成 / 失败 / 取消）的默认预算：结果表情晚到几秒仍有用，丢掉就没有了。 */
+const DEFAULT_FINAL_TIMEOUT_MS = 2000
+/**
+ * typing 心跳的默认预算。必须覆盖一次冷连接握手 + 平台往返（本机实测 2.2–2.4 秒）；
+ * 2 秒的上限会在请求送达前就取消它，「正在输入」因此整段消失。渠道可用
+ * typingTimeoutMs 覆盖，但降到真实往返以下就会重现这个问题。
+ */
+const DEFAULT_TYPING_TIMEOUT_MS = 6000
+const TERMINAL_STATES = new Set<MessageStatus>(['success', 'ended', 'error', 'cancelled'])
+
 /** 单条原消息的状态请求独立排队，失败和超时不阻塞正文。 */
 export class MessageProgress {
   private tail = Promise.resolve()
@@ -10,18 +22,24 @@ export class MessageProgress {
   private terminal = false
   private releaseTyping?: () => void
   private readonly expiry: ReturnType<typeof setTimeout>
+  /** 状态表情的预算由渠道声明：冷连接下的首次请求会明显慢于热连接。 */
+  private readonly reactionTimeoutMs: number
+  /** 终态可以用更长的预算，等过平台一次几十秒的限流冷却；中间态不值得等。 */
+  private readonly finalTimeoutMs: number
 
   constructor(readonly channel: ChannelAdapter, readonly message: ImMessage,
     private readonly host: { get(name: string): unknown }, private readonly log: (line: string) => void, initial: 'queued' | 'processing' = 'processing') {
     this.expiry = setTimeout(() => this.finish('cleared'), 30 * 60_000)
     this.expiry.unref?.()
+    this.reactionTimeoutMs = positiveTimeout(channel.statusReactionTimeoutMs, DEFAULT_STATUS_TIMEOUT_MS)
+    this.finalTimeoutMs = positiveTimeout(channel.finalStatusReactionTimeoutMs, this.reactionTimeoutMs)
     this.update(initial)
   }
 
-  private async safely(operation: (signal: AbortSignal) => Promise<unknown>): Promise<void> {
-    const signal = AbortSignal.timeout(2000)
+  private async safely(operation: (signal: AbortSignal) => Promise<unknown>, timeoutMs = DEFAULT_STATUS_TIMEOUT_MS): Promise<void> {
+    const signal = AbortSignal.timeout(timeoutMs)
     try { await fileOperation(operation(signal), signal) }
-    catch { this.log(`[${this.channel.id}] 消息状态更新失败，正文继续处理`) }
+    catch (error) { this.log(`[${this.channel.id}] 消息状态更新失败（${failureKind(error)}），正文继续处理`) }
   }
 
   update(state: 'queued' | 'processing' | 'waiting'): void {
@@ -29,7 +47,7 @@ export class MessageProgress {
     this.transition(state)
     this.releaseTyping?.()
     this.releaseTyping = state === 'processing'
-      ? acquireTyping(this.channel, this.message.chatId, operation => this.safely(operation)) : undefined
+      ? acquireTyping(this.channel, this.message.chatId, (operation, timeoutMs) => this.safely(operation, timeoutMs)) : undefined
   }
 
   finish(state: 'success' | 'ended' | 'error' | 'cancelled' | 'cleared'): void {
@@ -49,12 +67,16 @@ export class MessageProgress {
     this.state = state
     this.tail = this.tail.then(async () => {
       if (this.state !== state) return
-      if (this.reaction) {
+      // 终态的结果表情值得等过一次限流冷却：晚到的 👍 有用，丢掉的 👍 就没了。
+      const budget = TERMINAL_STATES.has(state) ? this.finalTimeoutMs : this.reactionTimeoutMs
+      const setting = state !== 'cleared' && Boolean(this.channel.addStatusReaction) && Boolean(this.message.messageId)
+      // 支持原子替换的渠道直接设置新表情即可覆盖旧表情：少一次请求，也不会出现清空后补不回来的空窗。
+      if (this.reaction && !(setting && this.channel.replaceStatusReaction)) {
         const old = this.reaction
         this.reaction = undefined
-        await this.safely(async signal => { await this.channel.removeStatusReaction?.(this.message, old, signal) })
+        await this.safely(async signal => { await this.channel.removeStatusReaction?.(this.message, old, signal) }, budget)
       }
-      if (state === 'cleared' || !this.channel.addStatusReaction || !this.message.messageId) return
+      if (!setting) return
       const label = withReplyLocale(this.host, () => ({
         queued: replyText('⏳排队中'), processing: replyText('🤔思考中'), waiting: replyText('⏳等待确认'), success: replyText('✅已完成'),
         ended: replyText('✅已结束'), error: replyText('❌处理失败'), cancelled: replyText('🚫已取消'),
@@ -63,9 +85,29 @@ export class MessageProgress {
         const reaction = await this.channel.addStatusReaction!(this.message, state, label, signal)
         // 不清理超时请求的迟到响应：Telegram 的撤销会清空新状态。
         if (!signal.aborted) this.reaction = reaction
-      })
+      }, budget)
     })
   }
+}
+
+/** 渠道声明的预算必须是个正数，否则回落到默认值。 */
+function positiveTimeout(value: number | undefined, fallback: number): number {
+  return Number.isFinite(value) && (value as number) > 0 ? (value as number) : fallback
+}
+
+/**
+ * 只记录结构化的失败类别。状态更新的排错需要知道「限流 / 超时 / 被拒绝」，
+ * 但不能把响应正文、请求体或令牌写进日志；无结构信息时统一记为 unknown。
+ */
+function failureKind(error: unknown): string {
+  const value = error as { status?: unknown; code?: unknown; name?: unknown } | undefined
+  const status = Number(value?.status)
+  if (Number.isInteger(status) && status >= 100 && status <= 599) return `status=${status}`
+  const code = typeof value?.code === 'string' ? value.code : ''
+  if (/^[A-Z][A-Z0-9_]{1,40}$/.test(code)) return `code=${code}`
+  const name = typeof value?.name === 'string' ? value.name : ''
+  if (/^[A-Za-z]{3,40}$/.test(name) && name !== 'Error') return name
+  return 'unknown'
 }
 
 export interface TurnCompletion { sessionId: string; turn: number; items: MessageProgress[]; status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed'; reasonKind?: string }
@@ -214,25 +256,34 @@ export class ProgressTracker {
   }
 }
 
-type TypingGroup = { users: number; timer?: ReturnType<typeof setInterval>; pending?: Promise<void> }
+type TypingGroup = { users: number; scope: AbortController; timer?: ReturnType<typeof setInterval>; pending?: Promise<void> }
 const typingGroups = new WeakMap<ChannelAdapter, Map<string, TypingGroup>>()
 
 /** 同一账号同一聊天只有一个 typing 定时器；旧任务结束不能停掉新任务。 */
 function acquireTyping(channel: ChannelAdapter, chatId: string,
-  safely: (operation: (signal: AbortSignal) => Promise<unknown>) => Promise<void>): () => void {
+  safely: (operation: (signal: AbortSignal) => Promise<unknown>, timeoutMs?: number) => Promise<void>): () => void {
   if (!channel.sendAction) return () => {}
   let chats = typingGroups.get(channel)
   if (!chats) typingGroups.set(channel, chats = new Map())
   let group = chats.get(chatId)
   if (!group) {
-    group = { users: 0 }
+    group = { users: 0, scope: new AbortController() }
     chats.set(chatId, group)
     const current = group
+    const typingBudget = positiveTimeout(channel.typingTimeoutMs, DEFAULT_TYPING_TIMEOUT_MS)
     const pulse = () => {
-      if (current.pending) return
-      current.pending = Promise.resolve().then(() => channel.sendAction!(chatId, 'typing'))
-        .catch(() => {}).finally(() => { current.pending = undefined })
-      void safely(() => current.pending!)
+      if (current.pending || current.scope.signal.aborted || chats!.get(chatId) !== current) return
+      // pending 必须跟随有界等待，而不是可能永不结束的旧 SDK 请求。
+      const pending = safely(async signal => {
+        const guard = AbortSignal.any([signal, current.scope.signal])
+        await fileOperation(Promise.resolve().then(() => {
+          guard.throwIfAborted()
+          if (chats!.get(chatId) !== current || current.users === 0) return
+          return channel.sendAction!(chatId, 'typing', guard)
+        }), guard)
+      }, typingBudget)
+      current.pending = pending
+      void pending.finally(() => { if (current.pending === pending) current.pending = undefined })
     }
     pulse()
     if (channel.typingIntervalMs) {
@@ -248,7 +299,8 @@ function acquireTyping(channel: ChannelAdapter, chatId: string,
     released = true
     if (--current.users > 0) return
     if (current.timer) clearInterval(current.timer)
-    chats!.delete(chatId)
+    current.scope.abort()
+    if (chats!.get(chatId) === current) chats!.delete(chatId)
     // 等本轮 start 返回后再 stop，且不打断已启动的新一组。
     void (current.pending ?? Promise.resolve()).then(() => {
       if (!chats!.has(chatId)) return safely(async () => { await channel.stopAction?.(chatId) })

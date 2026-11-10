@@ -4,7 +4,7 @@ import { DeliveryRejected } from '../engine/deferred-delivery.js'
 import { notice } from '../engine/command-locale.js'
 import { diagnosticJson, DiagnosticError, probe, requireDiagnostic } from './diagnostics.js'
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream, ThinkingOptions } from '../engine/types.js'
-import { fileForm, fileRequest } from './file-send.js'
+import { fileForm } from './file-send.js'
 import { JsonStateFile } from '../engine/json-state.js'
 import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
@@ -55,6 +55,37 @@ interface TgUpdate {
 }
 
 const API = 'https://api.telegram.org'
+
+/**
+ * 状态表情的总预算。冷连接（刚启动、连接被平台关掉之后）的 TLS 握手 + 请求
+ * 会明显超过 2 秒，热连接约 0.6 秒；只给一次 2 秒的机会正是「偶发丢表情」的来源。
+ */
+const STATUS_REACTION_TIMEOUT_MS = 10_000
+/**
+ * 结果表情（完成 / 失败 / 取消）的预算：整聊天限流时 retry_after 常有 20–40 秒，
+ * 中间态等它没有意义，但晚到的 👍 仍然有用，所以终态愿意等过一次冷却。
+ */
+const STATUS_REACTION_FINAL_TIMEOUT_MS = 50_000
+/** 单次尝试的预算：一次尝试不能吃掉整个重试窗口。 */
+const STATUS_REACTION_ATTEMPT_TIMEOUT_MS = 3000
+/** 状态表情的重试间隔；限流时按 retry_after 放宽，冷却太长则直接放弃。 */
+const STATUS_REACTION_DELAYS_MS = [400, 1200] as const
+/**
+ * typing 心跳的请求预算。必须覆盖一次冷连接握手 + 平台往返：
+ * 本机到 api.telegram.org 的实测往返是 2.2–2.4 秒，2 秒的上限会在请求送达前
+ * 就把它自己取消掉，「正在输入」因此整段消失。typing 每 4 秒才发一次，
+ * 放宽到 6 秒仍然有界，不会堆积请求。
+ */
+const TYPING_REQUEST_TIMEOUT_MS = 6000
+/**
+ * typing 自己吃到 429 后的退避上限。正文 / 编辑的冷却再长也不牵连 typing：
+ * 一个群被编辑限流几十秒时，「正在输入」不该跟着整段消失。
+ */
+const TYPING_COOLDOWN_MAX_MS = 30_000
+
+function isTerminalStatus(state: string): boolean {
+  return state === 'success' || state === 'ended' || state === 'error' || state === 'cancelled'
+}
 
 /**
  * 编码 Telegram 会话键：
@@ -183,10 +214,73 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
 
   // Rich message 是较新的 Bot API 方法；一旦确认不可用就一直走纯文本，避免每条消息都先失败一次。
   let richDisabled = false
+  /** 连续 typing 失败次数：只记第一条失败日志，成功一次即清零。 */
+  let typingFailureStreak = 0
+  /** typing 自己的一份冷却：与正文 / 编辑的 429 冷却互不影响。 */
+  const typingCooldownUntil = new Map<string, number>()
+  /** 每个进程只记一次「typing 确实送达」，用于确认修复在线。 */
+  let typingConfirmed = false
   // 429 按聊天记冷却：一个群/会话限流不应阻塞其他聊天的正常发送。
   const MAX_COOLDOWN_MS = 5 * 60_000
   const rateLimitedUntil = new Map<string, number>()
+  /**
+   * 平台消息配额。群聊 20 条/分钟、私聊 1 条/秒是 Telegram 的硬上限，
+   * 新消息和 editMessageText 都算在内；超了就是 20–40 秒起步的 flood wait。
+   * 这里用令牌桶提前刹车：事后按 retry_after 退避只会一边被罚一边继续排队。
+   */
+  const PRIVATE_BURST = 10
+  const GROUP_BURST = 5
+  const GROUP_MESSAGES_PER_MINUTE = 20
+  const PRIVATE_MESSAGES_PER_SECOND = 1
+  const MESSAGE_MUTATIONS = new Set(['sendMessage', 'sendRichMessage', 'editMessageText'])
+  const messageBuckets = new Map<string, { tokens: number; at: number }>()
   function cooldownKey(chatId: unknown): string { return chatId === undefined || chatId === null ? '' : String(chatId) }
+  /** 返回 0 表示现在可以发；返回毫秒表示还要等多久才有配额。 */
+  function takeMessageToken(key: string): number {
+    const group = key.startsWith('-')
+    const perSecond = group ? GROUP_MESSAGES_PER_MINUTE / 60 : PRIVATE_MESSAGES_PER_SECOND
+    const burst = group ? GROUP_BURST : PRIVATE_BURST
+    const now = Date.now()
+    let bucket = messageBuckets.get(key)
+    if (!bucket) {
+      if (messageBuckets.size >= 256) messageBuckets.clear()
+      bucket = { tokens: burst, at: now }
+      messageBuckets.set(key, bucket)
+    }
+    const tokens = Math.min(burst, bucket.tokens + ((now - bucket.at) / 1000) * perSecond)
+    bucket.tokens = tokens
+    bucket.at = now
+    if (tokens >= 1) { bucket.tokens = tokens - 1; return 0 }
+    return Math.ceil(((1 - tokens) / perSecond) * 1000)
+  }
+  function floodRemaining(chatId: unknown): number {
+    const key = cooldownKey(chatId)
+    return key ? Math.max(0, (rateLimitedUntil.get(key) ?? 0) - Date.now()) : 0
+  }
+  /**
+   * 最终正文、命令回复这类消息必须送达：配额不够就等（最多 15 秒），等到了再发。
+   * 只对装饰性/中间态传 0——它们没有配额就直接放弃，交给下一次刷新。
+   */
+  const ESSENTIAL_BUDGET_WAIT_MS = 15_000
+  async function waitForBudget(chatId: unknown, maxWaitMs: number, signal?: AbortSignal): Promise<number> {
+    const key = cooldownKey(chatId)
+    if (!key) return 0
+    let remaining = maxWaitMs
+    for (;;) {
+      const wait = takeMessageToken(key)
+      if (wait <= 0) return 0
+      if (wait > remaining) return wait
+      remaining -= wait
+      await sleepWithSignal(wait, signal).catch(() => undefined)
+      if (signal?.aborted) return wait
+    }
+  }
+  /** 令牌用尽不是平台拒绝，而是「还没轮到」：正文等配额，装饰性消息直接丢。 */
+  function budgetExhausted(waitMs: number): DeliveryRejected {
+    return Object.assign(new DeliveryRejected('telegram message budget exhausted'), {
+      status: 429, rejected: true, retryAfterMs: waitMs, throttled: true,
+    })
+  }
   function noteCooldown(chatId: unknown, retryAfterMs: number): void {
     const key = cooldownKey(chatId)
     if (!key) return
@@ -255,7 +349,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     await api('sendMessage', { chat_id: route.chatId, ...threadParam, text })
   }
 
-  async function readApiResult<T>(method: string, res: Response, chatId: unknown): Promise<T> {
+  async function readApiResult<T>(method: string, res: Response, chatId: unknown, noteRateLimit = true): Promise<T> {
     // Gateways may return HTML on transient HTTP failures; do not lose the status to JSON parsing.
     if (res.status >= 500 || [408, 425].includes(res.status)) {
       await res.body?.cancel().catch(() => undefined)
@@ -266,7 +360,9 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     catch (error) {
       if (!(res.status >= 400)) throw error
       const retryAfterMs = Number(res.headers?.get('retry-after')) * 1000
-      if (res.status === 429) noteCooldown(chatId, retryAfterMs)
+      // typing 的 429 只进它自己的短冷却，不能把正文 / 编辑的发送冷却一起推高，
+      // 否则 typing 与正文互相拖累，越限流越发不出去。
+      if (res.status === 429 && noteRateLimit && method !== 'sendChatAction') noteCooldown(chatId, retryAfterMs)
       throw Object.assign(res.status === 429 ? new DeliveryRejected(`telegram ${method}: HTTP 429`) : new Error(`telegram ${method}: HTTP ${res.status}`), {
         status: res.status, rejected: true, retryAfterMs,
       })
@@ -277,21 +373,28 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       const error = Object.assign(status === 429 ? new DeliveryRejected(message) : new Error(message), {
         status, rejected: true, retryAfterMs: Number(data.parameters?.retry_after ?? res.headers?.get('retry-after')) * 1000,
       })
-      if (status === 429) noteCooldown(chatId, error.retryAfterMs)
+      if (status === 429 && noteRateLimit && method !== 'sendChatAction') noteCooldown(chatId, error.retryAfterMs)
       if (status === 401) (error as Error & { code?: string }).code = 'telegram-401'
       throw error
     }
     return data.result
   }
 
-  async function api<T>(method: string, body: Record<string, unknown>, timeoutMs = 30_000, guard?: { signal: AbortSignal; isCurrent?: () => boolean }): Promise<T> {
+  async function api<T>(method: string, body: Record<string, unknown>, timeoutMs = 30_000,
+    guard?: { signal: AbortSignal; isCurrent?: () => boolean }, options?: { bulk?: boolean }): Promise<T> {
     if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
     const signals = [lifecycle?.signal, guard?.signal].filter((signal): signal is AbortSignal => signal !== undefined)
     const scope = signals.length ? AbortSignal.any(signals) : undefined
     const request = async (signal?: AbortSignal) => {
       if (stopped || guard?.isCurrent?.() === false) throw new DOMException('Telegram delivery canceled', 'AbortError')
       scope?.throwIfAborted()
-      if (['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)) checkCooldown(body.chat_id)
+      if (MESSAGE_MUTATIONS.has(method)) {
+        checkCooldown(body.chat_id)
+        // 配额在发起请求前就扣：被限流打回来的请求同样计入平台流量，不能等到失败再算。
+        // 最终正文愿意等到配额（否则收口会变成「结果未知」）；中间态和装饰消息不等。
+        const wait = await waitForBudget(body.chat_id, options?.bulk === true ? 0 : ESSENTIAL_BUDGET_WAIT_MS, signal ?? scope)
+        if (wait > 0) throw budgetExhausted(wait)
+      }
       const res = await fetchTelegram(`${API}/bot${token}/${method}`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
         redirect: 'error', signal: timeoutSignal(timeoutMs, signal ?? scope),
@@ -299,9 +402,38 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       return readApiResult<T>(method, res, body.chat_id)
     }
     // Retry delivery, never task execution, polling, topic creation or unrelated mutations.
-    return ['sendMessage', 'sendRichMessage', 'editMessageText'].includes(method)
+    // 装饰性消息（思考过程）走单次尝试：限流窗口里重试只会把配额再烧一遍。
+    return MESSAGE_MUTATIONS.has(method) && options?.bulk !== true
       ? retryTelegram(request, { signal: scope, method, log, edit: method === 'editMessageText' })
       : request()
+  }
+
+  /**
+   * 设置 / 清空原消息上的状态表情。
+   *
+   * 这条请求以前只走一次 fileRequest：没有重试、不看 429 的 retry_after，失败又被
+   * 吞成一行无因日志，于是「偶尔」就永久丢掉一个表情。这里改成与正文同源的重试
+   * 语义，但预算更短：429 的 retry_after 往往几十秒，状态表情不值得为它挂住队列，
+   * 直接放弃，等下一次状态变更再显示。
+   *
+   * 两个刻意的边界：setMessageReaction 是幂等覆盖，重试不会留下第二条表情；
+   * 表情的 429 不写入按聊天的冷却，避免一行装饰性的失败拖慢真正的正文投递。
+   */
+  async function setStatusReaction(chatId: number | string, messageId: number,
+    reaction: Array<{ type: 'emoji'; emoji: string }>, signal: AbortSignal, budgetMs = STATUS_REACTION_TIMEOUT_MS): Promise<void> {
+    // 表情是装饰：限流窗口里直接放弃，把配额留给正文，也不延长平台的处罚窗口。
+    if (floodRemaining(chatId) > 0) return
+    await retryTelegram(async attemptSignal => {
+      const res = await fetchTelegram(`${API}/bot${token}/setMessageReaction`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, redirect: 'error',
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId, reaction }),
+        signal: timeoutSignal(STATUS_REACTION_ATTEMPT_TIMEOUT_MS, attemptSignal),
+      })
+      await readApiResult('setMessageReaction', res, chatId, false)
+    }, {
+      signal, method: 'setMessageReaction', log, edit: true,
+      delaysMs: STATUS_REACTION_DELAYS_MS, budgetMs,
+    })
   }
 
   /** Seal finals synchronously; a slow final can never lend its message to the next turn. */
@@ -363,12 +495,16 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
             }
             if (body.text === current.last) return
             try {
-              const result = await api<{ message_id: number }>(method, body, 30_000, current.guard)
+              // 思考过程是装饰性的：走单次尝试，配额不够就丢这一帧，绝不排队重试。
+              const result = await api<{ message_id: number }>(method, body, 30_000, current.guard, { bulk: true })
               if (current.messageId === undefined) {
                 if (!Number.isSafeInteger(result?.message_id)) throw new Error('telegram thinking receipt missing')
                 current.messageId = result.message_id
               }
             } catch (error) {
+              // 配额不足或平台限流：思考过程是装饰性的，丢这一帧就行，不要把它变成「投递失败」。
+              if ((error as { throttled?: boolean } | undefined)?.throttled) return
+              if (Number((error as { status?: number } | undefined)?.status) === 429) return
               if (!(method === 'editMessageText' && Number((error as { status?: number })?.status) === 400
                 && /message is not modified/i.test(error instanceof Error ? error.message : ''))) throw error
             }
@@ -376,6 +512,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           }
           try { await send() }
           catch (error) {
+            if ((error as { throttled?: boolean } | undefined)?.throttled) return
             // Only a definite HTML parse rejection permits format fallback, never unknown delivery.
             const rejected = error as { status?: number; rejected?: boolean }
             if (current.plain || rejected?.rejected !== true || Number(rejected.status) !== 400
@@ -560,7 +697,29 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         lastError = error instanceof Error ? error.message : String(error)
         log(`[telegram] 轮询错误: ${lastError}`)
         if (stopped) break
-        await sleepWithSignal(3000, lifecycle?.signal).catch(() => undefined)
+        // 409 是「同一个 bot token 还有另一个实例在 getUpdates」：3s 一次的抢轮询只会放大冲突，
+        // 也把真正的原因淹在日志里。退到 15s 复查，等另一个实例自己让出。
+        const conflicting = /Conflict|terminated by other getUpdates/i.test(lastError)
+        await sleepWithSignal(conflicting ? 15_000 : 3000, lifecycle?.signal).catch(() => undefined)
+      }
+    }
+  }
+
+  /**
+   * 轮询外层看护：pollLoop 内部已按 3s 重试常规网络抖动，
+   * 这里只兜住循环自身意外退出的情况——否则 channels.json 里会一直显示「轮询中」，
+   * 实际却再也没有 getUpdates 在跑。
+   */
+  async function supervisePoll(): Promise<void> {
+    while (!stopped) {
+      try {
+        await pollLoop()
+        return
+      } catch (error) {
+        if (stopped) return
+        lastError = error instanceof Error ? error.message : String(error)
+        log(`[telegram] 轮询循环退出: ${lastError}，5s 后重启`)
+        await sleepWithSignal(5000, lifecycle?.signal).catch(() => undefined)
       }
     }
   }
@@ -585,7 +744,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       const hook = await api<{ url?: string }>('getWebhookInfo', {})
       if (hook.url) throw Object.assign(new Error('该 Telegram 机器人已配置 Webhook，请先在原服务中移除。'), { code: 'webhook-configured' })
       log('[telegram] 开始长轮询')
-      pollTask = pollLoop().catch((error) => {
+      pollTask = supervisePoll().catch((error) => {
         if (!stopped) log(`[telegram] 轮询循环退出: ${error instanceof Error ? error.message : String(error)}`)
       })
     },
@@ -662,31 +821,58 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         await api('editMessageText', { chat_id: route.chatId, message_id: sent.message_id, text: `${text}\n\n${status}`, reply_markup: { inline_keyboard: [] } })
       } }
     },
-    typingIntervalMs: 5000,
+    typingIntervalMs: 4000,
+    typingTimeoutMs: TYPING_REQUEST_TIMEOUT_MS,
+    // 表情由机器人自己一条，设置新表情即覆盖旧的：引擎不必先撤销再设置。
+    replaceStatusReaction: true,
+    statusReactionTimeoutMs: STATUS_REACTION_TIMEOUT_MS,
+    finalStatusReactionTimeoutMs: STATUS_REACTION_FINAL_TIMEOUT_MS,
     async addStatusReaction(message, state, _label, signal) {
       const target = reactionMessageId(message)
-      if (target === undefined || state === 'cancelled') return
+      if (target === undefined) return
       const route = parseTelegramChatId(message.chatId)
+      const budget = isTerminalStatus(state) ? STATUS_REACTION_FINAL_TIMEOUT_MS : STATUS_REACTION_TIMEOUT_MS
+      // 取消没有对应表情：清掉机器人的表情，不留一个停在「思考中」的旧状态。
+      if (state === 'cancelled' || state === 'cleared') {
+        await setStatusReaction(route.chatId, target, [], signal, budget)
+        return
+      }
       const emoji = (state === 'success' || state === 'ended') ? '👍' : state === 'error' ? '👎' : state === 'waiting' ? '🤔' : '👀'
-      await fileRequest(`${API}/bot${token}/setMessageReaction`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, signal,
-        body: JSON.stringify({ chat_id: route.chatId, message_id: target, reaction: [{ type: 'emoji', emoji }] }),
-      }, fetchTelegram)
+      await setStatusReaction(route.chatId, target, [{ type: 'emoji', emoji }], signal, budget)
       return emoji
     },
     async removeStatusReaction(message, _reaction, signal) {
       const target = reactionMessageId(message)
       if (target === undefined) return
       const route = parseTelegramChatId(message.chatId)
-      await fileRequest(`${API}/bot${token}/setMessageReaction`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, signal,
-        body: JSON.stringify({ chat_id: route.chatId, message_id: target, reaction: [] }),
-      }, fetchTelegram)
+      await setStatusReaction(route.chatId, target, [], signal)
     },
-    async sendAction(chatId) {
+    async sendAction(chatId, _action, signal) {
+      signal?.throwIfAborted()
       const route = parseTelegramChatId(chatId)
+      // 只受 typing 自己的短冷却约束：正文 / 编辑被限流时，「正在输入」仍要照发，
+      // 否则同聊天的一次 40 秒 429 就能让它整段消失。typing 自己吃到 429 才退避。
+      const chatKey = String(route.chatId)
+      if ((typingCooldownUntil.get(chatKey) ?? 0) > Date.now()) return
+      typingCooldownUntil.delete(chatKey)
       const threadParam = route.threadId !== undefined ? { message_thread_id: route.threadId } : {}
-      await api('sendChatAction', { chat_id: route.chatId, ...threadParam, action: 'typing' }).catch(() => undefined)
+      const started = Date.now()
+      try {
+        await api('sendChatAction', { chat_id: route.chatId, ...threadParam, action: 'typing' }, TYPING_REQUEST_TIMEOUT_MS, signal ? { signal } : undefined)
+        typingFailureStreak = 0
+        if (!typingConfirmed) { typingConfirmed = true; log('[telegram] typing 心跳已送达') }
+      } catch (error) {
+        const status = Number((error as { status?: unknown } | undefined)?.status)
+        const retryAfterMs = Number((error as { retryAfterMs?: unknown } | undefined)?.retryAfterMs)
+        if (status === 429) {
+          const wait = Math.min(Math.max(1000, Number.isFinite(retryAfterMs) ? retryAfterMs : 0), TYPING_COOLDOWN_MAX_MS)
+          typingCooldownUntil.set(chatKey, Date.now() + wait)
+        }
+        const safeStatus = Number.isFinite(status) ? ` status=${status}` : ''
+        // 每次 pulse 都失败时只记第一条：可观测，又不至于把日志刷满。
+        if (typingFailureStreak++ === 0) log(`[telegram] typing failed${safeStatus} durationMs=${Math.max(0, Date.now() - started)}`)
+        throw error
+      }
     },
     async beginReply(chatId, initial = '…'): Promise<ReplyStream & { detach(): void }> {
       const route = parseTelegramChatId(chatId)

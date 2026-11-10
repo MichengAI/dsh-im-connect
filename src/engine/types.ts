@@ -67,9 +67,27 @@ export interface ChannelAdapter {
   /** 状态回应针对原消息，不依赖聊天最近一条消息的可变槽位。 */
   addStatusReaction?(message: ImMessage, state: MessageStatus, label: string, signal: AbortSignal): Promise<string | undefined>
   removeStatusReaction?(message: ImMessage, reaction: string, signal: AbortSignal): Promise<void>
+  /**
+   * 设置新状态表情会原子覆盖机器人自己的旧表情时置 true。
+   * 引擎据此省掉「先撤销再设置」的第二次请求，也不再有表情被清空后补不回来的空窗。
+   */
+  replaceStatusReaction?: boolean
+  /** 单次状态表情请求的预算（毫秒），缺省 2000；冷连接较慢的渠道可放宽，失败仍不阻塞正文。 */
+  statusReactionTimeoutMs?: number
+  /**
+   * 终态（完成 / 失败 / 取消）状态表情的预算（毫秒），缺省跟随 statusReactionTimeoutMs。
+   * 平台整聊天限流时 retry_after 常有几十秒：中间态等它没意义，结果表情等到就还有用。
+   */
+  finalStatusReactionTimeoutMs?: number
   typingIntervalMs?: number
+  /**
+   * 单次 typing 心跳的预算（毫秒），缺省 6000。
+   * 必须覆盖一次冷连接握手 + 平台往返：预算短于真实往返时，请求会在送达前
+   * 被自己取消，「正在输入」反而整段消失。
+   */
+  typingTimeoutMs?: number
   stopAction?(chatId: string): Promise<void>
-  sendAction?(chatId: string, action: 'typing'): Promise<void>
+  sendAction?(chatId: string, action: 'typing', signal?: AbortSignal): Promise<void>
   sendMedia?(chatId: string, filePath: string, caption?: string): Promise<void>
   /** 渠道本地白名单。true 放行，false 硬拒绝，undefined 交给引擎白名单。 */
   authorizes?(userId: string): boolean | undefined
