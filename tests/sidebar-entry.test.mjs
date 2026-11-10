@@ -289,7 +289,6 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   }
 
   let clientSidebar = false
-  let clientUpdate = true
   let clientTaskTree = false
   let taskTreeChangeEvents = []
   const mockWorkspaces = { create: (input) => ({ id: 'ws-mock-id', ...input }) }
@@ -302,14 +301,6 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
           return { enabled: clientSidebar }
         }
         return { enabled: clientSidebar }
-      }
-      if (path === '/online-update') {
-        if (options?.method === 'POST') {
-          const body = JSON.parse(options.body)
-          clientUpdate = body.enabled
-          return { enabled: clientUpdate }
-        }
-        return { enabled: clientUpdate, locked: false }
       }
       if (path === '/task-tree-sessions') {
         if (options?.method === 'POST') {
