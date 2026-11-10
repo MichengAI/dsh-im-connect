@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.35] - 2026-11-10
+
+### Telegram connection resilience, reaction reliability, and delivery safeguards
+
+- Improve Telegram long-polling resilience: in constrained networking environments (such as NAT or containers), long-polling automatically recovers and resumes message dispatch after aborted or stalled connections, preventing silent bot hang-ups (#64, #68).
+- Enhance status reactions and typing heartbeat stability: status reactions (thinking, finished, etc.) now retry on transient network errors or rate limits with atomic replacement, preventing missing delivery emojis; typing heartbeats feature expanded budgets and quota isolation, preventing premature cancellations over slow connections (#67).
+- Safeguard final replies and unclaimed turns: protect historical requests from accidental matching during cold starts, and serialize final reply settlement to ensure long assistant responses are fully delivered before turn cleanup (#66).
+- Documentation and settings streamlining: remove obsolete updater options now handled directly by the host plugin system, and align configuration section numbering across all localized README manuals.
+
 ## [1.0.34] - 2026-11-09
 
 ### Mobile sidebar interaction & channel session routing improvements
