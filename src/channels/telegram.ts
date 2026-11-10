@@ -6,7 +6,7 @@ import { diagnosticJson, DiagnosticError, probe, requireDiagnostic } from './dia
 import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream, ThinkingOptions } from '../engine/types.js'
 import { fileForm } from './file-send.js'
 import { JsonStateFile } from '../engine/json-state.js'
-import { sleepWithSignal, timeoutSignal } from '../engine/abort.js'
+import { fileOperation, sleepWithSignal, timeoutSignal } from '../engine/abort.js'
 import { fileMedia, imageMedia, MAX_CHANNEL_IMAGE_BYTES } from './channel-image-download.js'
 import { retryTelegram } from './telegram-retry.js'
 import { isInboundAddressed, type MentionPolicy } from './mention-policy.js'
@@ -55,6 +55,7 @@ interface TgUpdate {
 }
 
 const API = 'https://api.telegram.org'
+const POLL_REQUEST_TIMEOUT_MS = 35_000
 
 /**
  * 状态表情的总预算。冷连接（刚启动、连接被平台关掉之后）的 TLS 握手 + 请求
@@ -593,11 +594,15 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   async function pollLoop(): Promise<void> {
     while (!stopped) {
       try {
-        const updates = await api<TgUpdate[]>('getUpdates', {
+        // Bound the complete fetch + JSON await even if a transport ignores abort.
+        // This attempt-local signal also cancels the request, never its parent lifecycle.
+        // Late results/rejections are observed by fileOperation but cannot reach dispatch.
+        const signal = timeoutSignal(POLL_REQUEST_TIMEOUT_MS, lifecycle?.signal)
+        const updates = await fileOperation(api<TgUpdate[]>('getUpdates', {
           offset,
           timeout: 25,
           allowed_updates: ['message', 'callback_query'],
-        }, 35_000)
+        }, POLL_REQUEST_TIMEOUT_MS, { signal }), signal)
         lastError = ''
         for (const update of updates) {
           if (stopped) break
