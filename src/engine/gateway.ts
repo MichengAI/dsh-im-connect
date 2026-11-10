@@ -192,6 +192,8 @@ export class ImEngine {
   /** 话题名回写状态：默认一个话题只命名一次。 */
   private readonly topicTitles: TopicTitleStore
   private readonly topicWrites = new KeyedSerialQueue()
+  // Host observers are fire-and-forget: final delivery must finish before turn cleanup.
+  private readonly replyFinalization = new KeyedSerialQueue()
 
   /**
    * @param sendRetryDelaysMs 分片发送退避表；测试可传 `[0]` 关闭等待。
@@ -1104,15 +1106,37 @@ export class ImEngine {
     // Otherwise normal settlement makes the still-pending final look like a cold turn.
     if (event.type !== 'turn/end') this.progress.event(id, event)
     const outcome: DeliveryOutcome = { ok: !skip, content: false }
-    const work = skip ? Promise.resolve() : this.processSessionEvent(session, event, outcome, trackedEnd)
-    if (event.type === 'turn/end') this.progress.event(id, event)
+    const deferEnd = event.type === 'turn/end' && this.replyFinalization.keys().includes(id)
+    const process = () => skip ? Promise.resolve() : this.processSessionEvent(session, event, outcome, trackedEnd)
+    let work: Promise<void>
+    if (event.type === 'assistant/message') {
+      // Start now, registering content before a synchronous turn/end; queue only its barrier.
+      const delivery = process()
+      // Observe rejection immediately, even when a previous finalization is still pending.
+      void delivery.catch(() => undefined)
+      work = this.replyFinalization.run(id, () => delivery)
+    } else if (event.type === 'turn/end') {
+      work = this.replyFinalization.run(id, () => {
+        const currentTurn = this.observedTurns.get(id)
+        // A queued old cleanup must not discard a newer turn's stream or thinking display.
+        const newerTurn = turn !== undefined && currentTurn !== undefined && currentTurn > turn
+        const ending = newerTurn ? Promise.resolve() : process()
+        // process() synchronously registers thinking-final delivery before closing progress.
+        this.progress.event(id, event)
+        return ending
+      })
+    } else {
+      work = process()
+    }
     if (event.type === 'assistant/message' && event.surfaceOp === 'append') {
       this.progress.delivery(id, event.data?.turn, work.then(
         () => !outcome.ok ? (outcome.definite ? 'rejected' as const : false) : outcome.content ? true : undefined,
         () => false,
       ))
     }
-    return work.catch(error => { this.log(`[im-progress] 会话回复失败: ${error instanceof Error ? error.name : 'Error'}`) })
+    const handled = work.catch(error => { this.log(`[im-progress] 会话回复失败: ${error instanceof Error ? error.name : 'Error'}`) })
+    // Delivery owns settlement; never hold the event producer behind a slow platform request.
+    return deferEnd ? Promise.resolve() : handled
   }
 
   /** 取流后因会话失效等原因放弃收口时，清掉只有状态、没有正文的占位。 */

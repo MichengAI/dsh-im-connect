@@ -77,6 +77,7 @@ export declare class ImEngine {
     /** 话题名回写状态：默认一个话题只命名一次。 */
     private readonly topicTitles;
     private readonly topicWrites;
+    private readonly replyFinalization;
     /**
      * @param sendRetryDelaysMs 分片发送退避表；测试可传 `[0]` 关闭等待。
      * @param topicTitleFile 话题名状态文件；缺省只在进程内去重。
