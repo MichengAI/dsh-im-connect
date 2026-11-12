@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.36] - 2026-11-12
+
+### Compatibility & Dependencies
+
+- Verified full compatibility with DeepSeek Harness `0.2.2-rc.2`, covering `0.2.0-rc.1` through `0.2.2-rc.2` and subsequent `0.2.x` pre-releases.
+- Align development dependencies with official `0.2.2-rc.2` and Schemastery `3.19.0`, and expand the CI host contract matrix and documentation version list.
+
 ## [1.0.35] - 2026-11-10
 
 ### Telegram connection resilience, reaction reliability, and delivery safeguards
