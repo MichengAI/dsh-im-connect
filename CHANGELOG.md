@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.38] - 2026-11-13
+
+### Settings UI Standardization
+
+- Unified settings header card: wrapped the header in an elevated card container for seamless visual consistency across settings.
+- Native button and icon styling: updated the issue feedback action to use the host's native pen icon and outline button primitive.
+
 ## [1.0.37] - 2026-11-12
 
 ### Compatibility & Dependencies
