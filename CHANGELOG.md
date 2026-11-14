@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.40] - 2026-11-14
+
+### Host Compatibility
+
+- Verified against the full DSH `0.2.2` line (`0.2.2-rc.1` through `0.2.2-rc.3`), including the uploaded-file receipt and session model-selection contracts that generation changed.
+
 ## [1.0.39] - 2026-11-14
 
 ### Host Compatibility
