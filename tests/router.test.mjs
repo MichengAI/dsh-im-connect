@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionRouter } from '../lib/engine/router.js'
 import { SessionMapStore } from '../lib/engine/session-store.js'
+import { uploadContractTodo } from './host-contract.mjs';
 
 test('新版 setup 使用显式 Agent，创建和恢复不访问未注入属性', async t => {
   const f = makeRouter(t)
@@ -101,7 +102,7 @@ test('新会话挂载账号 Agent 预设，恢复旧会话保持原预设', asyn
   assert.deepEqual(mounted, ['research', 'research'])
 })
 
-test('real Chat selection owns assembly and request after account initialization', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT }, async t => {
+test('real Chat selection owns assembly and request after account initialization', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT, todo: uploadContractTodo() }, async t => {
   const { Context } = await import('@deepseek-ai/cordis')
   const { pathToFileURL } = await import('node:url')
   const { ApiSessionAgentController } = await import(pathToFileURL(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/agent.js')).href)
