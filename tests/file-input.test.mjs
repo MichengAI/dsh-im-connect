@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { filePromptParts } from '../lib/engine/file-input.js'
-import { uploadContractTodo } from './host-contract.mjs';
+import { stagedAttachment, sessionSelection } from './host-contract.mjs';
 const file = { kind: 'file', name: '报告.pdf', data: Buffer.from('report') }
 test('文件字节走 Chat uploadStream，仅凭据进入 prompt', async () => {
   const calls = []
@@ -28,7 +28,7 @@ test('文件上传中止后不继续提交第二份文件', async () => {
   await ready; scope.abort(); await assert.rejects(work); release({ receiptId: 'late' }); assert.equal(calls, 1)
 })
 
-test('实际宿主上传服务产生 Agent 隔离的文件凭据', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT, todo: uploadContractTodo() }, async t => {
+test('实际宿主上传服务产生 Agent 隔离的文件凭据', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT }, async t => {
   const { dirname, join } = await import('node:path')
   const { pathToFileURL } = await import('node:url')
   const { readFile } = await import('node:fs/promises')
@@ -60,7 +60,8 @@ test('实际宿主上传服务产生 Agent 隔离的文件凭据', { skip: !proc
   const uploads = new FileUploads(ctx)
   const parts = await filePromptParts(ctx, 's', [file], new AbortController().signal)
   assert.equal(saved.toString(), 'report')
-  assert.equal(uploads.resolve(agent, parts[0].receiptId).attachmentId, 'stored-file')
+  // 0.2.2 起 resolve 返回 { type, attachment } 信封，0.2.1 返回裸的文件引用。
+  assert.equal(stagedAttachment(uploads.resolve(agent, parts[0].receiptId)).attachmentId, 'stored-file')
   const other = { session: { header: {} } }; other.ctx = createScope(ctx, other).ctx
   assert.equal(uploads.resolve(other, parts[0].receiptId), undefined)
   const controllerRoot = process.env.DSH_CHAT_CONTRACT_ROOT
@@ -80,7 +81,7 @@ test('实际宿主上传服务产生 Agent 隔离的文件凭据', { skip: !proc
     llm: { listProviders: () => [{ id: 'p' }] },
   }
   const owner = new ApiSessionAgentController(host)
-  owner.selectionFor(agent).current = { provider: 'p', model: 'm' }
+  sessionSelection(owner, agent, { provider: 'p', model: 'm' })
   const controller = new SessionCommandController(host, owner, 'D:\\workspace')
   await controller.prompt({ sessionId: 's', requestId: 'input-file', mode: 'queue', content: parts }, new AbortController().signal)
   assert.equal(received[0].content[0].type, 'file')

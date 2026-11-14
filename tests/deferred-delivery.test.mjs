@@ -6,7 +6,10 @@ import { join } from 'node:path'
 import { assistantText } from '../lib/engine/assistant-text.js'
 import { DeferredDelivery, DeliveryUnavailable, recoverTurn } from '../lib/engine/deferred-delivery.js'
 import { readDeliveryHistory } from '../lib/engine/delivery-history.js'
-import { uploadContractTodo } from './host-contract.mjs';
+import { hostContractVersion } from './host-contract.mjs'
+
+// 0.2.2 移除了宿主 SessionHistoryController（历史分页改由 history.js 的纯函数承载），该契约测试不适用。
+const historyControllerRemoved = hostContractVersion()?.startsWith('0.2.2-') ?? false
 
 const message = { chatId: 'chat', userId: 'user', kind: 'dm', text: 'private question', context: { webhook: 'secret' } }
 const events = (id = 'r', turn = 1) => [
@@ -160,7 +163,7 @@ test('冷读取固定快照游标分页并关闭 follow，不调用 prompt 或 r
 })
 
 
-test('真实宿主冷历史分页在首帧关闭，不触发 prepared 会话激活', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT, todo: uploadContractTodo() }, async () => {
+test('真实宿主冷历史分页在首帧关闭，不触发 prepared 会话激活', { skip: !process.env.DSH_CHAT_CONTRACT_ROOT || historyControllerRemoved }, async () => {
   const { pathToFileURL } = await import('node:url')
   const { SessionHistoryController } = await import(pathToFileURL(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/history.js')).href)
   const history = Array.from({ length: 70 }, (_, index) => events(`request-${index}`, index)).flat().map((event, seq) => ({ ...event, seq, time: Date.now(),
