@@ -3061,7 +3061,13 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
 .ima-feedback-title{font-weight:550;line-height:20px}
 .ima-pending-list{display:flex;flex-direction:column;gap:6px;width:100%}
 .ima-pending-row{display:flex;gap:8px;align-items:center;padding:4px 0}
-.ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden}.ima-official-tree{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.ima-wrap{display:flex;flex-direction:column;min-height:0;flex:1;height:100%;overflow:hidden;--ima-strip-h:42px}.ima-official-tree{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+/* Issue #100：宿主工作区树按 max-height:100cqh 自撑满侧栏滚动区，页签条叠在它上面会让整个壳
+   比滚动区高出页签条的高度，滚动区因此多出可滚距离 —— 滚一格就把页签裁出可视区。
+   把壳内宿主树的高度上限扣掉页签条高度，壳正好等于滚动区，页签永远不动。
+   高度走变量：分段页签 42px（上 2 + 32 + 下 8），无宿主分段页签时兜底页签 25px（4 + 20 + 1）。 */
+.ima-official-tree>*{max-height:calc(100cqh - var(--ima-strip-h,42px))!important}
+.ima-wrap:has(>.ima-tabs){--ima-strip-h:25px}
 .ima-tabs-wrap{display:flex;margin:2px var(--dsh-sidebar-inline-padding,12px) 8px 0;padding:0;width:auto}
 .ima-tabs-wrap .ima-segmented-tabs{display:grid!important;width:100%!important;box-sizing:border-box!important;height:32px!important;min-height:32px!important;max-height:32px!important;padding:2px!important;border:0!important;border-radius:var(--dsw-radius-sm,8px)!important;box-shadow:inset 0 0 0 .5px var(--dsw-alias-border-l2,rgba(255,255,255,.08))!important;background:var(--dsw-alias-bg-layer-1,rgba(255,255,255,.02))!important}
 .ima-tabs-wrap .ima-segmented-tabs>span{inset:2px auto 2px 2px!important;width:calc((100% - 4px)/var(--ima-tab-count,2))!important;border-radius:6px!important;border:0.5px solid var(--dsw-alias-border-l3,rgba(255,255,255,.12))!important;background:var(--dsw-alias-bg-layer-3,rgba(255,255,255,.08))!important;box-shadow:none!important}
