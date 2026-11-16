@@ -653,6 +653,8 @@ window.__ModuleLoader__.load({
         "account.telegramThinkingDisplayCollapsed": "折叠展示",
         "account.telegramThinkingDisplayNote": "开启后，模型的思考过程会以可折叠引用块单独发送，点击可展开查看。群聊中所有成员均可展开，请在允许分享思考的部署开启。",
         "account.telegramThinkingDisplayOff": "关闭",
+        "account.threadSessions": "群回复串会话隔离",
+        "account.threadSessionsNote": "开启后飞书群聊回复串将按话题独立会话与上下文；默认关闭。",
         "account.workspace": "工作区",
         "action.addAccount": "添加账号",
         "action.approve": "批准",
@@ -955,6 +957,8 @@ window.__ModuleLoader__.load({
         "account.telegramThinkingDisplayCollapsed": "Collapsed",
         "account.telegramThinkingDisplayNote": "When enabled, reasoning is sent as an expandable quote block that users can tap to expand. All group members can view expanded reasoning.",
         "account.telegramThinkingDisplayOff": "Off",
+        "account.threadSessions": "Thread session isolation",
+        "account.threadSessionsNote": "When enabled, group message threads are isolated into separate sessions; disabled by default.",
         "account.workspace": "Workspace",
         "action.addAccount": "Add account",
         "action.approve": "Approve",
@@ -1257,6 +1261,8 @@ window.__ModuleLoader__.load({
         "account.telegramThinkingDisplayCollapsed": "折りたたみ表示",
         "account.telegramThinkingDisplayNote": "有効にすると、思考過程が折りたたみ可能な引用ブロックとして送信され、タップして展開できます。グループ内の全員が展開して閲覧可能です。",
         "account.telegramThinkingDisplayOff": "オフ",
+        "account.threadSessions": "スレッドセッション分離",
+        "account.threadSessionsNote": "有効にすると、グループ返信スレッドごとに独立したセッションとコンテキストが保持されます。デフォルトは無効です。",
         "account.workspace": "ワークスペース",
         "action.addAccount": "アカウントを追加",
         "action.approve": "承認",
@@ -1559,6 +1565,8 @@ window.__ModuleLoader__.load({
         "account.telegramThinkingDisplayCollapsed": "Plegado",
         "account.telegramThinkingDisplayNote": "Cuando está habilitado, el razonamiento se envía como un bloque de cita desplegable que los usuarios pueden tocar para expandir. Todos los miembros pueden verlo.",
         "account.telegramThinkingDisplayOff": "Desactivado",
+        "account.threadSessions": "Aislamiento de sesiones de hilos",
+        "account.threadSessionsNote": "Al activarse, los hilos de mensajes en grupos se aíslan en sesiones independientes; desactivado por defecto.",
         "account.workspace": "Espacio de trabajo",
         "action.addAccount": "Añadir cuenta",
         "action.approve": "Aprobar",
@@ -1861,6 +1869,8 @@ window.__ModuleLoader__.load({
         "account.telegramThinkingDisplayCollapsed": "Replié",
         "account.telegramThinkingDisplayNote": "Si activé, le raisonnement est envoyé sous forme de bloc de citation pliable pouvant être déroulé au toucher. Visible par tous les membres du groupe.",
         "account.telegramThinkingDisplayOff": "Désactivé",
+        "account.threadSessions": "Isolation des sessions de fil",
+        "account.threadSessionsNote": "Une fois activé, les fils de messages de groupe sont isolés dans des sessions distinctes ; désactivé par défaut.",
         "account.workspace": "Espace de travail",
         "action.addAccount": "Ajouter un compte",
         "action.approve": "Approuver",
@@ -2163,6 +2173,8 @@ window.__ModuleLoader__.load({
         "account.telegramThinkingDisplayCollapsed": "Eingeklappt",
         "account.telegramThinkingDisplayNote": "Wenn aktiviert, wird das Reasoning als einklappbarer Zitatblock gesendet, der angetippt werden kann. Alle Gruppenmitglieder können ihn einsehen.",
         "account.telegramThinkingDisplayOff": "Aus",
+        "account.threadSessions": "Thread-Sitzungsisolation",
+        "account.threadSessionsNote": "Wenn aktiviert, werden Gruppen-Nachrichten-Threads in separate Sitzungen isoliert; standardmäßig deaktiviert.",
         "account.workspace": "Arbeitsbereich",
         "action.addAccount": "Konto hinzufügen",
         "action.approve": "Genehmigen",
@@ -2465,6 +2477,8 @@ window.__ModuleLoader__.load({
         "account.telegramThinkingDisplayCollapsed": "Свернуто",
         "account.telegramThinkingDisplayNote": "Если включено, ход мыслей отправляется в виде сворачиваемого цитатного блока. Все участники группы могут развернуть и просмотреть его.",
         "account.telegramThinkingDisplayOff": "Выкл",
+        "account.threadSessions": "Изоляция сессий тредов",
+        "account.threadSessionsNote": "При включении цепочки ответов в группах изолируются в отдельные сессии; по умолчанию выключено.",
         "account.workspace": "Рабочая область",
         "action.addAccount": "Добавить аккаунт",
         "action.approve": "Одобрить",
@@ -2766,7 +2780,9 @@ window.__ModuleLoader__.load({
         "account.telegramThinkingDisplay": "Exibir processo de pensamento",
         "account.telegramThinkingDisplayCollapsed": "Recolhido",
         "account.telegramThinkingDisplayNote": "Quando ativado, o raciocínio é enviado como um bloco de citação expansível que pode ser aberto com um toque. Visível para todos no grupo.",
-        "account.telegramThinkingDisplayOff": "Desativado",
+        "account.telegramThinkingDisplayOff": "Desactivado",
+        "account.threadSessions": "Isolamento de sessões de tópicos",
+        "account.threadSessionsNote": "Quando ativado, os tópicos de mensagens em grupos são isolados em sessões separadas; desativado por padrão.",
         "account.workspace": "Espaço de trabalho",
         "action.addAccount": "Adicionar conta",
         "action.approve": "Aprovar",
@@ -4560,7 +4576,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         setDraft(account);
         setProxyModeDraft(account.proxyMode || "inherit");
         setNote("");
-      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort, account.thinkingDisplay]);
+      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.threadSessions, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort, account.thinkingDisplay]);
       useEffect(() => {
         if (accountIdRef.current !== account.id) {
           accountIdRef.current = account.id;
@@ -4608,6 +4624,11 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           }
           if (Object.prototype.hasOwnProperty.call(patch, "thinkingDisplay")) {
             payload.thinkingDisplay = patch.thinkingDisplay;
+          }
+        }
+        if (account.platform === "feishu" || account.platform === "lark") {
+          if (Object.prototype.hasOwnProperty.call(patch, "threadSessions")) {
+            payload.threadSessions = patch.threadSessions;
           }
         }
         return onSave(account.id, payload).then((ok) => {
@@ -4748,6 +4769,22 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
               return h("div", { className: "ima-picker-note warning" }, t(key, { count: issues.invalid }));
             })(),
             h("div", { className: "ima-picker-note" }, t("account.telegramGroupPolicyNote")),
+          ),
+          (account.platform === "feishu" || account.platform === "lark") && h("div", { className: "ima-thread-sessions-settings" },
+            h("div", { className: "ima-picker-field wide" },
+              h("span", { className: "ima-picker-label" }, t("account.threadSessions")),
+              h(Switch, {
+                role: "switch",
+                checked: Boolean(draft.threadSessions ?? account.threadSessions),
+                "aria-checked": Boolean(draft.threadSessions ?? account.threadSessions),
+                "aria-label": t("account.threadSessions"),
+                onChange: (checked) => {
+                  setDraft({ ...draft, threadSessions: checked });
+                  save({ threadSessions: checked });
+                },
+              }),
+            ),
+            h("div", { className: "ima-picker-note" }, t("account.threadSessionsNote")),
           ),
           h(CommandPermissionSettings, { value: draft.commandPermissions, onSave: commandPermissions => save({ commandPermissions }), t }),
           note && h("div", { className: note === "status.saved" ? "ima-save-note ok" : "ima-save-note" }, t(note)),

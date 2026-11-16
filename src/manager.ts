@@ -225,6 +225,7 @@ export interface AccountView {
   mentionPolicy?: 'addressed' | 'always'
   freeChatGroups?: string
   thinkingDisplay?: boolean
+  threadSessions?: boolean
   lastCheckedAt?: string
 }
 
@@ -453,6 +454,9 @@ export class ChannelManager {
           : (config.thinkingDisplay === 'false'
             ? false
             : (this.engineConfig.thinkingDisplay?.mode === 'collapsed')),
+      } : {}),
+      ...((platform === 'feishu' || platform === 'lark') ? {
+        threadSessions: config.threadSessions === 'true',
       } : {}),
       lastCheckedAt: state.lastCheckedAt,
     }
@@ -1083,9 +1087,20 @@ export class ChannelManager {
         else delete config.thinkingDisplay
         state.config = config
       }
+      const hasThreadSessionsSetting = (platform === 'feishu' || platform === 'lark') && Object.hasOwn(input, 'threadSessions')
+      let threadSessionsChanged = false
+      if (hasThreadSessionsSetting) {
+        const previousThreadSessions = state.config?.threadSessions === 'true'
+        const requestedThreadSessions = input.threadSessions === true || input.threadSessions === 'true'
+        threadSessionsChanged = requestedThreadSessions !== previousThreadSessions
+        const config = { ...(state.config ?? {}) }
+        if (requestedThreadSessions) config.threadSessions = 'true'
+        else delete config.threadSessions
+        state.config = config
+      }
       this.flush()
       if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
-      if ((proxyChanged || mentionPolicyChanged) && this.running.has(accountId)) await this.startOne(accountId)
+      if ((proxyChanged || mentionPolicyChanged || threadSessionsChanged) && this.running.has(accountId)) await this.startOne(accountId)
       return { ok: true, account: this.accountView(accountId, state) }
     })
   }

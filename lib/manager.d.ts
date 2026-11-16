@@ -76,6 +76,7 @@ export interface AccountView {
     mentionPolicy?: 'addressed' | 'always';
     freeChatGroups?: string;
     thinkingDisplay?: boolean;
+    threadSessions?: boolean;
     lastCheckedAt?: string;
 }
 interface AccountDiagnosticResult {

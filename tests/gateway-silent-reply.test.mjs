@@ -110,3 +110,28 @@ test('网关在回合没有输出内容（empty 状态）时彻底保持安静�
   // 验证：delivered 必须为空，绝不能发送“本次处理已结束，未返回可投递的结果”
   assert.equal(delivered.length, 0, 'empty 回合不得向聊天投递任何提示或卡片')
 })
+
+test('silentTurns 状态容量上限为 1024 并遵循 FIFO 淘汰（变异 G 守护）', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'im-engine-fifo-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const store = new SessionMapStore(join(dir, 'sessions.json'))
+  const ctx = { on: () => () => {}, get: () => undefined }
+  const engine = new ImEngine(ctx, store, new SeenStore(join(dir, 'seen.json')), {
+    cwd: dir,
+    provider: 'p',
+    model: 'm',
+    agentPreset: 'standard',
+    permissionPreset: 'danger-full-access',
+  }, () => {})
+  t.after(() => engine.dispose())
+
+  // 连续填充 1025 条记录
+  for (let i = 1; i <= 1025; i++) {
+    engine.recordSilentTurn('test-session', i)
+  }
+
+  // 变异 G 守护：容量上限严格为 1024，最早的第 1 条必须被淘汰，最新的第 1025 条必须保留
+  assert.equal(engine.silentTurns.size, 1024, '容量上限形同虚设若未淘汰超额元素')
+  assert.equal(engine.silentTurns.has('test-session:1'), false, '最早进入的记录必须被 FIFO 驱逐')
+  assert.equal(engine.silentTurns.has('test-session:1025'), true, '最新记录必须成功记录')
+})

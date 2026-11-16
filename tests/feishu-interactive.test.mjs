@@ -59,6 +59,16 @@ test('extractFeishuCardText 递归提取飞书卡片文本内容', () => {
   const legacyText = extractFeishuCardText(JSON.stringify(legacyCard))
   assert.ok(legacyText.includes('传统卡片标题'))
   assert.ok(legacyText.includes('传统卡片正文'))
+
+  // 5. 超长卡片内容边界截断守护（默认 4000，支持自定义）
+  const longCard = {
+    schema: '2.0',
+    body: { elements: [{ tag: 'markdown', content: '这是一段测试文本。'.repeat(600) }] },
+  }
+  const truncatedDefault = extractFeishuCardText(JSON.stringify(longCard))
+  assert.equal(truncatedDefault.length, 4000, '默认截断到 4000 字符')
+  const truncatedCustom = extractFeishuCardText(JSON.stringify(longCard), 200)
+  assert.equal(truncatedCustom.length, 200, '支持自定义上限截断')
 })
 
 test('resolveFeishuContent 支持 interactive 消息类型并提取卡片文本', async () => {

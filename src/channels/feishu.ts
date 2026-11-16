@@ -87,9 +87,11 @@ export function extractFeishuCardText(rawContent: string | Record<string, unknow
     const trimmed = text.trim()
     if (!trimmed) return
     if (parts.length > 0 && parts[parts.length - 1] === trimmed) return
-    if (totalLength >= maxChars) return
-    parts.push(trimmed)
-    totalLength += trimmed.length
+    const remaining = maxChars - totalLength
+    if (remaining <= 0) return
+    const clipped = trimmed.length > remaining ? trimmed.slice(0, remaining) : trimmed
+    parts.push(clipped)
+    totalLength += clipped.length
   }
 
   const extractElements = (elements: unknown[]) => {
@@ -166,7 +168,7 @@ export function extractFeishuCardText(rawContent: string | Record<string, unknow
     extractElements(card.elements)
   }
 
-  return parts.join('\n')
+  return parts.join('\n').slice(0, maxChars)
 }
 
 /** 飞书限流：消息接口 230020 / 11232，通用频控 99991400（HTTP 429，旧接口为 400）。 */
@@ -329,18 +331,22 @@ async function postFeishuMessage(
 ): Promise<{ code?: number | string; data?: { message_id?: string } } | undefined> {
   const { chatId: targetChatId, threadId } = parseFeishuChatId(chatId)
   if (threadId && typeof sender.im.message.reply === 'function') {
-    try {
-      const replyResult = await sender.im.message.reply({
-        path: { message_id: threadId },
-        data: { msg_type: msgType, content, reply_in_thread: true },
-      }) as { code?: number | string; data?: { message_id?: string } } | undefined
-      if (!isRejectedCode(replyResult?.code)) return replyResult
-      if (isThrottleCode(replyResult?.code)) return replyResult
-      log?.(`话题回复被拒 (code=${replyResult?.code})，安全回退群消息`)
-    } catch (error) {
-      if (throttledResponse(error)) throw error
-      log?.(`话题回复网络或调用异常: ${error instanceof Error ? error.message : String(error)}`)
-      throw error
+    if (!threadId.startsWith('omt_')) {
+      try {
+        const replyResult = await sender.im.message.reply({
+          path: { message_id: threadId },
+          data: { msg_type: msgType, content, reply_in_thread: true },
+        }) as { code?: number | string; data?: { message_id?: string } } | undefined
+        if (!isRejectedCode(replyResult?.code)) return replyResult
+        if (isThrottleCode(replyResult?.code)) return replyResult
+        log?.(`话题回复被拒 (code=${replyResult?.code})，安全回退群消息`)
+      } catch (error) {
+        if (throttledResponse(error)) throw error
+        log?.(`话题回复网络或调用异常: ${error instanceof Error ? error.message : String(error)}`)
+        throw error
+      }
+    } else {
+      log?.(`收到非消息 ID 话题标识 (${threadId})，安全回退群消息`)
     }
   }
   return sender.im.message.create({
@@ -416,10 +422,13 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           const addressed = !group || isFeishuBotMentioned(message.mentions, botOpenId)
           if (!addressed || !message.chat_id || !current()) return
           const rawChatId = message.chat_id
-          // 原生话题群/话题串认 thread_id；开启配置 threadSessions 时兼容普通群回复串（root_id）；私聊绝不隔离话题
+          // 原生话题群/话题串认真实根消息 ID（跟帖取 root_id，首贴取自身 message_id）；
+          // 普通群仅在开启配置 threadSessions 时按回复串（root_id）隔离会话，避免日常引用过度分裂；私聊绝不隔离话题
           const threadId = group
             ? (typeof message.thread_id === 'string' && message.thread_id.trim()
-                ? message.thread_id.trim()
+                ? (typeof message.root_id === 'string' && message.root_id.trim()
+                    ? message.root_id.trim()
+                    : (typeof message.message_id === 'string' && message.message_id.trim() ? message.message_id.trim() : undefined))
                 : (config.threadSessions && typeof message.root_id === 'string' && message.root_id.trim()
                     ? message.root_id.trim()
                     : undefined))
