@@ -2,7 +2,7 @@ import { DeferredDelivery, DeliveryRejected, DeliveryUnavailable, type DeferredE
 import { ChoiceSendError } from './choice-delivery.js'
 import { sleepWithSignal } from './abort.js'
 import { ThinkingDisplayTracker, normalizeThinkingDisplay, type ThinkingDisplayTarget } from './thinking-display.js'
-import { assistantText } from './assistant-text.js'
+import { assistantText, isSilentReplyText } from './assistant-text.js'
 import { readDeliveryHistory } from './delivery-history.js'
 import { FileInputError, filePromptParts } from './file-input.js'
 import { ChoiceStore, type Choice } from './choices.js'
@@ -189,6 +189,17 @@ export class ImEngine {
   private readonly chatCommands: ChatCommands
   private readonly commandScopes = new Map<string, AbortController>()
   private readonly inputScopes = new Map<string, AbortController>()
+  /** 显式声明 NO_REPLY 静默协议的回合，收口时不追加任何通知。 */
+  private readonly silentTurns = new Set<string>()
+
+  private recordSilentTurn(sessionId: string, turn: number | undefined): void {
+    if (turn === undefined) return
+    if (this.silentTurns.size >= 1024) {
+      const oldest = this.silentTurns.values().next().value
+      if (oldest) this.silentTurns.delete(oldest)
+    }
+    this.silentTurns.add(`${sessionId}:${turn}`)
+  }
   /** 话题名回写状态：默认一个话题只命名一次。 */
   private readonly topicTitles: TopicTitleStore
   private readonly topicWrites = new KeyedSerialQueue()
@@ -1335,6 +1346,10 @@ export class ImEngine {
     if (event.type === 'assistant/message') {
       let stopped = false
       try {
+        if (isSilentReplyText(event.data?.message?.content)) {
+          const turn = (event.data as { turn?: number })?.turn ?? this.observedTurns.get(sessionId)
+          this.recordSilentTurn(sessionId, turn)
+        }
         const text = assistantText(event.data?.message?.content, channel.skipInterimText)
         if (text === undefined) {
           this.log(`[${channel.id}] 跳过含工具调用的中间叙述 ${sessionId}`)
@@ -1499,13 +1514,18 @@ export class ImEngine {
     await this.syncTopicName(sessionId, title, true)
   }
 
-  /** 正常交付保持安静；仅异常结果追加必要文字提示。 */
+  /** 正常交付与空回复回合保持安静；仅异常失败结果追加必要文字提示。 */
   private async notifyCompletion(result: TurnCompletion): Promise<void> {
+    const silentKey = `${result.sessionId}:${result.turn}`
+    const isSilent = this.silentTurns.has(silentKey)
+    if (isSilent) this.silentTurns.delete(silentKey)
     if (result.status === 'completed') return
-    const status = result.status
     const first = result.items[0]
     if (!first) return
     const { channel, message } = first
+    // 显式声明 NO_REPLY 静默协议的回合，收口时不追加任何通知
+    if (result.status === 'empty' && isSilent) return
+    const status = result.status
     const valid = () => {
       const current = this.router.lookup(channel.id, message.kind ?? 'dm', message.chatId)
       return !this.disposed && this.channels.get(channel.id) === channel && current?.sessionId === result.sessionId

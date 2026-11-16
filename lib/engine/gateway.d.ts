@@ -74,6 +74,9 @@ export declare class ImEngine {
     private readonly chatCommands;
     private readonly commandScopes;
     private readonly inputScopes;
+    /** 显式声明 NO_REPLY 静默协议的回合，收口时不追加任何通知。 */
+    private readonly silentTurns;
+    private recordSilentTurn;
     /** 话题名回写状态：默认一个话题只命名一次。 */
     private readonly topicTitles;
     private readonly topicWrites;
@@ -161,7 +164,7 @@ export declare class ImEngine {
     private observeTopicEdit;
     /** /rename 之后把新标题同步到话题名（显式操作，不受 once 限制）。 */
     renameTopicNow(sessionId: string, title: string): Promise<void>;
-    /** 正常交付保持安静；仅异常结果追加必要文字提示。 */
+    /** 正常交付与空回复回合保持安静；仅异常失败结果追加必要文字提示。 */
     private notifyCompletion;
     /** 逐片发送；返回是否至少送达过一片，供调用方决定是否标记已投递。 */
     private deliver;

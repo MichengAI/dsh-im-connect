@@ -28,6 +28,147 @@ export function splitByTableLimit(text: string, maxTables = FEISHU_CARD_MAX_TABL
   return parts.filter((part) => part.trim() !== '')
 }
 
+/**
+ * 编码飞书会话键：
+ * 如果在群聊话题（Thread）内，组合为 chatId:rootId；大厅消息保持原生 chatId。
+ */
+export function feishuChatId(chatId: string, threadId?: string): string {
+  return threadId ? `${chatId}:${threadId}` : String(chatId)
+}
+
+/**
+ * 解码飞书会话键：
+ * 分离出基础 chatId 以及可选的话题根消息 ID（threadId/rootId）。
+ */
+export function parseFeishuChatId(chatId: string): { chatId: string; threadId?: string } {
+  const index = chatId.indexOf(':')
+  if (index < 0) return { chatId, threadId: undefined }
+  return {
+    chatId: chatId.slice(0, index),
+    threadId: chatId.slice(index + 1) || undefined,
+  }
+}
+
+/**
+ * 递归从飞书卡片 JSON 中提取可读文本。
+ * 支持 Schema 2.0（body.elements / body.property.elements 递归结构）、
+ * Legacy 传统格式（header.title + elements）以及 json_card 包装格式。
+ */
+export function extractFeishuCardText(rawContent: string | Record<string, unknown>, maxChars = 4000): string {
+  let card: any
+  if (typeof rawContent === 'string') {
+    try {
+      card = JSON.parse(rawContent)
+    } catch {
+      return ''
+    }
+  } else if (rawContent && typeof rawContent === 'object') {
+    card = rawContent
+  } else {
+    return ''
+  }
+
+  // 兼容 raw_card_content 包装：{"json_card": "{\"body\": ...}"}
+  if (card && typeof card.json_card === 'string') {
+    try {
+      card = JSON.parse(card.json_card)
+    } catch {
+      // 保持原样
+    }
+  }
+
+  if (!card || typeof card !== 'object') return ''
+
+  const parts: string[] = []
+  let totalLength = 0
+
+  const addPart = (text: string | undefined) => {
+    if (!text) return
+    const trimmed = text.trim()
+    if (!trimmed) return
+    if (parts.length > 0 && parts[parts.length - 1] === trimmed) return
+    if (totalLength >= maxChars) return
+    parts.push(trimmed)
+    totalLength += trimmed.length
+  }
+
+  const extractElements = (elements: unknown[]) => {
+    if (!Array.isArray(elements) || totalLength >= maxChars) return
+    for (const elem of elements) {
+      if (!elem || typeof elem !== 'object') continue
+      const item = elem as Record<string, any>
+      // 优先从单一文本源提取，避免 content 与 text 属性重复提取
+      let directText: string | undefined
+      if (typeof item.content === 'string' && item.content.trim()) {
+        directText = item.content
+      } else if (item.property && typeof item.property.content === 'string' && item.property.content.trim()) {
+        directText = item.property.content
+      } else if (item.property && typeof item.property.title === 'string' && item.property.title.trim()) {
+        directText = item.property.title
+      } else if (typeof item.text === 'string' && item.text.trim()) {
+        directText = item.text
+      } else if (item.text && typeof item.text === 'object') {
+        if (typeof item.text.content === 'string' && item.text.content.trim()) {
+          directText = item.text.content
+        } else if (typeof item.text.text === 'string' && item.text.text.trim()) {
+          directText = item.text.text
+        }
+      }
+      if (directText) addPart(directText)
+
+      // 递归子元素集合
+      if (Array.isArray(item.elements)) extractElements(item.elements)
+      if (item.property && Array.isArray(item.property.elements)) extractElements(item.property.elements)
+      if (Array.isArray(item.columns)) {
+        for (const col of item.columns) {
+          if (col && Array.isArray(col.elements)) extractElements(col.elements)
+        }
+      }
+      if (Array.isArray(item.items)) extractElements(item.items)
+      if (Array.isArray(item.rows)) {
+        for (const row of item.rows) {
+          if (Array.isArray(row)) extractElements(row)
+          else if (row && Array.isArray(row.elements)) extractElements(row.elements)
+        }
+      }
+      if (Array.isArray(item.fields)) {
+        for (const field of item.fields) {
+          if (field && typeof field === 'object' && field.text) {
+            if (typeof field.text.content === 'string' && field.text.content.trim()) {
+              addPart(field.text.content)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 优先提取卡片标题（header.title 或 title）
+  if (card.header?.title?.content && typeof card.header.title.content === 'string') {
+    addPart(card.header.title.content)
+  } else if (typeof card.title === 'string' && card.title.trim()) {
+    addPart(card.title)
+  } else if (card.title && typeof card.title.content === 'string' && card.title.content.trim()) {
+    addPart(card.title.content)
+  }
+
+  // Schema 2.0: body.elements 或 body.property.elements
+  if (card.body && typeof card.body === 'object') {
+    if (card.body.property && Array.isArray(card.body.property.elements)) {
+      extractElements(card.body.property.elements)
+    } else if (Array.isArray(card.body.elements)) {
+      extractElements(card.body.elements)
+    }
+  }
+
+  // Legacy 或直接在顶层的 elements
+  if (Array.isArray(card.elements)) {
+    extractElements(card.elements)
+  }
+
+  return parts.join('\n')
+}
+
 /** 飞书限流：消息接口 230020 / 11232，通用频控 99991400（HTTP 429，旧接口为 400）。 */
 const FEISHU_THROTTLE_CODES = new Set([230020, 11232, 99991400])
 
@@ -108,6 +249,10 @@ export async function resolveFeishuContent(client: ResourceClient, message: Feis
         } else if (typeof item.text === 'string') texts.push(item.text)
       }
     }
+  } else if (message.message_type === 'interactive') {
+    const text = extractFeishuCardText(message.content ?? '{}')
+    if (text) texts.push(text)
+    else throw new Error('卡片内容为空')
   } else throw new Error('暂不支持该消息类型，请发送文字或图片。')
   if (keys.length > MAX_CHANNEL_IMAGES) throw new Error('图片数量超过上限')
   const media: ImMedia[] = []
@@ -161,11 +306,47 @@ interface FeishuConfig {
   appSecret?: string
   domain?: 'feishu' | 'lark'
   host?: { get(name: string): unknown }
+  threadSessions?: boolean
 }
 
 interface FeishuMention {
   key?: string
   id?: { open_id?: string }
+}
+
+/**
+ * 飞书统一消息发送辅助：
+ * 若 chatId 为包含话题根消息 ID 的复合键（chatId:threadId），优先在话题回复串内发送（reply_in_thread: true）；
+ * 若回复话题被明确业务拒绝（如根消息删除或无权回复话题），安全回退为群消息发送，保证正文不丢失；
+ * 若遇到网络异常或限流，严格遵守网络结果未知时不重发原则，抛出由上层处理。
+ */
+async function postFeishuMessage(
+  sender: { im: { message: { create(opts: unknown): Promise<unknown>; reply?(opts: unknown): Promise<unknown> } } },
+  chatId: string,
+  msgType: string,
+  content: string,
+  log?: (line: string) => void,
+): Promise<{ code?: number | string; data?: { message_id?: string } } | undefined> {
+  const { chatId: targetChatId, threadId } = parseFeishuChatId(chatId)
+  if (threadId && typeof sender.im.message.reply === 'function') {
+    try {
+      const replyResult = await sender.im.message.reply({
+        path: { message_id: threadId },
+        data: { msg_type: msgType, content, reply_in_thread: true },
+      }) as { code?: number | string; data?: { message_id?: string } } | undefined
+      if (!isRejectedCode(replyResult?.code)) return replyResult
+      if (isThrottleCode(replyResult?.code)) return replyResult
+      log?.(`话题回复被拒 (code=${replyResult?.code})，安全回退群消息`)
+    } catch (error) {
+      if (throttledResponse(error)) throw error
+      log?.(`话题回复网络或调用异常: ${error instanceof Error ? error.message : String(error)}`)
+      throw error
+    }
+  }
+  return sender.im.message.create({
+    params: { receive_id_type: 'chat_id' },
+    data: { receive_id: targetChatId, msg_type: msgType, content },
+  }) as Promise<{ code?: number | string; data?: { message_id?: string } } | undefined>
 }
 
 /** 群消息只有明确 mention 当前机器人本身才算 addressed；@ 其他成员不触发。 */
@@ -182,7 +363,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let client: ResourceClient & {
     request(opts: { url: string; method: 'GET' }): Promise<unknown>
-    im: { messageReaction: { create(opts: unknown): Promise<{ code?: number; data?: { reaction_id?: string } }>; delete(opts: unknown): Promise<{ code?: number }> }; message: { create(opts: unknown): Promise<unknown>; patch(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> }; image: { create(opts: unknown): Promise<{ image_key?: string } | null> } }
+    im: { messageReaction: { create(opts: unknown): Promise<{ code?: number; data?: { reaction_id?: string } }>; delete(opts: unknown): Promise<{ code?: number }> }; message: { create(opts: unknown): Promise<unknown>; reply?(opts: unknown): Promise<unknown>; patch(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> }; image: { create(opts: unknown): Promise<{ image_key?: string } | null> } }
   } | undefined
   let ws: { close(opts?: { force?: boolean }): void } | undefined
   let statusText = '未连接'
@@ -217,9 +398,9 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       const botOpenId = identity.bot?.open_id?.trim() ?? ''
       if (!botOpenId) throw new Error(`${id}: 无法获取机器人 open_id`)
       const dispatcher = new sdk.EventDispatcher({}).register({
-        'card.action.trigger': async (data: { operator?: { open_id?: string }; action?: { value?: { token?: string; group?: boolean } }; context?: { open_chat_id?: string }; event_id?: string }) => {
+        'card.action.trigger': async (data: { operator?: { open_id?: string }; action?: { value?: { token?: string; group?: boolean; chatId?: string } }; context?: { open_chat_id?: string }; event_id?: string }) => {
           const token = data.action?.value?.token
-          const chatId = data.context?.open_chat_id
+          const chatId = data.action?.value?.chatId ?? data.context?.open_chat_id
           if (current() && token && chatId && data.operator?.open_id) void Promise.resolve(handler?.({ chatId, userId: data.operator.open_id,
             text: '', actionToken: token, kind: data.action?.value?.group ? 'group' : 'dm', addressed: true,
           })).catch(() => log(`[${id}] 按钮操作失败`))
@@ -227,25 +408,35 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         },
         'im.message.receive_v1': async (data: {
           sender?: { sender_id?: { open_id?: string } }
-          message?: { message_id?: string; chat_id?: string; chat_type?: string; message_type?: string; content?: string; mentions?: FeishuMention[] }
+          message?: { message_id?: string; root_id?: string; parent_id?: string; thread_id?: string; chat_id?: string; chat_type?: string; message_type?: string; content?: string; mentions?: FeishuMention[] }
         }) => {
           const message = data.message
           if (!message) return
           const group = message.chat_type === 'group'
           const addressed = !group || isFeishuBotMentioned(message.mentions, botOpenId)
           if (!addressed || !message.chat_id || !current()) return
-          const chatId = message.chat_id
+          const rawChatId = message.chat_id
+          // 原生话题群/话题串认 thread_id；开启配置 threadSessions 时兼容普通群回复串（root_id）；私聊绝不隔离话题
+          const threadId = group
+            ? (typeof message.thread_id === 'string' && message.thread_id.trim()
+                ? message.thread_id.trim()
+                : (config.threadSessions && typeof message.root_id === 'string' && message.root_id.trim()
+                    ? message.root_id.trim()
+                    : undefined))
+            : undefined
+          const chatId = feishuChatId(rawChatId, threadId)
           return incoming.run(chatId, async () => {
             if (!current()) return
             let resolved: { text: string; media: ImMedia[] }
             try {
               resolved = await resolveFeishuContent(client!, message, timeoutSignal(30_000, generation.signal))
-            } catch {
+            } catch (error) {
               if (!current()) return
-              log(`[${id}] 图片或消息读取失败`)
+              log(`[${id}] 图片或消息读取失败: ${error instanceof Error ? error.message : String(error)}`)
+              if (group) return
               await client?.im.message.create({
                 params: { receive_id_type: 'chat_id' },
-                data: { receive_id: message.chat_id, msg_type: 'text', content: JSON.stringify({ text: channelNotice(config.host, '图片或消息读取失败，请重发图片或发送文字。') }) },
+                data: { receive_id: rawChatId, msg_type: 'text', content: JSON.stringify({ text: channelNotice(config.host, '图片或消息读取失败，请重发图片或发送文字。') }) },
               }).then(result => {
                 const code = (result as { code?: number | string } | undefined)?.code
                 if (isRejectedCode(code)) throw new Error('media-notice-rejected')
@@ -259,6 +450,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               text: resolved.text,
               ...(resolved.media.length ? { media: resolved.media } : {}),
               messageId: message.message_id,
+              platformMessageId: message.message_id,
               kind: group ? 'group' : 'dm',
               addressed,
             })
@@ -288,14 +480,13 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         try {
           // 仅明确业务拒绝或 HTTP 400 回退；网络结果未知时不重发，避免重复投递。
           // 飞书要渲染 Markdown 表格，卡片必须是 Schema 2.0（body.elements）
-          const card = await sender.im.message.create({
-            params: { receive_id_type: 'chat_id' },
-            data: {
-              receive_id: chatId,
-              msg_type: 'interactive',
-              content: JSON.stringify({ schema: '2.0', config: { wide_screen_mode: true }, body: { elements: [{ tag: 'markdown', content: part }] } }),
-            },
-          }).catch((error: unknown) => {
+          const card = await postFeishuMessage(
+            sender,
+            chatId,
+            'interactive',
+            JSON.stringify({ schema: '2.0', config: { wide_screen_mode: true }, body: { elements: [{ tag: 'markdown', content: part }] } }),
+            line => log(`[${id}] ${line}`),
+          ).catch((error: unknown) => {
             const response = (error as { response?: { status?: number } } | undefined)?.response
             // 旧接口也可能用 HTTP 400 返回限流，必须优先保留上层退避语义。
             if (response?.status !== 400 || throttledResponse(error)) throw error
@@ -307,10 +498,13 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           if (isThrottleCode(card?.code)) throw new DeliveryRejected(`${id}: text-send-throttled code=${card?.code}`)
           const rejected = card?.code
           // 卡片被拒（内容过大、接口不支持等）时退回纯文本，不丢正文。
-          const plain = await sender.im.message.create({
-            params: { receive_id_type: 'chat_id' },
-            data: { receive_id: chatId, msg_type: 'text', content: JSON.stringify({ text: part }) },
-          }).catch((error: unknown) => {
+          const plain = await postFeishuMessage(
+            sender,
+            chatId,
+            'text',
+            JSON.stringify({ text: part }),
+            line => log(`[${id}] ${line}`),
+          ).catch((error: unknown) => {
             log(`[${id}] 纯文本回退发送失败 ${httpFailureSummary(error)}`)
             throw error
           }) as { code?: number | string } | undefined
@@ -326,13 +520,11 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
     },
     async sendChoices(message, text, buttons) {
       if (!client) throw new Error('channel-unavailable')
-      const result = await client.im.message.create({ params: { receive_id_type: 'chat_id' }, data: {
-        receive_id: message.chatId, msg_type: 'interactive', content: JSON.stringify({ config: { wide_screen_mode: true }, elements: [
-          { tag: 'markdown', content: text },
-          ...buttons.map(button => ({ tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: button.label.slice(0, 60) },
-            type: 'default', value: { token: button.token, group: message.kind === 'group' } }] })),
-        ] }),
-      } }).catch(error => { throw choiceSendError(error) }) as { code?: number; data?: { message_id?: string } } | undefined
+      const result = await postFeishuMessage(client, message.chatId, 'interactive', JSON.stringify({ config: { wide_screen_mode: true }, elements: [
+        { tag: 'markdown', content: text },
+        ...buttons.map(button => ({ tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: button.label.slice(0, 60) },
+        type: 'default', value: { token: button.token, group: message.kind === 'group', ...(parseFeishuChatId(message.chatId).threadId ? { chatId: message.chatId } : {}) } }] })),
+      ] }), line => log(`[${id}] ${line}`)).catch(error => { throw choiceSendError(error) }) as { code?: number; data?: { message_id?: string } } | undefined
       if (isRejectedCode(result?.code)) throw new ChoiceSendError('rejected')
       const messageId = result?.data?.message_id
       const sender = client
@@ -372,11 +564,8 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           const picture = await fileOperation(active.im.image.create({ data: { image_type: 'message', image: data } }), scope) as { image_key?: string }
           scope.throwIfAborted()
           if (picture?.image_key) {
-            const sentPicture = await active.im.message.create({
-              params: { receive_id_type: 'chat_id' },
-              data: { receive_id: chatId, msg_type: 'image', content: JSON.stringify({ image_key: picture.image_key }) },
-            }) as { code?: number }
-            if (!isRejectedCode(sentPicture.code)) return
+            const sentPicture = await postFeishuMessage(active, chatId, 'image', JSON.stringify({ image_key: picture.image_key }), line => log(`[${id}] ${line}`)) as { code?: number }
+            if (!isRejectedCode(sentPicture?.code)) return
           }
         } catch (error) {
           if (scope.aborted) throw error
@@ -386,11 +575,8 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       const uploaded = await fileOperation(active.im.file.create({ data: { file_type: 'stream', file_name: file.name, file: data } }), scope)
       scope.throwIfAborted()
       if (!uploaded?.file_key) throw new Error('file-upload-rejected')
-      const sent = await active.im.message.create({
-        params: { receive_id_type: 'chat_id' },
-        data: { receive_id: chatId, msg_type: 'file', content: JSON.stringify({ file_key: uploaded.file_key }) },
-      }) as { code?: number }
-      if (isRejectedCode(sent.code)) throw new Error('file-send-rejected')
+      const sent = await postFeishuMessage(active, chatId, 'file', JSON.stringify({ file_key: uploaded.file_key }), line => log(`[${id}] ${line}`)) as { code?: number }
+      if (isRejectedCode(sent?.code)) throw new Error('file-send-rejected')
     },
     setMessageHandler(h) { handler = h },
     async diagnose(signal) {

@@ -3,6 +3,25 @@ import type { ChannelAdapter, ImMedia } from '../engine/types.js';
 export declare const FEISHU_CARD_MAX_TABLES = 5;
 /** 按表格数量拆正文，保证每张卡不超上限，且不会把表格切一半。 */
 export declare function splitByTableLimit(text: string, maxTables?: number): string[];
+/**
+ * 编码飞书会话键：
+ * 如果在群聊话题（Thread）内，组合为 chatId:rootId；大厅消息保持原生 chatId。
+ */
+export declare function feishuChatId(chatId: string, threadId?: string): string;
+/**
+ * 解码飞书会话键：
+ * 分离出基础 chatId 以及可选的话题根消息 ID（threadId/rootId）。
+ */
+export declare function parseFeishuChatId(chatId: string): {
+    chatId: string;
+    threadId?: string;
+};
+/**
+ * 递归从飞书卡片 JSON 中提取可读文本。
+ * 支持 Schema 2.0（body.elements / body.property.elements 递归结构）、
+ * Legacy 传统格式（header.title + elements）以及 json_card 包装格式。
+ */
+export declare function extractFeishuCardText(rawContent: string | Record<string, unknown>, maxChars?: number): string;
 interface FeishuContentMessage {
     message_id?: string;
     message_type?: string;
@@ -38,6 +57,7 @@ interface FeishuConfig {
     host?: {
         get(name: string): unknown;
     };
+    threadSessions?: boolean;
 }
 interface FeishuMention {
     key?: string;

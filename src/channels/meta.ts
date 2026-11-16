@@ -55,6 +55,7 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
     fields: [
       { key: 'appId', label: 'App ID' },
       { key: 'appSecret', label: 'App Secret', secret: true },
+      { key: 'threadSessions', label: '话题会话隔离', settingsOnly: true },
     ],
   },
   lark: {
@@ -65,6 +66,7 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
     fields: [
       { key: 'appId', label: 'App ID' },
       { key: 'appSecret', label: 'App Secret', secret: true },
+      { key: 'threadSessions', label: '话题会话隔离', settingsOnly: true },
     ],
   },
   weixin: {
