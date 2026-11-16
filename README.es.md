@@ -103,6 +103,10 @@ Disponible desde el panel de administración en **Complementos → @michengai/ds
 - **Predeterminado**: Desactivado (`off`)
 - **Función**: Envía la cadena de pensamiento del modelo en Telegram dentro de un bloque de cita plegable (`<blockquote expandable>`).
 
+### 5. Aislamiento de sesiones de hilos en Feishu (`threadSessions`)
+- **Predeterminado**: Desactivado (`false`)
+- **Función**: Cuando está habilitado, los hilos de respuesta en grupos de Feishu mantienen sesiones y contextos independientes basados en el ID del mensaje raíz. De forma predeterminada, todos los hilos comparten el contexto del grupo.
+
 ## Uso y comandos
 
 Abra **Configuración → Asistente IM**, elija **Añadir cuenta** en el canal deseado y configure el espacio de trabajo, modelo, permisos y modo de envío.
@@ -118,6 +122,20 @@ Abra **Configuración → Asistente IM**, elija **Añadir cuenta** en el canal d
 | Modelo y razonamiento | `/models`, `/model <nombre>`, `/reasoning [nivel]` | Ajusta el modelo y esfuerzo de razonamiento |
 | Gestión de sesiones | `/sessions`, `/session <número/ID>`, `/rename <título>`, `/fork` | Lista, cambia, renombra o bifurca sesiones |
 | Recuperación de entregas | `/delivery`, `/delivery retry <ID>` | Reenvía mensajes que fallaron por desconexión |
+| Aislamiento de hilos | Activar en la configuración de la cuenta de Feishu / Lark | Mantiene los hilos de respuesta en contextos aislados (predeterminado: desactivado) |
+| Respuesta silenciosa | `NO_REPLY` o `<<<NO_REPLY>>>` en la salida del modelo | Finaliza el turno en silencio sin tarjetas de notificación de marcador de posición |
+
+### Hilos de Feishu y tarjetas interactivas
+
+- **Respuestas precisas en hilos**: Utiliza con precisión la API `reply` de Feishu dirigida al ID del mensaje raíz, evitando que las respuestas caigan en el chat general.
+- **Extracción de tarjetas**: Extrae texto y botones de tarjetas interactivas de Feishu con truncamiento seguro automático.
+- **Retorno de botones en hilos**: Las pulsaciones de botones de tarjetas interactivas dentro de un hilo preservan el contexto original para aprobaciones y selecciones.
+
+### Protocolo de respuesta silenciosa (`NO_REPLY`)
+
+Cuando el agente determina que no se requiere una respuesta visible para el usuario:
+- El modelo emite `NO_REPLY` o `<<<NO_REPLY>>>`.
+- La pasarela suprime por completo las tarjetas de aviso ("Procesamiento completado sin resultado").
 
 ### Nombres automáticos de temas en Telegram
 

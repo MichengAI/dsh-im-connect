@@ -103,6 +103,10 @@ Erreichbar über die Verwaltung unter **Plugins → @michengai/dsh-im-connect**:
 - **Standard**: Aus (`off`)
 - **Funktion**: Übermittelt den Denkprozess des Modells auf Telegram als einklappbaren Zitatblock (`<blockquote expandable>`).
 
+### 5. Feishu-Thread-Sitzungsisolation (`threadSessions`)
+- **Standard**: Deaktiviert (`false`)
+- **Funktion**: Wenn aktiviert, behalten Antwort-Threads in Feishu-Gruppen isolierte Sitzungen und Kontexte basierend auf der Root-Nachrichten-ID. Standardmäßig teilen alle Threads den Gruppenkontext.
+
 ## Nutzung und Befehle
 
 Öffnen Sie **Einstellungen → IM-Assistent**, wählen Sie **Konto hinzufügen** und konfigurieren Sie Arbeitsbereich, Modell, Berechtigungen und Versandmodus.
@@ -118,6 +122,20 @@ Erreichbar über die Verwaltung unter **Plugins → @michengai/dsh-im-connect**:
 | Modell & Denkaufwand | `/models`, `/model <Name>`, `/reasoning [Stufe]` | Passt das Modell zur Laufzeit an |
 | Sitzungsverwaltung | `/sessions`, `/session <Nummer/ID>`, `/rename <Titel>`, `/fork` | Sitzungen auflisten, wechseln, umbenennen oder forken |
 | Zustellwiederherstellung | `/delivery`, `/delivery retry <ID>` | Sendet unterbrochene Nachrichten erneut |
+| Thread-Isolation | In den Feishu-/Lark-Kontoeinstellungen aktivieren | Isoliert Antwort-Threads in eigene Kontexte (Standard: aus) |
+| Stille Antwort | `NO_REPLY` oder `<<<NO_REPLY>>>` in der Modellausgabe | Beendet den Turn lautlos ohne Platzhalter-Benachrichtigungen |
+
+### Feishu-Threads und interaktive Karten
+
+- **Präzise Thread-Antworten**: Verwendet gezielt die Feishu `reply`-API mit der Root-Nachrichten-ID, um Nachrichten präzise im Thread zu halten.
+- **Kartenextraktion**: Extrahiert Text und Schaltflächen aus interaktiven Feishu-Karten mit automatischer Kürzung.
+- **Schaltflächen-Callbacks**: Klicks auf Kartenschaltflächen in Threads behalten den vollen Thread-Kontext für Genehmigungen und Auswahlen.
+
+### Stille Antwort (`NO_REPLY`)
+
+Wenn der Agent entscheidet, dass keine sichtbare Antwort erforderlich ist:
+- Das Modell gibt `NO_REPLY` oder `<<<NO_REPLY>>>` aus.
+- Das Gateway unterdrückt Hinweiskarten („Verarbeitung beendet ohne Ergebnis“) vollständig.
 
 ### Automatische Telegram-Themenbenennung
 

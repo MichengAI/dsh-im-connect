@@ -11,9 +11,11 @@ import { SeenStore } from '../lib/engine/seen-store.js'
 import { MessageProgress } from '../lib/engine/message-progress.js'
 
 test('isSilentReplyText 识别显式静默标记', () => {
-  // 显式 NO_REPLY
+  // 显式 NO_REPLY 及 <<<NO_REPLY>>> 变体（支持大小写与包裹语法）
   assert.equal(isSilentReplyText([{ type: 'text', text: 'NO_REPLY' }]), true)
   assert.equal(isSilentReplyText([{ type: 'text', text: '  NO_REPLY  \n' }]), true)
+  assert.equal(isSilentReplyText([{ type: 'text', text: '<<<NO_REPLY>>>' }]), true)
+  assert.equal(isSilentReplyText([{ type: 'text', text: '  <<<no_reply>>>  \n' }]), true)
 
   // 无文本块 / 空文本不是显式 NO_REPLY 静默标记
   assert.equal(isSilentReplyText([]), false)
@@ -27,13 +29,16 @@ test('isSilentReplyText 识别显式静默标记', () => {
 })
 
 test('assistantText 识别并剥离 NO_REPLY 静默回复标记', () => {
-  // 单独 NO_REPLY
+  // 单独 NO_REPLY / <<<NO_REPLY>>>
   assert.equal(assistantText([{ type: 'text', text: 'NO_REPLY' }]), '')
   assert.equal(assistantText([{ type: 'text', text: '  NO_REPLY  \n' }]), '')
+  assert.equal(assistantText([{ type: 'text', text: '<<<NO_REPLY>>>' }]), '')
+  assert.equal(assistantText([{ type: 'text', text: '<<<no_reply>>>' }]), '')
 
-  // 尾部带有 NO_REPLY
+  // 尾部带有 NO_REPLY / <<<NO_REPLY>>>
   assert.equal(assistantText([{ type: 'text', text: '这是一段正常正文\nNO_REPLY' }]), '这是一段正常正文')
   assert.equal(assistantText([{ type: 'text', text: '前置说明\n\n  NO_REPLY  ' }]), '前置说明')
+  assert.equal(assistantText([{ type: 'text', text: '前置说明\n<<<NO_REPLY>>>' }]), '前置说明')
 
   // 普通文本不受影响
   assert.equal(assistantText([{ type: 'text', text: '正常的回复内容' }]), '正常的回复内容')

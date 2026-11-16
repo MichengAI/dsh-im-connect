@@ -103,6 +103,10 @@ Gérée depuis le panneau **Extensions → @michengai/dsh-im-connect** :
 - **Défaut** : Désactivé (`off`)
 - **Fonction** : Transmet le cheminement de pensée du modèle sous forme de bloc de citation repliable Telegram (`<blockquote expandable>`).
 
+### 5. Isolation des sessions de fil Feishu (`threadSessions`)
+- **Défaut** : Désactivé (`false`)
+- **Fonction** : Lorsqu'activé, les fils de réponse (threads) dans les groupes Feishu conservent des sessions et contextes indépendants basés sur l'ID du message racine. Par défaut, tous les fils partagent le contexte du groupe.
+
 ## Utilisation et commandes
 
 Ouvrez **Paramètres → Assistant IM**, cliquez sur **Ajouter un compte** et configurez l'espace de travail, le modèle, les droits et le mode d'envoi.
@@ -118,6 +122,20 @@ Ouvrez **Paramètres → Assistant IM**, cliquez sur **Ajouter un compte** et co
 | Modèle et raisonnement | `/models`, `/model <nom>`, `/reasoning [niveau]` | Ajuste dynamiquement le modèle |
 | Gestion des sessions | `/sessions`, `/session <numéro/ID>`, `/rename <titre>`, `/fork` | Liste, bascule, renomme ou duplique une session |
 | Récupération des envois | `/delivery`, `/delivery retry <ID>` | Réexpédie les messages interrompus |
+| Isolation de fil | À activer dans les paramètres du compte Feishu / Lark | Isole les fils de réponse dans des contextes distincts (désactivé par défaut) |
+| Réponse silencieuse | `NO_REPLY` ou `<<<NO_REPLY>>>` dans la sortie du modèle | Termine le tour en silence sans cartes d'avertissement inutiles |
+
+### Fils de discussion Feishu et cartes interactives
+
+- **Réponses précises dans les fils** : Utilise précisément l'API `reply` de Feishu ciblant l'ID du message racine, évitant que les messages ne retombent dans le fil général du groupe.
+- **Extraction des cartes** : Extrait le texte et les boutons des cartes interactives Feishu avec troncature sécurisée automatique.
+- **Rappels des boutons dans les fils** : Les clics sur les boutons de carte interactive au sein d'un fil conservent le contexte d'origine pour les approbations et sélections.
+
+### Protocole de réponse silencieuse (`NO_REPLY`)
+
+Lorsque l'agent décide qu'aucune réponse visible n'est nécessaire pour l'utilisateur :
+- Le modèle émet `NO_REPLY` ou `<<<NO_REPLY>>>`.
+- La passerelle supprime totalement les cartes d'avertissement (« Traitement terminé sans résultat »).
 
 ### Titrage automatique des sujets Telegram
 

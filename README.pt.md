@@ -103,6 +103,10 @@ Acessível no painel em **Plugins → @michengai/dsh-im-connect**:
 - **Padrão**: Desativado (`off`)
 - **Função**: Envia a cadeia de pensamento no Telegram dentro de uma citação expansível (`<blockquote expandable>`).
 
+### 5. Isolamento de sessões de tópicos no Feishu (`threadSessions`)
+- **Padrão**: Desativado (`false`)
+- **Função**: Quando ativado, os tópicos de resposta em grupos do Feishu mantêm sessões e contextos isolados baseados no ID da mensagem raiz. Por padrão, todos os tópicos compartilham o contexto do grupo.
+
 ## Uso e comandos
 
 Abra **Configurações → Assistente IM**, clique em **Adicionar conta** e configure o espaço de trabalho, modelo, permissões e modo de envio.
@@ -118,6 +122,20 @@ Abra **Configurações → Assistente IM**, clique em **Adicionar conta** e conf
 | Modelo e raciocínio | `/models`, `/model <nome>`, `/reasoning [nível]` | Ajusta o modelo dinamicamente |
 | Gerenciar sessões | `/sessions`, `/session <número/ID>`, `/rename <título>`, `/fork` | Lista, alterna, renomeia ou duplica sessões |
 | Recuperação de envio | `/delivery`, `/delivery retry <ID>` | Reenvia mensagens interrompidas |
+| Isolamento de tópicos | Ativar nas configurações da conta Feishu / Lark | Mantém os tópicos de resposta em contextos isolados (padrão: desativado) |
+| Resposta silenciosa | `NO_REPLY` ou `<<<NO_REPLY>>>` na saída do modelo | Finaliza o turno silenciosamente sem cartões de aviso |
+
+### Tópicos do Feishu e cartões interativos
+
+- **Respostas precisas em tópicos**: Utiliza com precisão a API `reply` do Feishu direcionada ao ID da mensagem raiz, evitando que as mensagens caiam no chat principal.
+- **Extração de cartões**: Extrai texto e botões de cartões interativos do Feishu com truncamento seguro automático.
+- **Retorno de botões em tópicos**: Os cliques em botões de cartões interativos dentro de um tópico preservam o contexto original para aprovações e seleções.
+
+### Protocolo de resposta silenciosa (`NO_REPLY`)
+
+Quando o agente decide que nenhuma resposta visível ao usuário é necessária:
+- O modelo emite `NO_REPLY` ou `<<<NO_REPLY>>>`.
+- O gateway suprime totalmente os cartões de aviso ("Processamento concluído sem resultado").
 
 ### Nomenclatura automática de tópicos no Telegram
 

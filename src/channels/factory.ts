@@ -16,7 +16,7 @@ export function createChannelAdapter(
   config: Record<string, string>,
   log: (line: string) => void,
   stateDir: string,
-  options?: { accountId?: string; accountLabel?: string; host?: { get(name: string): unknown }; onWeixinBotToken?: (token: string | undefined) => void | Promise<void>; loadFeishuSdk?: () => Promise<any> },
+  options?: { accountId?: string; accountLabel?: string; host?: { get(name: string): unknown }; onWeixinBotToken?: (token: string | undefined) => void | Promise<void>; loadFeishuSdk?: () => Promise<typeof import('@larksuiteoapi/node-sdk')> },
 ): ChannelAdapter | undefined {
   let adapter: ChannelAdapter | undefined
   const imageOptions = ['qq', 'wecom', 'dingtalk'].includes(id)

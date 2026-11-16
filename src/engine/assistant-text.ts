@@ -1,5 +1,5 @@
-const SILENT_REPLY_RE = /^\s*NO_REPLY\s*$/
-const TRAILING_SILENT_RE = /\s+NO_REPLY\s*$/
+const SILENT_REPLY_RE = /^\s*(?:<<<)?NO_REPLY(?:>>>)?\s*$/i
+const TRAILING_SILENT_RE = /\s+(?:<<<)?NO_REPLY(?:>>>)?\s*$/i
 
 type AssistantContent = ReadonlyArray<{ type?: string; text?: string }> | null
 

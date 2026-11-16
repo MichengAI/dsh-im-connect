@@ -312,6 +312,17 @@ Native configuration options are provided here. Their values are persisted in `c
 - **Ranges**: `minChars` 0–4096 (also applied on final), `intervalMs` 1000–60000, `maxChars` 200–4096. Finite out-of-range values are clamped, nonfinite values use defaults. HTML escaping, labels, wrappers and truncation notes all fit the budget without splitting emoji surrogate pairs.
 - **Fallback**: only a definite HTML entity rejection switches to plain text, which persists for later edits in that turn. Unknown network outcomes, authentication failures and rate limits do not trigger a format-switch resend.
 
+### 5. Feishu thread session isolation (`threadSessions`)
+- **Default**: disabled (`false`)
+- **Description**: When enabled, message threads in Feishu group chats maintain independent sessions and conversation context bounded by their root message ID. When disabled, all threads share the main group session context.
+- **UI Configuration**: Toggle **Thread session isolation** directly in **Settings → IM Assistant → Feishu / Lark Account Settings**; takes effect dynamically via account restart upon saving.
+- **Example** (account or plugin configuration):
+  ```json
+  {
+    "threadSessions": "true"
+  }
+  ```
+
 ## Usage
 
 Open **Settings → IM Assistant**, select **Add account** under the target channel, then choose that account's workspace, model, permission, private-access mode, and send mode. To register a new workspace, click **Add workspace…** in the dropdown footer to invoke the system folder picker (manual path inputs are disallowed); hosts lacking native folder pickers show "This Host cannot create workspaces" (upgrade to one of the supported host releases listed in Requirements, or add via the host sidebar).
@@ -338,6 +349,8 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 | Approve a stranger DM | Open **Settings → IM Assistant** and approve or deny the pending request | Affects DM access only |
 | Answer an interactive question | Reply with an option number or text; separate multiple choices with commas, or enter a custom answer | Multiple questions arrive in order; only the initiating user can answer in a group |
 | Approve a tool | Reply `Approve` / `Deny` or `批准` / `拒绝` in a DM | Also accepts `yes` / `no` / `allow` / `reject`; group replies cannot grant |
+| Feishu thread isolation | Open Settings on the Feishu / Lark account row and toggle Thread session isolation | Group message threads maintain isolated sessions and context; disabled by default (shares group context) |
+| Silent reply protocol | Include `NO_REPLY` or `<<<NO_REPLY>>>` in the model output | When the agent determines no reply is required, the plugin silently finishes the turn without sending fallback notice cards |
 | Review on the web | Open the workspace **Channels** tab | IM sessions never appear under **Tasks** |
 
 After `/workspace`, `/new` and continuing after archiving the current session keep the selected workspace and use the account model, Agent preset, and permission preset. `/session` and `/fork` preserve the original session configuration.
@@ -347,6 +360,18 @@ Switching sessions stops output pushes from previous sessions to this chat, incl
 Explicitly binding a session with `/session` restores its output, including when selecting the current session again. Mute pauses assistant text and file output; approvals, questions, and task status notices still arrive. Switching or muting discards queued stream updates and cached text; an already sent partial card may remain visible, but the next output starts a fresh stream.
 
 DingTalk replies prefer official AI Card streaming. If card creation fails, plain text preserves line breaks; code fences and list markers remain literal. QQ replies use official markdown and keep headings, bold text, links, and tables; only a platform rejection falls back to plain text (where tables become lists). Telegram replies are sent as Rich Messages with Markdown so headings, bold text, and tables render, falling back to plain text when that method is unavailable; do not enable Webhook on the same bot. Feishu normal replies also use card Markdown, so headings and tables render; cards are split so none holds more than five tables, with a plain-text fallback. Long replies split with structure awareness: table chunks repeat the header, code fences are re-closed, and the `(n/m)` marker only prefixes prose chunks. `/help` is grouped as getting around / sessions and workspaces / models and reasoning / tasks and delivery, with one entry per feature and the usable aliases marked; group titles are bold while the rest of the command copy stays plain text, which keeps them scannable on a phone. Discord renders headings, bold text, code, and lists on the client but has no Markdown tables, and mobile clients cannot scroll horizontally, so pipe tables become a vertical block per row (first two columns as a bold title, remaining columns as `header: value`). Everything else is sent verbatim. Do not configure a Discord Interactions Endpoint URL, or button clicks will not arrive through the Gateway. Slack also has no Markdown tables and no `#` headings, so outgoing text is converted to mrkdwn: headings become a bold whole line, tables become the same vertical block, `**bold**` becomes `*bold*`, and links become `<url|label>`, while code fences stay untouched.
+
+### Feishu threads & interactive cards
+
+- **Accurate thread replies**: When replying to specific messages or threads in Feishu group chats, the assistant precisely invokes Feishu's `reply` API targeting the root message ID, eliminating fallback drops into the group lobby.
+- **Card message extraction**: Supports parsing Feishu interactive card content (recursively extracting text, buttons, and Markdown elements) with automatic safe truncation to prevent data loss.
+- **In-thread card button callbacks**: Interactive card button clicks within a thread preserve full original thread context, ensuring approvals and option selections resolve inside the correct thread.
+
+### Silent reply protocol (`NO_REPLY`)
+
+In group chats or automated workflows, when the agent decides no user-visible response is needed (e.g. routine background check passing, scheduled job completion, or mentions where speaking is unnecessary):
+- The model outputs `NO_REPLY` or `<<<NO_REPLY>>>` (either standalone or as a trailing marker).
+- The gateway detects the silent marker and finishes the turn silently, fully suppressing the "Processing completed with no deliverable result" placeholder card to keep chats clean.
 
 ### Telegram topic naming
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.42] - 2026-11-17
+
+### Feishu Threads & Reply Experience
+
+- **Thread session isolation**: Added a "Thread session isolation" toggle in Feishu and Lark account settings. When enabled, group message threads maintain isolated conversation sessions and context bounded by each thread; disabled by default (shares group context).
+- **Accurate in-thread replies**: Improved reply routing for Feishu group messages and threads, ensuring responses stay strictly within the original thread and eliminating unintended fallbacks to the main lobby.
+- **Interactive cards & buttons**: Added parsing support for Feishu interactive card messages; button interactions within a thread retain full thread context, ensuring approvals and option choices resolve in place.
+
+### Delivery & Silent Protocol
+
+- **Silent reply protocol**: Added support for `NO_REPLY` (and `<<<NO_REPLY>>>`) silent markers. When the assistant determines no user-visible response is needed, it finishes the turn silently without sending fallback notice cards.
+
 ## [1.0.41] - 2026-11-15
 
 ### UI & Layout Fixes
