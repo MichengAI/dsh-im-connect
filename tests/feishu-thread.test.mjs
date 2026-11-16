@@ -314,15 +314,141 @@ test('client.js 与 8 语字典包含 threadSessions 开关与文案绑定', asy
   assert.match(client, /"account\.threadSessions":\s*"Isolamento de sessões de tópicos"/)
 })
 
-test('factory.ts 严格判定 threadSessions 布尔值，避免字符串 false 误触发', async () => {
+test('factory.ts 严格判定 threadSessions 布尔值并影响入站会话隔离（N1 真实守护）', async t => {
   const { createChannelAdapter } = await import('../lib/channels/factory.js')
   const dir = (await import('node:os')).tmpdir()
 
-  // 1. 传入字符串 "false" 时，不能被判定为 true
-  const adapterFalse = createChannelAdapter('feishu', { appId: 'id', appSecret: 'sec', threadSessions: 'false' }, () => {}, dir)
-  assert.ok(adapterFalse)
+  let registeredDispatcherFalse
+  const sdkFalse = {
+    ...realSdk,
+    Client: class {
+      request = async () => ({ bot: { open_id: 'ou_bot' } })
+      im = { message: { create: async () => ({ code: 0 }), reply: async () => ({ code: 0 }) } }
+    },
+    EventDispatcher: class {
+      register(handlers) { registeredDispatcherFalse = handlers; return this }
+    },
+    WSClient: class { async start() {} close() {} },
+  }
 
-  // 2. 传入字符串 "true" 时，正常生效
-  const adapterTrue = createChannelAdapter('feishu', { appId: 'id', appSecret: 'sec', threadSessions: 'true' }, () => {}, dir)
+  let registeredDispatcherTrue
+  const sdkTrue = {
+    ...realSdk,
+    Client: class {
+      request = async () => ({ bot: { open_id: 'ou_bot' } })
+      im = { message: { create: async () => ({ code: 0 }), reply: async () => ({ code: 0 }) } }
+    },
+    EventDispatcher: class {
+      register(handlers) { registeredDispatcherTrue = handlers; return this }
+    },
+    WSClient: class { async start() {} close() {} },
+  }
+
+  // 1. 传入字符串 "false" 时，不能被判定为 true（保持群大厅会话）
+  const messagesFalse = []
+  const adapterFalse = createChannelAdapter('feishu', { appId: 'id', appSecret: 'sec', threadSessions: 'false' }, () => {}, dir, {
+    loadFeishuSdk: async () => sdkFalse,
+  })
+  assert.ok(adapterFalse)
+  t.after(() => adapterFalse.stop())
+  adapterFalse.setMessageHandler(msg => messagesFalse.push(msg))
+  await adapterFalse.start()
+
+  const onMessageFalse = registeredDispatcherFalse?.['im.message.receive_v1']
+  assert.ok(typeof onMessageFalse === 'function')
+  await onMessageFalse({
+    sender: { sender_id: { open_id: 'ou_user' } },
+    message: {
+      message_id: 'om_msg_quote',
+      root_id: 'om_root_quote',
+      chat_id: 'oc_chat_1',
+      chat_type: 'group',
+      message_type: 'text',
+      content: JSON.stringify({ text: '引用测试' }),
+      mentions: [{ id: { open_id: 'ou_bot' } }],
+    },
+  })
+  assert.equal(messagesFalse.length, 1)
+  assert.equal(messagesFalse[0].chatId, 'oc_chat_1', 'threadSessions 为字符串 false 时绝不能错误隔离会话')
+
+  // 2. 传入字符串 "true" 时，按 root_id 隔离为独立话题会话
+  const messagesTrue = []
+  const adapterTrue = createChannelAdapter('feishu', { appId: 'id', appSecret: 'sec', threadSessions: 'true' }, () => {}, dir, {
+    loadFeishuSdk: async () => sdkTrue,
+  })
   assert.ok(adapterTrue)
+  t.after(() => adapterTrue.stop())
+  adapterTrue.setMessageHandler(msg => messagesTrue.push(msg))
+  await adapterTrue.start()
+
+  const onMessageTrue = registeredDispatcherTrue?.['im.message.receive_v1']
+  assert.ok(typeof onMessageTrue === 'function')
+  await onMessageTrue({
+    sender: { sender_id: { open_id: 'ou_user' } },
+    message: {
+      message_id: 'om_msg_quote',
+      root_id: 'om_root_quote',
+      chat_id: 'oc_chat_1',
+      chat_type: 'group',
+      message_type: 'text',
+      content: JSON.stringify({ text: '引用测试' }),
+      mentions: [{ id: { open_id: 'ou_bot' } }],
+    },
+  })
+  assert.equal(messagesTrue.length, 1)
+  assert.equal(messagesTrue[0].chatId, 'oc_chat_1:om_root_quote', 'threadSessions 为字符串 true 时必须正确按 root_id 隔离')
+})
+
+test('manager 侧 threadSessions 持久化与重连路径覆盖（N2 真实守护）', async t => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { ChannelManager } = await import('../lib/manager.js')
+
+  const stateDir = mkdtempSync(join(tmpdir(), 'im-connect-manager-thread-'))
+  const manager = new ChannelManager({
+    ctx: { permissionPresets: { names: ['review'], defaultPreset: 'review', optionOf: (n) => ({ value: n, name: n }) } },
+    stateDir,
+    log: () => undefined,
+    engineConfig: { cwd: stateDir, provider: 'p', model: 'm' },
+  })
+  t.after(() => {
+    manager.disposeApi()
+    rmSync(stateDir, { recursive: true, force: true })
+  })
+
+  // 预置飞书账号
+  manager.store.channels['feishu:test1'] = {
+    platform: 'feishu',
+    enabled: true,
+    config: { appId: 'id1', appSecret: 'sec1' },
+  }
+
+  let restartedCount = 0
+  manager.running.set('feishu:test1', {
+    status: () => '已连接',
+    stop() {},
+    start: async () => {},
+  })
+  manager.startOne = async (id) => {
+    if (id === 'feishu:test1') restartedCount++
+  }
+
+  // 1. 开启 threadSessions: true
+  const res1 = await manager.updateAccount('feishu:test1', { threadSessions: true })
+  assert.equal(res1.ok, true)
+  assert.equal(res1.account.threadSessions, true)
+  assert.equal(manager.store.channels['feishu:test1'].config.threadSessions, 'true')
+  assert.equal(restartedCount, 1, '启用 threadSessions 必须触发 startOne 重启')
+
+  // 2. 状态未变更时，不重复触发重启
+  await manager.updateAccount('feishu:test1', { threadSessions: true })
+  assert.equal(restartedCount, 1, '状态未变时不应重启')
+
+  // 3. 关闭 threadSessions: false
+  const res2 = await manager.updateAccount('feishu:test1', { threadSessions: false })
+  assert.equal(res2.ok, true)
+  assert.equal(res2.account.threadSessions, false)
+  assert.equal(manager.store.channels['feishu:test1'].config.threadSessions, undefined)
+  assert.equal(restartedCount, 2, '关闭 threadSessions 必须触发 startOne 重启')
 })

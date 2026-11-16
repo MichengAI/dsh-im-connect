@@ -69,6 +69,20 @@ test('extractFeishuCardText 递归提取飞书卡片文本内容', () => {
   assert.equal(truncatedDefault.length, 4000, '默认截断到 4000 字符')
   const truncatedCustom = extractFeishuCardText(JSON.stringify(longCard), 200)
   assert.equal(truncatedCustom.length, 200, '支持自定义上限截断')
+
+  // 6. 多元素卡片累加截断守护（N3 真实守护：验证 parts.join('\n').slice(0, maxChars) 最终截断）
+  const multiElements = Array.from({ length: 45 }, (_, i) => ({
+    tag: 'div',
+    text: { tag: 'plain_text', content: `第${i + 1}行说明文本: `.padEnd(100, 'x') },
+  }))
+  const multiCard = {
+    header: { title: { content: '卡片标题前缀: '.padEnd(100, 'h') } },
+    elements: multiElements,
+  }
+  const multiTruncatedDefault = extractFeishuCardText(JSON.stringify(multiCard))
+  assert.equal(multiTruncatedDefault.length, 4000, '多元素累加拼接换行符后总长度必须严格等于 4000')
+  const multiTruncatedCustom = extractFeishuCardText(JSON.stringify(multiCard), 500)
+  assert.equal(multiTruncatedCustom.length, 500, '多元素累加自定义上限必须严格等于 500')
 })
 
 test('resolveFeishuContent 支持 interactive 消息类型并提取卡片文本', async () => {

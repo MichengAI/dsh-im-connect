@@ -7,5 +7,6 @@ export declare function createChannelAdapter(id: ChannelId, config: Record<strin
         get(name: string): unknown;
     };
     onWeixinBotToken?: (token: string | undefined) => void | Promise<void>;
+    loadFeishuSdk?: () => Promise<any>;
 }): ChannelAdapter | undefined;
 //# sourceMappingURL=factory.d.ts.map
