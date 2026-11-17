@@ -18,6 +18,24 @@ export const FEISHU_COT_COMPLETE_API = '/open-apis/im/v1/message_cot/complete'
 /** 飞书 message_cot 单个事件内容字符上限保护，避免 10001 AppendCOTEvents: event[0] content too long */
 export const FEISHU_COT_CHUNK_SIZE = 800
 
+/** 按 Unicode 码点安全切分文本，严禁在 Emoji 代理对之间切开产生孤立代理 */
+export function chunkByCodePoints(text: string, maxChunkLength: number): string[] {
+  if (text.length <= maxChunkLength) return [text]
+  const chunks: string[] = []
+  let currentChunk = ''
+  for (const char of text) {
+    if (currentChunk.length + char.length > maxChunkLength && currentChunk.length > 0) {
+      chunks.push(currentChunk)
+      currentChunk = ''
+    }
+    currentChunk += char
+  }
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk)
+  }
+  return chunks
+}
+
 interface CotEvent {
   event_type: string
   content: string
@@ -518,9 +536,9 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
                     enable_badge: false,
                     update_feed_rank: false,
                   },
-                }) as { code?: number; data?: { cot_id?: string; message_id?: string } } | undefined
+                }) as { code?: number | string; data?: { cot_id?: string; message_id?: string } } | undefined
 
-                if (!res || res.code !== 0 || !res.data?.cot_id || !res.data?.message_id) {
+                if (!res || isRejectedCode(res.code) || !res.data?.cot_id || !res.data?.message_id) {
                   log(`[${id}] 原生 message_cot 创建失败 (code=${res?.code})，降级为卡片折叠显示`)
                   current.mode = 'card'
                 } else {
@@ -541,8 +559,8 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
                 }
 
                 if (delta.length > 0) {
-                  for (let i = 0; i < delta.length; i += FEISHU_COT_CHUNK_SIZE) {
-                    const chunk = delta.slice(i, i + FEISHU_COT_CHUNK_SIZE)
+                  const chunks = chunkByCodePoints(delta, FEISHU_COT_CHUNK_SIZE)
+                  for (const chunk of chunks) {
                     events.push(cotEvent('REASONING_MESSAGE_CONTENT', { messageId: reasoningMessageId, delta: chunk }, current))
                   }
                   current.sentChars = processedText.length
@@ -562,17 +580,20 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
                       message_id: current.cotMessageId,
                       events,
                     },
-                  }) as { code?: number; msg?: string } | undefined
+                  }) as { code?: number | string; msg?: string } | undefined
 
-                  if (putRes && putRes.code !== 0) {
-                    log(`[${id}] 原生 CoT 事件写入被拒 (code=${putRes.code}, msg=${putRes.msg})，降级为卡片折叠`)
+                  if (!putRes || isRejectedCode(putRes.code)) {
+                    log(`[${id}] 原生 CoT 事件写入被拒 (code=${putRes?.code}, msg=${putRes?.msg})，降级为卡片折叠`)
                     current.mode = 'card'
                   } else if (next.options?.final) {
                     try {
-                      await client.request({
+                      const completeRes = await client.request({
                         method: 'POST',
                         url: `${FEISHU_COT_COMPLETE_API}/${current.cotId}?message_id=${current.cotMessageId}&reason=done`,
-                      })
+                      }) as { code?: number | string; msg?: string } | undefined
+                      if (!completeRes || isRejectedCode(completeRes.code)) {
+                        log(`[${id}] 原生 CoT 完成收口通知被拒 (code=${completeRes?.code}, msg=${completeRes?.msg})`)
+                      }
                     } catch (completeErr) {
                       log(`[${id}] 原生 CoT 完成收口通知异常: ${completeErr instanceof Error ? completeErr.message : String(completeErr)}`)
                     }

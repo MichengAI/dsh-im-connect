@@ -444,3 +444,131 @@ test('Feishu sendThinking: PUT message_cot 返回业务错误码（如 10001）�
 
   await channel.stop()
 })
+
+test('Feishu sendThinking: 分片安全切分 Unicode 码点，严禁将 Emoji 代理对截断切开', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_card_fallback' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'POST') {
+          return { code: 0, data: { cot_id: 'cot_emoji_1', message_id: 'om_cot_emoji_1' } }
+        }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'PUT') {
+          return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const logs = []
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, (line) => logs.push(line), async () => mockSdk)
+  await channel.start()
+
+  // 构造在第 800 UTF-16 单元处跨越 emoji (😀: \\uD83D\\uDE00) 的思考内容
+  // 799 个 'A' + 1 个 '😀' (长度2) + 10 个 'B' = 总长 811
+  const emojiText = 'A'.repeat(799) + '😀' + 'B'.repeat(10)
+  await channel.sendThinking('oc_emoji_chat', emojiText, { streamId: 'stream-emoji', final: false })
+
+  const putCall = requests.find(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(putCall, '必须发起 PUT 请求')
+  const contentEvents = putCall.data.events.filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+  assert.equal(contentEvents.length, 2, '811 长度且切分点在 799 处跨 emoji 应分为 2 个分片')
+
+  const chunk0 = JSON.parse(contentEvents[0].content).delta
+  const chunk1 = JSON.parse(contentEvents[1].content).delta
+
+  // 严禁产生孤立代理对：正则匹配单独的高代理（\\uD800-\\uDBFF）或低代理（\\uDC00-\\uDFFF）
+  const loneSurrogateRegex = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+  assert.equal(loneSurrogateRegex.test(chunk0), false, `分片 0 严禁包含孤立代理对: ${chunk0.slice(-5)}`)
+  assert.equal(loneSurrogateRegex.test(chunk1), false, `分片 1 严禁包含孤立代理对: ${chunk1.slice(0, 5)}`)
+  assert.equal(chunk0.length, 799, '分片 0 遇到 emoji 无法完整容纳时应在 799 处提前截断')
+  assert.ok(chunk1.startsWith('😀'), '分片 1 开头必须是完整的 emoji 😀')
+  assert.equal(chunk0 + chunk1, emojiText, '两分片重组后必须与原文完全一致')
+
+  await channel.stop()
+})
+
+test('Feishu sendThinking: PUT 返回 undefined 或非零业务码时降级且不调用 complete，字符串零码正常成功', async () => {
+  const requests = []
+  const logs = []
+  let putResponse = undefined
+  let completeResponse = { code: 99999, msg: 'cot complete rejected' }
+
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async (opts) => ({ code: 0, data: { message_id: 'om_card_fallback' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/message_cot/complete') && opts.method === 'POST') {
+          return completeResponse
+        }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'POST') {
+          return { code: 0, data: { cot_id: 'cot_put_test', message_id: 'om_cot_put' } }
+        }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'PUT') {
+          return putResponse
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, (line) => logs.push(line), async () => mockSdk)
+  await channel.start()
+
+  // 1. PUT 返回 undefined：模拟底层 HTTP 失败或 SDK 返回空
+  putResponse = undefined
+  await channel.sendThinking('oc_put_chat', '测试 undefined 响应', { streamId: 'stream-put-1', final: true })
+
+  assert.ok(logs.some(l => l.includes('原生 CoT 事件写入被拒')), 'PUT 返回 undefined 时必须记录被拒警告')
+  const completeCalled = requests.some(r => r.url.includes('/message_cot/complete'))
+  assert.equal(completeCalled, false, 'PUT 写入未成功（undefined）时绝不能调用 complete 接口')
+
+  // 2. PUT 返回 { code: "0" }（字符串零码）应判定为成功，且 complete 返回错误码时记录告警
+  requests.length = 0
+  logs.length = 0
+  putResponse = { code: '0', msg: 'ok' }
+  completeResponse = { code: '10005', msg: 'already completed' }
+
+  await channel.sendThinking('oc_put_chat_2', '测试字符串 0 码', { streamId: 'stream-put-2', final: true })
+
+  assert.equal(logs.some(l => l.includes('原生 CoT 事件写入被拒')), false, '字符串零码 code: "0" 严禁误判为被拒')
+  const completeCalled2 = requests.some(r => r.url.includes('/message_cot/complete'))
+  assert.equal(completeCalled2, true, 'PUT 返回字符串零码成功后，final 帧应调用 complete 接口')
+  assert.ok(logs.some(l => l.includes('原生 CoT 完成收口通知被拒 (code=10005')), 'complete 接口返回非零码时必须记录告警日志')
+
+  await channel.stop()
+})

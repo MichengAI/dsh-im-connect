@@ -5,6 +5,8 @@ export declare const FEISHU_COT_API = "/open-apis/im/v1/message_cot";
 export declare const FEISHU_COT_COMPLETE_API = "/open-apis/im/v1/message_cot/complete";
 /** 飞书 message_cot 单个事件内容字符上限保护，避免 10001 AppendCOTEvents: event[0] content too long */
 export declare const FEISHU_COT_CHUNK_SIZE = 800;
+/** 按 Unicode 码点安全切分文本，严禁在 Emoji 代理对之间切开产生孤立代理 */
+export declare function chunkByCodePoints(text: string, maxChunkLength: number): string[];
 /** 按表格数量拆正文，保证每张卡不超上限，且不会把表格切一半。 */
 export declare function splitByTableLimit(text: string, maxTables?: number): string[];
 /**
