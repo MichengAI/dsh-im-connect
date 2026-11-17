@@ -61,7 +61,7 @@ export const Config: Schema<PluginConfig> = Schema.object({
     minChars: Schema.number().default(120).description('累计到这个字数才发第一条思考消息。'),
     intervalMs: Schema.number().default(2000).description('两次思考消息刷新之间的最小间隔（毫秒）。'),
     maxChars: Schema.number().default(3500).description('单条思考消息允许的最大字符数。'),
-  }).description('思考过程折叠消息；需要渠道实现 sendThinking（目前为 Telegram）。'),
+  }).description('思考过程折叠消息；需要渠道实现 sendThinking（目前支持 Telegram、飞书与 Lark）。'),
 })
 
 export function apply(ctx: Context, config: PluginConfig): void {

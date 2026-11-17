@@ -14,6 +14,9 @@ import { markdownTableOffsets } from '../engine/split.js'
 export const FEISHU_CARD_MAX_TABLES = 5
 
 export const FEISHU_COT_API = '/open-apis/im/v1/message_cot'
+export const FEISHU_COT_COMPLETE_API = '/open-apis/im/v1/message_cot/complete'
+/** 飞书 message_cot 单个事件内容字符上限保护，避免 10001 AppendCOTEvents: event[0] content too long */
+export const FEISHU_COT_CHUNK_SIZE = 800
 
 interface CotEvent {
   event_type: string
@@ -21,13 +24,13 @@ interface CotEvent {
   timestamp: string
 }
 
-let lastCotTimestamp = 0
-function cotEvent(eventType: string, content: Record<string, unknown>): CotEvent {
-  lastCotTimestamp = Math.max(Date.now(), lastCotTimestamp + 1)
+function cotEvent(eventType: string, content: Record<string, unknown>, state?: FeishuThinkingState): CotEvent {
+  const now = Date.now()
+  const ts = state ? (state.lastCotTimestamp = Math.max(now, (state.lastCotTimestamp ?? 0) + 1)) : now
   return {
     event_type: eventType,
     content: JSON.stringify(content),
-    timestamp: String(lastCotTimestamp),
+    timestamp: String(ts),
   }
 }
 
@@ -39,6 +42,7 @@ interface FeishuThinkingState {
   cotMessageId?: string
   sentChars: number
   reasoningStarted?: boolean
+  lastCotTimestamp?: number
   cardMessageId?: string
   scope: AbortController
   guard: { signal: AbortSignal; isCurrent?: () => boolean }
@@ -478,6 +482,29 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           const runId = next.options?.streamId ?? 'turn'
           const label = next.options?.label ?? (next.options?.final ? '🧠 思考过程' : '🧠 思考中…')
 
+          // 文本预算与截断处理（对齐 maxChars 与 truncated 契约）
+          const requestedMaxChars = typeof next.options?.maxChars === 'number' && Number.isFinite(next.options.maxChars)
+            ? next.options.maxChars
+            : 3500
+          const maxChars = Math.min(4096, Math.max(200, Math.floor(requestedMaxChars)))
+          const TRUNCATED_NOTE = '\n\n…（已截断，完整内容见网页会话）'
+
+          let processedText = next.text
+          let isTruncated = next.options?.truncated === true
+          if (processedText.length > maxChars) {
+            let end = 0
+            const budget = Math.max(0, maxChars - TRUNCATED_NOTE.length)
+            for (const char of processedText) {
+              if (end + char.length > budget) break
+              end += char.length
+            }
+            processedText = processedText.slice(0, end)
+            isTruncated = true
+          }
+          if (isTruncated && !processedText.endsWith(TRUNCATED_NOTE)) {
+            processedText += TRUNCATED_NOTE
+          }
+
           // 1. 尝试原生 CoT 模式
           if (current.mode === 'cot') {
             try {
@@ -503,28 +530,31 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               }
 
               if (current.mode === 'cot' && current.cotId && current.cotMessageId) {
-                const delta = next.text.slice(current.sentChars)
+                const delta = processedText.slice(current.sentChars)
                 const events: CotEvent[] = []
                 const reasoningMessageId = `reasoning-${runId}`
 
                 if (!current.reasoningStarted) {
-                  events.push(cotEvent('RUN_STARTED', { threadId: targetChatId, runId }))
-                  events.push(cotEvent('REASONING_MESSAGE_START', { messageId: reasoningMessageId, role: 'reasoning' }))
+                  events.push(cotEvent('RUN_STARTED', { threadId: targetChatId, runId }, current))
+                  events.push(cotEvent('REASONING_MESSAGE_START', { messageId: reasoningMessageId, role: 'reasoning' }, current))
                   current.reasoningStarted = true
                 }
 
                 if (delta.length > 0) {
-                  events.push(cotEvent('REASONING_MESSAGE_CONTENT', { messageId: reasoningMessageId, delta }))
-                  current.sentChars = next.text.length
+                  for (let i = 0; i < delta.length; i += FEISHU_COT_CHUNK_SIZE) {
+                    const chunk = delta.slice(i, i + FEISHU_COT_CHUNK_SIZE)
+                    events.push(cotEvent('REASONING_MESSAGE_CONTENT', { messageId: reasoningMessageId, delta: chunk }, current))
+                  }
+                  current.sentChars = processedText.length
                 }
 
                 if (next.options?.final) {
-                  events.push(cotEvent('REASONING_MESSAGE_END', { messageId: reasoningMessageId }))
-                  events.push(cotEvent('RUN_FINISHED', { threadId: targetChatId, runId, status: 'done' }))
+                  events.push(cotEvent('REASONING_MESSAGE_END', { messageId: reasoningMessageId }, current))
+                  events.push(cotEvent('RUN_FINISHED', { threadId: targetChatId, runId, status: 'done' }, current))
                 }
 
                 if (events.length > 0) {
-                  await client.request({
+                  const putRes = await client.request({
                     method: 'PUT',
                     url: FEISHU_COT_API,
                     data: {
@@ -532,7 +562,21 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
                       message_id: current.cotMessageId,
                       events,
                     },
-                  })
+                  }) as { code?: number; msg?: string } | undefined
+
+                  if (putRes && putRes.code !== 0) {
+                    log(`[${id}] 原生 CoT 事件写入被拒 (code=${putRes.code}, msg=${putRes.msg})，降级为卡片折叠`)
+                    current.mode = 'card'
+                  } else if (next.options?.final) {
+                    try {
+                      await client.request({
+                        method: 'POST',
+                        url: `${FEISHU_COT_COMPLETE_API}/${current.cotId}?message_id=${current.cotMessageId}&reason=done`,
+                      })
+                    } catch (completeErr) {
+                      log(`[${id}] 原生 CoT 完成收口通知异常: ${completeErr instanceof Error ? completeErr.message : String(completeErr)}`)
+                    }
+                  }
                 }
               }
             } catch (error) {
@@ -558,7 +602,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
                       border: { color: 'grey' },
                       expanded: false,
                       elements: [
-                        { tag: 'markdown', content: next.text },
+                        { tag: 'markdown', content: processedText },
                       ],
                     },
                   ],

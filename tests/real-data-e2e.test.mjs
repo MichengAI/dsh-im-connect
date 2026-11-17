@@ -1,125 +1,138 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync, copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { ChannelManager } from '../lib/manager.js'
 import { createFeishuChannel, FEISHU_COT_API, feishuChatId } from '../lib/channels/feishu.js'
 
-const REAL_STATE_DIR = 'C:/Users/YUJIYU/.dsh/dsh-im-connect'
-const REAL_CHANNELS_FILE = join(REAL_STATE_DIR, 'channels.json')
-
-const DEFAULT_REAL_SNAPSHOT = {
+// 隔离的多渠道真实配置模型快照（覆盖企业微信、QQ、微信、Discord、Telegram、Slack 6 大平台）
+const MOCK_MULTI_CHANNEL_SNAPSHOT = {
   channels: {
-    wecom_fd9b3196299e: { platform: 'wecom', enabled: true, receiveEnabled: true, privateAccess: 'all', config: { botId: 'test_bot' } },
-    qq_d54826896596: { platform: 'qq', enabled: true, receiveEnabled: true, privateAccess: 'approved', config: { appId: '123456' } },
-    weixin_34a2f05efca4: { platform: 'weixin', enabled: true, receiveEnabled: true, privateAccess: 'approved', config: { botToken: 'test_token' } },
-    discord_05e9a2042dac: { platform: 'discord', enabled: true, receiveEnabled: true, privateAccess: 'approved', config: { token: 'test_token' } },
-    telegram_3d638421d91b: { platform: 'telegram', enabled: true, receiveEnabled: true, privateAccess: 'approved', config: { botToken: 'test_token' } },
-    slack_a4d8b18512cd: { platform: 'slack', enabled: true, receiveEnabled: true, privateAccess: 'approved', config: { botToken: 'test_token', appToken: 'test_app' } }
+    wecom_mock_1: {
+      platform: 'wecom', enabled: true, receiveEnabled: true, privateAccess: 'all',
+      assistant: { provider: 'test', model: 'test' },
+      config: { botId: 'test_bot_wecom' }
+    },
+    qq_mock_1: {
+      platform: 'qq', enabled: true, receiveEnabled: true, privateAccess: 'approved',
+      assistant: { provider: 'test', model: 'test' },
+      config: { appId: '12345678' }
+    },
+    weixin_mock_1: {
+      platform: 'weixin', enabled: true, receiveEnabled: true, privateAccess: 'approved',
+      assistant: { provider: 'test', model: 'test' },
+      config: { botToken: 'test_token_wx' }
+    },
+    discord_mock_1: {
+      platform: 'discord', enabled: true, receiveEnabled: true, privateAccess: 'approved',
+      assistant: { provider: 'test', model: 'test' },
+      config: { token: 'test_token_dc' }
+    },
+    telegram_mock_1: {
+      platform: 'telegram', enabled: true, receiveEnabled: true, privateAccess: 'approved',
+      assistant: { provider: 'test', model: 'test' },
+      config: { botToken: 'test_token_tg' }
+    },
+    slack_mock_1: {
+      platform: 'slack', enabled: true, receiveEnabled: true, privateAccess: 'approved',
+      assistant: { provider: 'test', model: 'test' },
+      config: { botToken: 'test_token_slack', appToken: 'test_app_token' }
+    }
   }
 }
 
-function loadRealChannelsData() {
-  if (existsSync(REAL_CHANNELS_FILE)) {
-    return JSON.parse(readFileSync(REAL_CHANNELS_FILE, 'utf8'))
-  }
-  return DEFAULT_REAL_SNAPSHOT
-}
-
-test('真实数据加载与账号状态视图完整性验证', async () => {
-  const data = loadRealChannelsData()
-  assert.ok(data.channels && typeof data.channels === 'object', '真实 channels 必须是对象')
-
-  // 创建一个真实数据的隔离测试环境
-  const tempDir = mkdtempSync(join(tmpdir(), 'dsh-real-data-test-'))
+test('多渠道真实配置结构加载与账号状态视图完整性验证', async (t) => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'dsh-e2e-state-'))
   const testChannelsFile = join(tempDir, 'channels.json')
-  writeFileSync(testChannelsFile, JSON.stringify(data, null, 2), 'utf8')
+  writeFileSync(testChannelsFile, JSON.stringify(MOCK_MULTI_CHANNEL_SNAPSHOT, null, 2), 'utf8')
 
-  try {
-    const logs = []
-    const log = (msg) => logs.push(msg)
-    const ctx = {
-      emit: () => {},
-      on: () => () => {},
-      logger: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
-      permissionPresets: { defaultPreset: 'standard' },
-    }
+  const logs = []
+  const log = (msg) => logs.push(msg)
+  const ctx = {
+    emit: () => {},
+    on: () => () => {},
+    logger: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
+    permissionPresets: { defaultPreset: 'standard' },
+  }
 
-    const manager = new ChannelManager({
-      ctx,
-      stateDir: tempDir,
-      log,
-      engineConfig: { cwd: process.cwd() }
-    })
+  const manager = new ChannelManager({
+    ctx,
+    stateDir: tempDir,
+    log,
+    engineConfig: { cwd: process.cwd(), provider: 'test', model: 'test' }
+  })
+  // 严格 stub 启动逻辑：确保纯本地执行，严禁触发真实外网网络请求
+  manager.startOne = async (accountId) => {
+    // 纯本地启动成功，不向任何外部服务发请求
+  }
 
-    // 1. 验证 list() 能够正确反映真实数据中的所有渠道
-    const list = manager.list()
-    assert.ok(Array.isArray(list), 'list() 必须是数组')
-    assert.ok(list.length >= 8, '渠道总数必须覆盖所有官方渠道')
-
-    // 检查真实已配置的平台
-    const configuredPlatforms = new Set(Object.values(data.channels).map(c => c.platform))
-    for (const p of configuredPlatforms) {
-      const item = list.find(c => c.id === p)
-      assert.ok(item, `真实配置的平台 ${p} 必须出现在 list 中`)
-      assert.ok(item.total > 0, `真实配置的平台 ${p} 账号总数必须大于 0`)
-      assert.ok(item.accounts.length > 0, `真实配置的平台 ${p} 账号列表必须不为空`)
-    }
-
-    // 2. 验证 Telegram 账号支持 thinkingDisplay 配置持久化与读取
-    const tgAccount = Object.entries(data.channels).find(([_, c]) => c.platform === 'telegram')
-    if (tgAccount) {
-      const [tgId] = tgAccount
-      const res1 = await manager.updateAccount(tgId, { thinkingDisplay: true })
-      assert.equal(res1.ok, true)
-      let account = manager.list().flatMap(c => c.accounts).find(a => a.id === tgId)
-      assert.equal(account.thinkingDisplay, true, '真实 Telegram 账号能够开启 thinkingDisplay')
-
-      const res2 = await manager.updateAccount(tgId, { thinkingDisplay: false })
-      assert.equal(res2.ok, true)
-      account = manager.list().flatMap(c => c.accounts).find(a => a.id === tgId)
-      assert.equal(account.thinkingDisplay, false, '真实 Telegram 账号能够关闭 thinkingDisplay')
-    }
-
-    // 3. 验证向真实数据结构中添加并更新飞书账号（带 thinkingDisplay 与 threadSessions）
-    const created = await manager.connect('feishu', { appId: 'cli_test_real', appSecret: 'sec_test_real' }, {
-      provider: 'test', model: 'test', cwd: process.cwd(), permission: 'review', privateAccess: 'approved',
-    })
-    assert.ok(created.accountId, '必须分配飞书 accountId')
-    const feishuId = created.accountId
-
-    const updateRes = await manager.updateAccount(feishuId, {
-      thinkingDisplay: true,
-      threadSessions: true,
-    })
-    assert.equal(updateRes.ok, true)
-    assert.equal(updateRes.account.thinkingDisplay, true)
-    assert.equal(updateRes.account.threadSessions, true)
-
-    // 4. 验证重新从磁盘加载（冷重启），真实格式持久化完整无损
-    const restartedManager = new ChannelManager({
-      ctx,
-      stateDir: tempDir,
-      log,
-      engineConfig: { cwd: process.cwd() }
-    })
-    const reloadedFeishu = restartedManager.list().flatMap(c => c.accounts).find(a => a.id === feishuId)
-    assert.equal(reloadedFeishu.thinkingDisplay, true, '重启后飞书 thinkingDisplay 依然保持开启')
-    assert.equal(reloadedFeishu.threadSessions, true, '重启后飞书 threadSessions 依然保持开启')
-
-    // 验证原有的真实账号数据在经过新增和更新操作后完整未被污染
-    const reloadedChannels = JSON.parse(readFileSync(testChannelsFile, 'utf8')).channels
-    for (const [origId, origVal] of Object.entries(data.channels)) {
-      assert.ok(reloadedChannels[origId], `原有真实账号 ${origId} 必须保留`)
-      assert.equal(reloadedChannels[origId].platform, origVal.platform, `原有账号 ${origId} 平台类型不变`)
-    }
-  } finally {
+  t.after(() => {
+    manager.disposeApi()
     rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  // 1. 验证 list() 能够正确反映配置快照中的所有 6 个渠道与平台总览
+  const list = manager.list()
+  assert.ok(Array.isArray(list), 'list() 必须是数组')
+  assert.ok(list.length >= 8, '渠道总数必须覆盖所有官方渠道定义')
+
+  const configuredPlatforms = new Set(Object.values(MOCK_MULTI_CHANNEL_SNAPSHOT.channels).map(c => c.platform))
+  for (const p of configuredPlatforms) {
+    const item = list.find(c => c.id === p)
+    assert.ok(item, `配置的平台 ${p} 必须出现在 list 中`)
+    assert.equal(item.total, 1, `配置的平台 ${p} 账号总数必须为 1`)
+    assert.equal(item.accounts.length, 1, `配置的平台 ${p} 账号列表长度必须为 1`)
+  }
+
+  // 2. 验证 Telegram 账号支持 thinkingDisplay 配置持久化与读取
+  const tgId = 'telegram_mock_1'
+  const res1 = await manager.updateAccount(tgId, { thinkingDisplay: true })
+  assert.equal(res1.ok, true)
+  let account = manager.list().flatMap(c => c.accounts).find(a => a.id === tgId)
+  assert.equal(account.thinkingDisplay, true, 'Telegram 账号能够开启 thinkingDisplay')
+
+  const res2 = await manager.updateAccount(tgId, { thinkingDisplay: false })
+  assert.equal(res2.ok, true)
+  account = manager.list().flatMap(c => c.accounts).find(a => a.id === tgId)
+  assert.equal(account.thinkingDisplay, false, 'Telegram 账号能够关闭 thinkingDisplay')
+
+  // 3. 验证向数据结构中添加并更新飞书账号（带 thinkingDisplay 与 threadSessions）
+  const created = await manager.connect('feishu', { appId: 'cli_test_mock', appSecret: 'sec_test_mock' }, {
+    provider: 'test', model: 'test', cwd: process.cwd(), permission: 'review', privateAccess: 'approved',
+  })
+  assert.equal(created.ok, true, '使用 stub startOne 连接必须明确返回 ok: true')
+  assert.ok(created.accountId, '必须分配飞书 accountId')
+  const feishuId = created.accountId
+
+  const updateRes = await manager.updateAccount(feishuId, {
+    thinkingDisplay: true,
+    threadSessions: true,
+  })
+  assert.equal(updateRes.ok, true)
+  assert.equal(updateRes.account.thinkingDisplay, true)
+  assert.equal(updateRes.account.threadSessions, true)
+
+  // 4. 验证重新从磁盘加载（冷重启），多渠道真实配置格式持久化完整无损
+  const restartedManager = new ChannelManager({
+    ctx,
+    stateDir: tempDir,
+    log,
+    engineConfig: { cwd: process.cwd(), provider: 'test', model: 'test' }
+  })
+  const reloadedFeishu = restartedManager.list().flatMap(c => c.accounts).find(a => a.id === feishuId)
+  assert.equal(reloadedFeishu.thinkingDisplay, true, '重启后飞书 thinkingDisplay 依然保持开启')
+  assert.equal(reloadedFeishu.threadSessions, true, '重启后飞书 threadSessions 依然保持开启')
+
+  // 验证原有的 6 个平台账号数据在经过新增和更新操作后完整未被污染
+  const reloadedChannels = JSON.parse(readFileSync(testChannelsFile, 'utf8')).channels
+  for (const [origId, origVal] of Object.entries(MOCK_MULTI_CHANNEL_SNAPSHOT.channels)) {
+    assert.ok(reloadedChannels[origId], `原有真实账号 ${origId} 必须保留`)
+    assert.equal(reloadedChannels[origId].platform, origVal.platform, `原有账号 ${origId} 平台类型不变`)
   }
 })
 
-test('真实数据环境下飞书原生 CoT 与话题串降级端到端链路', async () => {
+test('飞书原生 CoT 与话题串降级端到端链路验证', async () => {
   const createdCards = []
   const cotCalls = []
   const mockSdk = {
@@ -186,15 +199,18 @@ test('真实数据环境下飞书原生 CoT 与话题串降级端到端链路', 
 
   // 1. 普通聊天流（非话题）：走原生 message_cot
   const dmChatId = 'oc_regular_group_or_dm'
-  await channel.sendThinking(dmChatId, '第一阶段思考：正在分析真实数据结构...')
-  await channel.sendThinking(dmChatId, '第二阶段思考：分析完成，准备执行。')
+  await channel.sendThinking(dmChatId, '第一阶段思考：正在分析数据结构...')
+  await channel.sendThinking(dmChatId, '第二阶段思考：分析完成，准备执行。', { final: true })
 
-  const postCot = cotCalls.find(c => c.url.includes(FEISHU_COT_API) && c.method === 'POST')
+  const postCot = cotCalls.find(c => c.url.includes(FEISHU_COT_API) && c.method === 'POST' && !c.url.includes('complete'))
   assert.ok(postCot, '普通消息必须发起 POST 请求创建原生思考消息')
   assert.equal(postCot.data.receive_id, dmChatId)
 
   const putCots = cotCalls.filter(c => c.url.includes(FEISHU_COT_API) && c.method === 'PUT')
   assert.ok(putCots.length > 0, '普通消息必须发起 PUT 请求推送思考事件')
+
+  const completeCot = cotCalls.find(c => c.url.includes('/message_cot/complete'))
+  assert.ok(completeCot, 'final 帧必须调用 complete 端点')
 
   // 2. 话题串内部（带 threadId）：自动平滑降级为可折叠卡片，且绝不出串
   const threadChatId = feishuChatId('oc_regular_group_or_dm', 'om_thread_root_999')
@@ -210,45 +226,60 @@ test('真实数据环境下飞书原生 CoT 与话题串降级端到端链路', 
   await channel.stop()
 })
 
-test('真实数据环境下各渠道诊断与策略完整性验证', async () => {
-  const data = loadRealChannelsData()
-  const tempDir = mkdtempSync(join(tmpdir(), 'dsh-real-data-diag-'))
+test('各渠道账号诊断策略与健康检查完整性验证', async (t) => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'dsh-diag-test-'))
   const testChannelsFile = join(tempDir, 'channels.json')
-  writeFileSync(testChannelsFile, JSON.stringify(data, null, 2), 'utf8')
+  writeFileSync(testChannelsFile, JSON.stringify(MOCK_MULTI_CHANNEL_SNAPSHOT, null, 2), 'utf8')
 
-  try {
-    const logs = []
-    const ctx = {
-      emit: () => {},
-      on: () => () => {},
-      logger: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
-      permissionPresets: { defaultPreset: 'standard' },
-    }
+  const logs = []
+  const ctx = {
+    emit: () => {},
+    on: () => () => {},
+    logger: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
+    permissionPresets: { defaultPreset: 'standard' },
+  }
 
-    const manager = new ChannelManager({
-      ctx,
-      stateDir: tempDir,
-      log: (msg) => logs.push(msg),
-      engineConfig: { cwd: process.cwd() }
+  const manager = new ChannelManager({
+    ctx,
+    stateDir: tempDir,
+    log: (msg) => logs.push(msg),
+    engineConfig: { cwd: process.cwd(), provider: 'test', model: 'test' }
+  })
+
+  // 为每个正在运行的账号注入 mock adapter：纯本地返回 passed 诊断结果，不发送外网请求
+  for (const accountId of Object.keys(MOCK_MULTI_CHANNEL_SNAPSHOT.channels)) {
+    manager.running.set(accountId, {
+      status: () => '已连接',
+      diagnose: async () => [
+        { name: 'credentials', status: 'passed', message: '凭据有效' },
+        { name: 'connectivity', status: 'passed', message: '连接就绪' }
+      ],
+      stop: async () => {}
     })
+  }
 
-    // 对真实配置中的所有账号逐一执行 checkAccount
-    for (const [accountId, acc] of Object.entries(data.channels)) {
-      const res = await manager.checkAccount(accountId)
-      assert.ok(typeof res === 'object', `账号 ${accountId} checkAccount 必须返回对象`)
-      assert.ok(res.account && typeof res.account === 'object', `账号 ${accountId} 返回必须包含 account`)
-      assert.ok('receiveEnabled' in res.account, `账号 ${accountId} 诊断结果必须包含 receiveEnabled`)
-      assert.ok('status' in res.account, `账号 ${accountId} 诊断结果必须包含 status`)
-    }
-  } finally {
+  t.after(() => {
+    manager.disposeApi()
     rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  // 对所有账号逐一执行 checkAccount 并严格校验 diagnostics.checks 内容
+  for (const [accountId, acc] of Object.entries(MOCK_MULTI_CHANNEL_SNAPSHOT.channels)) {
+    const res = await manager.checkAccount(accountId)
+    assert.ok(res && typeof res === 'object', `账号 ${accountId} checkAccount 必须返回对象`)
+    assert.equal(res.ok, true, `账号 ${accountId} 诊断执行必须返回 ok: true`)
+    assert.ok(res.diagnostics && Array.isArray(res.diagnostics.checks), `账号 ${accountId} 必须返回 checks 数组`)
+    assert.equal(res.diagnostics.checks.length, 2, `账号 ${accountId} checks 必须包含 2 项检查`)
+    assert.equal(res.diagnostics.checks[0].status, 'passed', 'credentials 检查必须 passed')
+    assert.equal(res.diagnostics.checks[1].status, 'passed', 'connectivity 检查必须 passed')
+    assert.ok(res.account && typeof res.account === 'object', `账号 ${accountId} 返回必须包含 account`)
+    assert.equal(res.account.receiveEnabled, true)
   }
 })
 
-test('Web Profile 安装产物中的 client.js 规范与多语言完整性验证', () => {
-  const installedClientPath = 'C:/Users/YUJIYU/.dsh/profiles/web/node_modules/@michengai/dsh-im-connect/client.js'
-  const clientPath = existsSync(installedClientPath) ? installedClientPath : 'client.js'
-  assert.ok(existsSync(clientPath), 'client.js 必须存在')
+test('项目工程内的 client.js 规范与多语言完整性验证', () => {
+  const clientPath = 'client.js'
+  assert.ok(existsSync(clientPath), '仓库根目录 client.js 必须存在')
 
   const code = readFileSync(clientPath, 'utf8')
   // 1. 验证 feishu 与 lark 账号弹窗包含 thinkingDisplaySupported 传递逻辑

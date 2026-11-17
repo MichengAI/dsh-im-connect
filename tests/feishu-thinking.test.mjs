@@ -306,3 +306,141 @@ test('ChannelManager 反显、保存与更新 Feishu 与 Lark 的 thinkingDispla
   assert.equal(larkSaved.ok, true)
   assert.equal(larkSaved.account.thinkingDisplay, true)
 })
+
+test('Feishu sendThinking: 长思考增量自动分片（<=800字符）、final调用complete端点及maxChars/truncated预算截断', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_1' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_2' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'POST') {
+          return { code: 0, data: { cot_id: 'cot_chunk_test', message_id: 'om_cot_chunk' } }
+        }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'PUT') {
+          return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const logs = []
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, (line) => logs.push(line), async () => mockSdk)
+  await channel.start()
+
+  // 1. 发送一段超过 2000 字符的长思考内容
+  const longThinking = 'A'.repeat(2500)
+  await channel.sendThinking('oc_long_chat', longThinking, {
+    streamId: 'stream-chunk-1',
+    label: '🧠 深度思考',
+    final: false,
+  })
+
+  const putCall = requests.find(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(putCall, '必须发起 PUT 请求')
+  const contentEvents = putCall.data.events.filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+  assert.ok(contentEvents.length >= 4, `2500 字符应分片为至少 4 个事件（实际 ${contentEvents.length} 个）`)
+  for (const e of contentEvents) {
+    const parsed = JSON.parse(e.content)
+    assert.ok(parsed.delta.length <= 800, `单事件 delta 长度必须 <= 800 字符，实际 ${parsed.delta.length}`)
+  }
+
+  // 2. 发送 final 帧，验证 complete 接口被调用
+  await channel.sendThinking('oc_long_chat', longThinking + ' 完成！', {
+    streamId: 'stream-chunk-1',
+    label: '🧠 深度思考',
+    final: true,
+  })
+
+  const completeCall = requests.find(r => r.method === 'POST' && r.url.includes('/message_cot/complete'))
+  assert.ok(completeCall, 'final: true 时必须调用 /open-apis/im/v1/message_cot/complete 接口完成收口')
+  assert.ok(completeCall.url.includes('cot_chunk_test'), 'complete 接口必须包含 cot_id')
+  assert.ok(completeCall.url.includes('om_cot_chunk'), 'complete 接口必须包含 message_id')
+
+  // 3. 验证 maxChars 与 truncated 截断提示
+  await channel.sendThinking('oc_truncated_chat', 'B'.repeat(1000), {
+    streamId: 'stream-trunc-1',
+    maxChars: 300,
+    truncated: true,
+    final: true,
+  })
+
+  const truncPut = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot')).at(-1)
+  assert.ok(truncPut)
+  const allDeltas = truncPut.data.events
+    .filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+    .map(e => JSON.parse(e.content).delta)
+    .join('')
+  assert.ok(allDeltas.includes('…（已截断，完整内容见网页会话）'), '被截断时必须包含截断提示')
+  assert.ok(allDeltas.length <= 350, '总长度必须受到 maxChars 预算限制')
+
+  await channel.stop()
+})
+
+test('Feishu sendThinking: PUT message_cot 返回业务错误码（如 10001）时平滑降级为卡片折叠', async () => {
+  let cardCreated = null
+  const logs = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async (opts) => {
+              cardCreated = opts
+              return { code: 0, data: { message_id: 'om_card_fallback' } }
+            },
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'POST') {
+          return { code: 0, data: { cot_id: 'cot_err_1', message_id: 'om_err_1' } }
+        }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'PUT') {
+          return { code: 10001, msg: 'AppendCOTEvents: event[0] content too long' }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, (line) => logs.push(line), async () => mockSdk)
+  await channel.start()
+
+  // 第一次发送：PUT 返回 10001 触发降级
+  await channel.sendThinking('oc_err_chat', '测试降级内容帧1', { streamId: 'stream-err', final: false })
+  // 第二次发送：此时 current.mode 已经降级为 card，应转走卡片交互
+  await channel.sendThinking('oc_err_chat', '测试降级内容帧1 + 帧2', { streamId: 'stream-err', final: true })
+
+  assert.ok(logs.some(l => l.includes('原生 CoT 事件写入被拒 (code=10001')), '必须记录降级 warning 日志')
+  assert.ok(cardCreated, '降级后必须创建交互卡片')
+  assert.equal(cardCreated.data.msg_type, 'interactive')
+  assert.match(cardCreated.data.content, /测试降级内容/)
+
+  await channel.stop()
+})
