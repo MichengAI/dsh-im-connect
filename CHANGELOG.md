@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.43] - 2026-11-17
+
+### Feishu & Lark Thinking Process
+
+- **Native thinking process bubbles**: Added support for displaying model reasoning (Thinking Process) in Feishu and Lark. Direct messages and main group chats use official native thinking process bubbles that can be expanded to review the complete chain of thought.
+- **In-thread collapsible fallback**: In group message threads, reasoning automatically falls back to an expandable card panel (`collapsible_panel`), ensuring thought processes stay within the thread without leaking to the main lobby; smoothly falls back to cards if the tenant lacks native permissions.
+- **Long reasoning & complex emoji display**: Improved presentation for long reasoning steps and composite emojis (such as diverse family and skin-tone emoji sequences), preventing split characters, garbled text, or corrupted symbols when displaying lengthy thought processes.
+- **How to enable**: Navigate to Settings → IM Connect → Feishu/Lark account settings, and set "Thinking process display" to "Collapsed" (defaults to system preference).
+
 ## [1.0.42] - 2026-11-17
 
 ### Feishu Threads & Reply Experience
