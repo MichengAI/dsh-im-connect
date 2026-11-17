@@ -298,13 +298,13 @@ test('client.js 与 8 语字典包含 threadSessions 下拉选择器与文案绑
   const { readFileSync } = await import('node:fs')
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(client, /threadSessionsSupported:\s*account\.platform === "feishu" \|\| account\.platform === "lark"/)
-  assert.match(client, /ima-thread-sessions-settings/)
+  assert.match(client, /props\.threadSessionsSupported && field\("threadSessions", threadSessionsLabel, h\(Select/)
   assert.match(client, /account\.threadSessions/)
   assert.match(client, /account\.threadSessionsNote/)
-  assert.match(client, /payload\.threadSessions = patch\.threadSessions/)
 
   // 确保使用统一的 Select 下拉框，而非突兀的 Switch 单独占行
-  assert.match(client, /value:\s*value\.threadSessions \? "isolated" : "off"/)
+  assert.match(client, /value:\s*resolveThreadSessionsSelect\(value\)/)
+  assert.match(client, /onChange:\s*\(next\) => update\(threadSessionsPatch\(next\)\)/)
   assert.match(client, /account\.threadSessionsOff/)
   assert.match(client, /account\.threadSessionsIsolated/)
   assert.doesNotMatch(client, /h\(Switch,\s*\{\s*role:\s*"switch",\s*checked:\s*Boolean\(draft\.threadSessions/)
@@ -332,12 +332,82 @@ test('client.js 与 8 语字典包含 threadSessions 下拉选择器与文案绑
   // 8 语词典完整性校验 - 独立会话选项 (Isolated)
   assert.match(client, /"account\.threadSessionsIsolated":\s*"独立会话"/)
   assert.match(client, /"account\.threadSessionsIsolated":\s*"Isolated sessions"/)
-  assert.match(client, /"account\.threadSessionsIsolated":\s*"スレッドごとに分离"|\"account\.threadSessionsIsolated\":\s*"スレッドごとに分離"/)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"スレッドごとに分離"/)
   assert.match(client, /"account\.threadSessionsIsolated":\s*"Sesiones aisladas"/)
   assert.match(client, /"account\.threadSessionsIsolated":\s*"Sessions isolées"/)
   assert.match(client, /"account\.threadSessionsIsolated":\s*"Isolierte Sitzungen"/)
   assert.match(client, /"account\.threadSessionsIsolated":\s*"Изолированные сессии"/)
   assert.match(client, /"account\.threadSessionsIsolated":\s*"Sessões isoladas"/)
+})
+
+test('client.js 导出的 threadSessions 行为映射与保存平台门控严格有效（防止语义反转）', async () => {
+  const { readFileSync } = await import('node:fs')
+  const vm = await import('node:vm')
+  const clientSource = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+
+  let exportedModule
+  const sandbox = {
+    window: {
+      __ModuleLoader__: {
+        load: ({ factory }) => {
+          const fakeRequire = (id) => {
+            if (id === 'react') return { createElement: () => null, Component: class {}, useState: () => [], useEffect: () => {}, useLayoutEffect: () => {}, useCallback: () => {}, useMemo: () => {}, useRef: () => ({}), useSyncExternalStore: () => {} }
+            if (id === 'react-dom') return {}
+            return {}
+          }
+          exportedModule = factory(fakeRequire)
+        },
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setInterval: () => 1,
+      clearInterval: () => {},
+    },
+    document: {},
+    console,
+  }
+  vm.runInNewContext(clientSource, sandbox)
+
+  const { resolveThreadSessionsSelect, threadSessionsPatch, filterAccountPlatformPayload } = exportedModule
+  assert.equal(typeof resolveThreadSessionsSelect, 'function')
+  assert.equal(typeof threadSessionsPatch, 'function')
+  assert.equal(typeof filterAccountPlatformPayload, 'function')
+
+  const toPlain = (obj) => JSON.parse(JSON.stringify(obj))
+
+  // 1. 状态回显映射验证：真值 -> isolated，假值/未定义 -> off，语义绝不可反转
+  assert.equal(resolveThreadSessionsSelect({ threadSessions: true }), 'isolated')
+  assert.equal(resolveThreadSessionsSelect({ threadSessions: false }), 'off')
+  assert.equal(resolveThreadSessionsSelect({}), 'off')
+  assert.equal(resolveThreadSessionsSelect(null), 'off')
+  assert.equal(resolveThreadSessionsSelect(undefined), 'off')
+
+  // 2. 下拉选项补丁函数验证：isolated -> true，其他任何值 -> false
+  assert.deepEqual(toPlain(threadSessionsPatch('isolated')), { threadSessions: true })
+  assert.deepEqual(toPlain(threadSessionsPatch('off')), { threadSessions: false })
+  assert.deepEqual(toPlain(threadSessionsPatch('unknown')), { threadSessions: false })
+
+  // 3. 平台保存门控逻辑验证：feishu 与 lark 支持 threadSessions 与 thinkingDisplay
+  const feishuPatch = { threadSessions: true, thinkingDisplay: true }
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('feishu', feishuPatch)), { threadSessions: true, thinkingDisplay: true })
+  const larkPatch = { threadSessions: false, thinkingDisplay: false }
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('lark', larkPatch)), { threadSessions: false, thinkingDisplay: false })
+
+  // telegram 仅允许 thinkingDisplay，绝不允许透传 threadSessions
+  const tgPatch = { threadSessions: true, thinkingDisplay: true }
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('telegram', tgPatch)), { thinkingDisplay: true })
+
+  // 其他平台（如 wecom、dingtalk、qq）两项均严禁透传
+  const otherPatch = { threadSessions: true, thinkingDisplay: true }
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('wecom', otherPatch)), {})
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('dingtalk', otherPatch)), {})
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('qq', otherPatch)), {})
+
+  // 4. 提示气泡非空与结构守住
+  assert.match(clientSource, /const threadSessionsTip = t\("account\.threadSessionsNote"\)/)
+  assert.match(clientSource, /HostTooltip\s*\?\s*h\(HostTooltip,\s*\{\s*label:\s*threadSessionsTip/)
+  // 5. AccountInspector 内部 save 实际接入 filterAccountPlatformPayload 门控
+  assert.match(clientSource, /typeof filterAccountPlatformPayload === "function"\s*\?\s*filterAccountPlatformPayload/)
 })
 
 test('factory.ts 严格判定 threadSessions 布尔值并影响入站会话隔离（N1 真实守护）', async t => {
