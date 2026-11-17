@@ -294,16 +294,22 @@ test('飞书出站向带话题的 chatId 发送消息及业务被拒安全回退
   assert.equal(createCalls[0].data?.receive_id, 'oc_chat_1')
 })
 
-test('client.js 与 8 语字典包含 threadSessions 开关与文案绑定', async () => {
+test('client.js 与 8 语字典包含 threadSessions 下拉选择器与文案绑定', async () => {
   const { readFileSync } = await import('node:fs')
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  assert.match(client, /account\.platform === "feishu" \|\| account\.platform === "lark"/)
+  assert.match(client, /threadSessionsSupported:\s*account\.platform === "feishu" \|\| account\.platform === "lark"/)
   assert.match(client, /ima-thread-sessions-settings/)
   assert.match(client, /account\.threadSessions/)
   assert.match(client, /account\.threadSessionsNote/)
   assert.match(client, /payload\.threadSessions = patch\.threadSessions/)
 
-  // 8 语词典完整性校验
+  // 确保使用统一的 Select 下拉框，而非突兀的 Switch 单独占行
+  assert.match(client, /value:\s*value\.threadSessions \? "isolated" : "off"/)
+  assert.match(client, /account\.threadSessionsOff/)
+  assert.match(client, /account\.threadSessionsIsolated/)
+  assert.doesNotMatch(client, /h\(Switch,\s*\{\s*role:\s*"switch",\s*checked:\s*Boolean\(draft\.threadSessions/)
+
+  // 8 语词典完整性校验 - 标题与提示
   assert.match(client, /"account\.threadSessions":\s*"群回复串会话隔离"/)
   assert.match(client, /"account\.threadSessions":\s*"Thread session isolation"/)
   assert.match(client, /"account\.threadSessions":\s*"スレッドセッション分離"/)
@@ -312,6 +318,26 @@ test('client.js 与 8 语字典包含 threadSessions 开关与文案绑定', asy
   assert.match(client, /"account\.threadSessions":\s*"Thread-Sitzungsisolation"/)
   assert.match(client, /"account\.threadSessions":\s*"Изоляция сессий тредов"/)
   assert.match(client, /"account\.threadSessions":\s*"Isolamento de sessões de tópicos"/)
+
+  // 8 语词典完整性校验 - 关闭选项 (Off)
+  assert.match(client, /"account\.threadSessionsOff":\s*"关闭"/)
+  assert.match(client, /"account\.threadSessionsOff":\s*"Off"/)
+  assert.match(client, /"account\.threadSessionsOff":\s*"オフ"/)
+  assert.match(client, /"account\.threadSessionsOff":\s*"Desactivado"/)
+  assert.match(client, /"account\.threadSessionsOff":\s*"Désactivé"/)
+  assert.match(client, /"account\.threadSessionsOff":\s*"Aus"/)
+  assert.match(client, /"account\.threadSessionsOff":\s*"Выкл"/)
+  assert.match(client, /"account\.threadSessionsOff":\s*"Desativado"/)
+
+  // 8 语词典完整性校验 - 独立会话选项 (Isolated)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"独立会话"/)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"Isolated sessions"/)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"スレッドごとに分离"|\"account\.threadSessionsIsolated\":\s*"スレッドごとに分離"/)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"Sesiones aisladas"/)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"Sessions isolées"/)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"Isolierte Sitzungen"/)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"Изолированные сессии"/)
+  assert.match(client, /"account\.threadSessionsIsolated":\s*"Sessões isoladas"/)
 })
 
 test('factory.ts 严格判定 threadSessions 布尔值并影响入站会话隔离（N1 真实守护）', async t => {

@@ -317,7 +317,7 @@ Native configuration options are provided here. Their values are persisted in `c
 ### 5. Feishu thread session isolation (`threadSessions`)
 - **Default**: disabled (`false`)
 - **Description**: When enabled, message threads in Feishu group chats maintain independent sessions and conversation context bounded by their root message ID. When disabled, all threads share the main group session context.
-- **UI Configuration**: Toggle **Thread session isolation** directly in **Settings → IM Assistant → Feishu / Lark Account Settings**; takes effect dynamically via account restart upon saving.
+- **UI Configuration**: Configure **Thread session isolation** directly in **Settings → IM Assistant → Feishu / Lark Account Settings** (select **Isolated sessions**); takes effect dynamically via account restart upon saving.
 - **Example** (account or plugin configuration):
   ```json
   {
