@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createFeishuChannel } from '../lib/channels/feishu.js'
+import { createFeishuChannel, chunkByGraphemes, chunkByCodePoints } from '../lib/channels/feishu.js'
 import { ChannelManager } from '../lib/manager.js'
 
 test('Feishu sendThinking: 私聊与群大厅普通消息走飞书原生 message_cot 思考过程', async () => {
@@ -627,4 +627,23 @@ test('Feishu sendThinking: PUT 返回 undefined 或非零业务码时降级且�
   assert.ok(logs.some(l => l.includes('原生 CoT 完成收口通知被拒 (code=10005')), 'complete 接口返回非零码时必须记录告警日志')
 
   await channel.stop()
+})
+
+test('Feishu chunkByGraphemes & chunkByCodePoints: 别名兼容与字形簇切分独立验证', () => {
+  assert.equal(chunkByCodePoints, chunkByGraphemes, 'chunkByCodePoints 必须与 chunkByGraphemes 保持引用兼容')
+
+  // 1. 小于最大长度直接返回单分片
+  assert.deepEqual(chunkByGraphemes('abc', 10), ['abc'])
+
+  // 2. 纯 ASCII 切分
+  assert.deepEqual(chunkByGraphemes('abcdef', 3), ['abc', 'def'])
+
+  // 3. 复杂字形簇不割裂（如 ZWJ 家族）
+  const family = '👨‍👩‍👧‍👦'
+  const text = '12345' + family + '67890'
+  const chunks = chunkByGraphemes(text, 7)
+  assert.equal(chunks[0], '12345')
+  assert.equal(chunks[1], family)
+  assert.equal(chunks[2], '67890')
+  assert.equal(chunks.join(''), text)
 })

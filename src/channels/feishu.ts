@@ -19,7 +19,7 @@ export const FEISHU_COT_COMPLETE_API = '/open-apis/im/v1/message_cot/complete'
 export const FEISHU_COT_CHUNK_SIZE = 800
 
 /** 按 Unicode 字形簇（Grapheme Cluster）安全切分文本，严禁切开 Emoji 代理对或 ZWJ 复合表情 */
-export function chunkByCodePoints(text: string, maxChunkLength: number): string[] {
+export function chunkByGraphemes(text: string, maxChunkLength: number): string[] {
   if (text.length <= maxChunkLength) return [text]
   const chunks: string[] = []
   let currentChunk = ''
@@ -50,6 +50,9 @@ export function chunkByCodePoints(text: string, maxChunkLength: number): string[
   }
   return chunks
 }
+
+/** 保持历史兼容别名 */
+export const chunkByCodePoints = chunkByGraphemes
 
 interface CotEvent {
   event_type: string
@@ -574,7 +577,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
                 }
 
                 if (delta.length > 0) {
-                  const chunks = chunkByCodePoints(delta, FEISHU_COT_CHUNK_SIZE)
+                  const chunks = chunkByGraphemes(delta, FEISHU_COT_CHUNK_SIZE)
                   for (const chunk of chunks) {
                     events.push(cotEvent('REASONING_MESSAGE_CONTENT', { messageId: reasoningMessageId, delta: chunk }, current))
                   }
