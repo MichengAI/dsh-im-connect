@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.44] - 2026-11-17
+
+### Feishu & Lark Thread Session Settings Experience
+
+- **Standard dropdown picker & tooltip**: The "Thread session isolation" setting in Feishu and Lark account details has been upgraded to a standard select picker (with "Off" and "Isolated sessions" options), accompanied by a helpful tooltip explaining that threads maintain isolated conversation context when enabled and share group context when disabled.
+- **Full multilingual localization**: Added localized labels and explanation tooltips for thread session isolation across all 8 supported languages (German, English, Spanish, French, Japanese, Portuguese, Russian, and Simplified Chinese).
+- **Reliable account settings synchronization**: Refined account detail saving and configuration synchronization to ensure platform-specific options (such as thread session isolation and thinking process display) take effect reliably with smooth account reloading.
+
 ## [1.0.43] - 2026-11-17
 
 ### Feishu & Lark Thinking Process
