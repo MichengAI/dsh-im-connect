@@ -506,6 +506,62 @@ test('Feishu sendThinking: 分片安全切分 Unicode 码点，严禁将 Emoji �
   await channel.stop()
 })
 
+test('Feishu sendThinking: 字形簇（Grapheme Cluster）安全切分，严禁切断 ZWJ 复合 Emoji (👨‍👩‍👧‍👦)', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_card_fallback' } }),
+            patch: async () => ({ code: 0, data: {} }),
+          },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'POST') {
+          return { code: 0, data: { cot_id: 'cot_zwj_test', message_id: 'om_cot_zwj' } }
+        }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'PUT') {
+          return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const logs = []
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, (line) => logs.push(line), async () => mockSdk)
+  await channel.start()
+
+  // 798 个 'A' + 1 个 '👨‍👩‍👧‍👦' (11 UTF-16 units: 👨 + ZWJ + 👩 + ZWJ + 👧 + ZWJ + 👦) + 10 个 'B' = 总长 819
+  // 798 + 2(👨) = 800。若按码点切分，会刚好在 👨 处切开，导致分片 0 只有 👨，分片 1 是残缺的连字符和母女
+  const familyEmoji = '👨‍👩‍👧‍👦'
+  const zwjText = 'A'.repeat(798) + familyEmoji + 'B'.repeat(10)
+  await channel.sendThinking('oc_zwj_chat', zwjText, { streamId: 'stream-zwj', final: false })
+
+  const putCall = requests.find(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(putCall, '必须发起 PUT 请求')
+  const contentEvents = putCall.data.events.filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+  assert.equal(contentEvents.length, 2, '819 长度且切分点在 798 处跨 ZWJ emoji 应分为 2 个分片')
+
+  const chunk0 = JSON.parse(contentEvents[0].content).delta
+  const chunk1 = JSON.parse(contentEvents[1].content).delta
+
+  // 分片 0 严禁包含 ZWJ 复合 emoji 的残缺首部 (👨)，分片 1 开头必须是完整的 👨‍👩‍👧‍👦
+  assert.equal(chunk0.endsWith('👨'), false, '分片 0 严禁将 ZWJ 家族 emoji 割裂切开')
+  assert.equal(chunk0.length, 798, '分片 0 遇到 👨‍👩‍👧‍👦 无法完整容纳时应在 798 处提前收口')
+  assert.ok(chunk1.startsWith(familyEmoji), '分片 1 开头必须是完整的 👨‍👩‍👧‍👦 复合表情')
+  assert.equal(chunk0 + chunk1, zwjText, '两分片重组后必须与原文完全一致')
+
+  await channel.stop()
+})
+
 test('Feishu sendThinking: PUT 返回 undefined 或非零业务码时降级且不调用 complete，字符串零码正常成功', async () => {
   const requests = []
   const logs = []
