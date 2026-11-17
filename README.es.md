@@ -101,7 +101,7 @@ Disponible desde el panel de administración en **Complementos → @michengai/ds
 
 ### 4. Mensaje de pensamiento plegable (`thinkingDisplay`)
 - **Predeterminado**: Desactivado (`off`)
-- **Función**: Envía la cadena de pensamiento del modelo en Telegram dentro de un bloque de cita plegable (`<blockquote expandable>`).
+- **Función**: Envía la cadena de pensamiento del modelo en Telegram (`<blockquote expandable>`) y Feishu/Lark (proceso de pensamiento nativo o tarjeta plegable en hilos).
 
 ### 5. Aislamiento de sesiones de hilos en Feishu (`threadSessions`)
 - **Predeterminado**: Desactivado (`false`)

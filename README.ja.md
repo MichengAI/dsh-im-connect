@@ -158,7 +158,7 @@ dsh plugin --profile web add @michengai/dsh-im-connect --registry=https://regist
 
 ### 4. 思考プロセスの折りたたみ表示 (`thinkingDisplay`)
 - **デフォルト**: オフ (`off`)
-- **機能**: モデルの思考プロセスを Telegram の折りたたみ引用ブロック（`<blockquote expandable>`）として送信し、タップで展開できるようにします。
+- **機能**: モデルの思考プロセスを Telegram（折りたたみ引用ブロック `<blockquote expandable>`）および Feishu/Lark（ネイティブ思考プロセスおよびスレッド内カード折りたたみ）として送信し、タップで展開できるようにします。
 
 ### 5. 飛書（Feishu）スレッドセッション分離 (`threadSessions`)
 - **デフォルト**: 無効 (`false`)

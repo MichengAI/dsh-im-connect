@@ -3,7 +3,7 @@ import { choiceSendError, ChoiceSendError } from '../engine/choice-delivery.js'
 import { afterPartialDelivery, DeliveryRejected } from '../engine/deferred-delivery.js'
 import { diagnosticJson, platformResult, probe, requireDiagnostic } from './diagnostics.js'
 import { fileOperation } from './file-send.js'
-import type { ChannelAdapter, ImMedia, ImMessage } from '../engine/types.js'
+import type { ChannelAdapter, ImMedia, ImMessage, ThinkingOptions } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
 import { timeoutSignal } from '../engine/abort.js'
@@ -12,6 +12,43 @@ import { markdownTableOffsets } from '../engine/split.js'
 
 /** 飞书一张卡片最多 5 个 table 元素，超了整个写入会被拒（230099 / ErrCode 11310），旧卡片内容会卡住。 */
 export const FEISHU_CARD_MAX_TABLES = 5
+
+export const FEISHU_COT_API = '/open-apis/im/v1/message_cot'
+
+interface CotEvent {
+  event_type: string
+  content: string
+  timestamp: string
+}
+
+let lastCotTimestamp = 0
+function cotEvent(eventType: string, content: Record<string, unknown>): CotEvent {
+  lastCotTimestamp = Math.max(Date.now(), lastCotTimestamp + 1)
+  return {
+    event_type: eventType,
+    content: JSON.stringify(content),
+    timestamp: String(lastCotTimestamp),
+  }
+}
+
+interface FeishuThinkingState {
+  key: string
+  chatId: string
+  mode: 'cot' | 'card'
+  cotId?: string
+  cotMessageId?: string
+  sentChars: number
+  reasoningStarted?: boolean
+  cardMessageId?: string
+  scope: AbortController
+  guard: { signal: AbortSignal; isCurrent?: () => boolean }
+  detach: () => void
+  pending?: { text: string; options?: ThinkingOptions }
+  running?: Promise<void>
+  sealed: boolean
+  failed?: unknown
+  lastCardContent?: string
+}
 
 /** 按表格数量拆正文，保证每张卡不超上限，且不会把表格切一半。 */
 export function splitByTableLimit(text: string, maxTables = FEISHU_CARD_MAX_TABLES): string[] {
@@ -368,13 +405,217 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
 
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   let client: ResourceClient & {
-    request(opts: { url: string; method: 'GET' }): Promise<unknown>
+    request(opts: { url: string; method?: string; data?: unknown; params?: unknown }): Promise<unknown>
     im: { messageReaction: { create(opts: unknown): Promise<{ code?: number; data?: { reaction_id?: string } }>; delete(opts: unknown): Promise<{ code?: number }> }; message: { create(opts: unknown): Promise<unknown>; reply?(opts: unknown): Promise<unknown>; patch(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> }; image: { create(opts: unknown): Promise<{ image_key?: string } | null> } }
   } | undefined
   let ws: { close(opts?: { force?: boolean }): void } | undefined
   let statusText = '未连接'
   let lifecycle: AbortController | undefined
   const label = id === 'lark' ? 'Lark' : '飞书'
+
+  const openThinking = new Map<string, FeishuThinkingState>()
+  const activeThinking = new Set<FeishuThinkingState>()
+
+  /** 思考过程投递：非话题（私聊/群大厅）走飞书原生 message_cot；话题回复串（thread）或权限不足时平滑降级为折叠卡片 */
+  async function publishThinking(chatId: string, text: string, options?: ThinkingOptions): Promise<void> {
+    if (!client || !lifecycle || lifecycle.signal.aborted || options?.signal?.aborted || options?.isCurrent?.() === false) return
+    const key = JSON.stringify([chatId, options?.streamId ?? 'legacy'])
+    let state = openThinking.get(key)
+    if (!state) {
+      if (!text.trim()) return
+      const scope = new AbortController()
+      const signal = options?.signal ? AbortSignal.any([scope.signal, options.signal, lifecycle.signal]) : AbortSignal.any([scope.signal, lifecycle.signal])
+      const { threadId } = parseFeishuChatId(chatId)
+      // 话题回复串（thread）内直接走折叠卡片，避免污染群大厅；大厅与私聊优先尝试原生 CoT
+      const initialMode: 'cot' | 'card' = threadId ? 'card' : 'cot'
+      state = {
+        key,
+        chatId,
+        mode: initialMode,
+        sentChars: 0,
+        sealed: false,
+        scope,
+        guard: { signal, isCurrent: options?.isCurrent },
+        detach: () => {},
+      }
+      const current = state
+      const cancel = () => {
+        current.pending = undefined
+        if (openThinking.get(key) === current) openThinking.delete(key)
+        activeThinking.delete(current)
+        current.detach()
+      }
+      current.detach = () => signal.removeEventListener('abort', cancel)
+      signal.addEventListener('abort', cancel, { once: true })
+      openThinking.set(key, current)
+      activeThinking.add(current)
+    }
+    if (state.failed) {
+      if (options?.final) {
+        openThinking.delete(key)
+        activeThinking.delete(state)
+        state.detach()
+      }
+      throw state.failed
+    }
+    state.pending = { text, options }
+    if (options?.final === true) {
+      state.sealed = true
+      if (openThinking.get(key) === state) openThinking.delete(key)
+    }
+
+    if (!state.running) {
+      const current = state
+      const drain = (): Promise<void> => current.running = Promise.resolve().then(async () => {
+        while (current.pending) {
+          const next = current.pending
+          current.pending = undefined
+          current.guard.signal.throwIfAborted()
+          if (current.guard.isCurrent?.() === false) break
+          if (!client) break
+
+          const { chatId: targetChatId } = parseFeishuChatId(chatId)
+          const runId = next.options?.streamId ?? 'turn'
+          const label = next.options?.label ?? (next.options?.final ? '🧠 思考过程' : '🧠 思考中…')
+
+          // 1. 尝试原生 CoT 模式
+          if (current.mode === 'cot') {
+            try {
+              if (!current.cotId) {
+                const res = await client.request({
+                  method: 'POST',
+                  url: `${FEISHU_COT_API}?receive_id_type=chat_id`,
+                  data: {
+                    receive_id: targetChatId,
+                    cot_hidden: false,
+                    enable_badge: false,
+                    update_feed_rank: false,
+                  },
+                }) as { code?: number; data?: { cot_id?: string; message_id?: string } } | undefined
+
+                if (!res || res.code !== 0 || !res.data?.cot_id || !res.data?.message_id) {
+                  log(`[${id}] 原生 message_cot 创建失败 (code=${res?.code})，降级为卡片折叠显示`)
+                  current.mode = 'card'
+                } else {
+                  current.cotId = res.data.cot_id
+                  current.cotMessageId = res.data.message_id
+                }
+              }
+
+              if (current.mode === 'cot' && current.cotId && current.cotMessageId) {
+                const delta = next.text.slice(current.sentChars)
+                const events: CotEvent[] = []
+                const reasoningMessageId = `reasoning-${runId}`
+
+                if (!current.reasoningStarted) {
+                  events.push(cotEvent('RUN_STARTED', { threadId: targetChatId, runId }))
+                  events.push(cotEvent('REASONING_MESSAGE_START', { messageId: reasoningMessageId, role: 'reasoning' }))
+                  current.reasoningStarted = true
+                }
+
+                if (delta.length > 0) {
+                  events.push(cotEvent('REASONING_MESSAGE_CONTENT', { messageId: reasoningMessageId, delta }))
+                  current.sentChars = next.text.length
+                }
+
+                if (next.options?.final) {
+                  events.push(cotEvent('REASONING_MESSAGE_END', { messageId: reasoningMessageId }))
+                  events.push(cotEvent('RUN_FINISHED', { threadId: targetChatId, runId, status: 'done' }))
+                }
+
+                if (events.length > 0) {
+                  await client.request({
+                    method: 'PUT',
+                    url: FEISHU_COT_API,
+                    data: {
+                      cot_id: current.cotId,
+                      message_id: current.cotMessageId,
+                      events,
+                    },
+                  })
+                }
+              }
+            } catch (error) {
+              if (throttledResponse(error)) return
+              log(`[${id}] 原生 CoT 发送异常: ${error instanceof Error ? error.message : String(error)}，降级为卡片折叠`)
+              current.mode = 'card'
+            }
+          }
+
+          // 2. 卡片折叠模式（话题内、或原生 CoT 降级）
+          if (current.mode === 'card') {
+            try {
+              const cardContent = JSON.stringify({
+                schema: '2.0',
+                config: { wide_screen_mode: true },
+                body: {
+                  elements: [
+                    {
+                      tag: 'collapsible_panel',
+                      header: {
+                        title: { tag: 'plain_text', content: label },
+                      },
+                      border: { color: 'grey' },
+                      expanded: false,
+                      elements: [
+                        { tag: 'markdown', content: next.text },
+                      ],
+                    },
+                  ],
+                },
+              })
+
+              if (cardContent !== current.lastCardContent) {
+                if (!current.cardMessageId) {
+                  const sent = await postFeishuMessage(
+                    client,
+                    chatId,
+                    'interactive',
+                    cardContent,
+                    line => log(`[${id}] ${line}`),
+                  ) as { code?: number | string; data?: { message_id?: string } } | undefined
+
+                  if (!isRejectedCode(sent?.code) && sent?.data?.message_id) {
+                    current.cardMessageId = sent.data.message_id
+                    current.lastCardContent = cardContent
+                  } else {
+                    log(`[${id}] 思考卡片创建被拒 (code=${sent?.code})`)
+                  }
+                } else {
+                  const patchRes = await client.im.message.patch({
+                    path: { message_id: current.cardMessageId },
+                    data: { content: cardContent },
+                  }) as { code?: number | string } | undefined
+
+                  if (!isRejectedCode(patchRes?.code)) {
+                    current.lastCardContent = cardContent
+                  }
+                }
+              }
+            } catch (error) {
+              if (throttledResponse(error)) return
+              log(`[${id}] 思考卡片发送或更新异常: ${error instanceof Error ? error.message : String(error)}`)
+            }
+          }
+        }
+      }).catch(error => {
+        current.failed = error
+        current.pending = undefined
+        throw error
+      }).finally(() => {
+        current.running = undefined
+        const canceled = current.guard.signal.aborted || current.guard.isCurrent?.() === false
+        if (!current.failed && !canceled && current.pending) return drain()
+        if (current.sealed || canceled) {
+          if (openThinking.get(key) === current) openThinking.delete(key)
+          activeThinking.delete(current)
+          current.detach()
+        }
+      })
+      drain()
+    }
+    return state.running
+  }
 
   return {
     id,
@@ -477,6 +718,12 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       lifecycle = undefined
       ws?.close({ force: true })
       ws = undefined
+      for (const thinking of activeThinking) {
+        thinking.scope.abort()
+        thinking.detach()
+      }
+      openThinking.clear()
+      activeThinking.clear()
       statusText = '已停止'
     },
     canDeliverDeferred() { return statusText === '长连接已建立' },
@@ -605,6 +852,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         requireDiagnostic(typeof bot?.open_id === 'string' && bot.open_id)
       })]
     },
+    sendThinking: publishThinking,
     status() { return statusText },
   }
 }

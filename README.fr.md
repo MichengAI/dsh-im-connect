@@ -101,7 +101,7 @@ Gérée depuis le panneau **Extensions → @michengai/dsh-im-connect** :
 
 ### 4. Affichage repliable de la réflexion (`thinkingDisplay`)
 - **Défaut** : Désactivé (`off`)
-- **Fonction** : Transmet le cheminement de pensée du modèle sous forme de bloc de citation repliable Telegram (`<blockquote expandable>`).
+- **Fonction** : Transmet le cheminement de pensée du modèle sous forme de bloc de citation repliable Telegram (`<blockquote expandable>`) ou de bulle native / carte repliable Feishu/Lark.
 
 ### 5. Isolation des sessions de fil Feishu (`threadSessions`)
 - **Défaut** : Désactivé (`false`)

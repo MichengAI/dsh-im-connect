@@ -449,6 +449,8 @@ export class ChannelManager {
       ...(platform === 'telegram' ? {
         mentionPolicy: config.mentionPolicy === 'always' ? 'always' : 'addressed',
         freeChatGroups: typeof config.freeChatGroups === 'string' ? config.freeChatGroups : '',
+      } : {}),
+      ...((platform === 'telegram' || platform === 'feishu' || platform === 'lark') ? {
         thinkingDisplay: config.thinkingDisplay === 'true'
           ? true
           : (config.thinkingDisplay === 'false'
@@ -1079,7 +1081,7 @@ export class ChannelManager {
         else delete config.freeChatGroups
         state.config = config
       }
-      const hasThinkingDisplaySetting = platform === 'telegram' && Object.hasOwn(input, 'thinkingDisplay')
+      const hasThinkingDisplaySetting = (platform === 'telegram' || platform === 'feishu' || platform === 'lark') && Object.hasOwn(input, 'thinkingDisplay')
       if (hasThinkingDisplaySetting) {
         const config = { ...(state.config ?? {}) }
         if (input.thinkingDisplay === true) config.thinkingDisplay = 'true'

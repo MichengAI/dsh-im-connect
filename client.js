@@ -4671,7 +4671,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           h(AccountSettingsPicker, {
             value: draft,
             onChange: applySettings,
-            thinkingDisplaySupported: account.platform === "telegram",
+            thinkingDisplaySupported: account.platform === "telegram" || account.platform === "feishu" || account.platform === "lark",
             segmentReplySupported: account.segmentReplySupported !== false,
             catalog,
             permissions,
