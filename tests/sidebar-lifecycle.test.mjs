@@ -202,3 +202,61 @@ test('侧栏外壳装配时根据 taskTreeSessions 注册和注销会话过滤�
     stop()
   }
 })
+
+test('同一个页面已存在活跃实例时，后续实例跳过包装并输出诊断日志', async () => {
+  const h = createHarness(body, 'im')
+  const entry = h.add()
+  const original = entry.component
+  const warnings = []
+  const origWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  let stop1, stop2
+  try {
+    stop1 = h.start()
+    assert.notEqual(entry.component, original, '第一实例成功接管外壳')
+    const wrappedByFirst = entry.component
+
+    // 模拟同一个页面启动了第二个实例（重复加载）
+    stop2 = h.start()
+    assert.equal(entry.component, wrappedByFirst, '第二实例不重复接管或破坏已有外壳')
+    assert.ok(warnings.some(msg => msg.includes('[dsh-im-connect]') && msg.includes('已有活跃')), '第二实例输出重复实例诊断日志')
+  } finally {
+    console.warn = origWarn
+    if (stop2) stop2()
+    if (stop1) stop1()
+  }
+})
+
+test('首个活跃条目已被包裹时，pickOfficialWorkspaces 保证最多包裹一个条目，不向后漫游', () => {
+  const code = extractBlock(source, '    function pickOfficialWorkspaces', '    function apply(ctx)', 'IM 侧栏选择器')
+  const pick = new Function(code + '; return pickOfficialWorkspaces;')()
+  const wrappedComp = function Wrapped() {}
+  wrappedComp.__imConnectWrapped = true
+  const firstEntry = { component: wrappedComp }
+  const secondEntry = { component: function SecondTree() {} }
+  const slots = { entries: () => [firstEntry, secondEntry] }
+  assert.equal(pick({ slots }), null, '首个活跃条目已被接管时，不向后漫游包装其他条目')
+})
+
+test('已包裹条目无法解析原始底层组件时，放弃包裹以防嵌套', async () => {
+  const h = createHarness(body, 'im')
+  const entry = h.add()
+  const fakeWrapper = function BrokenWrapper() {}
+  fakeWrapper.__imConnectWrapped = true
+  const brokenEntry = { component: fakeWrapper }
+  const warnings = []
+  const origWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  const stop = h.start(undefined, {
+    pickOfficialWorkspaces: () => brokenEntry,
+  })
+  try {
+    await h.settle()
+    assert.equal(brokenEntry.component, fakeWrapper, '放弃二次包裹，保持原样')
+    assert.ok(warnings.some(msg => msg.includes('放弃') || msg.includes('防嵌套')), '输出防嵌套警告')
+  } finally {
+    console.warn = origWarn
+    stop()
+  }
+})
+

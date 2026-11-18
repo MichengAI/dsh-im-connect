@@ -6214,6 +6214,8 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     function pickOfficialWorkspaces(ctx) {
       const read = ctx.slots.entriesOfSlot || ctx.slots.entries;
       const entries = (read && read.call(ctx.slots, "sidebar.workspaces")) || [];
+      const active = entries.find((item) => item && item.component);
+      if (active && isWrappedWorkspaceComponent(active.component)) return null;
       for (const item of entries) {
         if (!item || !item.component) continue;
         if (isWrappedWorkspaceComponent(item.component)) continue;
@@ -6229,6 +6231,25 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         || component.__imConnectOriginal !== undefined
         || component.__dshAutomationWrapped === true
         || component.__dshAutomationOriginal !== undefined);
+    }
+
+    function resolveOfficialTreeComponent(component) {
+      const seen = new Set();
+      let current = component;
+      while (current !== undefined && current !== null && !seen.has(current)) {
+        seen.add(current);
+        const flags = current;
+        const next = flags.__dshNativeTabOriginal || flags.__dshAutomationOriginal || flags.__imConnectOriginal;
+        if (next !== undefined && next !== current) {
+          current = next;
+          continue;
+        }
+        if (flags.__dshNativeTabWrapped === true || flags.__dshAutomationWrapped === true || flags.__imConnectWrapped === true) {
+          return null;
+        }
+        return current;
+      }
+      return null;
     }
 
     const BUNDLE_KEY = "@michengai/dsh-im-connect";
@@ -7031,6 +7052,22 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         let stopInsertedTabLocale = () => {};
         let insertedTabRegistry = null;
         let syncing = false;
+        const globalStore = typeof window !== "undefined" ? window : globalThis;
+        const SIDEBAR_OWNER_KEY = "__dshImConnectSidebarOwner__";
+        const instanceId = { id: "im-" + Math.random().toString(36).slice(2) };
+        let warnedDuplicate = false;
+        const isDuplicateOwner = () => {
+          const owner = globalStore[SIDEBAR_OWNER_KEY];
+          return !!(owner && owner !== instanceId);
+        };
+        const claimOwnership = () => {
+          globalStore[SIDEBAR_OWNER_KEY] = instanceId;
+        };
+        const releaseOwnership = () => {
+          if (globalStore[SIDEBAR_OWNER_KEY] === instanceId) {
+            delete globalStore[SIDEBAR_OWNER_KEY];
+          }
+        };
         // 与定时插件共享通知，补足直接替换 component 不触发宿主插槽通知的情况。
         const notifyPeers = () => { queueMicrotask(() => window.dispatchEvent(new Event("dsh-native-sidebar-change"))); };
         const clearFilter = () => {
@@ -7104,6 +7141,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         };
         const unwrap = () => {
           clearInsertedTab();
+          releaseOwnership();
           clearFilter();
           activeFilterRegistry = null;
           if (wrappedEntry) {
@@ -7165,6 +7203,13 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         };
         const sync = () => {
           if (syncing) return;
+          if (isDuplicateOwner()) {
+            if (!warnedDuplicate) {
+              warnedDuplicate = true;
+              console.warn("[dsh-im-connect] 检测到同模块已有活跃的侧栏实例，跳过重复包装与页签注入");
+            }
+            return;
+          }
           syncing = true;
           try {
             const combo = hasDshCodexUiSidebar(ctx);
@@ -7179,12 +7224,37 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
             if (!occupant) { clearInsertedTab(); return; }
             if (insertedTabRegistry && findNativeTabRegistry(occupant) !== insertedTabRegistry) clearInsertedTab();
             if (occupant && (occupant.component.__dshNativeTabHost || occupant.component.__dshNativeTabWrapped || occupant.component.__dshAutomationWrapped || findNativeTabRegistry(occupant))) {
+              claimOwnership();
               insertChannelTab(occupant);
               return;
             }
             const official = pickOfficialWorkspaces(ctx);
             if (!official) return;
-            originalComp = official.component;
+            const resolveRealOfficialTree = (comp) => {
+              const seen = new Set();
+              let current = comp;
+              while (current !== undefined && current !== null && !seen.has(current)) {
+                seen.add(current);
+                const flags = current;
+                const next = flags.__dshNativeTabOriginal || flags.__dshAutomationOriginal || flags.__imConnectOriginal;
+                if (next !== undefined && next !== current) {
+                  current = next;
+                  continue;
+                }
+                if (flags.__dshNativeTabWrapped === true || flags.__dshAutomationWrapped === true || flags.__imConnectWrapped === true) {
+                  return null;
+                }
+                return current;
+              }
+              return null;
+            };
+            const resolvedComp = resolveRealOfficialTree(official.component);
+            if (!resolvedComp) {
+              console.warn("[dsh-im-connect] 目标条目已被包裹且无法解析原始底层组件，放弃包裹以防嵌套");
+              return;
+            }
+            originalComp = resolvedComp;
+            claimOwnership();
             const registry = createNativeTabRegistry(originalComp);
             ownedRegistry = registry;
             removeInsertedOpener = installSessionOpener(registry);
@@ -7230,6 +7300,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           unsubSidebar();
           window.removeEventListener("dsh-native-sidebar-change", sync);
           unwrap();
+          releaseOwnership();
         };
       });
     }
