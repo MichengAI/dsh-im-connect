@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dsh: [0.2.0-rc.1, 0.2.0-rc.2, 0.2.1-rc.1, 0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.4, 0.2.1-rc.5, 0.2.2-rc.1, 0.2.2-rc.2, 0.2.2-rc.3]
+        dsh: [0.2.2-rc.1, 0.2.2-rc.2, 0.2.2-rc.3, 0.2.2-rc.4, 0.2.2-rc.5]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -86,15 +86,8 @@ jobs:
           set -euo pipefail
           ver="${{ matrix.dsh }}"
           args=(--prefix "$RUNNER_TEMP/dsh-image-contract" --no-audit --no-fund)
-          cordis="4.0.4"
-          schema="3.18.4"
-          if [[ "$ver" == 0.2.1-* ]]; then
-            cordis="4.0.5"
-            schema="3.18.5"
-          elif [[ "$ver" == 0.2.2-* ]]; then
-            cordis="4.1.0"
-            schema="3.19.0"
-          fi
+          cordis="4.1.0"
+          schema="3.19.0"
           pkgs=(
             "@deepseek-ai/cordis@${cordis}"
             "@deepseek-ai/schemastery@${schema}"
@@ -104,10 +97,6 @@ jobs:
             "@deepseek-ai/dsh-client-connection@${ver}"
             "@deepseek-ai/dsh-session-log-export@${ver}"
           )
-          # 旧宿主的波浪号会选中新版附属包，显式保留该代依赖组合。
-          if [[ "$ver" == 0.2.0-* ]]; then
-            pkgs+=("@deepseek-ai/cordis-plugin-include@1.0.9" "@deepseek-ai/cordis-plugin-loader@1.0.5")
-          fi
           npm install "${args[@]}" "${pkgs[@]}"
 
       - name: 安装文件读取契约测试宿主
@@ -115,24 +104,14 @@ jobs:
         run: |
           set -euo pipefail
           ver="${{ matrix.dsh }}"
-          cordis="4.0.4"
-          schema="3.18.4"
-          if [[ "$ver" == 0.2.1-* ]]; then
-            cordis="4.0.5"
-            schema="3.18.5"
-          elif [[ "$ver" == 0.2.2-* ]]; then
-            cordis="4.1.0"
-            schema="3.19.0"
-          fi
+          cordis="4.1.0"
+          schema="3.19.0"
           pkgs=(
             "@deepseek-ai/cordis@${cordis}"
             "@deepseek-ai/schemastery@${schema}"
             "@deepseek-ai/dsh-fs-local@${ver}"
             "@deepseek-ai/dsh-api-workspace-files@${ver}"
           )
-          if [[ "$ver" == 0.2.0-* ]]; then
-            pkgs+=("@deepseek-ai/cordis-plugin-include@1.0.9" "@deepseek-ai/cordis-plugin-loader@1.0.5")
-          fi
           npm install --prefix "$RUNNER_TEMP/dsh-file-contract" --ignore-scripts --no-audit --no-fund "${pkgs[@]}"
 
       - name: 编译并测试

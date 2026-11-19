@@ -29,7 +29,7 @@ export function normalizeCommandPermissions(input: unknown): CommandPermissions 
   return { dm: scope(source.dm), group: scope(source.group) }
 }
 
-export function canExecuteCommand(policy: CommandPermissions, kind: 'dm' | 'group', userId?: string): boolean {
+export function canExecuteCommand(policy: CommandPermissions, kind: 'dm' | 'group', _userId?: string): boolean {
   // 旧测试包的用户例外仅保留格式兼容，执行权限统一由聊天类型开关决定。
   return policy[kind].enabled
 }

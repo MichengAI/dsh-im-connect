@@ -841,15 +841,12 @@ test('真实宿主 Controller 创建预设会话并在归属失败时保留新 I
   const { join } = await import('node:path')
   const { pathToFileURL } = await import('node:url')
   const { SessionCommandController } = await import(pathToFileURL(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/commands.js')).href)
-  const { ApiSessionAgentController } = await import(pathToFileURL(join(process.env.DSH_CHAT_CONTRACT_ROOT, 'lib/types/agent.js')).href)
-  const createsSession = typeof ApiSessionAgentController.prototype.createSession === 'function'
   for (const failAttach of [false, true]) {
     const f = presetFixture()
     const created = []
     const workspace = { id: 'w1', path: 'D:\\one', sessionIds: ['s1'], async attachSession(id) { if (failAttach) throw new Error('fixture attach failure'); created.push(['attach', id]) } }
     const registry = { get: id => id === 'w1' ? workspace : undefined, archivedSessionIds: ['archived'] }
-    // 0.2.1 委托 createSession 生成会话标识；0.2.0 仍使用 ensureSession。
-    const agents = createsSession ? {
+    const agents = {
       async createSession(request) {
         assert.deepEqual(Object.keys(request).sort(), ['agentPreset', 'cwd', 'reusable'])
         assert.equal(request.cwd, 'D:\\one')
@@ -862,16 +859,12 @@ test('真实宿主 Controller 创建预设会话并在归属失败时保留新 I
         created.push(['create', id, request])
         return { agent: { id, session: { id, preset: request.agentPreset } }, agentPreset: request.agentPreset }
       },
-    } : {
-      async ensureSession(id, cwd, existing, preset) { created.push(['ensure', id, cwd, existing, preset]); return { session: { id, preset } } },
-      presetForSession: session => session.preset ?? 'standard',
     }
     const controller = new SessionCommandController({ workspaceRegistry: registry }, agents, 'D:\\default')
     f.services.sessionController.create = request => controller.create(request)
     const text = await f.run('/preset id:42')
     const id = created[0][1]
-    assert.equal(created[0][0], createsSession ? 'create' : 'ensure')
-    if (!createsSession) assert.deepEqual(created[0].slice(2), ['D:\\one', false, '42'])
+    assert.equal(created[0][0], 'create')
     if (failAttach) {
       assert.match(text, /新会话已创建/)
       assert.ok(text.includes(`/session ${id}`))

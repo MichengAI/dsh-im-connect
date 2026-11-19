@@ -68,7 +68,7 @@ export class SessionRouter {
   constructor(
     private readonly ctx: AgentHost,
     private readonly store: SessionMapStore,
-    private readonly config: EngineConfig,
+    config: EngineConfig,
     private readonly log: (line: string) => void,
     private readonly resolveConfig: (channelId: string) => EngineConfig = () => config,
     options: { disposeTimeoutMs?: number; onDeliveryStopped?: (binding: ChatBinding) => void } = {},

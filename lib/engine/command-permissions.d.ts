@@ -11,5 +11,5 @@ export interface CommandPermissions {
     group: CommandScope;
 }
 export declare function normalizeCommandPermissions(input: unknown): CommandPermissions;
-export declare function canExecuteCommand(policy: CommandPermissions, kind: 'dm' | 'group', userId?: string): boolean;
+export declare function canExecuteCommand(policy: CommandPermissions, kind: 'dm' | 'group', _userId?: string): boolean;
 //# sourceMappingURL=command-permissions.d.ts.map

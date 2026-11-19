@@ -10,7 +10,7 @@ export async function filePromptParts(host: { get(name: string): unknown }, sess
   const signal = timeoutSignal(120_000, parent)
   signal.throwIfAborted()
   const upload = host.get('fileUploads') as { uploadStream?: (request: { sessionId: string; data: AsyncIterable<Uint8Array>; name?: string; signal: AbortSignal }) => Promise<{ receiptId: string }> } | undefined
-  if (!upload?.uploadStream) throw new FileInputError(replyText('当前 DSH 不支持 Chat 文件输入，请升级到 0.1.5-rc.1 或更新的兼容版本后重新发送。'))
+  if (!upload?.uploadStream) throw new FileInputError(replyText('当前 DSH 不支持 Chat 文件输入，请升级到 0.2.2-rc.1 或更新的兼容版本后重新发送。'))
   if (media.length > 4) throw new FileInputError(replyText('一次最多发送 4 个文件，累计不超过 20 MiB。'))
   let total = 0
   const parts: Array<{ type: 'file'; receiptId: string }> = []

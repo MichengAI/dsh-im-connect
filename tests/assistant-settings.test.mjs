@@ -23,7 +23,7 @@ test('初始化期间卸载后不得恢复会话或访问失效服务', async t 
 test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', () => {
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   assert.equal(manifest.engines?.node, '^22.19.0 || >=24.0.0')
-  assert.equal(manifest.engines?.dsh, '>=0.2.0-rc.1 <0.3.0-0')
+  assert.equal(manifest.engines?.dsh, '>=0.2.2-rc.1 <0.3.0-0')
   assert.equal(manifest.packageManager, 'pnpm@11.22.0')
   const dshPackages = [
     '@deepseek-ai/dsh-agent',
@@ -33,10 +33,10 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
     '@deepseek-ai/dsh-client-ui-slots',
     '@deepseek-ai/dsh-host-webserver',
   ]
-  const hostUnion = '>=0.2.0-rc.1 <0.3.0-0'
+  const hostUnion = '>=0.2.2-rc.1 <0.3.0-0'
   for (const packageName of dshPackages) {
     assert.equal(manifest.peerDependencies[packageName], hostUnion)
-    assert.equal(manifest.devDependencies[packageName], '0.2.2-rc.3')
+    assert.equal(manifest.devDependencies[packageName], '0.2.2-rc.5')
   }
   assert.equal(manifest.devDependencies['@deepseek-ai/cordis'], '4.1.0')
   assert.equal(

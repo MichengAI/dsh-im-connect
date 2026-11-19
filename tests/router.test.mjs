@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionRouter } from '../lib/engine/router.js'
 import { SessionMapStore } from '../lib/engine/session-store.js'
-import { hostContractVersion, sessionSelection } from './host-contract.mjs'
+import { sessionSelection } from './host-contract.mjs'
 
 test('新版 setup 使用显式 Agent，创建和恢复不访问未注入属性', async t => {
   const f = makeRouter(t)
@@ -157,12 +157,6 @@ test('real Chat selection owns assembly and request after account initialization
     await controller.prompt({ requestId: crypto.randomUUID(), sessionId: agent.id, mode: 'queue', content: [{ type: 'image', data: 'AA==', mediaType: 'image/png' }] }, new AbortController().signal)
     assert.deepEqual(resolved.at(-1), ['chat', 'vision'])
     assert.equal(received.at(-1).content[0].type, 'image')
-    // 0.2.2 起 system-prompt 与 agent/request 由 Agent 自身的 model 状态装配，
-    // stub Agent 没有该状态；这里只验证图片校验与会话模型解析确实走会话选择。
-    if (!(hostContractVersion()?.startsWith('0.2.2-') ?? false)) {
-      assert.deepEqual((await assemble()).variables, { provider: current.provider, model: current.model })
-      assert.deepEqual(await request(), current)
-    }
   }
 })
 

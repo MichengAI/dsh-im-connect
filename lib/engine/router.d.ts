@@ -73,7 +73,6 @@ type AgentHost = Context & {
 export declare class SessionRouter {
     private readonly ctx;
     private readonly store;
-    private readonly config;
     private readonly log;
     private readonly resolveConfig;
     private readonly live;

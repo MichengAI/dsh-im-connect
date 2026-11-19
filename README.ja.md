@@ -117,7 +117,7 @@ DSH IM Connect は DeepSeek Harness の公式拡張規約に従い、ワーク�
 ## 前提条件
 
 - **Node.js**: 22 以降
-- **DeepSeek Harness**: 0.2.0-rc.1 以降（Web および Desktop）
+- **DeepSeek Harness**: 0.2.2-rc.1 以降（Web および Desktop）
 - 各メッセージングプラットフォームの有効なボットアカウントまたは認証情報
 
 ## インストール
