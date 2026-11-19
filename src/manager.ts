@@ -842,6 +842,13 @@ export class ChannelManager {
           send(404, { ok: false, error: `未知操作 ${action}` })
           return
         }
+        if (parts[2] === 'accounts' && parts.length === 5 && parts[4] === 'commands' && method === 'GET') {
+          const accountId = parts[3]!
+          if (!this.store.channels[accountId]) { send(404, { ok: false, error: '账号不存在' }); return }
+          const result = await this.engine.listAccountCommands(accountId)
+          send(200, { ok: true, ...result })
+          return
+        }
         if (parts[2] === 'accounts' && parts.length === 5 && method === 'POST') {
           const accountId = parts[3]!
           const action = parts[4]!

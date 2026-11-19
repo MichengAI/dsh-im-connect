@@ -142,6 +142,11 @@ export class SessionRouter {
     ])]
   }
 
+  /** 仅返回当前内存中活跃的绑定，用于设置页命令发现，避免遍历历史会话。 */
+  liveSessionIdsForChannel(channelId: ChannelInstanceId): string[] {
+    return [...new Set([...this.live.values()].filter((item) => item.channelId === channelId).map((item) => item.sessionId))]
+  }
+
   /** 某个聊天登记过的全部会话记录（含当前绑定），按最近更新排序。 */
   chatRecords(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): SessionRecord[] {
     return this.store.list().filter((item) => !item.detached && item.channel === channelId && item.kind === kind && item.chatId === chatId)

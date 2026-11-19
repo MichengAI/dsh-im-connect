@@ -123,3 +123,14 @@ test('旧版用户例外不会在首次保存 v2 时被静默激活', async () =
   assert.deepEqual(saved[0].dm.users, [])
   assert.equal(saved[0].schemaVersion, 2)
 })
+
+test('命令权限编辑器提供候选、字段错误、未保存保护和稳定操作 class', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const command = source.slice(source.indexOf('    function CommandListInput('), source.indexOf('    function AccountConnectionCheck'))
+  assert.match(command, /commandSuggestions/)
+  assert.match(command, /datalist/)
+  assert.match(command, /ima-command-field-error/)
+  assert.match(command, /onDirtyChange/)
+  assert.match(command, /ima-command-remove/)
+  assert.match(command, /data-ima-command-invalid/)
+})

@@ -1,3 +1,4 @@
+import { type CommandDescriptor } from './chat-commands.js';
 import { type CommandPermissions } from './command-permissions.js';
 import type { Context } from '@deepseek-ai/cordis';
 import { SeenStore } from './seen-store.js';
@@ -90,6 +91,11 @@ export declare class ImEngine {
     removeSession(sessionId: string): Promise<boolean>;
     cleanupMissingSession(sessionId: string): Promise<boolean>;
     ensureSession(sessionId: string): Promise<boolean>;
+    /** 返回该账号当前绑定会话可用的 Host 命令；没有会话时返回内置候选。 */
+    listAccountCommands(accountId: string): Promise<{
+        commands: CommandDescriptor[];
+        source: 'session' | 'builtin';
+    }>;
     setModel(provider: string, model: string, reasoningEffort?: string): void;
     setCwd(cwd: string): void;
     setPermission(permission: string): void;

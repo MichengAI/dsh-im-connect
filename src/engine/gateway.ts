@@ -9,7 +9,7 @@ import { ChoiceStore, type Choice } from './choices.js'
 import { MessageProgress, ProgressTracker, type TurnCompletion } from './message-progress.js'
 import { notice, replyText, withReplyLocale } from './command-locale.js'
 import { FileDelivery, type DeliverySession } from './file-delivery.js'
-import { ChatCommands } from './chat-commands.js'
+import { ChatCommands, type CommandDescriptor } from './chat-commands.js'
 import { commandPermissionDenial, normalizeCommandPermissions, type CommandPermissions } from './command-permissions.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { ImageInputError, imageInputFailure, imagePromptPart } from './image-input.js'
@@ -144,6 +144,34 @@ interface InteractionDeliveryResult {
 }
 
 const USER_QUESTION_WRAPPER = Symbol('dsh-im-connect.user-question-wrapper')
+
+/** 无可用 Host 会话时给设置页的静态候选；这里只是建议，不参与权限执行。 */
+const BUILTIN_COMMAND_DESCRIPTORS: CommandDescriptor[] = [
+  { name: 'menu', description: 'Open the command menu' },
+  { name: 'help', description: 'Show command help' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'sessions', description: 'List sessions' },
+  { name: 'session', description: 'Switch to a session' },
+  { name: 'workspaces', description: 'List workspaces' },
+  { name: 'workspace', description: 'Start a session in a workspace' },
+  { name: 'models', description: 'List models' },
+  { name: 'model', description: 'Show or switch the model' },
+  { name: 'presets', description: 'List agent presets' },
+  { name: 'preset', description: 'Switch agent preset' },
+  { name: 'reasoning', description: 'Configure reasoning effort' },
+  { name: 'reasonings', description: 'List reasoning efforts' },
+  { name: 'reasoninglist', description: 'List reasoning efforts' },
+  { name: 'status', description: 'Show current status' },
+  { name: 'stop', description: 'Stop the running task' },
+  { name: 'steer', description: 'Send steering input' },
+  { name: 'queue', description: 'Inspect or edit the queue' },
+  { name: 'history', description: 'Show recent history' },
+  { name: 'rename', description: 'Rename the current session' },
+  { name: 'fork', description: 'Fork the current session' },
+  { name: 'export', description: 'Export the current session' },
+  { name: 'delivery', description: 'Inspect delivery records' },
+  { name: 'topicname', description: 'Configure topic naming' },
+]
 
 export class ImEngine {
   private readonly deferred: DeferredDelivery
@@ -329,6 +357,21 @@ export class ImEngine {
 
   async ensureSession(sessionId: string): Promise<boolean> {
     return this.router.ensure(sessionId)
+  }
+
+  /** 返回该账号当前绑定会话可用的 Host 命令；没有会话时返回内置候选。 */
+  async listAccountCommands(accountId: string): Promise<{ commands: CommandDescriptor[]; source: 'session' | 'builtin' }> {
+    const found = new Map<string, CommandDescriptor>()
+    for (const sessionId of this.router.liveSessionIdsForChannel(accountId)) {
+      if (!this.router.bindingForSession(sessionId)) continue
+      for (const item of await this.chatCommands.listCommands(sessionId)) {
+        if (!found.has(item.name)) found.set(item.name, item)
+      }
+    }
+    if (found.size > 0) {
+      return { commands: [...found.values()].sort((a, b) => a.name.localeCompare(b.name)), source: 'session' }
+    }
+    return { commands: [...BUILTIN_COMMAND_DESCRIPTORS], source: 'builtin' }
   }
 
   setModel(provider: string, model: string, reasoningEffort?: string): void {

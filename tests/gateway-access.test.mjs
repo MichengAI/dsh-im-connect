@@ -1241,6 +1241,31 @@ test('v2 命令权限按默认清单和用户例外分别放行', async t => {
   } finally { engine.dispose() }
 })
 
+test('账号命令目录合并绑定会话的 Host commands.list 并带内置回退', async t => {
+  const tested = []
+  const services = {
+    sessionController: { resolveAgent: async () => ({ agent: {} }) },
+    commands: { list: (agent) => { tested.push(agent); return [{ name: 'custom', description: '会话插件命令' }, { name: 'goal', description: '目标命令' }] } },
+  }
+  const f = makeEngine(t, undefined, undefined, services)
+  try {
+    await f.engine.router.bind('telegram', 'dm', 'user-1', 'catalog-session', '目录测试', {}, '/workspace')
+    const listed = await f.engine.listAccountCommands('telegram')
+    assert.equal(listed.source, 'session')
+    assert.deepEqual(listed.commands.map(item => item.name), ['custom', 'goal'])
+    assert.equal(tested.length, 1, '应读取当前活跃绑定会话')
+  } finally { f.engine.dispose() }
+})
+
+test('账号命令目录在没有 Host commands 服务时回退到内置候选', async t => {
+  const f = makeEngine(t, undefined, undefined, { sessionController: { resolveAgent: async () => ({ agent: {} }) } })
+  try {
+    const listed = await f.engine.listAccountCommands('telegram')
+    assert.equal(listed.source, 'builtin')
+    assert.ok(listed.commands.some(item => item.name === 'help'))
+  } finally { f.engine.dispose() }
+})
+
 test('workspace → 普通消息回传 → new → 再回传使用同一创建和绑定链路', async t => {
   const services = {
     workspaceController: { async *follow() { yield { value: { items: [{ workspaceId: 'chosen', path: 'D:/chosen', sessionIds: [] }], archivedSessionIds: [] } } } },

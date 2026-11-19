@@ -430,7 +430,7 @@ Command replies, tool approvals, interactive questions, and channel notices sent
 
 ## Permissions and security boundaries
 
-Command permission does not grant DM admission or replace tool approval. Enabled users can inspect and resume ordinary Chat sessions and execute registered Host commands. Each account can set separate default command permissions for DMs and groups, add per-user exceptions, and choose follow-default, all commands, selected commands, or no commands. Legacy `commandPermissions` configurations without `schemaVersion` keep the previous chat-type switch behavior; policies containing `schemaVersion: 2` require this or a newer dsh-im-connect version, so reset command permissions before downgrading.
+Command permission does not grant DM admission or replace tool approval. Enabled users can inspect and resume ordinary Chat sessions and execute registered Host commands. Each account can set separate default command permissions for DMs and groups, add per-user exceptions, and choose follow-default, all commands, selected commands, or no commands. Legacy `commandPermissions` configurations without `schemaVersion` keep the previous chat-type switch behavior; policies containing `schemaVersion: 2` require this or a newer dsh-im-connect version, so reset command permissions before downgrading. The settings editor suggests commands available to the current bound session; suggestions do not change enforcement.
 
 | Item | Current behavior |
 | --- | --- |

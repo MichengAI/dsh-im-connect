@@ -159,6 +159,9 @@ Wenn seit der letzten Nachricht eine konfigurierte Zeitspanne vergangen ist (z. 
 
 ## Sicherheit und Zugriffsgrenzen
 
+Die Befehlsberechtigung gewährt keinen DM-Zugriff und ersetzt keine Werkzeug-Genehmigung. Aktivierte Benutzer können normale Chat-Sitzungen einsehen und fortsetzen sowie registrierte Host-Befehle ausführen. Für jedes Konto lassen sich getrennte Standard-Befehlsberechtigungen für DMs und Gruppen festlegen, benutzerspezifische Ausnahmen hinzufügen und „Standard folgen“, „Alle Befehle“, „Ausgewählte Befehle“ oder „Keine Befehle“ wählen. Alte `commandPermissions`-Konfigurationen ohne `schemaVersion` behalten das bisherige Schalterverhalten; Richtlinien mit `schemaVersion: 2` benötigen diese oder eine neuere dsh-im-connect-Version – vor einem Downgrade die Befehlsberechtigungen zurücksetzen. Der Editor zeigt verfügbare Befehle der aktuell gebundenen Sitzung als Hinweis; Vorschläge ändern die tatsächliche Durchsetzung nicht.
+
+
 - **Verwaltungs-API**: Läuft unter `/api/dsh-im-connect` mit nativer Sitzungsauthentifizierung.
 - **Schlüsselspeicher**: Anmeldedaten werden verschlüsselt im Tresor des Hosts verwaltet.
 - **Werkzeug-Genehmigung**: Erlaubt die sichere Autorisierung direkt im Chat ohne Browser-Wechsel.

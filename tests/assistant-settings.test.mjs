@@ -797,7 +797,7 @@ test('账号页渠道行与账号行用网格对齐，表单单列', () => {
   assert.match(client, /\.ima-account-settings\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\);gap:14px 16px/)
   assert.match(client, /\.ima-account-settings\.compact\{grid-template-columns:1fr\}/)
   assert.match(client, /h\(Button, \{ onClick: \(e\) => \{ e\.stopPropagation\(\); setEditing\(ch\.id\); \}/)
-  assert.match(client, /h\(Button, \{ onClick: \(\) => \{ selectAccount\(account\.id\); setSettingsAccount\(account\.id\); \}/)
+  assert.match(client, /h\(Button, \{ onClick: \(\) => \{ selectAccount\(account\.id\); setCommandDirty\(false\); setSettingsAccount\(account\.id\); \}/)
   assert.match(client, /variant: mappedVariant/);
   assert.match(client, /function isHostComponent\(component\)/);
   assert.match(client, /typeof component\.render === "function"/);

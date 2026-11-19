@@ -1,6 +1,10 @@
 import type { Choice } from './choices.js';
 import type { ChannelAdapter, ImMessage } from './types.js';
 import type { SessionRouter } from './router.js';
+export interface CommandDescriptor {
+    name: string;
+    description: string;
+}
 export interface CommandHost {
     get(name: string): unknown;
 }
@@ -18,6 +22,8 @@ export declare class ChatCommands {
     private readonly reasoningChoices;
     constructor(host: CommandHost, router: SessionRouter, pending: (sessionId: string) => boolean, onSession?: (sessionId: string, msg: ImMessage) => void, showChoices?: ((channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, allowNumber?: boolean) => Promise<string>) | undefined, onRenamed?: ((sessionId: string, title: string) => void) | undefined, onTopicName?: ((channel: ChannelAdapter, msg: ImMessage, action?: "on" | "off") => string) | undefined);
     clear(): void;
+    /** 读取某个会话当前可用的 Host 命令；失败时返回空列表，不能影响设置页。 */
+    listCommands(sessionId: string): Promise<CommandDescriptor[]>;
     private service;
     private call;
     private presets;

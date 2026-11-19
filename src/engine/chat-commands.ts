@@ -19,7 +19,8 @@ interface Workspace { workspaceId: string; title?: string; path: string; session
 interface HistoryEvent { type: string; data?: { message?: { role?: string; content?: Array<{ type: string; text?: string }> }; content?: Array<{ type: string; text?: string }>; source?: { kind?: string } } }
 interface Snapshot { projections?: { values?: { agentPreset?: string | null; permissions?: { currentValue: string; options?: Array<{ value: string; name: string }> }; goal?: { goal: { phase: string } } | null; modelSelection?: { next?: Selection; lastUsed?: Selection } } }; records: Array<{ type: string; event?: HistoryEvent }> }
 interface Preset { id: string; name?: string; description?: string; isDefault?: boolean; broken?: string }
-interface Descriptor { name: string; description: string }
+export interface CommandDescriptor { name: string; description: string }
+type Descriptor = CommandDescriptor
 export interface CommandHost { get(name: string): unknown }
 export const chatControlHelp = () => [
   replyText('IM 助理已连接 DeepSeek Harness。直接发送文字即可开始任务。'), replyText('例如：帮我整理今天的待办。'), '',
@@ -66,6 +67,19 @@ export class ChatCommands {
     private readonly onTopicName?: (channel: ChannelAdapter, msg: ImMessage, action?: 'on' | 'off') => string) { }
 
   clear(): void { this.choices.clear(); this.reasoningChoices.clear() }
+
+  /** 读取某个会话当前可用的 Host 命令；失败时返回空列表，不能影响设置页。 */
+  async listCommands(sessionId: string): Promise<CommandDescriptor[]> {
+    try {
+      if (!this.host.get('commands') || !this.host.get('sessionController')) return []
+      const listed = await this.call<CommandDescriptor[]>('commands', 'list', await this.agent(sessionId))
+      return Array.isArray(listed)
+        ? listed.filter(item => item && typeof item.name === 'string' && typeof item.description === 'string')
+        : []
+    } catch {
+      return []
+    }
+  }
 
   private service(name: string): Record<string, (...args: unknown[]) => unknown> {
     const value = this.host.get(name)

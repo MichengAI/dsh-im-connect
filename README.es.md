@@ -159,6 +159,9 @@ Si transcurre un período prolongado desde el último mensaje (ej. 1 hora, 6 hor
 
 ## Permisos y seguridad
 
+El permiso de comandos no concede acceso a DM ni sustituye la aprobación de herramientas. Los usuarios habilitados pueden inspeccionar y reanudar sesiones de Chat normales y ejecutar comandos registrados del Host. Cada cuenta puede configurar permisos de comandos predeterminados distintos para DM y grupos, añadir excepciones por usuario y elegir «Seguir predeterminado», «Todos los comandos», «Comandos seleccionados» o «Sin comandos». Las configuraciones antiguas de `commandPermissions` sin `schemaVersion` mantienen el comportamiento anterior del interruptor; las políticas con `schemaVersion: 2` requieren esta versión o una más reciente de dsh-im-connect, así que restablezca los permisos de comandos antes de una degradación. El editor muestra como sugerencia los comandos disponibles de la sesión vinculada actual; las sugerencias no cambian la aplicación real.
+
+
 - **API de gestión**: Utiliza `/api/dsh-im-connect` bajo las políticas de autenticación y protección de sesión nativas de DSH.
 - **Almacenamiento de secretos**: Los tokens se resguardan de forma segura en las credenciales protegidas del host.
 - **Aprobación de herramientas**: Permite autorizar comandos directamente en el chat sin exponer la consola web.
