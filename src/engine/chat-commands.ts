@@ -72,9 +72,11 @@ export class ChatCommands {
   async listCommands(sessionId: string): Promise<CommandDescriptor[]> {
     try {
       if (!this.host.get('commands') || !this.host.get('sessionController')) return []
-      const listed = await this.call<CommandDescriptor[]>('commands', 'list', await this.agent(sessionId))
+      const listed = await this.call<Array<Partial<CommandDescriptor>>>('commands', 'list', await this.agent(sessionId))
       return Array.isArray(listed)
-        ? listed.filter(item => item && typeof item.name === 'string' && typeof item.description === 'string')
+        ? listed
+          .filter(item => item && typeof item.name === 'string')
+          .map(item => ({ name: item.name!, description: typeof item.description === 'string' ? item.description : '' }))
         : []
     } catch {
       return []

@@ -1245,14 +1245,15 @@ test('账号命令目录合并绑定会话的 Host commands.list 并带内置回
   const tested = []
   const services = {
     sessionController: { resolveAgent: async () => ({ agent: {} }) },
-    commands: { list: (agent) => { tested.push(agent); return [{ name: 'custom', description: '会话插件命令' }, { name: 'goal', description: '目标命令' }] } },
+    commands: { list: (agent) => { tested.push(agent); return [{ name: 'custom', description: '会话插件命令' }, { name: 'goal', description: '目标命令' }, { name: 'nodescription' }] } },
   }
   const f = makeEngine(t, undefined, undefined, services)
   try {
     await f.engine.router.bind('telegram', 'dm', 'user-1', 'catalog-session', '目录测试', {}, '/workspace')
     const listed = await f.engine.listAccountCommands('telegram')
     assert.equal(listed.source, 'session')
-    assert.deepEqual(listed.commands.map(item => item.name), ['custom', 'goal'])
+    assert.deepEqual(listed.commands.map(item => item.name), ['custom', 'goal', 'nodescription'])
+    assert.equal(listed.commands.find(item => item.name === 'nodescription').description, '')
     assert.equal(tested.length, 1, '应读取当前活跃绑定会话')
   } finally { f.engine.dispose() }
 })
