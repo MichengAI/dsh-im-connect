@@ -423,6 +423,10 @@ export const commandEnglish = {
   "排队消息：{0} 条": "Queued messages: {0}",
   "当前聊天未开启命令权限，可以继续正常对话。":
     "Commands are disabled in this chat. You can still chat normally.",
+  "当前用户未开启命令权限，可以继续正常对话。":
+    "Command permission is disabled for your user. You can still chat normally.",
+  "当前命令不在允许的命令清单中，可以继续正常对话。":
+    "This command is not in the allowed command list. You can still chat normally.",
   "命令已取消。查看当前状态：/status":
     "Command canceled. Check current status: /status",
   "命令执行失败：{0}\n\n查看用法：/help；确认当前会话：/status":

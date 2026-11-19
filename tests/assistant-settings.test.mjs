@@ -382,7 +382,7 @@ test('公开私聊提示审批边界，账号详情保存只接受最新结果',
   assert.match(client, /account\.assistant && account\.assistant\.reasoningEffort/)
   assert.match(client, /const saveSeq = useRef\(0\)/)
   assert.match(client, /const seq = \+\+saveSeq\.current/)
-  assert.match(client, /if \(seq === saveSeq\.current\) setNote/)
+  assert.match(client, /if \(seq === saveSeq\.current\) \{/)
   assert.match(client, /data\.newIdentity \? t\("bind\.newIdentity"\) : t\("bind\.success"\)/)
 })
 
@@ -797,7 +797,7 @@ test('账号页渠道行与账号行用网格对齐，表单单列', () => {
   assert.match(client, /\.ima-account-settings\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\);gap:14px 16px/)
   assert.match(client, /\.ima-account-settings\.compact\{grid-template-columns:1fr\}/)
   assert.match(client, /h\(Button, \{ onClick: \(e\) => \{ e\.stopPropagation\(\); setEditing\(ch\.id\); \}/)
-  assert.match(client, /h\(Button, \{ onClick: \(\) => \{ selectAccount\(account\.id\); setSettingsAccount\(account\.id\); \}/)
+  assert.match(client, /h\(Button, \{ onClick: \(\) => \{ selectAccount\(account\.id\); setCommandDirty\(false\); setSettingsAccount\(account\.id\); \}/)
   assert.match(client, /variant: mappedVariant/);
   assert.match(client, /function isHostComponent\(component\)/);
   assert.match(client, /typeof component\.render === "function"/);
@@ -811,13 +811,15 @@ test('账号页渠道行与账号行用网格对齐，表单单列', () => {
   assert.match(client, /presetStandardName/)
 })
 
-test('账号命令权限沿用旧版两列下拉，控件换成 Ant Select', () => {
+test('账号命令权限提供默认规则、用户例外和命令清单编辑器', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   const command = client.slice(client.indexOf('function CommandPermissionSettings'), client.indexOf('function AccountConnectionCheck'))
-  assert.match(command, /className: "ima-command-permissions ima-account-settings"/)
+  assert.match(command, /className: "ima-command-permissions"/)
   assert.match(command, /h\(Select, \{/)
-  assert.match(command, /t\("command\.enabled"\)/)
-  assert.match(command, /t\("command\.disabled"\)/)
+  assert.match(command, /t\("command\.selected"\)/)
+  assert.match(command, /t\("command\.users"\)/)
+  assert.match(command, /t\("command\.commands"\)/)
+  assert.match(command, /t\("command\.save"\)/)
   assert.doesNotMatch(command, /h\(Switch/)
 })
 
@@ -1137,6 +1139,42 @@ test('账号命令权限整组校验保存，失败不改变原有准入与权�
   const preserved = await manager.updateAccount(created.accountId, { name: 'renamed' })
   assert.deepEqual(preserved.account.commandPermissions, commandPermissions)
   assert.equal(preserved.account.privateAccess, 'approved')
+})
+
+test('账号命令权限可保存 v2 用户例外与命令清单并保持私有准入', async t => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'command-policy-v2-test' }, { privateAccess: 'approved' })
+  const commandPermissions = {
+    schemaVersion: 2,
+    dm: {
+      enabled: true,
+      defaultAllowedCommands: ['help'],
+      users: [{ userId: 'owner', enabled: true, allowedCommands: ['status', 'new'] }],
+    },
+    group: { enabled: true, users: [] },
+  }
+  const saved = await manager.updateAccount(created.accountId, { commandPermissions })
+  assert.equal(saved.ok, true)
+  assert.deepEqual(saved.account.commandPermissions, commandPermissions)
+  assert.equal(saved.account.privateAccess, 'approved')
+})
+
+test('v2 命令策略不会被旧版无版本 payload 静默降级', async t => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'command-policy-downgrade-test' }, { privateAccess: 'approved' })
+  const v2 = {
+    schemaVersion: 2,
+    dm: { enabled: true, defaultAllowedCommands: ['help'], users: [] },
+    group: { enabled: true, users: [] },
+  }
+  assert.equal((await manager.updateAccount(created.accountId, { commandPermissions: v2 })).ok, true)
+  const legacy = { dm: { enabled: true, users: [] }, group: { enabled: true, users: [] } }
+  const rejected = await manager.updateAccount(created.accountId, { commandPermissions: legacy })
+  assert.equal(rejected.ok, false)
+  const preserved = await manager.updateAccount(created.accountId, { name: 'renamed-v2' })
+  assert.deepEqual(preserved.account.commandPermissions, v2)
 })
 
 test('账号发送方式默认排队，可切换插话并按账号持久化，未知值回落排队', async t => {

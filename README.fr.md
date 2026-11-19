@@ -159,6 +159,9 @@ Si aucun échange n'a eu lieu depuis une durée définie (ex. 1h, 6h), le messag
 
 ## Sécurité et limites d'accès
 
+L’autorisation de commandes ne donne pas accès aux messages privés et ne remplace pas l’approbation des outils. Les utilisateurs autorisés peuvent consulter et reprendre des sessions Chat ordinaires et exécuter les commandes Host enregistrées. Chaque compte peut définir des autorisations de commandes par défaut distinctes pour les messages privés et les groupes, ajouter des exceptions par utilisateur et choisir « Suivre la valeur par défaut », « Toutes les commandes », « Commandes sélectionnées » ou « Aucune commande ». Les anciennes configurations `commandPermissions` sans `schemaVersion` conservent le comportement d’interrupteur précédent ; les politiques avec `schemaVersion: 2` nécessitent cette version ou une version plus récente de dsh-im-connect, pensez donc à réinitialiser les autorisations de commandes avant une rétrogradation. L’éditeur affiche comme suggestion les commandes disponibles de la session liée ; les suggestions ne modifient pas l’application réelle.
+
+
 - **API de gestion** : Déployée sur `/api/dsh-im-connect` sous l'authentification native de DSH.
 - **Stockage des secrets** : Les jetons sont chiffrés et protégés dans les coffres système de l'hôte.
 - **Validation des outils** : Autorisez les actions d'un simple message sans basculer sur la console web.

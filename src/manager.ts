@@ -433,7 +433,7 @@ export class ChannelManager {
       cwd: normalizeWorkspacePath(state.cwd) ?? this.currentWorkspace(),
       permission: normalizePermission(state.permission, this.permissionPresets().names) ?? this.currentPermission(),
       agentPreset: state.agentPreset || this.engineConfig.agentPreset || 'standard',
-      commandPermissions: normalizeCommandPermissions(state.commandPermissions),
+      commandPermissions: safeCommandPermissions(state.commandPermissions),
       privateAccess: state.privateAccess === 'all' ? 'all' : 'approved',
       sendMode: normalizeSendMode(state.sendMode),
       segmentReply: segmentSupported && (state.segmentReply ?? this.engineConfig.segmentReply) === true,
@@ -840,6 +840,13 @@ export class ChannelManager {
             return
           }
           send(404, { ok: false, error: `未知操作 ${action}` })
+          return
+        }
+        if (parts[2] === 'accounts' && parts.length === 5 && parts[4] === 'commands' && method === 'GET') {
+          const accountId = parts[3]!
+          if (!this.store.channels[accountId]) { send(404, { ok: false, error: '账号不存在' }); return }
+          const result = await this.engine.listAccountCommands(accountId)
+          send(200, { ok: true, ...result })
           return
         }
         if (parts[2] === 'accounts' && parts.length === 5 && method === 'POST') {
@@ -1556,6 +1563,12 @@ export class ChannelManager {
       : false
     const segmentDelayMinSecs = normalizeSegmentSecs(input.segmentDelayMinSecs) ?? previous.segmentDelayMinSecs
     const segmentDelayMaxSecs = normalizeSegmentSecs(input.segmentDelayMaxSecs) ?? previous.segmentDelayMaxSecs
+    // v2 策略不能被未刷新的旧版设置页用无版本 payload 静默降级清空。
+    if (input.commandPermissions !== undefined && previous.commandPermissions?.schemaVersion === 2
+      && (!input.commandPermissions || typeof input.commandPermissions !== 'object'
+        || (input.commandPermissions as Record<string, unknown>).schemaVersion !== 2)) {
+      return { ok: false, error: '命令权限配置版本不兼容，请刷新设置页后重试' }
+    }
     let commandPermissions: CommandPermissions
     try { commandPermissions = normalizeCommandPermissions(input.commandPermissions === undefined ? previous.commandPermissions : input.commandPermissions) }
     catch { return { ok: false, error: '命令权限配置无效' } }
@@ -1699,6 +1712,11 @@ export class ChannelManager {
   private flush(): void {
     writeFileAtomicSync(this.file, `${JSON.stringify(this.store, null, 2)}\n`)
   }
+}
+
+function safeCommandPermissions(value: unknown): CommandPermissions {
+  try { return normalizeCommandPermissions(value) }
+  catch { return { dm: { enabled: false, users: [] }, group: { enabled: false, users: [] } } }
 }
 
 function pairingSettings(input?: Record<string, unknown>): Record<string, string> {

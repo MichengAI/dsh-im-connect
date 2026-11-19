@@ -102,6 +102,8 @@ export declare class SessionRouter {
     idleMs(channelId: ChannelInstanceId, kind: ChatKind, chatId: string, now?: number): number;
     bindingForSession(sessionId: string): ChatBinding | undefined;
     sessionIdsForChannel(channelId: ChannelInstanceId): string[];
+    /** 仅返回当前内存中活跃的绑定，用于设置页命令发现，避免遍历历史会话。 */
+    liveSessionIdsForChannel(channelId: ChannelInstanceId): string[];
     /** 某个聊天登记过的全部会话记录（含当前绑定），按最近更新排序。 */
     chatRecords(channelId: ChannelInstanceId, kind: ChatKind, chatId: string): SessionRecord[];
     /** 持久化解除投递关系，保留历史及句柄，供网页查看与渠道卸载。 */

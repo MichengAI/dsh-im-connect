@@ -9,8 +9,8 @@ import { ChoiceStore, type Choice } from './choices.js'
 import { MessageProgress, ProgressTracker, type TurnCompletion } from './message-progress.js'
 import { notice, replyText, withReplyLocale } from './command-locale.js'
 import { FileDelivery, type DeliverySession } from './file-delivery.js'
-import { ChatCommands } from './chat-commands.js'
-import { canExecuteCommand, normalizeCommandPermissions, type CommandPermissions } from './command-permissions.js'
+import { ChatCommands, type CommandDescriptor } from './chat-commands.js'
+import { commandPermissionDenial, normalizeCommandPermissions, type CommandPermissions } from './command-permissions.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { ImageInputError, imageInputFailure, imagePromptPart } from './image-input.js'
 import { APPROVAL_WAIT_MS, ApprovalBroker } from './approval.js'
@@ -144,6 +144,38 @@ interface InteractionDeliveryResult {
 }
 
 const USER_QUESTION_WRAPPER = Symbol('dsh-im-connect.user-question-wrapper')
+
+/** 无可用 Host 会话时给设置页的静态候选；这里只是建议，不参与权限执行。 */
+const BUILTIN_COMMAND_DESCRIPTORS: CommandDescriptor[] = [
+  { name: 'menu', description: 'Open the command menu' },
+  { name: 'help', description: 'Show command help' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'sessions', description: 'List sessions' },
+  { name: 'session', description: 'Switch to a session' },
+  { name: 'unbind', description: 'Unbind the current session' },
+  { name: 'mute', description: 'Mute session notifications' },
+  { name: 'unmute', description: 'Unmute session notifications' },
+  { name: 'workspaces', description: 'List workspaces' },
+  { name: 'workspace', description: 'Start a session in a workspace' },
+  { name: 'models', description: 'List models' },
+  { name: 'model', description: 'Show or switch the model' },
+  { name: 'presets', description: 'List agent presets' },
+  { name: 'preset', description: 'Switch agent preset' },
+  { name: 'reasoning', description: 'Configure reasoning effort' },
+  { name: 'reasonings', description: 'List reasoning efforts' },
+  { name: 'reasoninglist', description: 'List reasoning efforts' },
+  { name: 'status', description: 'Show current status' },
+  { name: 'stop', description: 'Stop the running task' },
+  { name: 'steer', description: 'Send steering input' },
+  { name: 'queue', description: 'Inspect or edit the queue' },
+  { name: 'history', description: 'Show recent history' },
+  { name: 'goal', description: 'Inspect or change the current goal' },
+  { name: 'rename', description: 'Rename the current session' },
+  { name: 'fork', description: 'Fork the current session' },
+  { name: 'export', description: 'Export the current session' },
+  { name: 'delivery', description: 'Inspect delivery records' },
+  { name: 'topicname', description: 'Configure topic naming' },
+]
 
 export class ImEngine {
   private readonly deferred: DeferredDelivery
@@ -331,6 +363,21 @@ export class ImEngine {
     return this.router.ensure(sessionId)
   }
 
+  /** 返回该账号当前绑定会话可用的 Host 命令；没有会话时返回内置候选。 */
+  async listAccountCommands(accountId: string): Promise<{ commands: CommandDescriptor[]; source: 'session' | 'builtin' }> {
+    const found = new Map<string, CommandDescriptor>()
+    for (const sessionId of this.router.liveSessionIdsForChannel(accountId)) {
+      if (!this.router.bindingForSession(sessionId)) continue
+      for (const item of await this.chatCommands.listCommands(sessionId)) {
+        if (!found.has(item.name)) found.set(item.name, item)
+      }
+    }
+    if (found.size > 0) {
+      return { commands: [...found.values()].sort((a, b) => a.name.localeCompare(b.name)), source: 'session' }
+    }
+    return { commands: [...BUILTIN_COMMAND_DESCRIPTORS], source: 'builtin' }
+  }
+
   setModel(provider: string, model: string, reasoningEffort?: string): void {
     this.config.provider = provider
     this.config.model = model
@@ -504,11 +551,17 @@ export class ImEngine {
       }
       if (selected !== undefined) { text = selected; msg = { ...msg, text, actionToken: undefined } }
       if (text.startsWith('/') && !msg.media?.length) {
-        if (!canExecuteCommand(this.resolveCommandPermissions(channelId), kind, msg.userId)) {
-          await this.deliver(channel, msg.chatId, withReplyLocale(this.ctx, () => replyText('当前聊天未开启命令权限，可以继续正常对话。')))
+        const command = text.split(/\s+/, 1)[0]?.toLowerCase()
+        const denial = commandPermissionDenial(this.resolveCommandPermissions(channelId), kind, msg.userId, text)
+        if (denial) {
+          const message = denial === 'user-disabled'
+            ? '当前用户未开启命令权限，可以继续正常对话。'
+            : denial === 'command-not-allowed'
+              ? '当前命令不在允许的命令清单中，可以继续正常对话。'
+              : '当前聊天未开启命令权限，可以继续正常对话。'
+          await this.deliver(channel, msg.chatId, withReplyLocale(this.ctx, () => replyText(message)))
           return
         }
-        const command = text.split(/\s+/, 1)[0]?.toLowerCase()
         const mergeKey = `${channelId}:${kind}:${msg.chatId}`
         if (command === '/stop') { this.merger.cancel(mergeKey); this.mergedMessages.delete(mergeKey) }
         else if (this.merger.has(mergeKey)) {
