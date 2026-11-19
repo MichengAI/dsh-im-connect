@@ -719,7 +719,7 @@ window.__ModuleLoader__.load({
         "command.unsavedConfirm": "有未保存的命令权限修改，关闭将丢失这些修改。",
         "command.discard": "放弃修改",
         "command.continueEditing": "继续编辑",
-        "command.invalid": "用户 ID 不能为空、重复或包含控制字符；命令名不能重复，不能与 * 混用；* 表示全部命令。",
+        "command.invalid": "用户 ID 不能为空、重复或包含控制字符；命令名只能包含字母、数字、下划线或连字符，不能重复，不能与 * 混用；* 表示全部命令。",
         "composer.addWorkspace": "添加工作区…",
         "composer.noModels": "暂无模型",
         "composer.noWorkspaces": "暂无工作区",
@@ -1050,7 +1050,7 @@ window.__ModuleLoader__.load({
         "command.unsavedConfirm": "You have unsaved command permission changes. Closing will discard them.",
         "command.discard": "Discard changes",
         "command.continueEditing": "Continue editing",
-        "command.invalid": "User IDs cannot be empty, duplicated or contain control characters; command names cannot be duplicated or mixed with *; * means all commands.",
+        "command.invalid": "User IDs cannot be empty, duplicated or contain control characters; command names may contain letters, digits, underscores or hyphens only, cannot be duplicated or mixed with *; * means all commands.",
         "composer.addWorkspace": "Add workspace…",
         "composer.noModels": "No models",
         "composer.noWorkspaces": "No workspaces",
@@ -4879,13 +4879,14 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       const removeUser = (kind, index) => {
         setDirty(true);
         setFieldErrors({});
-        for (const key of Object.keys(preservedLists.current.users)) {
+        const nextCache = {};
+        for (const [key, value] of Object.entries(preservedLists.current.users)) {
           if (!key.startsWith(kind + ":")) continue;
           const rowIndex = Number(key.slice(kind.length + 1));
-          const value = preservedLists.current.users[key];
-          delete preservedLists.current.users[key];
-          if (rowIndex > index) preservedLists.current.users[kind + ":" + (rowIndex - 1)] = value;
+          if (rowIndex === index) continue;
+          nextCache[kind + ":" + (rowIndex > index ? rowIndex - 1 : rowIndex)] = value;
         }
+        preservedLists.current.users = nextCache;
         setDraft(current => ({
           ...current,
           [kind]: { ...current[kind], users: current[kind].users.filter((_, userIndex) => userIndex !== index) },
@@ -4897,7 +4898,8 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         if (!Array.isArray(list) || list.length > 200) return "command.invalid";
         const names = [];
         for (const item of list) {
-          let name = String(item).trim().toLowerCase();
+          if (typeof item !== "string") return "command.invalid";
+          let name = item.trim().toLowerCase();
           if (name.startsWith("/")) name = name.slice(1);
           if (name === "*") {
             if (names.length > 0 || list.length > 1) return "command.invalid";

@@ -1263,6 +1263,8 @@ test('账号命令目录在没有 Host commands 服务时回退到内置候选',
     const listed = await f.engine.listAccountCommands('telegram')
     assert.equal(listed.source, 'builtin')
     assert.ok(listed.commands.some(item => item.name === 'help'))
+    assert.ok(listed.commands.some(item => item.name === 'goal'))
+    assert.ok(listed.commands.some(item => item.name === 'unbind'))
   } finally { f.engine.dispose() }
 })
 
