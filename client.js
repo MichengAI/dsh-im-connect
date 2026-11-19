@@ -712,6 +712,7 @@ window.__ModuleLoader__.load({
         "command.user": "平台用户 ID",
         "command.userPlaceholder": "例如 123456789 或 U0123456789",
         "command.permission": "命令权限",
+        "command.pick": "选择命令",
         "command.add": "添加用户例外",
         "command.remove": "移除",
         "command.save": "保存命令权限",
@@ -1043,6 +1044,7 @@ window.__ModuleLoader__.load({
         "command.user": "Platform user ID",
         "command.userPlaceholder": "e.g. 123456789 or U0123456789",
         "command.permission": "Command permission",
+        "command.pick": "Choose commands",
         "command.add": "Add user exception",
         "command.remove": "Remove",
         "command.save": "Save command permissions",
@@ -1374,6 +1376,7 @@ window.__ModuleLoader__.load({
         "command.user": "プラットフォームユーザー ID",
         "command.userPlaceholder": "例：123456789 または U0123456789",
         "command.permission": "コマンド権限",
+        "command.pick": "コマンドを選択",
         "command.add": "ユーザー例外を追加",
         "command.remove": "削除",
         "command.save": "コマンド権限を保存",
@@ -1705,6 +1708,7 @@ window.__ModuleLoader__.load({
         "command.user": "ID de usuario de la plataforma",
         "command.userPlaceholder": "p. ej. 123456789 o U0123456789",
         "command.permission": "Permiso de comandos",
+        "command.pick": "Elegir comandos",
         "command.add": "Añadir excepción de usuario",
         "command.remove": "Eliminar",
         "command.save": "Guardar permisos de comandos",
@@ -2036,6 +2040,7 @@ window.__ModuleLoader__.load({
         "command.user": "ID utilisateur de la plateforme",
         "command.userPlaceholder": "p. ex. 123456789 ou U0123456789",
         "command.permission": "Permission des commandes",
+        "command.pick": "Choisir des commandes",
         "command.add": "Ajouter une exception utilisateur",
         "command.remove": "Supprimer",
         "command.save": "Enregistrer les permissions",
@@ -2367,6 +2372,7 @@ window.__ModuleLoader__.load({
         "command.user": "Plattform-Benutzer-ID",
         "command.userPlaceholder": "z. B. 123456789 oder U0123456789",
         "command.permission": "Befehlsberechtigung",
+        "command.pick": "Befehle auswählen",
         "command.add": "Benutzerausnahme hinzufügen",
         "command.remove": "Entfernen",
         "command.save": "Befehlsberechtigungen speichern",
@@ -2698,6 +2704,7 @@ window.__ModuleLoader__.load({
         "command.user": "ID пользователя платформы",
         "command.userPlaceholder": "например, 123456789 или U0123456789",
         "command.permission": "Права на команды",
+        "command.pick": "Выбрать команды",
         "command.add": "Добавить исключение",
         "command.remove": "Удалить",
         "command.save": "Сохранить права на команды",
@@ -3029,6 +3036,7 @@ window.__ModuleLoader__.load({
         "command.user": "ID de usuário da plataforma",
         "command.userPlaceholder": "ex. 123456789 ou U0123456789",
         "command.permission": "Permissão de comandos",
+        "command.pick": "Escolher comandos",
         "command.add": "Adicionar exceção de usuário",
         "command.remove": "Remover",
         "command.save": "Salvar permissões de comandos",
@@ -3399,7 +3407,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
 .ima-command-users{display:grid;gap:8px;min-width:0}
 .ima-command-user-block{display:grid;gap:4px;min-width:0}.ima-command-user-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,180px) minmax(0,1.4fr) auto;align-items:center;gap:8px;min-width:0}.ima-command-user-head{padding:0 11px;align-items:start}.ima-command-label{color:var(--ima-muted);font-size:11px;line-height:16px}.ima-command-inherit{color:var(--ima-muted);font-size:11px;line-height:16px;overflow-wrap:anywhere}
 .ima-command-user-spacer{display:block;min-width:0}
-.ima-command-input{min-width:0;height:32px;box-sizing:border-box}
+.ima-command-input{min-width:0;height:32px;box-sizing:border-box}.ima-command-picker{position:relative;display:grid;gap:4px;min-width:0}.ima-command-picker-row{display:flex;align-items:center;gap:6px;min-width:0}.ima-command-picker-row .ima-command-input{flex:1;min-width:0}.ima-command-picker-toggle{flex:none;white-space:nowrap}.ima-command-picker-menu{display:grid;gap:2px;max-height:220px;overflow:auto;padding:6px;border:0.5px solid var(--dsw-alias-border-l2,#494949);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-1,#18181b));position:absolute;z-index:6;top:calc(100% + 4px);left:0;right:0;box-shadow:var(--dsw-elevation-menu,0 8px 24px rgba(0,0,0,.28))}.ima-command-picker-option{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:var(--dsw-radius-sm,6px);font-size:12px;line-height:18px;cursor:pointer;color:var(--dsw-alias-label-primary,#eee)}.ima-command-picker-option:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.06))}.ima-command-picker-option input{accent-color:var(--dsw-alias-brand-primary,#4b7cff)}
 @media (max-width:680px){.ima-command-user-row{grid-template-columns:minmax(0,1fr) minmax(120px,160px);}.ima-command-user-row .ima-command-input:nth-child(3){grid-column:1/-1}.ima-command-user-row .ima-command-remove{grid-column:2;justify-self:end}}
 .ima-diagnostic-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.ima-inspector-title-row .ima-tag{margin-inline-end:0}.ima-bind-modal .ima-feedback{margin-bottom:12px}.ima-connection-check{display:grid;gap:6px;padding:12px;border:1px solid var(--ima-line);border-radius:8px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;color:var(--ima-muted)}.ima-connection-check strong{color:var(--ima-text)}.ima-diagnostic-item{padding:8px 0;border-top:1px solid var(--ima-line)}
 .ima-inspector-actions{display:flex!important;flex-wrap:wrap!important;align-items:center!important;justify-content:flex-end!important;gap:8px!important;margin-top:16px!important;padding-top:16px!important;padding-bottom:4px!important}
@@ -4776,31 +4784,64 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     }
 
     // 命令清单输入保留原始文本，失焦或回车时再转成数组，避免输入逗号/空格被立即吞掉。
-    function CommandListInput({ value, onChange, placeholder, ariaLabel, className, disabled = false, describedBy, listId, invalid = false }) {
+    function CommandListInput({ value, onChange, placeholder, ariaLabel, className, disabled = false, describedBy, listId, invalid = false, suggestions = [], pickLabel = "选择命令" }) {
       const parse = (text) => String(text || "").split(/[\s,，]+/u).map(item => item.trim().replace(/^\/+/, "").toLowerCase()).filter(Boolean);
       const [text, setText] = useState(() => Array.isArray(value) ? value.join(", ") : "");
+      const [open, setOpen] = useState(false);
       useEffect(() => {
         setText(Array.isArray(value) ? value.join(", ") : "");
       }, [JSON.stringify(value)]);
-      return h(Input, {
-        className: className || "ima-command-input",
-        value: text,
-        placeholder,
-        "aria-label": ariaLabel,
-        "aria-describedby": describedBy,
-        "aria-invalid": invalid || undefined,
-        "data-ima-command-invalid": invalid ? "true" : undefined,
-        list: listId,
-        disabled,
-        onChange: event => setText(event.target.value),
-        onBlur: () => onChange(parse(text)),
-        onKeyDown: event => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            onChange(parse(text));
-          }
-        },
-      });
+      const selected = Array.isArray(value) ? value : [];
+      const options = Array.isArray(suggestions) ? suggestions.filter(Boolean) : [];
+      const toggle = (name) => {
+        const next = selected.includes(name) ? selected.filter(item => item !== name) : [...selected, name];
+        onChange(next);
+        setText(next.join(", "));
+      };
+      return h("div", { className: "ima-command-picker" },
+        h("div", { className: "ima-command-picker-row" },
+          h(Input, {
+            className: className || "ima-command-input",
+            value: text,
+            placeholder,
+            "aria-label": ariaLabel,
+            "aria-describedby": describedBy,
+            "aria-invalid": invalid || undefined,
+            "data-ima-command-invalid": invalid ? "true" : undefined,
+            list: listId,
+            disabled,
+            onChange: event => setText(event.target.value),
+            onBlur: () => onChange(parse(text)),
+            onKeyDown: event => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onChange(parse(text));
+              }
+            },
+          }),
+          options.length > 0 ? h(Button, {
+            className: "ima-command-picker-toggle",
+            variant: "outline",
+            size: "sm",
+            type: "button",
+            disabled,
+            "aria-expanded": open,
+            "aria-label": pickLabel,
+            onClick: () => setOpen(current => !current),
+          }, pickLabel + (selected.length ? " (" + selected.length + ")" : "")) : null),
+        open && options.length > 0 ? h("div", {
+          className: "ima-command-picker-menu",
+          role: "group",
+          "aria-label": pickLabel,
+          onMouseDown: event => event.preventDefault(),
+        }, options.map(name => h("label", { className: "ima-command-picker-option", key: name },
+          h("input", {
+            type: "checkbox",
+            checked: selected.includes(name),
+            disabled,
+            onChange: () => toggle(name),
+          }),
+          h("span", null, name)))) : null);
     }
 
     // 命令权限编辑器：默认规则 + 用户例外 + 命令清单；保存时一次性提交完整策略。
@@ -5020,6 +5061,8 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
               describedBy: "ima-command-hint-" + kind,
               listId: datalistId,
               invalid: Boolean(fieldErrors[kind + ".commands"]),
+              suggestions,
+              pickLabel: t("command.pick"),
               disabled: saving,
               onChange: commands => updateScope(kind, { ...scope, defaultAllowedCommands: commands }),
             }),
@@ -5068,6 +5111,8 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
                   describedBy: "ima-command-hint-" + kind,
                   listId: datalistId,
                   invalid: Boolean(fieldErrors[kind + ".user." + index + ".commands"]),
+                  suggestions,
+                  pickLabel: t("command.pick"),
                   disabled: saving,
                   onChange: commands => updateUser(kind, index, { ...user, allowedCommands: commands }),
                 }) : modeUser === "inherit" ? h("span", { className: "ima-command-inherit" },
