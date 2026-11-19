@@ -49,6 +49,17 @@ test('界面 t() 用到的键都在词典里', () => {
   assert.deepEqual(missing, [])
 })
 
+test('动态命令权限 scope 键在 8 门语言中都存在', () => {
+  assert.match(source, /t\("command\." \+ kind\)/)
+  for (const kind of ['dm', 'group']) {
+    const key = 'command.' + kind
+    for (const lang of ['zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt']) {
+      assert.equal(typeof IM_LOCALES[lang][key], 'string', `${lang}.${key}`)
+      assert.ok(IM_LOCALES[lang][key].trim().length > 0, `${lang}.${key} 为空`)
+    }
+  }
+})
+
 test('已下线的 ChannelCard / 空态 / 在线更新词条不再占词典', () => {
   for (const key of [
     'settings.selectAccountTitle', 'action.configure', 'status.unconfigured',
