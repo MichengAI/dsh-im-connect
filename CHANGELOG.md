@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Command-Level Permissions
+
+- **Per-user command policies**: Each account can configure a default command policy for DMs and groups, add per-user exceptions, and restrict a user or the default group to selected commands. Policies without `schemaVersion: 2` keep the previous chat-type switch behavior.
+- **Command allowlists**: Command names are matched after alias normalization (`/m`, `/clear`, `/sessions`, `/current`, etc.); Host extension commands remain allowed when listed.
+- **Settings editor**: The account settings dialog now provides per-scope default rules, user exception rows and command lists, saved atomically with the account.
+
 ## [1.0.46] - 2026-11-19
 
 ### Host Compatibility Matrix & Stability

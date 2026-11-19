@@ -339,7 +339,7 @@ Open **Settings → IM Assistant**, select **Add account** under the target chan
 | Start a new session | Send `/new` or `/clear` | Creates and switches the current IM session; previous sessions stay in the Channels list without affecting web tasks |
 | Status / help | Send `/status` or `/help` | Current session and dynamically discovered Chat commands |
 | Agent preset | Choose **Agent preset** when adding or editing an account | Uses the Chat roster; changes apply to new sessions while previous sessions keep their preset |
-| Command permissions | Open Settings on the account row and toggle DM/group commands | Admission is checked first; disabling commands keeps conversation and approval/question replies available |
+| Command permissions | Open Settings on the account row to configure default rules, user exceptions and allowed commands | Admission is checked first; disabling commands keeps conversation and approval/question replies available |
 | Sessions / workspaces | `/sessions`, `/session <number or ID>`; `/workspaces`, `/workspace <number or ID>` | Resume ordinary Chat sessions; workspace selection creates a session without changing account defaults |
 | Task controls | `/stop`, `/steer <text>`, `/queue` | Stop, provide instructions, or inspect the queue; stopping preserves Host queued messages |
 | Send mode | Open Settings on the account row and choose Queue or Steer under **Send mode** | Queue (the default) keeps today's behavior; Steer hands an ordinary message to the running task as additional instructions immediately (same as `/steer`), and behaves like Queue while the task is idle |
@@ -430,7 +430,7 @@ Command replies, tool approvals, interactive questions, and channel notices sent
 
 ## Permissions and security boundaries
 
-Command permission does not grant DM admission or replace tool approval. Enabled users can inspect and resume ordinary Chat sessions and execute registered Host commands. Each account has independent DM/group switches without user IDs; legacy configurations default to enabled for compatibility.
+Command permission does not grant DM admission or replace tool approval. Enabled users can inspect and resume ordinary Chat sessions and execute registered Host commands. Each account can set separate default command permissions for DMs and groups, add per-user exceptions, and choose follow-default, all commands, selected commands, or no commands. Legacy `commandPermissions` configurations without `schemaVersion` keep the previous chat-type switch behavior; policies containing `schemaVersion: 2` require this or a newer dsh-im-connect version, so reset command permissions before downgrading.
 
 | Item | Current behavior |
 | --- | --- |

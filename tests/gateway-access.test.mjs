@@ -1210,6 +1210,37 @@ test('命令关闭不影响准入、普通消息和白名单工具审批', async
   } finally { engine.dispose() }
 })
 
+test('v2 命令权限按默认清单和用户例外分别放行', async t => {
+  const policy = {
+    schemaVersion: 2,
+    dm: {
+      enabled: true,
+      defaultAllowedCommands: ['help'],
+      users: [{ userId: 'user-1', enabled: true, allowedCommands: ['status'] }],
+    },
+    group: { enabled: true, users: [] },
+  }
+  const { engine, inbound, sent } = makeEngine(t, undefined, undefined, {}, { resolveCommandPermissions: () => policy })
+  engine.addAllowed('telegram', 'user-1')
+  engine.addAllowed('telegram', 'user-2')
+  try {
+    await inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/help', messageId: 'v2-user-help' })
+    await waitFor(() => sent.some(item => item.text.includes('不在允许的命令清单') || item.text.includes('未开启命令权限')))
+    const afterUserDenial = sent.length
+    await inbound({ chatId: 'user-1', userId: 'user-1', kind: 'dm', text: '/status', messageId: 'v2-user-status' })
+    await waitFor(() => sent.length > afterUserDenial)
+    assert.equal(sent.slice(afterUserDenial).some(item => item.text.includes('未开启命令权限') || item.text.includes('不在允许的命令清单')), false,
+      'the user exception command was allowed')
+    const afterDefaultHelp = sent.length
+    await inbound({ chatId: 'user-2', userId: 'user-2', kind: 'dm', text: '/help', messageId: 'v2-default-help' })
+    await waitFor(() => sent.length > afterDefaultHelp)
+    assert.equal(sent.slice(afterDefaultHelp).some(item => item.text.includes('未开启命令权限') || item.text.includes('不在允许的命令清单')), false,
+      'the default command list allowed help')
+    await inbound({ chatId: 'user-2', userId: 'user-2', kind: 'dm', text: '/status', messageId: 'v2-default-status' })
+    await waitFor(() => sent.filter(item => item.text.includes('未开启命令权限') || item.text.includes('不在允许的命令清单')).length >= 2)
+  } finally { engine.dispose() }
+})
+
 test('workspace → 普通消息回传 → new → 再回传使用同一创建和绑定链路', async t => {
   const services = {
     workspaceController: { async *follow() { yield { value: { items: [{ workspaceId: 'chosen', path: 'D:/chosen', sessionIds: [] }], archivedSessionIds: [] } } } },

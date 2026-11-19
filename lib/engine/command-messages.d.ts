@@ -341,6 +341,8 @@ export declare const commandEnglish: {
     readonly 无目标: "No goal";
     readonly "\u6392\u961F\u6D88\u606F\uFF1A{0} \u6761": "Queued messages: {0}";
     readonly "\u5F53\u524D\u804A\u5929\u672A\u5F00\u542F\u547D\u4EE4\u6743\u9650\uFF0C\u53EF\u4EE5\u7EE7\u7EED\u6B63\u5E38\u5BF9\u8BDD\u3002": "Commands are disabled in this chat. You can still chat normally.";
+    readonly "\u5F53\u524D\u7528\u6237\u672A\u5F00\u542F\u547D\u4EE4\u6743\u9650\uFF0C\u53EF\u4EE5\u7EE7\u7EED\u6B63\u5E38\u5BF9\u8BDD\u3002": "Command permission is disabled for your user. You can still chat normally.";
+    readonly "\u5F53\u524D\u547D\u4EE4\u4E0D\u5728\u5141\u8BB8\u7684\u547D\u4EE4\u6E05\u5355\u4E2D\uFF0C\u53EF\u4EE5\u7EE7\u7EED\u6B63\u5E38\u5BF9\u8BDD\u3002": "This command is not in the allowed command list. You can still chat normally.";
     readonly "\u547D\u4EE4\u5DF2\u53D6\u6D88\u3002\u67E5\u770B\u5F53\u524D\u72B6\u6001\uFF1A/status": "Command canceled. Check current status: /status";
     readonly "\u547D\u4EE4\u6267\u884C\u5931\u8D25\uFF1A{0}\n\n\u67E5\u770B\u7528\u6CD5\uFF1A/help\uFF1B\u786E\u8BA4\u5F53\u524D\u4F1A\u8BDD\uFF1A/status": "Command failed: {0}\n\nUsage: /help; check current session: /status";
     readonly "\u8BF7\u67E5\u770B\u672C\u673A\u65E5\u5FD7\u3002": "Open DSH on your computer to check the error details.";

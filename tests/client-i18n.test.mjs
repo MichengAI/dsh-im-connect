@@ -51,7 +51,7 @@ test('界面 t() 用到的键都在词典里', () => {
 
 test('已下线的 ChannelCard / 空态 / 在线更新词条不再占词典', () => {
   for (const key of [
-    'settings.selectAccountTitle', 'command.user', 'action.configure', 'status.unconfigured',
+    'settings.selectAccountTitle', 'action.configure', 'status.unconfigured',
     'composer.project', 'rail.hideArchived', 'account.agentPreset', 'account.presetNote',
     'bind.close', 'rail.pin', 'rail.unpin',
     'update.entry.title', 'update.entry.desc', 'update.entry.toggle', 'error.update.disabled',
