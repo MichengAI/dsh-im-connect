@@ -714,6 +714,7 @@ window.__ModuleLoader__.load({
         "command.permission": "命令权限",
         "command.pick": "选择命令",
         "command.noMatches": "没有匹配的命令",
+        "command.searchPlaceholder": "搜索或输入命令",
         "command.add": "添加用户例外",
         "command.remove": "移除",
         "command.save": "保存命令权限",
@@ -1047,6 +1048,7 @@ window.__ModuleLoader__.load({
         "command.permission": "Command permission",
         "command.pick": "Choose commands",
         "command.noMatches": "No matching commands",
+        "command.searchPlaceholder": "Search or type commands",
         "command.add": "Add user exception",
         "command.remove": "Remove",
         "command.save": "Save command permissions",
@@ -1380,6 +1382,7 @@ window.__ModuleLoader__.load({
         "command.permission": "コマンド権限",
         "command.pick": "コマンドを選択",
         "command.noMatches": "一致するコマンドがありません",
+        "command.searchPlaceholder": "コマンドを検索または入力",
         "command.add": "ユーザー例外を追加",
         "command.remove": "削除",
         "command.save": "コマンド権限を保存",
@@ -1713,6 +1716,7 @@ window.__ModuleLoader__.load({
         "command.permission": "Permiso de comandos",
         "command.pick": "Elegir comandos",
         "command.noMatches": "Ningún comando coincide",
+        "command.searchPlaceholder": "Buscar o escribir comandos",
         "command.add": "Añadir excepción de usuario",
         "command.remove": "Eliminar",
         "command.save": "Guardar permisos de comandos",
@@ -2046,6 +2050,7 @@ window.__ModuleLoader__.load({
         "command.permission": "Permission des commandes",
         "command.pick": "Choisir des commandes",
         "command.noMatches": "Aucune commande correspondante",
+        "command.searchPlaceholder": "Rechercher ou saisir des commandes",
         "command.add": "Ajouter une exception utilisateur",
         "command.remove": "Supprimer",
         "command.save": "Enregistrer les permissions",
@@ -2379,6 +2384,7 @@ window.__ModuleLoader__.load({
         "command.permission": "Befehlsberechtigung",
         "command.pick": "Befehle auswählen",
         "command.noMatches": "Keine passenden Befehle",
+        "command.searchPlaceholder": "Befehle suchen oder eingeben",
         "command.add": "Benutzerausnahme hinzufügen",
         "command.remove": "Entfernen",
         "command.save": "Befehlsberechtigungen speichern",
@@ -2712,6 +2718,7 @@ window.__ModuleLoader__.load({
         "command.permission": "Права на команды",
         "command.pick": "Выбрать команды",
         "command.noMatches": "Нет подходящих команд",
+        "command.searchPlaceholder": "Поиск или ввод команд",
         "command.add": "Добавить исключение",
         "command.remove": "Удалить",
         "command.save": "Сохранить права на команды",
@@ -3045,6 +3052,7 @@ window.__ModuleLoader__.load({
         "command.permission": "Permissão de comandos",
         "command.pick": "Escolher comandos",
         "command.noMatches": "Nenhum comando correspondente",
+        "command.searchPlaceholder": "Pesquisar ou digitar comandos",
         "command.add": "Adicionar exceção de usuário",
         "command.remove": "Remover",
         "command.save": "Salvar permissões de comandos",
@@ -4792,11 +4800,12 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     }
 
     // 命令多选框：单个搜索/输入控件 + 可多选的下拉面板。
-    function CommandListInput({ value, onChange, placeholder, ariaLabel, className, disabled = false, describedBy, invalid = false, suggestions = [], pickLabel = "选择命令", emptyLabel = "没有匹配的命令" }) {
+    function CommandListInput({ value, onChange, placeholder, searchPlaceholder, ariaLabel, className, disabled = false, describedBy, invalid = false, suggestions = [], pickLabel = "选择命令", emptyLabel = "没有匹配的命令" }) {
       const parse = (text) => String(text || "").split(/[\s,，]+/u).map(item => item.trim().replace(/^\/+/, "").toLowerCase()).filter(Boolean);
       const [query, setQuery] = useState("");
       const [open, setOpen] = useState(false);
       const rootRef = useRef(null);
+      const selectingRef = useRef(false);
       const selected = Array.isArray(value) ? value.filter(item => typeof item === "string") : [];
       const options = Array.isArray(suggestions) ? [...new Set(suggestions.filter(item => typeof item === "string"))] : [];
       const normalizedQuery = query.trim().toLowerCase();
@@ -4813,6 +4822,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         return () => document.removeEventListener("mousedown", onOutside);
       }, [open]);
       const toggle = (name) => {
+        setQuery("");
         if (selected.includes("*")) {
           onChange([name]);
           return;
@@ -4849,7 +4859,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           h(Input, {
             className: "ima-command-search",
             value: query,
-            placeholder: selected.length ? "" : placeholder,
+            placeholder: selected.length ? "" : (searchPlaceholder || placeholder),
             "aria-label": ariaLabel,
             "aria-describedby": describedBy,
             "aria-invalid": invalid || undefined,
@@ -4862,6 +4872,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
             onClick: () => setOpen(true),
             onChange: event => { setQuery(event.target.value); setOpen(true); },
             onBlur: event => {
+              if (selectingRef.current) return;
               if (!rootRef.current || !rootRef.current.contains(event.relatedTarget)) {
                 commit();
                 setOpen(false);
@@ -4881,7 +4892,8 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           role: "listbox",
           "aria-multiselectable": "true",
           "aria-label": pickLabel,
-          onMouseDown: event => event.preventDefault(),
+          onMouseDown: () => { selectingRef.current = true; },
+          onClick: () => { selectingRef.current = false; },
         },
           filtered.length ? filtered.map(name => h("div", {
             className: "ima-command-option" + (selected.includes(name) ? " is-selected" : ""),
@@ -5106,8 +5118,8 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
               ],
               onChange: next => updateScope(kind, withScopeMode(scope, next, kind)),
             })),
-          mode === "selected" ? h("label", { className: "ima-picker-field" },
-            h("span", { className: "ima-picker-label" }, t("command.commands")),
+          mode === "selected" ? h("div", { className: "ima-picker-field", role: "group", "aria-labelledby": sectionId + "-commands" },
+            h("span", { className: "ima-picker-label", id: sectionId + "-commands" }, t("command.commands")),
             h(CommandListInput, {
               value: scope.defaultAllowedCommands,
               placeholder: t("command.commandsHint"),
@@ -5118,6 +5130,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
               suggestions,
               pickLabel: t("command.pick"),
               emptyLabel: t("command.noMatches"),
+              searchPlaceholder: t("command.searchPlaceholder"),
               disabled: saving,
               onChange: commands => updateScope(kind, { ...scope, defaultAllowedCommands: commands }),
             }),
@@ -5169,6 +5182,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
                   suggestions,
                   pickLabel: t("command.pick"),
                   emptyLabel: t("command.noMatches"),
+                  searchPlaceholder: t("command.searchPlaceholder"),
                   disabled: saving,
                   onChange: commands => updateUser(kind, index, { ...user, allowedCommands: commands }),
                 }) : modeUser === "inherit" ? h("span", { className: "ima-command-inherit" },

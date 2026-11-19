@@ -133,6 +133,7 @@ test('命令权限编辑器提供候选、字段错误、未保存保护和稳�
   assert.match(command, /onDirtyChange/)
   assert.match(command, /ima-command-remove/)
   assert.match(command, /data-ima-command-invalid/)
+  assert.match(command, /mode === "selected" \? h\("div", \{ className: "ima-picker-field"/)
   const bindModal = source.slice(source.indexOf('    function BindModal('), source.indexOf('    const BUILT_IN_PERMISSION_LABELS'))
   assert.match(bindModal, /const \[commandDirty, setCommandDirty\] = useState\(false\)/)
   assert.match(bindModal, /onDirtyChange: setCommandDirty/)
