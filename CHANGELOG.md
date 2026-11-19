@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.46] - 2026-11-19
+
+### Host Compatibility Matrix & Stability
+
+- **DeepSeek Harness >=0.2.2-rc.1 support**: Upgraded host support matrix to DeepSeek Harness `>=0.2.2-rc.1 <0.3.0-0`, fully verified on official release candidates `0.2.2-rc.1` through `0.2.2-rc.5`.
+- **Legacy migration notice**: Host environments running earlier `0.2.0`–`0.2.1` releases will be rejected by the version gate; users on those versions should stay on plugin version `1.0.45`.
+- **Status & thinking progress display**: Improved the timeout handling for status progress feedback so that the final status banner duration aligns cleanly with the overall feedback budget, ensuring status notices remain visible without premature dismissal during long-running tasks.
+
 ## [1.0.45] - 2026-11-18
 
 ### Sidebar Tab Strip & Layout Stability

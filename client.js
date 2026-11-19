@@ -43,7 +43,6 @@ window.__ModuleLoader__.load({
     const IconChevronDownOutline = pickHostIcon("IconChevronDownOutlineRegular");
     const IconChevronRightOutline = pickHostIcon("IconChevronRightOutlineRegular");
     const IconPlusOutline = pickHostIcon("IconPlusOutlineRegular");
-    const IconEditOutline = pickHostIcon("IconEditOutlineRegular");
     const IconListPenOutline = pickHostIcon("IconListPenOutlineMedium", "IconListPenOutlineRegular", "IconListPenOutline", "IconEditOutlineRegular", "IconEditOutline");
     const IconLoadingOutline = pickHostIcon("IconLoadingOutlineRegular");
     function alertIcon(type) {

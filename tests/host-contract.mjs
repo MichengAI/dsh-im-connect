@@ -1,22 +1,6 @@
 // 真实宿主契约测试的 0.2.2+ 适配。
 // 1) 0.2.2 起上传凭据的 resolve 返回 { type, attachment } 信封。
 // 2) 0.2.2 起会话级模型选择由 Agent 自己暴露 model.current()。
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-
-/**
- * 读取隔离宿主的版本号。
- * @returns {string | undefined} 宿主版本，未安装隔离宿主时为 undefined。
- */
-export function hostContractVersion() {
-  const root = process.env.DSH_CHAT_CONTRACT_ROOT;
-  if (!root) return undefined;
-  try {
-    return JSON.parse(readFileSync(join(dirname(root), 'dsh-api-session-controller/package.json'), 'utf8')).version;
-  } catch {
-    return undefined;
-  }
-}
 
 /**
  * 把 resolve() 的返回值归一到文件/图片引用本身。

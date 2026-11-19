@@ -45,7 +45,6 @@ export function createHarness(body, kind) {
     pickWrappableWorkspacesEntry: list => list.find(e => !e.component?.__dshNativeTabWrapped && !e.component?.__imConnectWrapped && !e.component?.__dshAutomationWrapped),
     pickOfficialWorkspaces: () => winner().find(e => !e.component?.__dshNativeTabHost && !e.component?.__dshNativeTabWrapped && !e.component?.__imConnectWrapped),
     isForeignSidebarHost: component => !!component?.__dshNativeTabHost || component?.__dshNativeTabWrapped === true || component?.__imConnectWrapped === true,
-    resolveOfficialTreeComponent: component => component,
     createNativeTabRegistry: registry,
     attachNativeTabRegistry: nativeTabs.attachNativeTabRegistry,
     findNativeTabRegistry: find,
