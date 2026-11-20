@@ -1,7 +1,9 @@
 import type { ChannelAdapter, ImMedia, ReplyStream } from '../engine/types.js';
+export declare function validateWecomWsUrl(input?: unknown): string | undefined;
 export interface WecomConfig {
     botId?: string;
     secret?: string;
+    wsUrl?: string;
     additionalImageHosts?: readonly string[];
     host?: {
         get(name: string): unknown;

@@ -50,7 +50,7 @@ export function createChannelAdapter(
     case 'weixin':
       adapter = createWeixinChannel({ enabled: true, stateDir, botToken: config.botToken, onBotToken: options?.onWeixinBotToken, host: options?.host }, log, stateDir); break
     case 'wecom':
-      adapter = createWecomChannel({ botId: config.botId, secret: config.secret, ...imageOptions, host: options?.host }, log); break
+      adapter = createWecomChannel({ botId: config.botId, secret: config.secret, wsUrl: config.wsUrl, ...imageOptions, host: options?.host }, log); break
     case 'dingtalk':
       adapter = createDingtalkChannel({ clientId: config.clientId, clientSecret: config.clientSecret, ...imageOptions, host: options?.host }, log); break
     case 'qq':

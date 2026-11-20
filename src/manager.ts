@@ -17,6 +17,7 @@ import { createFileVault, createServiceVault, credentialRef, type CredentialServ
 import { ImEngine } from './engine/gateway.js'
 import { SeenStore } from './engine/seen-store.js'
 import { clearWeixinLogin, persistWeixinLogin, readLegacyWeixinBotToken, readWeixinAllowedUserId } from './channels/weixin.js'
+import { validateWecomWsUrl } from './channels/wecom.js'
 import { normalizeAssistantModel, normalizePermission, normalizeWorkspacePath, type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js'
 import type { ChannelAdapter, EngineConfig, ImMessage, SendMode } from './engine/types.js'
 import { KeyedSerialQueue } from './engine/keyed-queue.js'
@@ -226,6 +227,7 @@ export interface AccountView {
   freeChatGroups?: string
   thinkingDisplay?: boolean
   threadSessions?: boolean
+  wsUrl?: string
   lastCheckedAt?: string
 }
 
@@ -460,6 +462,9 @@ export class ChannelManager {
       ...((platform === 'feishu' || platform === 'lark') ? {
         threadSessions: config.threadSessions === 'true',
       } : {}),
+      ...(platform === 'wecom' && config.wsUrl ? {
+        wsUrl: config.wsUrl,
+      } : {}),
       lastCheckedAt: state.lastCheckedAt,
     }
   }
@@ -494,6 +499,21 @@ export class ChannelManager {
         if (hosts !== undefined) incoming.additionalImageHosts = parseAdditionalImageHosts(hosts).join('\n')
       } catch {
         return { ok: false, error: '图片扩展主机配置无效：请填写精确域名，不要包含通配符、URL、端口或 IP 地址。' }
+      }
+    }
+    if (id === 'wecom' && Object.hasOwn(incoming, 'wsUrl')) {
+      const rawWsUrl = incoming.wsUrl
+      if (rawWsUrl !== undefined) {
+        const trimmed = typeof rawWsUrl === 'string' ? rawWsUrl.trim() : ''
+        if (trimmed) {
+          try {
+            incoming.wsUrl = validateWecomWsUrl(trimmed)!
+          } catch (error) {
+            return { ok: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        } else {
+          delete incoming.wsUrl
+        }
       }
     }
     const normalized = await this.normalizeAccountSettings(id, settings, prev)
@@ -1100,9 +1120,27 @@ export class ChannelManager {
         else delete config.threadSessions
         state.config = config
       }
+      const hasWecomWsUrlSetting = platform === 'wecom' && Object.hasOwn(input, 'wsUrl')
+      let wecomWsUrlChanged = false
+      if (hasWecomWsUrlSetting) {
+        const previousWsUrl = state.config?.wsUrl
+        let nextWsUrl: string | undefined
+        if (typeof input.wsUrl === 'string' && input.wsUrl.trim()) {
+          try {
+            nextWsUrl = validateWecomWsUrl(input.wsUrl)
+          } catch (error) {
+            return { ok: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        }
+        wecomWsUrlChanged = nextWsUrl !== previousWsUrl
+        const config = { ...(state.config ?? {}) }
+        if (nextWsUrl) config.wsUrl = nextWsUrl
+        else delete config.wsUrl
+        state.config = config
+      }
       this.flush()
       if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
-      if ((proxyChanged || mentionPolicyChanged || threadSessionsChanged) && this.running.has(accountId)) await this.startOne(accountId)
+      if ((proxyChanged || mentionPolicyChanged || threadSessionsChanged || wecomWsUrlChanged) && this.running.has(accountId)) await this.startOne(accountId)
       return { ok: true, account: this.accountView(accountId, state) }
     })
   }

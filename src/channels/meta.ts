@@ -8,6 +8,7 @@ export interface ChannelField {
   secret?: boolean
   /** 仅用于已绑定账号的设置，不放进新增账号凭据表单。 */
   settingsOnly?: boolean
+  placeholder?: string
 }
 
 export interface ChannelMeta {
@@ -84,6 +85,7 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
     fields: [
       { key: 'botId', label: 'Bot ID' },
       { key: 'secret', label: 'Secret', secret: true },
+      { key: 'wsUrl', label: 'WebSocket URL', placeholder: '默认 wss://openws.work.weixin.qq.com' },
     ],
   },
 

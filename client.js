@@ -609,6 +609,9 @@ window.__ModuleLoader__.load({
         "account.proxyNote": "仅影响当前账号；保存后自动重连生效。",
         "account.proxySaved": "代理地址已保存；留空保存可保留当前地址。",
         "account.proxyUrl": "代理地址",
+        "account.wecomWsUrl": "WebSocket URL",
+        "account.wecomWsUrlNote": "私有化部署时填写自定义长连接地址，留空使用官方默认地址；保存后自动重连生效。",
+        "account.wecomWsUrlPlaceholder": "默认 wss://openws.work.weixin.qq.com",
         "account.receive": "接收消息",
         "account.receiveDescription": "关闭后保留账号配置，但不接收新消息",
         "account.remark": "名称备注",
@@ -779,6 +782,8 @@ window.__ModuleLoader__.load({
         "field.telegram.token": "Bot Token",
         "field.wecom.botId": "Bot ID",
         "field.wecom.secret": "Secret",
+        "field.wecom.wsUrl": "WebSocket URL",
+        "field.wecom.wsUrl.placeholder": "默认 wss://openws.work.weixin.qq.com",
         "hover.copied": "已复制",
         "loading": "加载中…",
         "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。",
@@ -915,6 +920,9 @@ window.__ModuleLoader__.load({
         "account.proxyNote": "Affects only this account. The channel reconnects automatically after saving.",
         "account.proxySaved": "A proxy address is saved. Leave the field blank to keep it.",
         "account.proxyUrl": "Proxy address",
+        "account.wecomWsUrl": "WebSocket URL",
+        "account.wecomWsUrlNote": "Enter a custom WebSocket URL for on-premise deployments, or leave blank for the official default; reconnects automatically after saving.",
+        "account.wecomWsUrlPlaceholder": "Default: wss://openws.work.weixin.qq.com",
         "account.receive": "Receive messages",
         "account.receiveDescription": "Turn this off to keep the account settings without receiving new messages",
         "account.remark": "Name remark",
@@ -1085,6 +1093,8 @@ window.__ModuleLoader__.load({
         "field.telegram.token": "Bot Token",
         "field.wecom.botId": "Bot ID",
         "field.wecom.secret": "Secret",
+        "field.wecom.wsUrl": "WebSocket URL",
+        "field.wecom.wsUrl.placeholder": "Default: wss://openws.work.weixin.qq.com",
         "hover.copied": "Copied",
         "loading": "Loading…",
         "pending.notice": "There are access requests. Approve a user before they can control the local assistant.",
@@ -1221,6 +1231,9 @@ window.__ModuleLoader__.load({
         "account.proxyNote": "現在のアカウントにのみ影響します。保存後に自動再接続して反映されます。",
         "account.proxySaved": "プロキシアドレスは保存されています。空のまま保存すると現在のアドレスが維持されます。",
         "account.proxyUrl": "プロキシアドレス",
+        "account.wecomWsUrl": "WebSocket URL",
+        "account.wecomWsUrlNote": "オンプレミス展開の場合はカスタム WebSocket URL を入力し、公式デフォルトを使用する場合は空欄にします。保存後に自動再接続されます。",
+        "account.wecomWsUrlPlaceholder": "デフォルト wss://openws.work.weixin.qq.com",
         "account.receive": "メッセージを受信",
         "account.receiveDescription": "無効にするとアカウント設定を維持したまま新規メッセージを受信しません",
         "account.remark": "名称備考",
@@ -1391,6 +1404,8 @@ window.__ModuleLoader__.load({
         "field.telegram.token": "Bot Token",
         "field.wecom.botId": "Bot ID",
         "field.wecom.secret": "Secret",
+        "field.wecom.wsUrl": "WebSocket URL",
+        "field.wecom.wsUrl.placeholder": "デフォルト wss://openws.work.weixin.qq.com",
         "hover.copied": "コピー完了",
         "loading": "読み込み中…",
         "pending.notice": "アクセスリクエストがあります。承認されたユーザーのみがローカルアシスタントを操作できます。",
@@ -1527,6 +1542,9 @@ window.__ModuleLoader__.load({
         "account.proxyNote": "Afecta solo a esta cuenta. El canal se reconecta automáticamente al guardar.",
         "account.proxySaved": "Se ha guardado una dirección de proxy. Deje el campo en blanco para conservarla.",
         "account.proxyUrl": "Dirección del proxy",
+        "account.wecomWsUrl": "WebSocket URL",
+        "account.wecomWsUrlNote": "Ingrese una URL de WebSocket personalizada para implementaciones locales o déjela en blanco para el valor predeterminado oficial; se reconecta automáticamente al guardar.",
+        "account.wecomWsUrlPlaceholder": "Predeterminado: wss://openws.work.weixin.qq.com",
         "account.receive": "Recibir mensajes",
         "account.receiveDescription": "Desactive esto para conservar la configuración de la cuenta sin recibir nuevos mensajes",
         "account.remark": "Observación del nombre",
@@ -1697,6 +1715,8 @@ window.__ModuleLoader__.load({
         "field.telegram.token": "Bot Token",
         "field.wecom.botId": "Bot ID",
         "field.wecom.secret": "Secret",
+        "field.wecom.wsUrl": "WebSocket URL",
+        "field.wecom.wsUrl.placeholder": "Predeterminado: wss://openws.work.weixin.qq.com",
         "hover.copied": "Copiado",
         "loading": "Cargando…",
         "pending.notice": "Hay solicitudes de acceso. Apruebe a un usuario para que pueda controlar el asistente local.",
@@ -1833,6 +1853,9 @@ window.__ModuleLoader__.load({
         "account.proxyNote": "Ne concerne que ce compte. Le canal se reconnecte automatiquement après enregistrement.",
         "account.proxySaved": "Une adresse de proxy est enregistrée. Laissez vide pour la conserver.",
         "account.proxyUrl": "Adresse du proxy",
+        "account.wecomWsUrl": "WebSocket URL",
+        "account.wecomWsUrlNote": "Saisissez une URL WebSocket personnalisée pour les déploiements sur site, ou laissez vide pour la valeur par défaut officielle ; se reconnecte automatiquement après enregistrement.",
+        "account.wecomWsUrlPlaceholder": "Par défaut : wss://openws.work.weixin.qq.com",
         "account.receive": "Recevoir des messages",
         "account.receiveDescription": "Désactivez cette option pour conserver les paramètres sans recevoir de nouveaux messages",
         "account.remark": "Remarque sur le nom",
@@ -2003,6 +2026,8 @@ window.__ModuleLoader__.load({
         "field.telegram.token": "Bot Token",
         "field.wecom.botId": "Bot ID",
         "field.wecom.secret": "Secret",
+        "field.wecom.wsUrl": "WebSocket URL",
+        "field.wecom.wsUrl.placeholder": "Par défaut : wss://openws.work.weixin.qq.com",
         "hover.copied": "Copié",
         "loading": "Chargement…",
         "pending.notice": "Demandes d'accès en attente. Approuvez un utilisateur pour lui permettre de piloter l'assistant local.",
@@ -2139,6 +2164,9 @@ window.__ModuleLoader__.load({
         "account.proxyNote": "Betrifft nur dieses Konto. Der Kanal verbindet sich nach dem Speichern automatisch neu.",
         "account.proxySaved": "Eine Proxy-Adresse ist gespeichert. Feld leer lassen, um sie beizubehalten.",
         "account.proxyUrl": "Proxy-Adresse",
+        "account.wecomWsUrl": "WebSocket URL",
+        "account.wecomWsUrlNote": "Geben Sie eine benutzerdefinierte WebSocket-URL für On-Premise-Bereitstellungen ein oder lassen Sie das Feld leer für den offiziellen Standard; verbindet sich nach dem Speichern automatisch neu.",
+        "account.wecomWsUrlPlaceholder": "Standard: wss://openws.work.weixin.qq.com",
         "account.receive": "Nachrichten empfangen",
         "account.receiveDescription": "Ausschalten, um Kontoeinstellungen zu behalten, ohne neue Nachrichten zu empfangen",
         "account.remark": "Namensnotiz",
@@ -2309,6 +2337,8 @@ window.__ModuleLoader__.load({
         "field.telegram.token": "Bot Token",
         "field.wecom.botId": "Bot ID",
         "field.wecom.secret": "Secret",
+        "field.wecom.wsUrl": "WebSocket URL",
+        "field.wecom.wsUrl.placeholder": "Standard: wss://openws.work.weixin.qq.com",
         "hover.copied": "Kopiert",
         "loading": "Wird geladen…",
         "pending.notice": "Es liegen Zugriffsanfragen vor. Genehmigen Sie Benutzer, damit sie den lokalen Assistenten steuern können.",
@@ -2445,6 +2475,9 @@ window.__ModuleLoader__.load({
         "account.proxyNote": "Влияет только на этот аккаунт. Канал автоматически переподключается после сохранения.",
         "account.proxySaved": "Адрес прокси сохранен. Оставьте поле пустым, чтобы сохранить его.",
         "account.proxyUrl": "Адрес прокси",
+        "account.wecomWsUrl": "WebSocket URL",
+        "account.wecomWsUrlNote": "Укажите пользовательский URL WebSocket для локального развертывания или оставьте пустым для официального адреса по умолчанию; переподключается автоматически после сохранения.",
+        "account.wecomWsUrlPlaceholder": "По умолчанию: wss://openws.work.weixin.qq.com",
         "account.receive": "Прием сообщений",
         "account.receiveDescription": "Отключите, чтобы сохранить настройки аккаунта без приема новых сообщений",
         "account.remark": "Примечание к имени",
@@ -2615,6 +2648,8 @@ window.__ModuleLoader__.load({
         "field.telegram.token": "Bot Token",
         "field.wecom.botId": "Bot ID",
         "field.wecom.secret": "Secret",
+        "field.wecom.wsUrl": "WebSocket URL",
+        "field.wecom.wsUrl.placeholder": "По умолчанию: wss://openws.work.weixin.qq.com",
         "hover.copied": "Скопировано",
         "loading": "Загрузка…",
         "pending.notice": "Есть запросы на доступ. Одобрите пользователя, чтобы он мог взаимодействовать с локальным ассистентом.",
@@ -2751,6 +2786,9 @@ window.__ModuleLoader__.load({
         "account.proxyNote": "Afeta apenas esta conta. O canal reconecta automaticamente após salvar.",
         "account.proxySaved": "Um endereço de proxy foi salvo. Deixe em branco para mantê-lo.",
         "account.proxyUrl": "Endereço do proxy",
+        "account.wecomWsUrl": "WebSocket URL",
+        "account.wecomWsUrlNote": "Insira uma URL WebSocket personalizada para implantações locais ou deixe em branco para o padrão oficial; reconecta automaticamente após salvar.",
+        "account.wecomWsUrlPlaceholder": "Padrão: wss://openws.work.weixin.qq.com",
         "account.receive": "Receber mensagens",
         "account.receiveDescription": "Desative para manter as configurações da conta sem receber novas mensagens",
         "account.remark": "Observação do nome",
@@ -2921,6 +2959,8 @@ window.__ModuleLoader__.load({
         "field.telegram.token": "Bot Token",
         "field.wecom.botId": "Bot ID",
         "field.wecom.secret": "Secret",
+        "field.wecom.wsUrl": "WebSocket URL",
+        "field.wecom.wsUrl.placeholder": "Padrão: wss://openws.work.weixin.qq.com",
         "hover.copied": "Copiado",
         "loading": "Carregando…",
         "pending.notice": "Existem solicitações de acesso. Aprove um usuário para permitir que ele controle o assistente local.",
@@ -3561,6 +3601,12 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       const translated = t(key);
       return translated === key ? field.label : translated;
     }
+    function fieldPlaceholder(ch, field, t) {
+      const key = "field." + ch.id + "." + field.key + ".placeholder";
+      const translated = t(key);
+      if (translated !== key) return translated;
+      return field.placeholder || fieldLabel(ch, field, t);
+    }
     function hintOf(ch, t) {
       const key = "qr." + ch.id;
       const translated = t(key);
@@ -4015,7 +4061,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
             h(Input, {
               type: f.secret ? "password" : "text",
               value: draft[f.key] || "",
-              placeholder: fieldLabel(ch, f, t),
+              placeholder: fieldPlaceholder(ch, f, t),
               onChange: (e) => setDraft({ ...draft, [f.key]: e.target.value }),
             }),
           )),
@@ -4094,6 +4140,11 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       if (platform === "feishu" || platform === "lark") {
         if (Object.prototype.hasOwnProperty.call(patch, "threadSessions")) {
           result.threadSessions = patch.threadSessions;
+        }
+      }
+      if (platform === "wecom") {
+        if (Object.prototype.hasOwnProperty.call(patch, "wsUrl")) {
+          result.wsUrl = patch.wsUrl;
         }
       }
       return result;
@@ -4595,6 +4646,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       const [draft, setDraft] = useState(account);
       const [proxyModeDraft, setProxyModeDraft] = useState(account.proxyMode || "inherit");
       const [proxyUrlDraft, setProxyUrlDraft] = useState(account.proxyUrl || "");
+      const [wsUrlDraft, setWsUrlDraft] = useState(account.wsUrl || "");
       const [mentionPolicyDraft, setMentionPolicyDraft] = useState(
         account.mentionPolicy === "always" ? "always" : (account.freeChatGroups ? "custom" : "addressed")
       );
@@ -4651,6 +4703,9 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       useEffect(() => {
         setProxyUrlDraft(account.proxyUrl || "");
       }, [account.id, account.proxyUrl]);
+      useEffect(() => {
+        setWsUrlDraft(account.wsUrl || "");
+      }, [account.id, account.wsUrl]);
       const save = (patch) => {
         const seq = ++saveSeq.current;
         const next = { ...draft, ...patch };
@@ -4697,6 +4752,11 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           if (platform === "feishu" || platform === "lark") {
             if (Object.prototype.hasOwnProperty.call(patch, "threadSessions")) {
               res.threadSessions = patch.threadSessions;
+            }
+          }
+          if (platform === "wecom") {
+            if (Object.prototype.hasOwnProperty.call(patch, "wsUrl")) {
+              res.wsUrl = patch.wsUrl;
             }
           }
           return res;
@@ -4841,6 +4901,31 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
               return h("div", { className: "ima-picker-note warning" }, t(key, { count: issues.invalid }));
             })(),
             h("div", { className: "ima-picker-note" }, t("account.telegramGroupPolicyNote")),
+          ),
+          account.platform === "wecom" && h("div", { className: "ima-wecom-settings" },
+            h("label", { className: "ima-picker-field wide" },
+              h("span", { className: "ima-picker-label" }, t("account.wecomWsUrl")),
+              h(Input, {
+                type: "text",
+                value: wsUrlDraft,
+                placeholder: t("account.wecomWsUrlPlaceholder"),
+                "aria-label": t("account.wecomWsUrl"),
+                onChange: (event) => setWsUrlDraft(event.target.value),
+                onBlur: (event) => {
+                  const value = event.target.value.trim();
+                  save({ wsUrl: value }).then((ok) => {
+                    if (ok && !value) setWsUrlDraft("");
+                  });
+                },
+                onKeyDown: (event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                },
+              }),
+            ),
+            h("div", { className: "ima-picker-note" }, t("account.wecomWsUrlNote")),
           ),
           h(CommandPermissionSettings, { value: draft.commandPermissions, onSave: commandPermissions => save({ commandPermissions }), t }),
           note && h("div", { className: note === "status.saved" ? "ima-save-note ok" : "ima-save-note" }, t(note)),

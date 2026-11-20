@@ -21,9 +21,28 @@ async function downloadWecomImage(image: { url?: string; aeskey?: string }, addi
   return imageMedia(decryptFile(await requestChannelBytes(image.url, { additionalTrustedHosts: additionalImageHosts }), image.aeskey))
 }
 
+export function validateWecomWsUrl(input?: unknown): string | undefined {
+  if (typeof input !== 'string' || !input.trim()) return undefined
+  const trimmed = input.trim()
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    throw new Error('WebSocket URL 无效：请填写合法的 WebSocket 地址')
+  }
+  if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
+    throw new Error('WebSocket URL 协议无效：仅支持 ws:// 或 wss:// 开头的地址')
+  }
+  if (!parsed.hostname) {
+    throw new Error('WebSocket URL 无效：缺少有效主机名')
+  }
+  return trimmed
+}
+
 export interface WecomConfig {
   botId?: string
   secret?: string
+  wsUrl?: string
   additionalImageHosts?: readonly string[]
   host?: { get(name: string): unknown }
 }
@@ -236,6 +255,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
   const botId = config.botId?.trim()
   const secret = config.secret?.trim()
   if (!botId || !secret) return undefined
+  const wsUrl = validateWecomWsUrl(config.wsUrl)
   const additionalImageHosts = validateAdditionalImageHosts(config.additionalImageHosts)
 
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
@@ -254,7 +274,7 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
     async start() {
       const startedGeneration = ++generation
       let sdk: {
-        WSClient: new (opts: { botId: string; secret: string; maxAuthFailureAttempts?: number; logger?: { debug: Function; info: Function; warn: Function; error: Function } }) => WecomSdkClient
+        WSClient: new (opts: { botId: string; secret: string; wsUrl?: string; maxAuthFailureAttempts?: number; logger?: { debug: Function; info: Function; warn: Function; error: Function } }) => WecomSdkClient
         generateReqId?: (prefix: string) => string
       }
       try {
@@ -262,7 +282,13 @@ export function createWecomChannel(config: WecomConfig, log: (line: string) => v
       } catch {
         throw new Error('缺少依赖 @wecom/aibot-node-sdk')
       }
-      client = new sdk.WSClient({ botId, secret, maxAuthFailureAttempts: 1, logger: quietSdkLogger(log, 'wecom') })
+      client = new sdk.WSClient({
+        botId,
+        secret,
+        maxAuthFailureAttempts: 1,
+        logger: quietSdkLogger(log, 'wecom'),
+        ...(wsUrl ? { wsUrl } : {}),
+      })
       client.on('authenticated', () => { if (generation === startedGeneration) statusText = '长连接已建立' })
       client.on('disconnected', () => { if (generation === startedGeneration) statusText = '已断开' })
       client.on('reconnecting', () => { if (generation === startedGeneration) statusText = '重连中' })
