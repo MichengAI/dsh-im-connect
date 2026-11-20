@@ -122,6 +122,8 @@ export interface ChannelAdapter {
      */
     sendThinking?(chatId: string, text: string, options?: ThinkingOptions): Promise<void>;
 }
+/** 思考过程截断提示语（基础文案）。 */
+export declare const DEFAULT_TRUNCATED_NOTE = "\u2026\uFF08\u5DF2\u622A\u65AD\uFF0C\u5B8C\u6574\u5185\u5BB9\u89C1\u7F51\u9875\u4F1A\u8BDD\uFF09";
 /** 思考过程消息的渲染参数；标题由引擎按宿主语言生成。 */
 export interface ThinkingOptions {
     /** 本次输出的唯一身份；引擎为每个会话回合生成，不得跨回合复用。 */

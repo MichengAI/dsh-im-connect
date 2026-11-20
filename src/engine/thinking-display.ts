@@ -70,7 +70,11 @@ export class ThinkingDisplayTracker {
     if (config.mode !== 'collapsed' || !target.channel.sendThinking || !target.isCurrent()) return
     const channelLimit = target.channel.maxThinkingChars
       ?? (target.channel.id === 'feishu' || target.channel.id === 'lark' ? 65536 : 4096)
-    const bufferLimit = channelLimit
+    const raw = target.config && typeof target.config === 'object' ? target.config as Record<string, unknown> : {}
+    const hasExplicitMaxChars = typeof raw.maxChars === 'number' && Number.isFinite(raw.maxChars)
+    const bufferLimit = hasExplicitMaxChars
+      ? Math.min(channelLimit, config.maxChars)
+      : channelLimit
     this.states.set(target.key, {
       target, config, scope: new AbortController(), streamId: `${target.sessionId}:${this.identity}:${++this.generation}`,
       prefix: '', total: 0, bufferLimit, closed: false, final: false,
@@ -178,7 +182,7 @@ export class ThinkingDisplayTracker {
 
   private send(state: Lifecycle, final: boolean): Promise<void> {
     if (!this.valid(state)) return Promise.resolve()
-    const maxChars = state.bufferLimit > 4096 ? state.bufferLimit : state.config.maxChars
+    const maxChars = state.bufferLimit
     const options: ThinkingOptions = {
       final, label: state.target.label(final, state.total), maxChars,
       streamId: state.streamId, signal: state.scope.signal, isCurrent: () => this.valid(state),

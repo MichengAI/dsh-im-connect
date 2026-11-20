@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createFeishuChannel, chunkByGraphemes, chunkByCodePoints } from '../lib/channels/feishu.js'
+import { ThinkingDisplayTracker } from '../lib/engine/thinking-display.js'
 import { ChannelManager } from '../lib/manager.js'
 
 test('Feishu sendThinking: 私聊与群大厅普通消息走飞书原生 message_cot 思考过程', async () => {
@@ -842,6 +843,144 @@ test('Feishu sendThinking: 降级到卡片折叠模式或超长文本卡片时�
   assert.ok(jsonContent, '卡片必须包含 content JSON 字符串')
   const byteLength = Buffer.byteLength(jsonContent, 'utf8')
   assert.ok(byteLength <= 30 * 1024, `卡片 content 字节数 (${byteLength} bytes) 必须在 30KB (30720 bytes) 限制以内`)
+
+  await channel.stop()
+})
+
+test('Feishu sendThinking: Tracker -> Feishu 全链路 70K 字符长思维链截断，最终长度严格等于 65536 且包含截断提示', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_cot_1' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply_1' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot')) {
+          if (opts.method === 'POST') return { code: 0, data: { cot_id: 'cot_full_1', message_id: 'om_full_cot' } }
+          if (opts.method === 'PUT') return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, () => {}, async () => mockSdk)
+  await channel.start()
+
+  let clock = 10000
+  const tracker = new ThinkingDisplayTracker(() => {}, () => clock)
+  const target = {
+    key: 'target-feishu-full-70k',
+    sessionId: 'session-full-70k',
+    channel,
+    chatId: 'oc_full_70k',
+    turn: 1,
+    config: { mode: 'collapsed' }, // 默认配置（未显式指定 maxChars）
+    isCurrent: () => true,
+    label: (final, count) => `🧠 思考过程 · ${count} 字`,
+  }
+
+  tracker.start(target)
+  // 分批喂入 70,000 字符
+  const chunk = '深度逻辑推导与思考链分析。'.repeat(500) // 约 6500 字符
+  for (let i = 0; i < 11; i++) {
+    clock += 2500
+    tracker.append(target, chunk)
+  }
+  await tracker.finish(target)
+
+  const putRequests = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(putRequests.length >= 1, '全链路必须发起 PUT 请求')
+  const totalDelivered = putRequests
+    .flatMap(r => r.data.events)
+    .filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+    .map(e => JSON.parse(e.content).delta)
+    .join('')
+
+  assert.equal(totalDelivered.length, 65536, `全链路截断后投递总长度必须严格等于 65536 字符（实测: ${totalDelivered.length}），绝不能溢出至 65554`)
+  assert.match(totalDelivered, /已截断/, '全链路截断必须包含已截断提示')
+
+  await channel.stop()
+})
+
+test('Feishu sendThinking: Tracker -> Feishu 全链路用户显式配置 maxChars: 2000 成功收紧并在 2000 字符内截断', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_cot_2' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply_2' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot')) {
+          if (opts.method === 'POST') return { code: 0, data: { cot_id: 'cot_tight_1', message_id: 'om_tight_cot' } }
+          if (opts.method === 'PUT') return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, () => {}, async () => mockSdk)
+  await channel.start()
+
+  let clock = 10000
+  const tracker = new ThinkingDisplayTracker(() => {}, () => clock)
+  const target = {
+    key: 'target-feishu-tight-2000',
+    sessionId: 'session-tight-2000',
+    channel,
+    chatId: 'oc_tight_2000',
+    turn: 1,
+    config: { mode: 'collapsed', maxChars: 2000 }, // 用户显式收紧为 2000 字符
+    isCurrent: () => true,
+    label: (final, count) => `🧠 思考过程 · ${count} 字`,
+  }
+
+  tracker.start(target)
+  // 喂入 5,000 字符
+  const chunk = '用户要求严格收紧思考预算。'.repeat(385) // 约 5005 字符
+  clock += 2500
+  tracker.append(target, chunk)
+  await tracker.finish(target)
+
+  const putRequests = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(putRequests.length >= 1, '必须发起 PUT 请求')
+  const totalDelivered = putRequests
+    .flatMap(r => r.data.events)
+    .filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+    .map(e => JSON.parse(e.content).delta)
+    .join('')
+
+  assert.ok(totalDelivered.length <= 2000, `用户显式收紧 maxChars: 2000 时，实际投递字符数 (${totalDelivered.length}) 不得超过 2000`)
+  assert.match(totalDelivered, /已截断/, '超限后应追加截断提示')
 
   await channel.stop()
 })

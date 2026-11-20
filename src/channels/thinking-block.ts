@@ -6,13 +6,15 @@
  * 渲染放在这里是为了可单测：转义、长度收敛、折叠标签都不依赖网络。
  */
 
+import { DEFAULT_TRUNCATED_NOTE } from '../engine/types.js'
+
 /** 单条 Telegram 消息的字符上限；留出余量给标签与截断提示。 */
 export const THINKING_BODY_LIMIT = 3_500
 
 /** 渠道没给上限时使用的默认值。 */
 export const DEFAULT_THINKING_MAX_CHARS = 3_500
 
-const TRUNCATED_NOTE = '…（已截断，完整内容见网页会话）'
+const TRUNCATED_NOTE = DEFAULT_TRUNCATED_NOTE
 
 /** 转义 Telegram HTML 模式要求的字符。 */
 export function escapeTelegramHtml(value: string): string {

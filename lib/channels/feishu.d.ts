@@ -1,4 +1,4 @@
-import type { ChannelAdapter, ImMedia } from '../engine/types.js';
+import { type ChannelAdapter, type ImMedia } from '../engine/types.js';
 /** 飞书一张卡片最多 5 个 table 元素，超了整个写入会被拒（230099 / ErrCode 11310），旧卡片内容会卡住。 */
 export declare const FEISHU_CARD_MAX_TABLES = 5;
 export declare const FEISHU_COT_API = "/open-apis/im/v1/message_cot";
@@ -11,15 +11,20 @@ export declare const FEISHU_COT_MAX_CHARS = 65536;
 export declare const FEISHU_CARD_THINKING_MAX_CHARS = 8000;
 /** 飞书卡片折叠面板内容最大安全 UTF-8 字节上限（30KB = 30720 字节，预留约 4.7KB 给卡片外壳 JSON） */
 export declare const FEISHU_CARD_THINKING_MAX_BYTES = 26000;
-export declare const TRUNCATED_NOTE = "\n\n\u2026\uFF08\u5DF2\u622A\u65AD\uFF0C\u5B8C\u6574\u5185\u5BB9\u89C1\u7F51\u9875\u4F1A\u8BDD\uFF09";
+export declare const TRUNCATED_NOTE: string;
+/** 安全获取 Unicode 字形簇（Grapheme Cluster）可迭代对象，在不支持 Intl.Segmenter 时安全退化为码点遍历 */
+export declare function getGraphemeUnits(text: string): Iterable<string>;
 /** 按 Unicode 字形簇（Grapheme Cluster）安全切分文本，严禁切开 Emoji 代理对或 ZWJ 复合表情 */
 export declare function chunkByGraphemes(text: string, maxChunkLength: number): string[];
 /** 保持历史兼容别名 */
 export declare const chunkByCodePoints: typeof chunkByGraphemes;
 /**
- * 针对思考内容按字符预算与可选字节预算进行字形簇安全截断，并在截断时追加提示后缀
+ * 针对思考内容按字符预算与可选字节预算进行字形簇安全截断，并在截断时追加提示后缀。
+ *
+ * 注：maxBytes 预算按原始 UTF-8 文本字节估算（不含 JSON 转义增量）；
+ * 卡片折叠面板预留了约 4.7KB 裕量应对卡片外壳与潜在字符转义。
  */
-export declare function clipThinkingText(text: string, maxChars: number, maxBytes?: number, note?: string): {
+export declare function clipThinkingText(text: string, maxChars: number, maxBytes?: number, note?: string, forceTruncate?: boolean): {
     text: string;
     truncated: boolean;
 };

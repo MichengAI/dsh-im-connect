@@ -115,6 +115,9 @@ export interface ChannelAdapter {
   sendThinking?(chatId: string, text: string, options?: ThinkingOptions): Promise<void>
 }
 
+/** 思考过程截断提示语（基础文案）。 */
+export const DEFAULT_TRUNCATED_NOTE = '…（已截断，完整内容见网页会话）'
+
 /** 思考过程消息的渲染参数；标题由引擎按宿主语言生成。 */
 export interface ThinkingOptions {
   /** 本次输出的唯一身份；引擎为每个会话回合生成，不得跨回合复用。 */
