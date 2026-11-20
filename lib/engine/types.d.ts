@@ -112,14 +112,14 @@ export interface ChannelAdapter {
     setTopicEditHandler?(handler: (chatId: string, name: string) => void): void;
     /** 企业微信等回调通道不能等合并窗口，必须立刻处理。 */
     skipMerge?: boolean;
+    /** 渠道支持的最大思考内容字符预算；未声明时由引擎按默认安全上限（单条 4,096，原生流式 65,536）兜底。 */
+    maxThinkingChars?: number;
     /**
      * 把模型的思考过程发成一条可在聊天里折叠/展开的消息（近似网页里收起的思考行）。
      *
      * 同一回合复用同一条消息，`final` 为 true 时收口并释放，下一回合另起一条。
      * 渠道不实现该方法时，引擎不会发送思考内容，只保留状态行。
      */
-    /** 渠道支持的最大思考内容字符预算；未声明时由引擎按默认安全上限（单条 4,096，原生流式 65,536）兜底。 */
-    maxThinkingChars?: number;
     sendThinking?(chatId: string, text: string, options?: ThinkingOptions): Promise<void>;
 }
 /** 思考过程消息的渲染参数；标题由引擎按宿主语言生成。 */

@@ -7,12 +7,22 @@ export declare const FEISHU_COT_COMPLETE_API = "/open-apis/im/v1/message_cot/com
 export declare const FEISHU_COT_CHUNK_SIZE = 800;
 /** 飞书原生 message_cot 流式推理长思维链最大安全预算（64K 字符），防止极端异常溢出 */
 export declare const FEISHU_COT_MAX_CHARS = 65536;
-/** 飞书卡片折叠面板（话题回复串内或降级兜底）markdown 单元素安全预算，避免 30KB JSON 超限 */
-export declare const FEISHU_CARD_THINKING_MAX_CHARS = 12000;
+/** 飞书卡片折叠面板（话题回复串内或降级兜底）安全字符预算，避免 30KB JSON 物理超限（8000 中文字约为 24KB UTF-8） */
+export declare const FEISHU_CARD_THINKING_MAX_CHARS = 8000;
+/** 飞书卡片折叠面板内容最大安全 UTF-8 字节上限（30KB = 30720 字节，预留约 4.7KB 给卡片外壳 JSON） */
+export declare const FEISHU_CARD_THINKING_MAX_BYTES = 26000;
+export declare const TRUNCATED_NOTE = "\n\n\u2026\uFF08\u5DF2\u622A\u65AD\uFF0C\u5B8C\u6574\u5185\u5BB9\u89C1\u7F51\u9875\u4F1A\u8BDD\uFF09";
 /** 按 Unicode 字形簇（Grapheme Cluster）安全切分文本，严禁切开 Emoji 代理对或 ZWJ 复合表情 */
 export declare function chunkByGraphemes(text: string, maxChunkLength: number): string[];
 /** 保持历史兼容别名 */
 export declare const chunkByCodePoints: typeof chunkByGraphemes;
+/**
+ * 针对思考内容按字符预算与可选字节预算进行字形簇安全截断，并在截断时追加提示后缀
+ */
+export declare function clipThinkingText(text: string, maxChars: number, maxBytes?: number, note?: string): {
+    text: string;
+    truncated: boolean;
+};
 /** 按表格数量拆正文，保证每张卡不超上限，且不会把表格切一半。 */
 export declare function splitByTableLimit(text: string, maxTables?: number): string[];
 /**

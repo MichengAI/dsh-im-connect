@@ -306,11 +306,11 @@ Native configuration options are provided here. Their values are persisted in `c
     mode: collapsed   # off | collapsed
     minChars: 120     # only send once this many characters accumulated
     intervalMs: 2000  # minimum interval between refreshes
-    maxChars: 3500    # per-message cap; longer text is truncated and noted
+    maxChars: 3500    # per-message cap; longer text is truncated and noted (native streaming CoT channels like Feishu use dedicated 64K budget)
   ```
 - **Channel and UI support**: implemented for Telegram, Feishu, and Lark; can be enabled in **Settings → IM Assistant → Account Details** by selecting **Collapsed** in the **Show thinking process** dropdown. Other channels ignore the setting and keep the existing status line.
 - **Boundaries and privacy**: collapsing is client-side display, not access control; everyone who can read the group message can expand the reasoning. Enable only where sharing reasoning is intentional. Thinking is not counted as final-answer delivery or included in automatic recovery.
-- **Resources and lifecycle**: off/unsupported channels retain no raw reasoning. When enabled, each turn retains at most a 4096 UTF-16-unit prefix plus a scalar character count. Pending refreshes coalesce to the latest snapshot; cancellation, rebinding, muting, unloading and turn replacement prevent stale output.
+- **Resources and lifecycle**: off/unsupported channels retain no raw reasoning. When enabled, each turn retains at most the channel capacity (4096 UTF-16 units by default, 65536 for Feishu native CoT) as a bounded prefix plus a scalar character count. Pending refreshes coalesce to the latest snapshot; cancellation, rebinding, muting, unloading and turn replacement prevent stale output.
 - **Ranges**: `minChars` 0–4096 (also applied on final), `intervalMs` 1000–60000, `maxChars` 200–4096. Finite out-of-range values are clamped, nonfinite values use defaults. HTML escaping, labels, wrappers and truncation notes all fit the budget without splitting emoji surrogate pairs.
 - **Fallback**: only a definite HTML entity rejection switches to plain text, which persists for later edits in that turn. Unknown network outcomes, authentication failures and rate limits do not trigger a format-switch resend.
 

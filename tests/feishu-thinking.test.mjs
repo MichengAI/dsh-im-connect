@@ -721,3 +721,128 @@ test('Feishu sendThinking: 原生 message_cot 模式完整支持长思维链流�
 
   await channel.stop()
 })
+
+test('Feishu sendThinking: 超过 65536 字符防爆上限时截断在 65536 字符预算并追加提示，绝不腰斩回 3500 字符', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_1' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_2' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'POST') {
+          return { code: 0, data: { cot_id: 'cot_70k', message_id: 'om_cot_70k' } }
+        }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'PUT') {
+          return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, () => {}, async () => mockSdk)
+  await channel.start()
+
+  // 构造 70,000 字符的大模型超长思维链，并模拟引擎报告 truncated: true
+  const hugeText = '长推理步骤分析与多轮逻辑推演。'.repeat(4667) // 约 70,005 字符
+  await channel.sendThinking('oc_huge_reasoning', hugeText, {
+    streamId: 'stream-huge',
+    label: '🧠 思考过程 · 70000 字',
+    maxChars: 3500, // 引擎默认携带的 maxChars
+    truncated: true, // 引擎标记已超预算截断
+    final: true,
+  })
+
+  const putRequests = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(putRequests.length >= 1, '必须发起 PUT 请求')
+  const totalDelivered = putRequests
+    .flatMap(r => r.data.events)
+    .filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+    .map(e => JSON.parse(e.content).delta)
+    .join('')
+
+  // 验证：应保留在 65536 字符的 CoT 安全预算内，绝不能腰斩成 3500
+  assert.ok(totalDelivered.length > 60000, `投递总长度应大于 60000 字符（实测: ${totalDelivered.length}），严禁在 3500 处腰斩`)
+  assert.ok(totalDelivered.length <= 65536, `投递总长度不得超过 65536 字符防爆上限（实测: ${totalDelivered.length}）`)
+  assert.match(totalDelivered, /已截断/, '超限后应追加截断提示')
+
+  await channel.stop()
+})
+
+test('Feishu sendThinking: 降级到卡片折叠模式或超长文本卡片时，单条 JSON 严格限制在 30KB (30720 字节) 内', async () => {
+  const requests = []
+  let createdCard = null
+  let patchedCard = null
+
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async (opts) => {
+              requests.push({ method: 'create', opts })
+              createdCard = opts
+              return { code: 0, data: { message_id: 'om_card_降级' } }
+            },
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply_1' } }),
+            patch: async (opts) => {
+              requests.push({ method: 'patch', opts })
+              patchedCard = opts
+              return { code: 0 }
+            },
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot')) {
+          // 模拟原生 CoT 接口被平台拒绝（例如无权限或单事件超限），触发降级卡片
+          return { code: 10001, msg: 'AppendCOTEvents rejected' }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, () => {}, async () => mockSdk)
+  await channel.start()
+
+  // 12000 个中文字符（UTF-8 编码下每个汉字 3 字节，共 36000 字节，旧版会超过 30KB 限制）
+  const hugeChineseText = '这是一段极长的复杂业务逻辑推导中文字符串。'.repeat(600) // 12,000 字
+  await channel.sendThinking('oc_card_chinese', hugeChineseText, {
+    streamId: 'stream-card-chinese',
+    label: '🧠 思考过程 · 12000 字',
+    final: true,
+  })
+
+  assert.ok(createdCard, 'CoT 失败后必须降级创建卡片')
+  const jsonContent = createdCard.data?.content
+  assert.ok(jsonContent, '卡片必须包含 content JSON 字符串')
+  const byteLength = Buffer.byteLength(jsonContent, 'utf8')
+  assert.ok(byteLength <= 30 * 1024, `卡片 content 字节数 (${byteLength} bytes) 必须在 30KB (30720 bytes) 限制以内`)
+
+  await channel.stop()
+})
+

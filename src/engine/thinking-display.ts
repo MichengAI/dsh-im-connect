@@ -70,7 +70,7 @@ export class ThinkingDisplayTracker {
     if (config.mode !== 'collapsed' || !target.channel.sendThinking || !target.isCurrent()) return
     const channelLimit = target.channel.maxThinkingChars
       ?? (target.channel.id === 'feishu' || target.channel.id === 'lark' ? 65536 : 4096)
-    const bufferLimit = Math.max(channelLimit, config.maxChars)
+    const bufferLimit = channelLimit
     this.states.set(target.key, {
       target, config, scope: new AbortController(), streamId: `${target.sessionId}:${this.identity}:${++this.generation}`,
       prefix: '', total: 0, bufferLimit, closed: false, final: false,
@@ -178,10 +178,11 @@ export class ThinkingDisplayTracker {
 
   private send(state: Lifecycle, final: boolean): Promise<void> {
     if (!this.valid(state)) return Promise.resolve()
+    const maxChars = state.bufferLimit > 4096 ? state.bufferLimit : state.config.maxChars
     const options: ThinkingOptions = {
-      final, label: state.target.label(final, state.total), maxChars: state.config.maxChars,
+      final, label: state.target.label(final, state.total), maxChars,
       streamId: state.streamId, signal: state.scope.signal, isCurrent: () => this.valid(state),
-      truncated: state.closed || state.high !== undefined,
+      truncated: Boolean(state.closed),
     }
     try {
       const work = state.target.channel.sendThinking!(state.target.chatId, state.prefix, options)

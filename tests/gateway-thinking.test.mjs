@@ -282,3 +282,54 @@ test('thinking tracker adapts buffer limit for feishu/lark without clamping at 4
   assert.equal(state.closed, false, '未达安全上限前严禁封闭')
   assert.equal(sends[0].options.truncated, false, '长思维链在安全预算内绝不标记 truncated: true')
 })
+
+test('thinking tracker: 流式分块切断高位代理时不误报截断 (truncated 仅代表 true closed)', () => {
+  let now = 0
+  const sends = []
+  const tracker = new ThinkingDisplayTracker(() => {}, () => now)
+  const channel = { id: 'tg', async sendThinking(chatId, text, options) { sends.push({ chatId, text, options }) } }
+  const target = {
+    key: 'tg:emoji:split',
+    sessionId: 'session-emoji',
+    chatId: 'oc_emoji',
+    channel,
+    turn: 1,
+    config: { mode: 'collapsed', minChars: 1 },
+    isCurrent: () => true,
+    label: (final, n) => `${final}:${n}`,
+  }
+  tracker.start(target)
+  // 输入一个末尾带有未拼接高位代理的 chunk（例如前缀 '测试' + '\uD83D'）
+  const splitChunk = '测试\uD83D'
+  tracker.append(target, splitChunk)
+  assert.ok(sends.length >= 1)
+  assert.equal(sends[0].options.truncated, false, '分块暂存高位代理未发生截断，严禁标记 truncated: true')
+})
+
+test('thinking tracker: 严格遵守渠道声明的更小 maxThinkingChars 预算，绝不被默认 maxChars 冲破', () => {
+  let now = 0
+  const sends = []
+  const tracker = new ThinkingDisplayTracker(() => {}, () => now)
+  // 渠道显式声明物理容量仅为 1000 字符
+  const channel = { id: 'tiny', maxThinkingChars: 1000, async sendThinking(chatId, text, options) { sends.push({ chatId, text, options }) } }
+  const target = {
+    key: 'tiny:budget:clamp',
+    sessionId: 'session-tiny',
+    chatId: 'oc_tiny',
+    channel,
+    turn: 1,
+    // 用户配置使用默认 3500 字符
+    config: { mode: 'collapsed', minChars: 10, maxChars: 3500 },
+    isCurrent: () => true,
+    label: (final, n) => `${final}:${n}`,
+  }
+  tracker.start(target)
+  const state = [...tracker.states.values()][0]
+  assert.equal(state.bufferLimit, 1000, '受限渠道容量上限必须锁定为渠道声明的 1000，不得被 3500 冲破')
+
+  // 注入 1500 字符
+  tracker.append(target, '字符'.repeat(750))
+  assert.equal(state.closed, true, '超过 1000 字符后应封闭')
+  assert.equal(state.prefix.length, 1000, '前缀长度不得超出 1000')
+})
+
