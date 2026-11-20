@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.47] - 2026-11-20
+
+### Feishu & Lark Long Reasoning Display (#75)
+
+- **Complete streaming display for long reasoning chains**: Feishu and Lark native reasoning bubbles now support full streaming display for lengthy chains of thought with a generous 64K budget, eliminating premature truncation at 3,500 characters.
+- **Clear note for extremely long reasoning**: When reasoning output exceeds 65,536 characters, the initial 64K content is preserved cleanly with an informative truncation notice appended at the end.
+- **Card payload safety in message threads**: Collapsible reasoning cards in group threads and card fallbacks strictly enforce platform size constraints, ensuring stable presentation and preventing card delivery errors.
+
 ## [1.0.46] - 2026-11-19
 
 ### Host Compatibility Matrix & Stability

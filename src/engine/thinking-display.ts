@@ -19,7 +19,7 @@ export function normalizeThinkingDisplay(value: unknown): ThinkingDisplayConfig 
     mode: input.mode === 'collapsed' ? 'collapsed' : 'off',
     minChars: number('minChars', 120, 0, 4096),
     intervalMs: number('intervalMs', 2000, 1000, 60000),
-    maxChars: number('maxChars', 3500, 200, 4096),
+    maxChars: number('maxChars', DEFAULT_THINKING_MAX_CHARS, 200, 4096),
   }
 }
 
@@ -183,6 +183,7 @@ export class ThinkingDisplayTracker {
 
   private send(state: Lifecycle, final: boolean): Promise<void> {
     if (!this.valid(state)) return Promise.resolve()
+    // 渠道能力高于普通单条上限时（如飞书 64K 原生流式通道），按 bufferLimit 下发；普通单条渠道（<= 4096）在 bufferLimit 与 config.maxChars 之间取较小值
     const maxChars = state.bufferLimit > 4096
       ? state.bufferLimit
       : Math.min(state.bufferLimit, state.config.maxChars)

@@ -7,7 +7,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import { ChannelManager } from './manager.js'
-import type { EngineConfig } from './engine/types.js'
+import { DEFAULT_THINKING_MAX_CHARS, type EngineConfig } from './engine/types.js'
 import type { TopicMode } from './engine/topic-title.js'
 import { createRotatingFileAppender } from './engine/file-log.js'
 import { withReplyLocale } from './engine/command-locale.js'
@@ -60,7 +60,7 @@ export const Config: Schema<PluginConfig> = Schema.object({
     mode: Schema.union(['off', 'collapsed']).default('off').description('思考过程投递：off 关闭，collapsed 发成可折叠消息。'),
     minChars: Schema.number().default(120).description('累计到这个字数才发第一条思考消息。'),
     intervalMs: Schema.number().default(2000).description('两次思考消息刷新之间的最小间隔（毫秒）。'),
-    maxChars: Schema.number().default(3500).description('单条思考消息允许的最大字符数（原生流式长思维链渠道如飞书除外，享有 64K 原生流式预算）。'),
+    maxChars: Schema.number().default(DEFAULT_THINKING_MAX_CHARS).description('单条思考消息允许的最大字符数（原生流式长思维链渠道如飞书除外，享有 64K 原生流式预算）。'),
   }).description('思考过程折叠消息；需要渠道实现 sendThinking（目前支持 Telegram、飞书与 Lark）。'),
 })
 

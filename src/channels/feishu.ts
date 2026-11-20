@@ -585,11 +585,11 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               ? Math.floor(next.options.maxChars)
               : FEISHU_COT_MAX_CHARS
             // 原生 message_cot 专用于承载大模型长思维链，默认享有 65,536 字符长预算；
-            // 只有当调用方显式指定了更小的严格预算（如测试用例或用户显式配置收紧 maxChars < 3500）时才收紧，
-            // 绝不因默认单条消息预算（3500/4096）而在 3500 处人为截断。
-            const cotBudget = explicitBudget < DEFAULT_THINKING_MAX_CHARS
-              ? Math.max(200, explicitBudget)
-              : FEISHU_COT_MAX_CHARS
+            // 只有当调用方显式指定了更小的严格预算（如测试用例或用户显式配置收紧）时才收紧，
+            // 默认单条消息预算（3500/DEFAULT_THINKING_MAX_CHARS）不应被人为腰斩截断。
+            const cotBudget = explicitBudget === DEFAULT_THINKING_MAX_CHARS
+              ? FEISHU_COT_MAX_CHARS
+              : Math.min(FEISHU_COT_MAX_CHARS, Math.max(200, explicitBudget))
             const res = clipThinkingText(
               processedText,
               cotBudget,

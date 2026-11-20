@@ -1129,3 +1129,65 @@ test('Feishu sendThinking: Tracker -> Feishu 全链路用户显式配置 maxChar
   await channel.stop()
 })
 
+test('Feishu sendThinking: DEFAULT_THINKING_MAX_CHARS 来源单一且全局配置默认值防漂移', async () => {
+  const { DEFAULT_THINKING_MAX_CHARS } = await import('../lib/engine/types.js')
+  const { normalizeThinkingDisplay } = await import('../lib/engine/thinking-display.js')
+  const schemaDefault = Config({}).thinkingDisplay.maxChars
+  const normalizedDefault = normalizeThinkingDisplay({}).maxChars
+  assert.equal(schemaDefault, DEFAULT_THINKING_MAX_CHARS, 'Schema 默认 maxChars 必须严格等于 DEFAULT_THINKING_MAX_CHARS')
+  assert.equal(normalizedDefault, DEFAULT_THINKING_MAX_CHARS, 'normalizeThinkingDisplay 兜底值必须严格等于 DEFAULT_THINKING_MAX_CHARS')
+})
+
+test('Feishu sendThinking: 显式中间预算（如 10,000）精准截断生效，默认 3,500 保持 64K 原生流式预算', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_cot_mid' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply_mid' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot')) {
+          if (opts.method === 'POST') return { code: 0, data: { cot_id: 'cot_mid', message_id: 'om_cot_mid' } }
+          if (opts.method === 'PUT') return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, () => {}, async () => mockSdk)
+  await channel.start()
+
+  const text20k = '深度推导。'.repeat(4000) // 20,000 字符
+  // 1. 显式传 10,000 字符预算
+  await channel.sendThinking('oc_mid', text20k, { final: true, maxChars: 10000 })
+  const put1 = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  const delivered1 = put1.flatMap(r => r.data.events).map(e => JSON.parse(e.content).delta).join('')
+  assert.equal(delivered1.length, 10000, `显式 maxChars: 10000 时最终投递必须精准等于 10000（实测: ${delivered1.length}）`)
+  assert.ok(delivered1.includes('已截断'), '显式收紧截断必须带截断提示')
+
+  // 清空请求
+  requests.length = 0
+  // 2. 显式传默认 3,500 字符预算（等价于默认配置），应享有 64K 原生长思维链预算
+  await channel.sendThinking('oc_mid_2', text20k, { final: true, maxChars: 3500 })
+  const put2 = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  const delivered2 = put2.flatMap(r => r.data.events).map(e => JSON.parse(e.content).delta).join('')
+  assert.equal(delivered2.length, text20k.length, `传入默认 maxChars: 3500 时长思维链必须享有 64K 预算完整投递（实测: ${delivered2.length}）`)
+
+  await channel.stop()
+})
+
