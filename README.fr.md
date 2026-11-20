@@ -69,7 +69,7 @@ Chaque message entrant est authentifié avant le traitement des commandes ou l'a
 | **🐦 Feishu** | QR Code / Manuel | Long Polling / Événements | Open API / Messages interactifs |
 | **🌐 Lark** | QR Code / Manuel | Long Polling / Événements | Open API / Messages interactifs |
 | **💬 WeChat** | QR Code | Scrutation officielle | Protocole de synchronisation natif |
-| **🏢 WeCom** | QR Code / Manuel | Rappel interne | Webhook / Messages enrichis |
+| **🏢 WeCom** | QR Code / Manuel / URL WebSocket | Rappel interne | Webhook / Messages enrichis / Déploiement privé |
 | **🐧 QQ** | QR Code / Manuel | WebSocket officiel / Webhook | OpenAPI / Markdown enrichi |
 | **✈️ Telegram** | Jeton de bot | Long Polling (getUpdates) | Telegram Bot API / Citations repliables |
 | **🎮 Discord** | Jeton de bot | Passerelle WebSocket | API REST |
@@ -106,6 +106,17 @@ Gérée depuis le panneau **Extensions → @michengai/dsh-im-connect** :
 ### 5. Isolation des sessions de fil Feishu (`threadSessions`)
 - **Défaut** : Désactivé (`false`)
 - **Fonction** : Lorsqu'activé, les fils de réponse (threads) dans les groupes Feishu conservent des sessions et contextes indépendants basés sur l'ID du message racine. Par défaut, tous les fils partagent le contexte du groupe.
+
+### 6. URL WebSocket personnalisée WeCom (`wsUrl`)
+- **Défaut** : URL officielle (`wss://openws.work.weixin.qq.com`)
+- **Fonction** : Permet de configurer une URL WebSocket personnalisée pour les déploiements sur site ou privés. Laissez vide pour utiliser l'adresse officielle par défaut.
+- **Configuration dans l'interface** : Saisissez l'URL dans le formulaire de saisie manuelle lors de l'ajout d'un compte, ou modifiez-la à tout moment dans le panneau de détails du compte. La reconnexion est automatique lors de l'enregistrement.
+- **Exemple** (configuration de compte) :
+  ```json
+  {
+    "wsUrl": "wss://custom.wecom.internal/ws"
+  }
+  ```
 
 ## Utilisation et commandes
 

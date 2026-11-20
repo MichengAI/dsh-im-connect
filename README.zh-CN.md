@@ -73,7 +73,7 @@
 | 🐦 **飞书** | ✅ 可用 | 扫码（自动创建机器人），或 App ID / App Secret | 飞书账号，或自建机器人凭据 |
 | 🌐 **Lark** | ✅ 可用 | 扫码，或 App ID / App Secret | Lark 国际版账号，或自建机器人凭据 |
 | 💬 **微信** | ✅ 可用* | 官方 iLink 扫码 | 建议专用小号；仅私聊 |
-| 🏢 **企业微信** | ✅ 可用 | 扫码（推荐），或 Bot ID / Secret | 企业微信智能机器人 |
+| 🏢 **企业微信** | ✅ 可用 | 扫码（推荐），或 Bot ID / Secret / WebSocket URL | 企业微信智能机器人；支持私有化部署自定义长连接地址 |
 | 🐧 **QQ** | ✅ 可用 | 扫码，或 AppID / AppSecret | QQ 开放平台机器人，不是个人号 |
 | ✈️ **Telegram** | ✅ 可用 | 仅填 Bot Token | `@BotFather`；同一 Bot 不要同时开 Webhook |
 | 🎮 **Discord** | ✅ 可用 | 仅填 Bot Token | Developer Portal 的官方 Bot。打开 Message Content Intent；文字频道和公告频道第一次 @ 后在 Thread 中继续，不必重复 @ |
@@ -322,6 +322,17 @@ dsh --profile web --dump-config
   ```json
   {
     "threadSessions": "true"
+  }
+  ```
+
+### 6. 企业微信私有化长连接地址 (`wsUrl`)
+- **默认状态**：官方默认地址（`wss://openws.work.weixin.qq.com`）
+- **功能说明**：在企业微信私有化部署场景下，可配置自建服务的 WebSocket 长连接地址；留空保存自动回退使用官方默认地址。
+- **界面配置**：在「添加账号」的手动凭据表单中可直接填写「WebSocket URL」；在已绑账号详情设置面板中可随时查看、修改或清空，修改保存后自动重新建立连接生效。
+- **配置示例**（账号配置）：
+  ```json
+  {
+    "wsUrl": "wss://custom.wecom.internal/ws"
   }
   ```
 

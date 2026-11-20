@@ -27,29 +27,41 @@ test('validateWecomWsUrl 正确验证与规范化 WebSocket URL', () => {
 
   assert.equal(validateWecomWsUrl('wss://openws.work.weixin.qq.com'), 'wss://openws.work.weixin.qq.com')
   assert.equal(validateWecomWsUrl('ws://127.0.0.1:8080/ws'), 'ws://127.0.0.1:8080/ws')
-  assert.equal(validateWecomWsUrl('  wss://custom.wecom.internal/gateway  '), 'wss://custom.wecom.internal/gateway')
+  assert.equal(validateWecomWsUrl('  WSS://CUSTOM.WECOM.INTERNAL/gateway  '), 'wss://custom.wecom.internal/gateway')
 
   assert.throws(() => validateWecomWsUrl('http://openws.work.weixin.qq.com'), /协议无效/)
   assert.throws(() => validateWecomWsUrl('https://openws.work.weixin.qq.com'), /协议无效/)
   assert.throws(() => validateWecomWsUrl('invalid-url'), /合法的 WebSocket 地址/)
+  assert.throws(() => validateWecomWsUrl('wss://user:pass@host/ws'), /禁止在地址中携带用户名或密码凭据/)
+  assert.throws(() => validateWecomWsUrl('ws://user@host/ws'), /禁止在地址中携带用户名或密码凭据/)
 })
 
 test('createWecomChannel 正确将 wsUrl 传递给底层 WSClient', async t => {
   t.after(() => mock.restoreAll())
-  let capturedOpts
-  mock.method(WSClient.prototype, 'connect', function () { this.emit('authenticated') })
+  const capturedWsUrls = []
+  mock.method(WSClient.prototype, 'connect', function () {
+    capturedWsUrls.push(this.options?.wsUrl)
+    this.emit('authenticated')
+    return this
+  })
   mock.method(WSClient.prototype, 'disconnect', () => {})
 
-  // 1. 不传 wsUrl 时，不传入自定义 wsUrl
+  // 1. 不传 wsUrl 时，底层 WSClient options.wsUrl 应当为空字符串（由 SDK 内部回退至官方默认 DEFAULT_WS_URL）
   const defaultChannel = createWecomChannel({ botId: 'test_bot', secret: 'test_secret' }, () => {})
-  t.after(() => defaultChannel?.stop())
   assert.ok(defaultChannel)
+  await defaultChannel.start()
+  defaultChannel.stop()
+  assert.equal(capturedWsUrls.length, 1)
+  assert.equal(capturedWsUrls[0], '')
 
   // 2. 传入自定义 wsUrl
   const customWs = 'wss://custom.wecom.internal/ws'
   const customChannel = createWecomChannel({ botId: 'test_bot', secret: 'test_secret', wsUrl: customWs }, () => {})
-  t.after(() => customChannel?.stop())
   assert.ok(customChannel)
+  await customChannel.start()
+  customChannel.stop()
+  assert.equal(capturedWsUrls.length, 2)
+  assert.equal(capturedWsUrls[1], customWs)
 })
 
 test('CHANNEL_META.wecom 包含 wsUrl 字段定义', () => {

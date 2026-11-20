@@ -71,7 +71,7 @@ WeChat is QR-only and DM-only, so the same WeChat account that scanned can talk 
 | 🐦 **Feishu** | ✅ Ready | QR, or App ID / App Secret; QR creates the bot automatically | Feishu account, or a self-built bot with App ID / Secret |
 | 🌐 **Lark** | ✅ Ready | QR, or App ID / App Secret | Lark account, or a self-built bot with App ID / Secret |
 | 💬 **WeChat** | ✅ Ready* | Official iLink QR | Dedicated account recommended; DM only |
-| 🏢 **WeCom** | ✅ Ready | QR (recommended), or Bot ID / Secret | WeCom intelligent bot |
+| 🏢 **WeCom** | ✅ Ready | QR (recommended), or Bot ID / Secret / WebSocket URL | WeCom intelligent bot; supports custom WebSocket URL for on-premise deployments |
 | 🐧 **QQ** | ✅ Ready | QR, or AppID / AppSecret | QQ Open Platform bot, not a personal QQ account |
 | ✈️ **Telegram** | ✅ Ready | Bot Token only | `@BotFather`; do not enable Webhook on the same bot |
 | 🎮 **Discord** | ✅ Ready | Bot Token only | Official Developer Portal bot. Enable the Message Content Intent. The first mention in a text or announcement channel continues in a thread without another mention |
@@ -322,6 +322,17 @@ Native configuration options are provided here. Their values are persisted in `c
   ```json
   {
     "threadSessions": "true"
+  }
+  ```
+
+### 6. WeCom custom WebSocket URL (`wsUrl`)
+- **Default**: official default (`wss://openws.work.weixin.qq.com`)
+- **Description**: Configure a custom WebSocket URL for on-premise or private deployments; leave blank to fall back to the official default.
+- **UI Configuration**: Enter the **WebSocket URL** in the manual credentials form when adding an account, or inspect, modify, or clear it anytime in the account settings panel. Changes reconnect automatically upon saving.
+- **Example** (account configuration):
+  ```json
+  {
+    "wsUrl": "wss://custom.wecom.internal/ws"
   }
   ```
 

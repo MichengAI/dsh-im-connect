@@ -69,7 +69,7 @@ Eingehende Nachrichten werden anhand des Absenders geprüft, bevor Befehle oder 
 | **🐦 Feishu** | QR-Code / Manuell | Long Polling / Events | Open API / Interaktive Nachrichten |
 | **🌐 Lark** | QR-Code / Manuell | Long Polling / Events | Open API / Interaktive Nachrichten |
 | **💬 WeChat** | QR-Code | Offizielles Synchron-Polling | Natives Synchronisationsprotokoll |
-| **🏢 WeCom** | QR-Code / Manuell | Interne Rückrufe | Webhook / Formatierte Karten |
+| **🏢 WeCom** | QR-Code / Manuell / WebSocket-URL | Interne Rückrufe | Webhook / Formatierte Karten / On-Premise-Support |
 | **🐧 QQ** | QR-Code / Manuell | Offizielles WebSocket / Webhook | OpenAPI / Rich Markdown |
 | **✈️ Telegram** | Bot-Token | Long Polling (getUpdates) | Telegram Bot API / Einklappbare Zitate |
 | **🎮 Discord** | Bot-Token | Gateway-WebSocket | REST-API |
@@ -106,6 +106,17 @@ Erreichbar über die Verwaltung unter **Plugins → @michengai/dsh-im-connect**:
 ### 5. Feishu-Thread-Sitzungsisolation (`threadSessions`)
 - **Standard**: Deaktiviert (`false`)
 - **Funktion**: Wenn aktiviert, behalten Antwort-Threads in Feishu-Gruppen isolierte Sitzungen und Kontexte basierend auf der Root-Nachrichten-ID. Standardmäßig teilen alle Threads den Gruppenkontext.
+
+### 6. Benutzerdefinierte WeCom-WebSocket-URL (`wsUrl`)
+- **Standard**: Offizielle URL (`wss://openws.work.weixin.qq.com`)
+- **Funktion**: Erlaubt die Konfiguration einer benutzerdefinierten WebSocket-URL für lokale oder On-Premise-Bereitstellungen. Leer lassen, um die offizielle Standardadresse zu verwenden.
+- **UI-Konfiguration**: Geben Sie die URL im Formular für manuelle Zugangsdaten ein oder passen Sie sie jederzeit in den Kontodetails an. Änderungen verbinden sich nach dem Speichern automatisch neu.
+- **Beispiel** (Kontokonfiguration):
+  ```json
+  {
+    "wsUrl": "wss://custom.wecom.internal/ws"
+  }
+  ```
 
 ## Nutzung und Befehle
 

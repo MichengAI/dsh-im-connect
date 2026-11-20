@@ -69,7 +69,7 @@ As mensagens recebidas são verificadas pelo remetente antes do processamento de
 | **🐦 Feishu** | QR Code / Manual | Long Polling / Eventos | Open API / Cartões interativos |
 | **🌐 Lark** | QR Code / Manual | Long Polling / Eventos | Open API / Cartões interativos |
 | **💬 WeChat** | QR Code | Sondagem oficial sincronizada | Protocolo de sincronização nativo |
-| **🏢 WeCom** | QR Code / Manual | Callback interno | Webhook / Cartões formatados |
+| **🏢 WeCom** | QR Code / Manual / URL do WebSocket | Callback interno | Webhook / Cartões formatados / Suporte On-Premise |
 | **🐧 QQ** | QR Code / Manual | WebSocket oficial / Webhook | OpenAPI / Markdown avançado |
 | **✈️ Telegram** | Token de Bot | Long Polling (getUpdates) | Telegram Bot API / Citações expansíveis |
 | **🎮 Discord** | Token de Bot | Gateway WebSocket | REST API |
@@ -106,6 +106,17 @@ Acessível no painel em **Plugins → @michengai/dsh-im-connect**:
 ### 5. Isolamento de sessões de tópicos no Feishu (`threadSessions`)
 - **Padrão**: Desativado (`false`)
 - **Função**: Quando ativado, os tópicos de resposta em grupos do Feishu mantêm sessões e contextos isolados baseados no ID da mensagem raiz. Por padrão, todos os tópicos compartilham o contexto do grupo.
+
+### 6. URL personalizada de WebSocket no WeCom (`wsUrl`)
+- **Padrão**: URL oficial (`wss://openws.work.weixin.qq.com`)
+- **Função**: Permite configurar uma URL personalizada de WebSocket para implantações locais ou privadas. Deixe em branco para usar o endereço padrão oficial.
+- **Configuração na interface**: Insira a URL no formulário manual ao adicionar uma conta ou edite-a a qualquer momento nos detalhes da conta. As alterações reconectam automaticamente ao salvar.
+- **Exemplo** (configuração de conta):
+  ```json
+  {
+    "wsUrl": "wss://custom.wecom.internal/ws"
+  }
+  ```
 
 ## Uso e comandos
 

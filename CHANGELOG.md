@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.48] - 2026-11-20
+
+### WeCom Custom WebSocket URL for On-Premise Deployments (#76)
+
+- **Custom WebSocket URL support**: Added support for configuring a custom WebSocket URL (`ws://` or `wss://`) for WeCom (Work WeChat), enabling seamless connection to self-hosted gateway servers in on-premise environments.
+- **Graceful fallback to official default**: When left blank during credential setup or in account settings, WeCom automatically falls back to the official default address (`wss://openws.work.weixin.qq.com`).
+- **Dynamic configuration update & reconnection**: Existing WeCom accounts can inspect, modify, or clear the WebSocket URL at any time from the account settings panel, which automatically reconnects to apply changes upon saving.
+
 ## [1.0.47] - 2026-11-20
 
 ### Feishu & Lark Long Reasoning Display (#75)

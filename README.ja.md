@@ -71,7 +71,7 @@ WeChat はQRコード連携のみでDMにのみ対応しているため、スキ
 | **🐦 Feishu** | QRコードスキャン / 手動凭証 | 長時間ポーリング / イベント | Open API / カードメッセージ |
 | **🌐 Lark** | QRコードスキャン / 手動凭証 | 長時間ポーリング / イベント | Open API / カードメッセージ |
 | **💬 WeChat** | QRコードスキャン | 公式同期ポーリング | 組み込み同期プロトコル |
-| **🏢 WeCom** | QRコードスキャン / 手動凭証 | 内部コールバック | Webhook / カードメッセージ |
+| **🏢 WeCom** | QRコードスキャン / 手動凭証 / WebSocket URL | 内部コールバック | Webhook / カードメッセージ / オンプレミス対応 |
 | **🐧 QQ** | QRコードスキャン / 手動凭証 | 公式 WebSocket / Webhook | OpenAPI / リッチテキスト |
 | **✈️ Telegram** | Bot Token | 長時間ポーリング (getUpdates) | Telegram Bot API / 折畳引用 |
 | **🎮 Discord** | Bot Token | Gateway WebSocket | REST API |
@@ -164,6 +164,17 @@ dsh plugin --profile web add @michengai/dsh-im-connect --registry=https://regist
 - **デフォルト**: 無効 (`false`)
 - **機能**: 有効にすると、飛書グループ内のスレッド（Thread）ごとに独立したセッションとコンテキストが保持されます。無効時はグループ全体で1つのセッションを共有します。
 - **UI 設定**: 「設定 → IM アシスタント → 飛書 / Lark アカウント設定」から「スレッドセッション分離」を切り替えられます。
+
+### 6. WeCom オンプレミス WebSocket URL (`wsUrl`)
+- **デフォルト**: 公式デフォルト (`wss://openws.work.weixin.qq.com`)
+- **機能**: オンプレミスやプライベート展開環境でカスタム WebSocket URL を設定できます。空欄の場合は公式デフォルトが使用されます。
+- **UI 設定**: 「アカウント追加」の手動設定フォームで「WebSocket URL」を入力するか、アカウント詳細設定パネルからいつでも確認・変更・クリアできます。保存後に自動再接続されます。
+- **設定例**（アカウント設定）：
+  ```json
+  {
+    "wsUrl": "wss://custom.wecom.internal/ws"
+  }
+  ```
 
 ## 使用方法
 
