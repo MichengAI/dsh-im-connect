@@ -1,4 +1,4 @@
-import type { ChannelAdapter, ThinkingOptions } from './types.js'
+import { DEFAULT_THINKING_MAX_CHARS, type ChannelAdapter, type ThinkingOptions } from './types.js'
 
 export interface ThinkingDisplayConfig {
   mode: 'off' | 'collapsed'
@@ -71,10 +71,11 @@ export class ThinkingDisplayTracker {
     const channelLimit = target.channel.maxThinkingChars
       ?? (target.channel.id === 'feishu' || target.channel.id === 'lark' ? 65536 : 4096)
     const raw = target.config && typeof target.config === 'object' ? target.config as Record<string, unknown> : {}
-    const hasExplicitMaxChars = typeof raw.maxChars === 'number' && Number.isFinite(raw.maxChars)
-    const bufferLimit = hasExplicitMaxChars
-      ? Math.min(channelLimit, config.maxChars)
-      : channelLimit
+    // 原生长思维链渠道（如飞书/Lark）享有 64K 原生流式预算；
+    // 只有当用户显式配置收紧预算（< 3500）时，才收紧缓冲预算；
+    // 生产环境中默认或普通单条消息上限（3500/4096）不应截断原生长思维链。
+    const tight = typeof raw.maxChars === 'number' && Number.isFinite(raw.maxChars) && raw.maxChars < DEFAULT_THINKING_MAX_CHARS
+    const bufferLimit = tight ? Math.min(channelLimit, config.maxChars) : channelLimit
     this.states.set(target.key, {
       target, config, scope: new AbortController(), streamId: `${target.sessionId}:${this.identity}:${++this.generation}`,
       prefix: '', total: 0, bufferLimit, closed: false, final: false,
@@ -182,7 +183,9 @@ export class ThinkingDisplayTracker {
 
   private send(state: Lifecycle, final: boolean): Promise<void> {
     if (!this.valid(state)) return Promise.resolve()
-    const maxChars = state.bufferLimit
+    const maxChars = state.bufferLimit > 4096
+      ? state.bufferLimit
+      : Math.min(state.bufferLimit, state.config.maxChars)
     const options: ThinkingOptions = {
       final, label: state.target.label(final, state.total), maxChars,
       streamId: state.streamId, signal: state.scope.signal, isCurrent: () => this.valid(state),

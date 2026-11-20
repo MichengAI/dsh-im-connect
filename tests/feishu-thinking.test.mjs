@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createFeishuChannel, chunkByGraphemes, chunkByCodePoints } from '../lib/channels/feishu.js'
 import { ThinkingDisplayTracker } from '../lib/engine/thinking-display.js'
 import { ChannelManager } from '../lib/manager.js'
+import { Config } from '../lib/index.js'
 
 test('Feishu sendThinking: 私聊与群大厅普通消息走飞书原生 message_cot 思考过程', async () => {
   const requests = []
@@ -847,6 +848,77 @@ test('Feishu sendThinking: 降级到卡片折叠模式或超长文本卡片时�
   await channel.stop()
 })
 
+test('Feishu sendThinking: Tracker -> Feishu 全链路生产配置下完整投递 20,000 字长思维链，绝不被默认 3500 截断', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_cot_20k' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply_20k' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot')) {
+          if (opts.method === 'POST') return { code: 0, data: { cot_id: 'cot_full_20k', message_id: 'om_full_cot_20k' } }
+          if (opts.method === 'PUT') return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, () => {}, async () => mockSdk)
+  await channel.start()
+
+  let clock = 10000
+  const tracker = new ThinkingDisplayTracker(() => {}, () => clock)
+  const target = {
+    key: 'test:session:feishu:20k',
+    sessionId: 'session-full-20k',
+    channel,
+    chatId: 'oc_full_20k',
+    turn: 1,
+    // 生产真实解析后的配置形状（用户未显式修改，包含 Schema 默认填充的 maxChars: 3500）
+    config: Config({ thinkingDisplay: { mode: 'collapsed' } }).thinkingDisplay,
+    isCurrent: () => true,
+    label: (final, count) => `🧠 思考过程 · ${count} 字`,
+  }
+
+  tracker.start(target)
+  // 分批喂入 20,000 字符
+  const chunk = '深度逻辑推导与思考链分析。'.repeat(300) // 约 3900 字符
+  for (let i = 0; i < 5; i++) {
+    clock += 2500
+    tracker.append(target, chunk)
+  }
+  await tracker.finish(target)
+
+  const putRequests = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(putRequests.length >= 1, '全链路必须发起 PUT 请求')
+  const totalDelivered = putRequests
+    .flatMap(r => r.data.events)
+    .filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+    .map(e => JSON.parse(e.content).delta)
+    .join('')
+
+  assert.equal(totalDelivered.length, chunk.length * 5, `生产默认配置下 20,000 字长思维链必须完整投递（实测: ${totalDelivered.length}），绝不能被 3500 提前截断`)
+  assert.ok(!totalDelivered.includes('已截断'), '未超限的 20,000 字长思维链绝不应包含已截断提示')
+
+  await channel.stop()
+})
+
 test('Feishu sendThinking: Tracker -> Feishu 全链路 70K 字符长思维链截断，最终长度严格等于 65536 且包含截断提示', async () => {
   const requests = []
   const mockSdk = {
@@ -884,12 +956,13 @@ test('Feishu sendThinking: Tracker -> Feishu 全链路 70K 字符长思维链截
   let clock = 10000
   const tracker = new ThinkingDisplayTracker(() => {}, () => clock)
   const target = {
-    key: 'target-feishu-full-70k',
+    key: 'test:session:feishu:70k',
     sessionId: 'session-full-70k',
     channel,
     chatId: 'oc_full_70k',
     turn: 1,
-    config: { mode: 'collapsed' }, // 默认配置（未显式指定 maxChars）
+    // 生产真实解析后的配置形状（含 Schema 填充的默认值）
+    config: Config({ thinkingDisplay: { mode: 'collapsed' } }).thinkingDisplay,
     isCurrent: () => true,
     label: (final, count) => `🧠 思考过程 · ${count} 字`,
   }
@@ -981,6 +1054,77 @@ test('Feishu sendThinking: Tracker -> Feishu 全链路用户显式配置 maxChar
 
   assert.ok(totalDelivered.length <= 2000, `用户显式收紧 maxChars: 2000 时，实际投递字符数 (${totalDelivered.length}) 不得超过 2000`)
   assert.match(totalDelivered, /已截断/, '超限后应追加截断提示')
+
+  await channel.stop()
+})
+
+test('Feishu sendThinking: Tracker -> Feishu 全链路用户显式配置 maxChars: 3500 与默认等价，绝不收紧截断 20,000 字长思维链', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_cot_3500' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_reply_3500' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot')) {
+          if (opts.method === 'POST') return { code: 0, data: { cot_id: 'cot_full_3500', message_id: 'om_full_cot_3500' } }
+          if (opts.method === 'PUT') return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, () => {}, async () => mockSdk)
+  await channel.start()
+
+  let clock = 10000
+  const tracker = new ThinkingDisplayTracker(() => {}, () => clock)
+  const target = {
+    key: 'test:session:feishu:3500',
+    sessionId: 'session-full-3500',
+    channel,
+    chatId: 'oc_full_3500',
+    turn: 1,
+    // 用户显式配置了 3500（与单条消息默认值等价）
+    config: { mode: 'collapsed', minChars: 120, intervalMs: 2000, maxChars: 3500 },
+    isCurrent: () => true,
+    label: (final, count) => `🧠 思考过程 · ${count} 字`,
+  }
+
+  tracker.start(target)
+  // 喂入 20,000 字符
+  const chunk = '深度逻辑推导与思考链分析。'.repeat(300) // 约 3900 字符
+  for (let i = 0; i < 5; i++) {
+    clock += 2500
+    tracker.append(target, chunk)
+  }
+  await tracker.finish(target)
+
+  const putRequests = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(putRequests.length >= 1, '全链路必须发起 PUT 请求')
+  const totalDelivered = putRequests
+    .flatMap(r => r.data.events)
+    .filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+    .map(e => JSON.parse(e.content).delta)
+    .join('')
+
+  assert.equal(totalDelivered.length, chunk.length * 5, `显式配置 maxChars: 3500 时长思维链必须完整投递（实测: ${totalDelivered.length}），绝不能被 3500 截断`)
+  assert.ok(!totalDelivered.includes('已截断'), '未超限的长思维链不应包含已截断提示')
 
   await channel.stop()
 })

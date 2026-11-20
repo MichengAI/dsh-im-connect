@@ -5,10 +5,11 @@
  * 点「显示更多」展开，适合把模型的思考过程折叠起来，效果接近网页里可展开的思考行。
  * 渲染放在这里是为了可单测：转义、长度收敛、折叠标签都不依赖网络。
  */
+import { DEFAULT_THINKING_MAX_CHARS } from '../engine/types.js';
 /** 单条 Telegram 消息的字符上限；留出余量给标签与截断提示。 */
 export declare const THINKING_BODY_LIMIT = 3500;
 /** 渠道没给上限时使用的默认值。 */
-export declare const DEFAULT_THINKING_MAX_CHARS = 3500;
+export { DEFAULT_THINKING_MAX_CHARS };
 /** 转义 Telegram HTML 模式要求的字符。 */
 export declare function escapeTelegramHtml(value: string): string;
 export interface ThinkingBlockInput {

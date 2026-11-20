@@ -6,13 +6,13 @@
  * 渲染放在这里是为了可单测：转义、长度收敛、折叠标签都不依赖网络。
  */
 
-import { DEFAULT_TRUNCATED_NOTE } from '../engine/types.js'
+import { DEFAULT_TRUNCATED_NOTE, DEFAULT_THINKING_MAX_CHARS } from '../engine/types.js'
 
 /** 单条 Telegram 消息的字符上限；留出余量给标签与截断提示。 */
 export const THINKING_BODY_LIMIT = 3_500
 
 /** 渠道没给上限时使用的默认值。 */
-export const DEFAULT_THINKING_MAX_CHARS = 3_500
+export { DEFAULT_THINKING_MAX_CHARS }
 
 const TRUNCATED_NOTE = DEFAULT_TRUNCATED_NOTE
 

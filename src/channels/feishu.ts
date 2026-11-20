@@ -3,7 +3,7 @@ import { choiceSendError, ChoiceSendError } from '../engine/choice-delivery.js'
 import { afterPartialDelivery, DeliveryRejected } from '../engine/deferred-delivery.js'
 import { diagnosticJson, platformResult, probe, requireDiagnostic } from './diagnostics.js'
 import { fileOperation } from './file-send.js'
-import { DEFAULT_TRUNCATED_NOTE, type ChannelAdapter, type ImMedia, type ImMessage, type ThinkingOptions } from '../engine/types.js'
+import { DEFAULT_TRUNCATED_NOTE, DEFAULT_THINKING_MAX_CHARS, type ChannelAdapter, type ImMedia, type ImMessage, type ThinkingOptions } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
 import { timeoutSignal } from '../engine/abort.js'
@@ -579,7 +579,6 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           //    默认支持 65,536 字符的长思维链安全预算，即使 options.truncated 为 true 也依然维持 65,536 预算。
           // 2. 卡片折叠模式（话题回复串内或降级兜底）受单条卡片 JSON 30KB 物理上限约束，采用 8,000 字符与 26KB 字节双重安全预算。
           let processedText = next.text
-          let isTruncated = false
 
           if (current.mode === 'cot') {
             const explicitBudget = typeof next.options?.maxChars === 'number' && Number.isFinite(next.options.maxChars) && next.options.maxChars > 0
@@ -588,7 +587,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
             // 原生 message_cot 专用于承载大模型长思维链，默认享有 65,536 字符长预算；
             // 只有当调用方显式指定了更小的严格预算（如测试用例或用户显式配置收紧 maxChars < 3500）时才收紧，
             // 绝不因默认单条消息预算（3500/4096）而在 3500 处人为截断。
-            const cotBudget = explicitBudget < 3500
+            const cotBudget = explicitBudget < DEFAULT_THINKING_MAX_CHARS
               ? Math.max(200, explicitBudget)
               : FEISHU_COT_MAX_CHARS
             const res = clipThinkingText(
@@ -599,7 +598,6 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               Boolean(next.options?.truncated),
             )
             processedText = res.text
-            isTruncated = res.truncated
           } else {
             const cardBudget = typeof next.options?.maxChars === 'number' && Number.isFinite(next.options.maxChars) && next.options.maxChars > 0
               ? Math.min(FEISHU_CARD_THINKING_MAX_CHARS, Math.max(200, Math.floor(next.options.maxChars)))
@@ -612,7 +610,6 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               Boolean(next.options?.truncated),
             )
             processedText = res.text
-            isTruncated = res.truncated
           }
 
           // 1. 尝试原生 CoT 模式

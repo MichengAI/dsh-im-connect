@@ -1,4 +1,4 @@
-import type { ChannelAdapter } from './types.js';
+import { type ChannelAdapter } from './types.js';
 export interface ThinkingDisplayConfig {
     mode: 'off' | 'collapsed';
     minChars: number;
