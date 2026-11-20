@@ -36,7 +36,10 @@ export function validateWecomWsUrl(input?: unknown): string | undefined {
   if (parsed.username || parsed.password) {
     throw new Error('WebSocket URL 无效：禁止在地址中携带用户名或密码凭据')
   }
-  if (parsed.pathname === '/' && !trimmed.endsWith('/') && !parsed.search && !parsed.hash) {
+  if (parsed.hash) {
+    throw new Error('WebSocket URL 无效：禁止在地址中携带 URL 片段（#fragment）')
+  }
+  if (parsed.pathname === '/' && !parsed.search) {
     return parsed.origin
   }
   return parsed.href

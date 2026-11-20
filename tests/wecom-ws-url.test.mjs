@@ -26,14 +26,18 @@ test('validateWecomWsUrl 正确验证与规范化 WebSocket URL', () => {
   assert.equal(validateWecomWsUrl('   '), undefined)
 
   assert.equal(validateWecomWsUrl('wss://openws.work.weixin.qq.com'), 'wss://openws.work.weixin.qq.com')
+  assert.equal(validateWecomWsUrl('wss://openws.work.weixin.qq.com/'), 'wss://openws.work.weixin.qq.com')
   assert.equal(validateWecomWsUrl('ws://127.0.0.1:8080/ws'), 'ws://127.0.0.1:8080/ws')
   assert.equal(validateWecomWsUrl('  WSS://CUSTOM.WECOM.INTERNAL/gateway  '), 'wss://custom.wecom.internal/gateway')
+  assert.equal(validateWecomWsUrl('wss://custom.wecom.internal:9000/'), 'wss://custom.wecom.internal:9000')
 
   assert.throws(() => validateWecomWsUrl('http://openws.work.weixin.qq.com'), /协议无效/)
   assert.throws(() => validateWecomWsUrl('https://openws.work.weixin.qq.com'), /协议无效/)
   assert.throws(() => validateWecomWsUrl('invalid-url'), /合法的 WebSocket 地址/)
   assert.throws(() => validateWecomWsUrl('wss://user:pass@host/ws'), /禁止在地址中携带用户名或密码凭据/)
   assert.throws(() => validateWecomWsUrl('ws://user@host/ws'), /禁止在地址中携带用户名或密码凭据/)
+  assert.throws(() => validateWecomWsUrl('wss://host/ws#token'), /禁止在地址中携带 URL 片段/)
+  assert.throws(() => validateWecomWsUrl('wss://host#hash'), /禁止在地址中携带 URL 片段/)
 })
 
 test('createWecomChannel 正确将 wsUrl 传递给底层 WSClient', async t => {
@@ -50,7 +54,7 @@ test('createWecomChannel 正确将 wsUrl 传递给底层 WSClient', async t => {
   const defaultChannel = createWecomChannel({ botId: 'test_bot', secret: 'test_secret' }, () => {})
   assert.ok(defaultChannel)
   await defaultChannel.start()
-  defaultChannel.stop()
+  await defaultChannel.stop()
   assert.equal(capturedWsUrls.length, 1)
   assert.equal(capturedWsUrls[0], '')
 
@@ -59,7 +63,7 @@ test('createWecomChannel 正确将 wsUrl 传递给底层 WSClient', async t => {
   const customChannel = createWecomChannel({ botId: 'test_bot', secret: 'test_secret', wsUrl: customWs }, () => {})
   assert.ok(customChannel)
   await customChannel.start()
-  customChannel.stop()
+  await customChannel.stop()
   assert.equal(capturedWsUrls.length, 2)
   assert.equal(capturedWsUrls[1], customWs)
 })
