@@ -30,6 +30,8 @@ test('validateWecomWsUrl 正确验证与规范化 WebSocket URL', () => {
   assert.equal(validateWecomWsUrl('ws://127.0.0.1:8080/ws'), 'ws://127.0.0.1:8080/ws')
   assert.equal(validateWecomWsUrl('  WSS://CUSTOM.WECOM.INTERNAL/gateway  '), 'wss://custom.wecom.internal/gateway')
   assert.equal(validateWecomWsUrl('wss://custom.wecom.internal:9000/'), 'wss://custom.wecom.internal:9000')
+  assert.equal(validateWecomWsUrl('wss://host/?token=x'), 'wss://host/?token=x')
+  assert.equal(validateWecomWsUrl('wss://host:8443/?token=x&auth=1'), 'wss://host:8443/?token=x&auth=1')
 
   assert.throws(() => validateWecomWsUrl('http://openws.work.weixin.qq.com'), /协议无效/)
   assert.throws(() => validateWecomWsUrl('https://openws.work.weixin.qq.com'), /协议无效/)
