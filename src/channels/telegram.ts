@@ -1038,6 +1038,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       }
     },
     sendThinking: publishThinking,
+    maxThinkingChars: 4096,
     setMessageHandler(h) { handler = h },
     setTopicEditHandler(h) { onTopicEdited = h },
     async diagnose(signal) {

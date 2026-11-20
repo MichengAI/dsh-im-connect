@@ -5,6 +5,10 @@ export declare const FEISHU_COT_API = "/open-apis/im/v1/message_cot";
 export declare const FEISHU_COT_COMPLETE_API = "/open-apis/im/v1/message_cot/complete";
 /** 飞书 message_cot 单个事件内容字符上限保护，避免 10001 AppendCOTEvents: event[0] content too long */
 export declare const FEISHU_COT_CHUNK_SIZE = 800;
+/** 飞书原生 message_cot 流式推理长思维链最大安全预算（64K 字符），防止极端异常溢出 */
+export declare const FEISHU_COT_MAX_CHARS = 65536;
+/** 飞书卡片折叠面板（话题回复串内或降级兜底）markdown 单元素安全预算，避免 30KB JSON 超限 */
+export declare const FEISHU_CARD_THINKING_MAX_CHARS = 12000;
 /** 按 Unicode 字形簇（Grapheme Cluster）安全切分文本，严禁切开 Emoji 代理对或 ZWJ 复合表情 */
 export declare function chunkByGraphemes(text: string, maxChunkLength: number): string[];
 /** 保持历史兼容别名 */

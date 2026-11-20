@@ -647,3 +647,77 @@ test('Feishu chunkByGraphemes & chunkByCodePoints: 别名兼容与字形簇切�
   assert.equal(chunks[2], '67890')
   assert.equal(chunks.join(''), text)
 })
+
+test('Feishu sendThinking: 原生 message_cot 模式完整支持长思维链流式展示，不被人为截断在 3500/4096 字符', async () => {
+  const requests = []
+  const mockSdk = {
+    defaultHttpInstance: { request: async () => {} },
+    Client: class {
+      constructor() {
+        this.im = {
+          message: {
+            create: async () => ({ code: 0, data: { message_id: 'om_1' } }),
+            reply: async () => ({ code: 0, data: { message_id: 'om_2' } }),
+            patch: async () => ({ code: 0 }),
+          },
+          messageReaction: { create: async () => ({ code: 0, data: {} }), delete: async () => ({ code: 0 }) },
+          file: { create: async () => ({ file_key: 'fk_1' }) },
+          image: { create: async () => ({ image_key: 'ik_1' }) },
+        }
+      }
+      async request(opts) {
+        requests.push(opts)
+        if (opts.url.includes('/open-apis/bot/v3/info')) return { bot: { open_id: 'ou_bot_1' } }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'POST') {
+          return { code: 0, data: { cot_id: 'cot_long_chain', message_id: 'om_cot_long' } }
+        }
+        if (opts.url.includes('/open-apis/im/v1/message_cot') && opts.method === 'PUT') {
+          return { code: 0, data: {} }
+        }
+        return { code: 0, data: {} }
+      }
+    },
+    WSClient: class { async start() {} close() {} },
+    EventDispatcher: class { register() { return this } },
+  }
+
+  const logs = []
+  const channel = createFeishuChannel('feishu', { appId: 'cli_test', appSecret: 'sec_test' }, (line) => logs.push(line), async () => mockSdk)
+  await channel.start()
+
+  // 模拟大模型 8000 字符的长思考过程，分两批流入（例如第一帧 5000 字符，第二帧追加到 8000 字符并收口）
+  const part1 = '思考链第一阶段：分析用户复杂业务需求。'.repeat(250) // 约 5000 字符
+  await channel.sendThinking('oc_long_reasoning', part1, {
+    streamId: 'stream-r1-long',
+    label: '🧠 思考中… · 5000 字',
+    maxChars: 3500, // 即使传入单条消息默认预算，原生 CoT 也不得在此阶段截断
+    final: false,
+  })
+
+  const put1 = requests.find(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(put1, '第一帧必须发起 PUT 请求')
+  const contentEvents1 = put1.data.events.filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+  const deltas1 = contentEvents1.map(e => JSON.parse(e.content).delta).join('')
+  assert.equal(deltas1, part1, '第一帧 5000 字符思考链必须完整推送，严禁截断')
+  assert.doesNotMatch(deltas1, /已截断/, '第一帧未超过安全上限，严禁包含截断提示')
+
+  const part2 = part1 + '思考链第二阶段：推导架构最优方案与收口。'.repeat(150) // 总长约 8000 字符
+  await channel.sendThinking('oc_long_reasoning', part2, {
+    streamId: 'stream-r1-long',
+    label: '🧠 思考过程 · 8000 字',
+    maxChars: 3500,
+    final: true,
+  })
+
+  const allPuts = requests.filter(r => r.method === 'PUT' && r.url.includes('/open-apis/im/v1/message_cot'))
+  assert.ok(allPuts.length >= 2, '第二帧必须发起新的增量 PUT 请求')
+  const allDeltas = allPuts
+    .flatMap(r => r.data.events)
+    .filter(e => e.event_type === 'REASONING_MESSAGE_CONTENT')
+    .map(e => JSON.parse(e.content).delta)
+    .join('')
+  assert.equal(allDeltas, part2, '两帧合计应完整保留全部 8000 字符思考链增量，绝不丢失后续内容')
+  assert.doesNotMatch(allDeltas, /已截断/, '未达防爆上限时严禁包含截断提示')
+
+  await channel.stop()
+})

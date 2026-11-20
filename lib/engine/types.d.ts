@@ -118,6 +118,8 @@ export interface ChannelAdapter {
      * 同一回合复用同一条消息，`final` 为 true 时收口并释放，下一回合另起一条。
      * 渠道不实现该方法时，引擎不会发送思考内容，只保留状态行。
      */
+    /** 渠道支持的最大思考内容字符预算；未声明时由引擎按默认安全上限（单条 4,096，原生流式 65,536）兜底。 */
+    maxThinkingChars?: number;
     sendThinking?(chatId: string, text: string, options?: ThinkingOptions): Promise<void>;
 }
 /** 思考过程消息的渲染参数；标题由引擎按宿主语言生成。 */

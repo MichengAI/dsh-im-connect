@@ -17,6 +17,10 @@ export const FEISHU_COT_API = '/open-apis/im/v1/message_cot'
 export const FEISHU_COT_COMPLETE_API = '/open-apis/im/v1/message_cot/complete'
 /** 飞书 message_cot 单个事件内容字符上限保护，避免 10001 AppendCOTEvents: event[0] content too long */
 export const FEISHU_COT_CHUNK_SIZE = 800
+/** 飞书原生 message_cot 流式推理长思维链最大安全预算（64K 字符），防止极端异常溢出 */
+export const FEISHU_COT_MAX_CHARS = 65_536
+/** 飞书卡片折叠面板（话题回复串内或降级兜底）markdown 单元素安全预算，避免 30KB JSON 超限 */
+export const FEISHU_CARD_THINKING_MAX_CHARS = 12_000
 
 /** 按 Unicode 字形簇（Grapheme Cluster）安全切分文本，严禁切开 Emoji 代理对或 ZWJ 复合表情 */
 export function chunkByGraphemes(text: string, maxChunkLength: number): string[] {
@@ -518,25 +522,49 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           const runId = next.options?.streamId ?? 'turn'
           const label = next.options?.label ?? (next.options?.final ? '🧠 思考过程' : '🧠 思考中…')
 
-          // 文本预算与截断处理（对齐 maxChars 与 truncated 契约）
-          const requestedMaxChars = typeof next.options?.maxChars === 'number' && Number.isFinite(next.options.maxChars)
-            ? next.options.maxChars
-            : 3500
-          const maxChars = Math.min(4096, Math.max(200, Math.floor(requestedMaxChars)))
+          // 文本预算与截断策略：
+          // 1. 原生 message_cot 模式为流式事件流，专用于承载大模型长思维链，绝不在 3,500/4,096 字符人为腰斩截断；
+          //    默认支持 65,536 字符的长思维链安全预算，仅在显式指定小预算（如测试用例）或达到防爆上限时截断。
+          // 2. 卡片折叠模式（话题回复串内或降级兜底）受单条卡片 JSON 30KB 物理上限约束，采用 12,000 字符安全预算。
           const TRUNCATED_NOTE = '\n\n…（已截断，完整内容见网页会话）'
 
           let processedText = next.text
-          let isTruncated = next.options?.truncated === true
-          if (processedText.length > maxChars) {
-            let end = 0
-            const budget = Math.max(0, maxChars - TRUNCATED_NOTE.length)
-            for (const char of processedText) {
-              if (end + char.length > budget) break
-              end += char.length
+          let isTruncated = false
+
+          if (current.mode === 'cot') {
+            const cotBudget = typeof next.options?.maxChars === 'number' && Number.isFinite(next.options.maxChars) && next.options.maxChars > 0 && next.options.truncated === true
+              ? Math.max(200, Math.floor(next.options.maxChars))
+              : FEISHU_COT_MAX_CHARS
+            if (processedText.length > cotBudget) {
+              let end = 0
+              const budget = Math.max(0, cotBudget - TRUNCATED_NOTE.length)
+              for (const char of processedText) {
+                if (end + char.length > budget) break
+                end += char.length
+              }
+              processedText = processedText.slice(0, end)
+              isTruncated = true
+            } else if (next.options?.truncated === true && cotBudget < FEISHU_COT_MAX_CHARS) {
+              isTruncated = true
             }
-            processedText = processedText.slice(0, end)
-            isTruncated = true
+          } else {
+            const cardBudget = typeof next.options?.maxChars === 'number' && Number.isFinite(next.options.maxChars) && next.options.maxChars > 0
+              ? Math.min(FEISHU_CARD_THINKING_MAX_CHARS, Math.max(200, Math.floor(next.options.maxChars)))
+              : FEISHU_CARD_THINKING_MAX_CHARS
+            if (processedText.length > cardBudget) {
+              let end = 0
+              const budget = Math.max(0, cardBudget - TRUNCATED_NOTE.length)
+              for (const char of processedText) {
+                if (end + char.length > budget) break
+                end += char.length
+              }
+              processedText = processedText.slice(0, end)
+              isTruncated = true
+            } else if (next.options?.truncated === true) {
+              isTruncated = true
+            }
           }
+
           if (isTruncated && !processedText.endsWith(TRUNCATED_NOTE)) {
             processedText += TRUNCATED_NOTE
           }
@@ -628,6 +656,16 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           // 2. 卡片折叠模式（话题内、或原生 CoT 降级）
           if (current.mode === 'card') {
             try {
+              let cardMarkdown = processedText
+              if (cardMarkdown.length > FEISHU_CARD_THINKING_MAX_CHARS) {
+                let end = 0
+                const budget = Math.max(0, FEISHU_CARD_THINKING_MAX_CHARS - TRUNCATED_NOTE.length)
+                for (const char of cardMarkdown) {
+                  if (end + char.length > budget) break
+                  end += char.length
+                }
+                cardMarkdown = cardMarkdown.slice(0, end) + TRUNCATED_NOTE
+              }
               const cardContent = JSON.stringify({
                 schema: '2.0',
                 config: { wide_screen_mode: true },
@@ -641,7 +679,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
                       border: { color: 'grey' },
                       expanded: false,
                       elements: [
-                        { tag: 'markdown', content: processedText },
+                        { tag: 'markdown', content: cardMarkdown },
                       ],
                     },
                   ],
@@ -933,10 +971,11 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
         platformResult(data.code)
         const bot = data.bot as { open_id?: unknown } | undefined
         requireDiagnostic(typeof bot?.open_id === 'string' && bot.open_id)
-      })]
-    },
-    sendThinking: publishThinking,
-    status() { return statusText },
+        })]
+        },
+        maxThinkingChars: FEISHU_COT_MAX_CHARS,
+        sendThinking: publishThinking,
+        status() { return statusText },
   }
 }
 

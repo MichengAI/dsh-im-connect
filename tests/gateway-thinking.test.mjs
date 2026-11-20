@@ -257,3 +257,28 @@ test('gateway dynamically checks mute, binding, permission, cold turn, reload, u
     assert.equal(f.engine.thinking.states.size, 0, mode)
   }
 })
+
+test('thinking tracker adapts buffer limit for feishu/lark without clamping at 4096', () => {
+  let now = 0
+  const sends = []
+  const tracker = new ThinkingDisplayTracker(() => {}, () => now)
+  const channel = { id: 'feishu', async sendThinking(chatId, text, options) { sends.push({ chatId, text, options }) } }
+  const target = {
+    key: 'feishu:long:chain',
+    sessionId: 'session-fs',
+    chatId: 'oc_long',
+    channel,
+    turn: 1,
+    config: { mode: 'collapsed', minChars: 10 },
+    isCurrent: () => true,
+    label: (final, n) => `${final}:${n}`,
+  }
+  tracker.start(target)
+  // 注入 10000 字符思考
+  const longText = '深度推理长思维链。'.repeat(1000)
+  tracker.append(target, longText)
+  const state = [...tracker.states.values()][0]
+  assert.equal(state.prefix.length, longText.length, '飞书渠道思考前缀缓冲应完整容纳长文本，严禁在 4096 处封闭')
+  assert.equal(state.closed, false, '未达安全上限前严禁封闭')
+  assert.equal(sends[0].options.truncated, false, '长思维链在安全预算内绝不标记 truncated: true')
+})

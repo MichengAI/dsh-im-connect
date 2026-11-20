@@ -41,6 +41,7 @@ interface Lifecycle {
   streamId: string
   prefix: string
   total: number
+  bufferLimit: number
   /** Numeric surrogate metadata, never an unbounded second reasoning buffer. */
   high?: number
   closed: boolean
@@ -67,9 +68,12 @@ export class ThinkingDisplayTracker {
     this.identities.set(target.key, { sessionId: target.sessionId, turn: target.turn })
     const config = normalizeThinkingDisplay(target.config)
     if (config.mode !== 'collapsed' || !target.channel.sendThinking || !target.isCurrent()) return
+    const channelLimit = target.channel.maxThinkingChars
+      ?? (target.channel.id === 'feishu' || target.channel.id === 'lark' ? 65536 : 4096)
+    const bufferLimit = Math.max(channelLimit, config.maxChars)
     this.states.set(target.key, {
       target, config, scope: new AbortController(), streamId: `${target.sessionId}:${this.identity}:${++this.generation}`,
-      prefix: '', total: 0, closed: false, final: false,
+      prefix: '', total: 0, bufferLimit, closed: false, final: false,
     })
   }
 
@@ -99,7 +103,7 @@ export class ThinkingDisplayTracker {
         state.high = last
         addition = addition.slice(0, -1)
       }
-      const room = 4096 - state.prefix.length
+      const room = state.bufferLimit - state.prefix.length
       let prefix = addition.slice(0, room)
       const end = prefix.charCodeAt(prefix.length - 1)
       if (end >= 0xd800 && end <= 0xdbff) prefix = prefix.slice(0, -1)
