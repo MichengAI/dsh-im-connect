@@ -594,7 +594,8 @@ export class ImEngine {
     const channel = this.channels.get(entry.channelId)
     if (this.disposed || !channel) return false
     const binding = this.router.lookup(entry.channelId, entry.message.kind ?? 'dm', entry.message.chatId)
-    return binding?.sessionId === entry.sessionId && decideAccess({ userAllowed: this.isAuthorized(entry.channelId, channel, entry.message), kind: entry.message.kind, addressed: true }) === 'allow'
+    return binding?.sessionId === entry.sessionId && (entry.turn === undefined || !this.progress.hasNewerTurn(entry.sessionId, entry.turn))
+      && decideAccess({ userAllowed: this.isAuthorized(entry.channelId, channel, entry.message), kind: entry.message.kind, addressed: true }) === 'allow'
   }
 
   private async recoverDelivery(entry: DeferredEntry, fresh = false, explicit = false): Promise<'missing' | 'unavailable' | undefined> {
@@ -1557,6 +1558,13 @@ export class ImEngine {
         'delivery-failed': replyText('本次处理已结束，但部分回复或文件未能发送。查看交付记录：/delivery；完整结果和文件请在网页查看，不会自动重复执行任务。'),
       })[status]
       if (!valid()) return
+      const noticeId = `completion:${result.sessionId}:${result.turn}:${status}`
+      try {
+        if (!this.deferred.beginNotice(noticeId, result.sessionId, channel.id, message, text, result.turn)) return
+      } catch (error) {
+        this.log(`[im-delivery] 完成通知记录失败: ${error instanceof Error ? error.message : String(error)}`)
+        return
+      }
       if (result.status === 'error' || result.status === 'cancelled' || result.status === 'empty') {
         for (const entry of this.deferred.list(channel.id, message)) if (entry.sessionId === result.sessionId && entry.turn === result.turn && entry.status === 'waiting') {
           this.deferred.patch(entry.id, { status: 'unknown' })
@@ -1571,11 +1579,14 @@ export class ImEngine {
           const body = text
           // 复用已有回复流发送异常说明；收口结果不明时不重复发送。
           await taken.stream.finish([taken.text, body].filter(Boolean).join('\n\n'))
+          this.deferred.patch(noticeId, { status: 'sent' })
           return true
         }
       }
-      const outcome = { ok: true }
+      const outcome: DeliveryOutcome = { ok: true }
       await this.deliver(channel, message.chatId, text, outcome)
+      if (outcome.ok) this.deferred.patch(noticeId, { status: 'sent' })
+      else if (outcome.definite) this.deferred.patch(noticeId, { status: 'ready' })
       return outcome.ok
     })
     if (notified) for (const id of terminalIds) this.deferred.patch(id, { status: 'sent' })

@@ -86,6 +86,20 @@ export class DeferredDelivery {
     try { this.flush() } catch (error) { this.entries = previous; throw error }
     this.active.add(id)
   }
+  /** Persist a stable completion notice before attempting platform I/O. */
+  beginNotice(id: string, sessionId: string, channelId: string, message: ImMessage, text: string, turn?: number): boolean {
+    if (this.entries.some(entry => entry.id === id)) return false
+    this.begin(id, sessionId, channelId, message)
+    try {
+      this.patch(id, { text, turn, status: 'unknown' })
+      this.active.delete(id)
+    } catch (error) {
+      this.entries = this.entries.filter(entry => entry.id !== id)
+      try { this.flush() } catch { this.quarantined.add(id) }
+      throw error
+    }
+    return true
+  }
   reject(id: string, definite = false): void {
     try { this.patch(id, { status: definite ? 'rejected' : 'unknown' }) }
     catch (error) { this.quarantined.add(id); throw error }

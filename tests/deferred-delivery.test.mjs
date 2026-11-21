@@ -73,6 +73,17 @@ test('明确未提交可恢复，未知不自动重试，分片计划跨重启�
   assert.deepEqual(sent, ['abc', 'def'])
 })
 
+test('完成通知先持久化，重复完成回调不重复创建记录', t => {
+  const { journal, file } = fixture(t)
+  const notice = { ...message, text: '' }
+  assert.equal(journal.beginNotice('completion:s:1:error', 's', 'c', notice, 'failure notice', 1), true)
+  const entry = () => journal.list().find(item => item.id === 'completion:s:1:error')
+  assert.equal(entry().status, 'unknown')
+  assert.equal(entry().text, 'failure notice')
+  assert.equal(journal.beginNotice('completion:s:1:error', 's', 'c', notice, 'failure notice'), false)
+  assert.equal(new DeferredDelivery(file).list().find(item => item.id === 'completion:s:1:error').text, 'failure notice')
+})
+
 test('发送前落盘失败不发出请求，内存状态回滚', async t => {
   const { file } = fixture(t)
   const journal = new DeferredDelivery(file)
