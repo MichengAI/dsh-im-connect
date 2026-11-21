@@ -8,6 +8,7 @@
 - **Clear & intuitive group titles**: Displays a clean platform title (e.g., "WeChat", "WeCom") in single-account environments, and automatically appends account remarks or custom names (e.g., "WeChat · Support") in multi-account environments.
 - **Direct account settings via context menu**: Right-clicking any channel group heading now opens the settings and diagnostics panel for that specific account directly, making it faster to adjust credentials and remarks.
 - **Instant title refresh on remark change**: Updating an account's remark name immediately refreshes the sidebar group title in real time without requiring a reload or restart.
+- **Context menu presentation cleanup**: Fixed an issue where right-clicking a channel group could inadvertently leave the menu item labeled as "Rename", and eliminated extraneous blank space and divider lines at the bottom of the menu for a cleaner look.
 
 ## [1.0.48] - 2026-11-20
 

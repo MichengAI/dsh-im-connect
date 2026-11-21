@@ -5742,7 +5742,15 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         el.style.display = "none";
         el.setAttribute("aria-hidden", "true");
       };
+      const purgeDetached = () => {
+        for (const el of hiddenElements.keys()) {
+          if (typeof document.contains === "function" && !document.contains(el)) {
+            hiddenElements.delete(el);
+          }
+        }
+      };
       const hideOthers = (menu, ours) => {
+        purgeDetached();
         for (const item of menu.querySelectorAll('button[role="menuitem"]')) {
           if (ours.has(item)) continue;
           hideElement(item);

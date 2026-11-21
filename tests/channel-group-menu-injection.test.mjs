@@ -312,11 +312,25 @@ test('频道分组右键菜单克隆重命名模板后，文案必须正确替�
   assert.equal(separator.style.display, 'none', '菜单中的多余分割线必须被隐藏')
   assert.equal(separator.getAttribute('aria-hidden'), 'true')
 
+  // 验证其他菜单项的外层包裹容器已被隐藏（避免残留空行）
+  assert.equal(deleteWrap.style.display, 'none', '其他项的包裹容器必须被隐藏以避免残留空行')
+  assert.equal(deleteWrap.getAttribute('aria-hidden'), 'true')
+
+  // 模拟宿主二次触发扫描 / 重排（模拟宿主重排刷新样式，覆盖 existing !== null 重新 hideOthers）
+  deleteWrap.style.display = ''
+  separator.style.display = ''
+  if (rafCallback) rafCallback()
+  assert.equal(menu.querySelectorAll('button[data-ima-channel-group-menu="true"]').length, 1, '二次扫描不得重复注入按钮')
+  assert.equal(deleteWrap.style.display, 'none', '二次扫描后 wrapper 依然被重新隐藏')
+  assert.equal(separator.style.display, 'none', '二次扫描后分割线依然被重新隐藏')
+
   dispose()
 
   // 验证清理后分割线还原
   assert.equal(separator.style.display, '', 'dispose 后分割线必须还原')
   assert.equal(separator.getAttribute('aria-hidden'), null)
+  assert.equal(deleteWrap.style.display, '', 'dispose 后 wrapper 必须还原')
+  assert.equal(deleteWrap.getAttribute('aria-hidden'), null)
 })
 
 test('无特定类名的普通结构菜单项，文案与图标同样能被平稳替换', () => {
@@ -509,5 +523,114 @@ test('installChannelGroupOption 正确注入「按频道」分组项，并清理
   assert.equal(injectedBtn.querySelectorAll('._check_70kcw_265').length, 0, '原有模板的 check 必须被清理')
 
   dispose()
+})
+
+test('频道分组菜单在连续打开或关闭后，自动回收脱离文档的旧 DOM 引用', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const menuCode = extractBlock(source, '    function replaceMenuItemContent(', '    function ChannelMenuSettingsIcon()', '频道分组菜单')
+
+  const document = new MockNode('document')
+  const body = new MockNode('body')
+  document.appendChild(body)
+  document.body = body
+
+  let rafCallback = null
+  const window = {
+    requestAnimationFrame: (cb) => { rafCallback = cb; return 1 },
+    cancelAnimationFrame: () => { rafCallback = null },
+    setTimeout: (cb) => cb(),
+  }
+
+  class MockMutationObserver {
+    observe() {}
+    disconnect() {}
+  }
+
+  const performance = { now: () => 1000 }
+  const channelMarkup = () => '<svg><path d=\"gear\"></path></svg>'
+  const ChannelMenuSettingsIcon = () => 'settings-icon'
+  const h = (type) => type()
+
+  const installChannelGroupMenu = new Function(
+    'document',
+    'window',
+    'MutationObserver',
+    'performance',
+    'channelMarkup',
+    'ChannelMenuSettingsIcon',
+    'h',
+    'CHANNEL_WORKSPACE_PREFIX',
+    'CHANNEL_GROUP_MENU_ATTR',
+    'channelIdFromWorkspaceId',
+    `${menuCode}; return installChannelGroupMenu;`
+  )(
+    document,
+    window,
+    MockMutationObserver,
+    performance,
+    channelMarkup,
+    ChannelMenuSettingsIcon,
+    h,
+    'ima-channel:',
+    'data-ima-channel-group-menu',
+    (wsId) => wsId.startsWith('ima-channel:') ? wsId.slice('ima-channel:'.length) : undefined
+  )
+
+  const channelRow = new MockNode('div')
+  channelRow.setAttribute('data-row-key', 'workspace:ima-channel:weixin')
+  body.appendChild(channelRow)
+
+  const buildMenu = () => {
+    const m = new MockNode('div')
+    m.setAttribute('role', 'menu')
+    const itemWrap = new MockNode('div')
+    const btn = new MockNode('button')
+    btn.setAttribute('role', 'menuitem')
+    btn.textContent = '重命名'
+    itemWrap.appendChild(btn)
+    const delWrap = new MockNode('div')
+    const delBtn = new MockNode('button')
+    delBtn.setAttribute('role', 'menuitem')
+    delBtn.textContent = '删除工作区'
+    delWrap.appendChild(delBtn)
+    m.appendChild(itemWrap)
+    m.appendChild(delWrap)
+    return { m, btn, delWrap }
+  }
+
+  const options = {
+    settingsLabel: '频道设置',
+    resolve: (id) => ({ id, platform: 'weixin', label: '微信' }),
+    onSettings: () => {},
+  }
+
+  const dispose = installChannelGroupMenu(options)
+
+  // 第一次打开菜单 menu1
+  const menu1Data = buildMenu()
+  body.appendChild(menu1Data.m)
+  document.dispatchEvent({ type: 'pointerdown', target: channelRow })
+  if (rafCallback) rafCallback()
+  assert.equal(menu1Data.delWrap.style.display, 'none')
+
+  // menu1 关闭脱离 DOM
+  menu1Data.m.remove()
+  assert.equal(document.contains(menu1Data.delWrap), false, 'menu1 节点已脱落')
+
+  // 第二次打开菜单 menu2
+  const menu2Data = buildMenu()
+  body.appendChild(menu2Data.m)
+  document.dispatchEvent({ type: 'pointerdown', target: channelRow })
+  if (rafCallback) rafCallback()
+  assert.equal(menu2Data.delWrap.style.display, 'none')
+
+  // 此时 menu1Data.delWrap 在第二次打开时触发了 purgeDetached，已被从 Map 中剔除
+  menu1Data.delWrap.style.display = 'custom-stay'
+  dispose()
+
+  // menu2Data 仍在 DOM 中，正常还原为 ''
+  assert.equal(menu2Data.delWrap.style.display, '')
+  // menu1Data 脱离的节点未被 dispose 重新修改，保持为 custom-stay
+  assert.equal(menu1Data.delWrap.style.display, 'custom-stay', '脱落节点不应残留于 Map 中被重复处理')
 })
 
