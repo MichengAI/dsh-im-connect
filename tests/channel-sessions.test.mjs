@@ -78,45 +78,69 @@ test('空会话列表只枚举一次，不返回空渠道', () => {
   assert.equal(lists, 1)
 })
 
-test('旧客户端（5afb33d）消费新服务端分组结构时频道列表不为空且会话 platform 正确', () => {
+test('旧客户端（5afb33d）消费真实 channelSessions() 产物时聚合出正确的平台分组与会话', () => {
+  const records = [
+    { channel: 'weixin-a', sessionId: 's-wx-1' },
+    { channel: 'weixin-b', sessionId: 's-wx-2' },
+    { channel: 'feishu-solo', sessionId: 's-fs-1' },
+  ]
+  const channels = {
+    'weixin-a': { platform: 'weixin', name: '客服号' },
+    'weixin-b': { platform: 'weixin', name: '监控号' },
+    'feishu-solo': { platform: 'feishu' },
+  }
+  const manager = {
+    archivedSessionIds: () => new Set(),
+    store: { channels },
+    sessions: { list: () => records },
+    platformOf: (id, config) => config?.platform || id.split('-')[0],
+    accountGroupLabel: ChannelManager.prototype.accountGroupLabel,
+  }
+  // 调用真实的 channelSessions 产出服务端 groups
+  const realServerGroups = ChannelManager.prototype.channelSessions.call(manager)
+
+  // 旧客户端（5afb33d）算法消费真实服务端 groups
   const CHANNEL_GROUP_IDS = ['weixin', 'wecom', 'qq', 'feishu', 'lark', 'dingtalk', 'telegram', 'discord', 'slack']
   const channelSessionChannels = new Map()
-  const updateMembershipOld = (groups) => {
-    for (const group of groups) {
-      for (const session of group.sessions || []) {
-        channelSessionChannels.set(String(session.sessionId), group.id)
-      }
+  for (const group of realServerGroups) {
+    for (const session of group.sessions || []) {
+      channelSessionChannels.set(String(session.sessionId), group.id)
     }
   }
-  const channelGroupsOld = (state) => {
-    const groups = new Map(CHANNEL_GROUP_IDS.map((id) => [id, { id, sessions: [] }]))
-    for (const id of state.ids || []) {
-      const channelId = channelSessionChannels.get(String(id))
-      const group = groups.get(channelId)
-      const session = state.byId && state.byId[id]
-      if (group && session) group.sessions.push({ sessionId: id })
-    }
-    return [...groups.values()].filter((g) => g.sessions.length > 0)
+
+  const oldGroups = new Map(CHANNEL_GROUP_IDS.map((id) => [id, { id, sessions: [] }]))
+  for (const session of records) {
+    const channelId = channelSessionChannels.get(session.sessionId)
+    const group = oldGroups.get(channelId)
+    if (group) group.sessions.push(session)
   }
+  const activeGroups = [...oldGroups.values()].filter((g) => g.sessions.length > 0)
 
-  const serverGroups = [
-    { id: 'weixin', accountId: 'weixin-a', platform: 'weixin', label: '微信 · 客服号', sessions: [{ sessionId: 's-wx-1' }] },
-    { id: 'weixin', accountId: 'weixin-b', platform: 'weixin', label: '微信 · 监控号', sessions: [{ sessionId: 's-wx-2' }] },
-    { id: 'feishu', accountId: 'feishu-solo', platform: 'feishu', label: '飞书', sessions: [{ sessionId: 's-fs-1' }] },
-  ]
-  updateMembershipOld(serverGroups)
-
-  assert.equal(channelSessionChannels.get('s-wx-1'), 'weixin')
-  assert.equal(channelSessionChannels.get('s-wx-2'), 'weixin')
-  assert.equal(channelSessionChannels.get('s-fs-1'), 'feishu')
-
-  const groups = channelGroupsOld({
-    ids: ['s-wx-1', 's-wx-2', 's-fs-1'],
-    byId: { 's-wx-1': {}, 's-wx-2': {}, 's-fs-1': {} },
-  })
-  assert.equal(groups.length, 2)
-  const wxGroup = groups.find((g) => g.id === 'weixin')
+  assert.equal(activeGroups.length, 2)
+  const wxGroup = activeGroups.find((g) => g.id === 'weixin')
   assert.equal(wxGroup?.sessions.length, 2)
-  const fsGroup = groups.find((g) => g.id === 'feishu')
+  const fsGroup = activeGroups.find((g) => g.id === 'feishu')
   assert.equal(fsGroup?.sessions.length, 1)
+})
+
+test('会话所属账号不在 store.channels 时 fallback 仅展示平台名，不泄露内部账号 ID', () => {
+  const records = [
+    { channel: 'feishu-orphan-12345', sessionId: 's-orphan-1' },
+  ]
+  const manager = {
+    archivedSessionIds: () => new Set(),
+    store: { channels: {} }, // store 中无任何账号配置
+    sessions: { list: () => records },
+    platformOf: (id) => id.split('-')[0],
+    accountGroupLabel: ChannelManager.prototype.accountGroupLabel,
+  }
+  const groups = ChannelManager.prototype.channelSessions.call(manager)
+  assert.equal(groups.length, 1)
+  assert.deepEqual(groups[0], {
+    id: 'feishu',
+    accountId: 'feishu-orphan-12345',
+    platform: 'feishu',
+    label: '飞书', // 纯平台名，绝不带 ' · feishu-orphan-12345'
+    sessions: [records[0]],
+  })
 })

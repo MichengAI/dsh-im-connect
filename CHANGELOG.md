@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.49] - 2026-11-21
+
+### Sidebar Channel Sessions Grouped by Account Instance & Quick Settings (#78)
+
+- **Account-level session grouping**: When multiple accounts are configured for the same messaging platform, sidebar sessions are neatly organized into dedicated groups per account instance, preventing conversations across accounts from mixing together.
+- **Clear & intuitive group titles**: Displays a clean platform title (e.g., "WeChat", "WeCom") in single-account environments, and automatically appends account remarks or custom names (e.g., "WeChat · Support") in multi-account environments.
+- **Direct account settings via context menu**: Right-clicking any channel group heading now opens the settings and diagnostics panel for that specific account directly, making it faster to adjust credentials and remarks.
+- **Instant title refresh on remark change**: Updating an account's remark name immediately refreshes the sidebar group title in real time without requiring a reload or restart.
+
 ## [1.0.48] - 2026-11-20
 
 ### WeCom Custom WebSocket URL for On-Premise Deployments (#76)

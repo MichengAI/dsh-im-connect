@@ -254,7 +254,9 @@ export interface ChannelView {
 }
 
 export interface ChannelSessionGroup {
+  /** 兼容期平台标识（供旧客户端按平台聚合），多账号时平台内各账号实例共享；后续大版本迁移后将统一为 accountId */
   id: string
+  /** 账号唯一实例 ID */
   accountId: string
   platform: ChannelId
   label: string
@@ -535,7 +537,7 @@ export class ChannelManager {
           id: platform,
           accountId,
           platform,
-          label: `${platformLabel} · ${accountId}`,
+          label: platformLabel,
           sessions: [],
         }
         accountGroups.set(accountId, group)

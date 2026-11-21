@@ -5461,7 +5461,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
 
     function channelGroupsFromSessionState(state, t) {
       const groups = new Map();
-      const metaMap = typeof channelAccountMeta !== "undefined" ? channelAccountMeta : new Map();
+      const metaMap = channelAccountMeta;
       for (const [accountId, meta] of metaMap) {
         groups.set(accountId, {
           id: accountId,
@@ -5474,7 +5474,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       for (const id of src.ids || []) {
         const platform = channelIdOfSession(id);
         if (!platform) continue;
-        const accountId = (typeof accountIdOfSession === "function" ? accountIdOfSession(id) : undefined) || platform;
+        const accountId = accountIdOfSession(id) || platform;
         let group = groups.get(accountId);
         if (!group) {
           const meta = metaMap.get(accountId);
@@ -5573,7 +5573,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     }
 
     const channelLogoUrlCache = new Map();
-    /** 频道品牌标 data URL，供分组头和会话行复用。 */
+    /** 频道品牌标 data URL，供工作区图标和会话行复用。 */
     function channelLogoUrl(id) {
       if (channelLogoUrlCache.has(id)) return channelLogoUrlCache.get(id);
       const markup = channelMarkup(h(BrandMark, { id, compact: true }));
