@@ -5622,23 +5622,44 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
      * 替换菜单项内的图标与文案，兼容各种带有嵌套包装、CSS Module 类名或纯结构节点的宿主 DOM。
      */
     function replaceMenuItemContent(button, templateText, label, icon) {
-      const iconContainer = button.querySelector('[class*="itemIcon"], [class*="Icon"]') || button.firstElementChild;
+      const ownerDoc = button.ownerDocument || (typeof document !== "undefined" ? document : null);
+      let iconContainer = button.querySelector('[class*="itemIcon"], [class*="Icon"]');
+      if (!iconContainer && button.firstElementChild) {
+        const first = button.firstElementChild;
+        const isSvg = first.tagName && first.tagName.toLowerCase() === "svg";
+        const isImg = first.tagName && first.tagName.toLowerCase() === "img";
+        if (isSvg || isImg || button.children.length > 1) {
+          iconContainer = first;
+        }
+      }
       const isInsideIcon = (el) => iconContainer && typeof iconContainer.contains === "function" && iconContainer.contains(el);
       const labelContainer = button.querySelector('[class*="itemLabel"], [class*="Label"]')
         || [...button.querySelectorAll("span, div")].find((el) => el !== iconContainer && !isInsideIcon(el) && (el.textContent || "").trim() === templateText)
         || (button.children.length > 1 ? button.children[1] : null)
-        || button.lastElementChild;
+        || (button.lastElementChild !== iconContainer ? button.lastElementChild : null);
 
-      if (iconContainer && icon !== undefined) {
-        iconContainer.innerHTML = icon;
+      if (icon !== undefined) {
+        if (!iconContainer && ownerDoc && typeof ownerDoc.createElement === "function") {
+          iconContainer = ownerDoc.createElement("span");
+          if (typeof iconContainer.setAttribute === "function") {
+            iconContainer.setAttribute("class", "ima-menu-item-icon");
+          }
+          button.insertBefore(iconContainer, button.firstChild);
+        }
+        if (iconContainer) {
+          iconContainer.innerHTML = icon;
+        }
       }
       if (labelContainer && labelContainer !== iconContainer) {
         labelContainer.textContent = label;
       } else {
-        const directChildren = [...button.children];
-        if (directChildren.length >= 2) {
-          if (icon !== undefined) directChildren[0].innerHTML = icon;
-          directChildren[1].textContent = label;
+        const remaining = [...button.children].filter((el) => el !== iconContainer);
+        if (remaining.length >= 1) {
+          remaining[0].textContent = label;
+        } else if (ownerDoc && typeof ownerDoc.createElement === "function") {
+          const textNode = ownerDoc.createElement("span");
+          textNode.textContent = label;
+          button.appendChild(textNode);
         } else {
           button.textContent = label;
         }
@@ -5671,6 +5692,9 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         button.removeAttribute("disabled");
         button.disabled = false;
         button.classList.remove("danger");
+        for (const child of [...button.children]) {
+          if (child.tagName && child.tagName.toLowerCase() === "svg") child.remove();
+        }
         for (const svg of button.querySelectorAll(":scope > svg")) svg.remove();
         for (const check of button.querySelectorAll('[class*="check"], svg[class*="check"]')) check.remove();
         replaceMenuItemContent(button, (first.textContent || "").trim(), options.label, channelMarkup(h(IconQueueOutline, { size: 16 })));

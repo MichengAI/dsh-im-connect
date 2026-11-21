@@ -16,6 +16,26 @@ class MockNode {
     this._textContent = ''
   }
 
+  createElement(tagName) {
+    return new MockNode(tagName)
+  }
+
+  append(...nodes) {
+    for (const node of nodes) {
+      if (typeof node === 'string') {
+        const textNode = new MockNode('span')
+        textNode.textContent = node
+        this.appendChild(textNode)
+      } else if (node) {
+        this.appendChild(node)
+      }
+    }
+  }
+
+  get firstChild() {
+    return this.children[0] || null
+  }
+
   get textContent() {
     if (this.children.length === 0) return this._textContent
     return this.children.map(c => c.textContent).join('')
@@ -632,5 +652,116 @@ test('频道分组菜单在连续打开或关闭后，自动回收脱离文档�
   assert.equal(menu2Data.delWrap.style.display, '')
   // menu1Data 脱离的节点未被 dispose 重新修改，保持为 custom-stay
   assert.equal(menu1Data.delWrap.style.display, 'custom-stay', '脱落节点不应残留于 Map 中被重复处理')
+})
+
+test('installChannelGroupOption 兼容清理直接挂在 button 下的 svg 图标', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const optionCode = extractBlock(source, '    function replaceMenuItemContent(', '    function installChannelGroupMenu(', '频道分组选项')
+
+  const document = new MockNode('document')
+  const body = new MockNode('body')
+  document.appendChild(body)
+  document.body = body
+
+  let rafCallback = null
+  const window = {
+    requestAnimationFrame: (cb) => { rafCallback = cb; return 1 },
+    cancelAnimationFrame: () => { rafCallback = null },
+    setTimeout: (cb) => cb(),
+  }
+
+  class MockMutationObserver {
+    observe() {}
+    disconnect() {}
+  }
+
+  const channelMarkup = () => '<svg><path d="channel-svg"></path></svg>'
+  const h = () => 'h'
+  const IconQueueOutline = 'queue'
+  const IconCheckOutline = 'check'
+
+  const installChannelGroupOption = new Function(
+    'document',
+    'window',
+    'MutationObserver',
+    'channelMarkup',
+    'h',
+    'IconQueueOutline',
+    'IconCheckOutline',
+    'CHANNEL_GROUP_OPTION_ATTR',
+    `${optionCode}; return installChannelGroupOption;`
+  )(
+    document,
+    window,
+    MockMutationObserver,
+    channelMarkup,
+    h,
+    IconQueueOutline,
+    IconCheckOutline,
+    'data-ima-channel-group-option'
+  )
+
+  const menu = new MockNode('div')
+  menu.setAttribute('role', 'menu')
+
+  const optWrap = new MockNode('div')
+  const optBtn = new MockNode('button')
+  optBtn.setAttribute('role', 'menuitem')
+
+  // 模拟模板项直接挂载一个旧 svg 图标
+  const directOldSvg = new MockNode('svg')
+  directOldSvg.setAttribute('data-old-icon', 'true')
+  const labelSpan = new MockNode('span')
+  labelSpan.textContent = '工作区'
+
+  optBtn.appendChild(directOldSvg)
+  optBtn.appendChild(labelSpan)
+  optWrap.appendChild(optBtn)
+
+  const titleNode = new MockNode('div')
+  titleNode.textContent = '分组方式'
+  menu.appendChild(titleNode)
+  menu.appendChild(optWrap)
+  body.appendChild(menu)
+
+  const dispose = installChannelGroupOption({
+    label: '按频道',
+    groupLabel: '分组方式',
+    workspaceLabel: '工作区',
+    checked: false,
+    onSelect: () => {},
+  })
+  if (rafCallback) rafCallback()
+
+  const injectedBtn = menu.querySelector('button[data-ima-channel-group-option="true"]')
+  assert.ok(injectedBtn, '注入项必须存在')
+  // 验证模板原有的 directOldSvg 必须被彻底移除，不能残留在注入项中
+  const remainingOldSvg = injectedBtn.querySelector('[data-old-icon="true"]')
+  assert.equal(remainingOldSvg, null, '直接挂在 button 上的旧 svg 必须被清除')
+
+  dispose()
+})
+
+test('replaceMenuItemContent 在模板项完全缺少图标容器时，自动补充图标容器，避免图标丢失', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const replaceCode = extractBlock(source, '    function replaceMenuItemContent(', '    function installChannelGroupOption(', 'replaceMenuItemContent')
+
+  const document = new MockNode('document')
+  const replaceMenuItemContent = new Function(
+    'document',
+    `${replaceCode}; return replaceMenuItemContent;`
+  )(document)
+
+  // 模拟一个极其极端的模板项：无任何子元素、纯文本的 button
+  const plainBtn = new MockNode('button')
+  plainBtn.textContent = '纯文本项'
+
+  const customIconHtml = '<svg class="my-gear"></svg>'
+  replaceMenuItemContent(plainBtn, '纯文本项', '新频道设置', customIconHtml)
+
+  assert.equal(plainBtn.textContent.includes('新频道设置'), true, '文案必须成功更新')
+  assert.doesNotMatch(plainBtn.textContent, /纯文本项/, '旧文案不应残留')
+  assert.equal(plainBtn.children.length >= 2, true, '必须至少包含图标容器与文案容器')
+  assert.equal(plainBtn.children[0].innerHTML, customIconHtml, '图标容器内必须包含指定的图标')
 })
 
