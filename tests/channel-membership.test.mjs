@@ -47,6 +47,39 @@ test('普通 Host ID 按渠道索引分类，归属变更使同一快照的缓�
   stop()
 })
 
+test('账号元数据（如备注名 label）变更使渠道归属 revision 更新并通知监听者', () => {
+  const f = create()
+  let changes = 0
+  const stop = f.subscribeChannelMembership(() => changes++)
+
+  // 1. 初始状态设置账号与会话
+  f.updateChannelMembership([
+    { id: 'wecom_1', platform: 'wecom', label: '企业微信 · 客服', sessions: [{ sessionId: 's1' }] },
+  ])
+  assert.equal(changes, 1)
+
+  // 2. 会话 ID 没变，但备注名 label 变更，必须触发更新通知
+  f.updateChannelMembership([
+    { id: 'wecom_1', platform: 'wecom', label: '企业微信 · 售后客服', sessions: [{ sessionId: 's1' }] },
+  ])
+  assert.equal(changes, 2)
+
+  // 3. 相同内容重复传入，判定未改变，不应重复通知
+  f.updateChannelMembership([
+    { id: 'wecom_1', platform: 'wecom', label: '企业微信 · 售后客服', sessions: [{ sessionId: 's1' }] },
+  ])
+  assert.equal(changes, 2)
+
+  // 4. 账号平台变化或新增账号，必须触发更新
+  f.updateChannelMembership([
+    { id: 'wecom_1', platform: 'wecom', label: '企业微信 · 售后客服', sessions: [{ sessionId: 's1' }] },
+    { id: 'wecom_2', platform: 'wecom', label: '企业微信 · 运维', sessions: [] },
+  ])
+  assert.equal(changes, 3)
+
+  stop()
+})
+
 const probe = source.slice(source.indexOf('    function probeService('), source.indexOf('    // 旧宿主读 list.current'))
 const effectStart = source.indexOf('      ctx.effect(() => {', source.indexOf('    function apply(ctx)'))
 const effect = source.slice(effectStart, source.indexOf('      ctx.effect(() => channelRefresh.subscribe', effectStart))

@@ -3350,6 +3350,19 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           if (channelSessionAccounts.get(id) !== account) { changed = true; break; }
         }
       }
+      if (!changed) {
+        if (meta.size !== channelAccountMeta.size) {
+          changed = true;
+        } else {
+          for (const [id, item] of meta) {
+            const prev = channelAccountMeta.get(id);
+            if (!prev || prev.label !== item.label || prev.platform !== item.platform) {
+              changed = true;
+              break;
+            }
+          }
+        }
+      }
       if (changed) {
         channelSessionIds = next;
         channelSessionChannels = channels;
