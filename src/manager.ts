@@ -253,6 +253,13 @@ export interface ChannelView {
   total: number
 }
 
+export interface ChannelSessionGroup {
+  id: string
+  platform: ChannelId
+  label: string
+  sessions: SessionRecord[]
+}
+
 interface PendingRequest {
   userId: string
   username?: string
@@ -469,16 +476,71 @@ export class ChannelManager {
     }
   }
 
-  channelSessions() {
-    const groups = new Map(CHANNEL_ORDER.map(id => [id, {
-      id,
-      label: CHANNEL_META[id].label,
-      sessions: [] as SessionRecord[],
-    }]))
-    for (const item of this.sessions.list()) {
-      groups.get(this.platformOf(item.channel, this.store.channels[item.channel]))?.sessions.push(item)
+  accountGroupLabel(accountId: string, state: ChannelState | undefined, multiAccount: boolean): string {
+    const platform = this.platformOf(accountId, state)
+    const platformLabel = CHANNEL_META[platform]?.label ?? platform
+    if (!multiAccount) return platformLabel
+    if (state && typeof this.accountView === 'function') {
+      try {
+        const view = this.accountView(accountId, state)
+        if (!view.autoName && view.name) {
+          return `${platformLabel} · ${view.name}`
+        }
+        if (view.nameOrdinal) {
+          return `${platformLabel} · #${view.nameOrdinal}`
+        }
+      } catch {
+        // fallback below
+      }
     }
-    return [...groups.values()].filter((group) => group.sessions.length > 0)
+    const rawName = state?.name?.trim()
+    if (rawName) return `${platformLabel} · ${rawName}`
+    return `${platformLabel} · ${accountId}`
+  }
+
+  channelSessions(): ChannelSessionGroup[] {
+    const channelStore = this.store.channels
+    const platformAccounts = new Map<ChannelId, string[]>()
+    for (const [accountId, state] of Object.entries(channelStore)) {
+      const platform = this.platformOf(accountId, state)
+      const list = platformAccounts.get(platform) ?? []
+      list.push(accountId)
+      platformAccounts.set(platform, list)
+    }
+
+    const accountGroups = new Map<string, ChannelSessionGroup>()
+    for (const platform of CHANNEL_ORDER) {
+      const accounts = platformAccounts.get(platform) ?? []
+      const isMulti = accounts.length > 1
+      for (const accountId of accounts) {
+        const state = channelStore[accountId]
+        accountGroups.set(accountId, {
+          id: accountId,
+          platform,
+          label: this.accountGroupLabel(accountId, state, isMulti),
+          sessions: [],
+        })
+      }
+    }
+
+    for (const item of this.sessions.list()) {
+      const accountId = item.channel
+      let group = accountGroups.get(accountId)
+      if (!group) {
+        const platform = this.platformOf(accountId, channelStore[accountId])
+        const platformLabel = CHANNEL_META[platform]?.label ?? platform
+        group = {
+          id: accountId,
+          platform,
+          label: `${platformLabel} · ${accountId}`,
+          sessions: [],
+        }
+        accountGroups.set(accountId, group)
+      }
+      group.sessions.push(item)
+    }
+
+    return [...accountGroups.values()].filter((group) => group.sessions.length > 0)
   }
 
   async connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{ ok: boolean; error?: string; accountId?: string; created?: boolean; newIdentity?: boolean }> {

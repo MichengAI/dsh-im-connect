@@ -5,7 +5,7 @@ import test from 'node:test'
 // 执行客户端实际分类和缓存逻辑，验证归属异步刷新后的结果。
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 const membership = source.slice(source.indexOf('    let requestHostSessionRefresh'), source.indexOf('    const api ='))
-const create = new Function(membership + '; return { updateChannelMembership, channelIdOfSession, isChannelSession, subscribeChannelMembership, setHostSessionRefresh: (fn) => { requestHostSessionRefresh = changed => { if (changed !== false) fn() } } };')
+const create = new Function(membership + '; return { updateChannelMembership, channelIdOfSession, accountIdOfSession, isChannelSession, subscribeChannelMembership, setHostSessionRefresh: (fn) => { requestHostSessionRefresh = changed => { if (changed !== false) fn() } } };')
 
 test('普通 Host ID 按渠道索引分类，归属变更使同一快照的缓存失效', () => {
   const f = create()
@@ -19,17 +19,31 @@ test('普通 Host ID 按渠道索引分类，归属变更使同一快照的缓�
   f.updateChannelMembership([{ id: 'wecom', sessions: [{ sessionId: 'session-adopted' }] }])
   assert.equal(f.isChannelSession('session-adopted'), true)
   assert.equal(f.channelIdOfSession('session-adopted'), 'wecom')
+  assert.equal(f.accountIdOfSession('session-adopted'), 'wecom')
   assert.equal(f.channelIdOfSession('im:weixin:dm:1:chat'), 'weixin')
   assert.equal(f.channelIdOfSession('im:wecom_bot:group:1:chat'), 'wecom')
+  assert.equal(f.accountIdOfSession('im:wecom_bot:group:1:chat'), 'wecom_bot')
   assert.equal(f.channelIdOfSession('task'), undefined)
+  assert.equal(f.accountIdOfSession('task'), undefined)
   // 统一 UUID 无法从字符串反解渠道，映射未覆盖时保持未知。
   assert.equal(f.channelIdOfSession('dsh-im-session-550e8400-e29b-41d4-a716-446655440000'), undefined)
   f.updateChannelMembership([{ id: 'wecom', sessions: [{ sessionId: 'session-adopted' }] }])
   assert.equal(changes, 1)
   assert.equal(hostRefreshes, 1)
+
+  // 支持多账号分组：channelId 返回平台供图标展示，accountId 返回具体账号
+  f.updateChannelMembership([
+    { id: 'wecom_bot_1', platform: 'wecom', label: '企业微信 · 客服', sessions: [{ sessionId: 's1' }] },
+    { id: 'wecom_bot_2', platform: 'wecom', label: '企业微信 · 告警', sessions: [{ sessionId: 's2' }] },
+  ])
+  assert.equal(f.channelIdOfSession('s1'), 'wecom')
+  assert.equal(f.accountIdOfSession('s1'), 'wecom_bot_1')
+  assert.equal(f.channelIdOfSession('s2'), 'wecom')
+  assert.equal(f.accountIdOfSession('s2'), 'wecom_bot_2')
+
   f.updateChannelMembership([])
   assert.equal(f.isChannelSession('session-adopted'), false)
-  assert.equal(hostRefreshes, 2)
+  assert.equal(hostRefreshes, 3)
   stop()
 })
 

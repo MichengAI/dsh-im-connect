@@ -48,7 +48,7 @@ test('频道页默认按频道分组，并注入第四个分组选项', () => {
   assert.match(client, /CHANNEL_WORKSPACE_PREFIX = "dsh-im-channel:"/)
   assert.match(client, /function installChannelGroupOption\(/)
   assert.match(client, /setTimeout\(options\.onSelect, 0\)/)
-  assert.match(client, /function channelIconCss\(/)
+  assert.doesNotMatch(client, /function channelIconCss\(/)
   assert.match(client, /data:image\/svg\+xml/)
   assert.match(client, /rail\.byChannel/)
   assert.match(client, /data-mode="channel"/)
@@ -56,7 +56,7 @@ test('频道页默认按频道分组，并注入第四个分组选项', () => {
 })
 
 test('频道组合成工作区保留真实工作区和归档集合', () => {
-  const code = extractBlock(client, '    const CHANNEL_WORKSPACE_PREFIX = "dsh-im-channel:";', '    let channelIconCssValue', '频道合成工作区', [
+  const code = extractBlock(client, '    const CHANNEL_WORKSPACE_PREFIX = "dsh-im-channel:";', '    /** 把 React 元素渲染成可直接注入官方 DOM 的 HTML。 */', '频道合成工作区', [
     'function syntheticChannelWorkspaceState(',
     'function channelRealWorkspaceState(',
   ])

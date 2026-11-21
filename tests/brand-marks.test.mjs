@@ -32,6 +32,6 @@ test('Slack 和 Discord 使用官方标文件，不手绘、不改色', () => {
   assert.doesNotMatch(brand, /h\("img"/)
   assert.doesNotMatch(brand, /#4A154B/)
   assert.doesNotMatch(brand, /M20\.317 4\.37/)
-  assert.match(client, /function channelIconCss\(/)
+  assert.doesNotMatch(client, /function channelIconCss\(/)
   assert.match(client, /data:image\/svg\+xml/)
 })

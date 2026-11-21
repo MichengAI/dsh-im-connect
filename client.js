@@ -428,8 +428,13 @@ window.__ModuleLoader__.load({
     function parseChannelSettingsRequest(value) {
       if (!value || typeof value !== "object") return undefined;
       const channelId = typeof value.channelId === "string" ? value.channelId.trim() : "";
-      if (!channelId) return undefined;
-      return { channelId, name: typeof value.name === "string" ? value.name : "" };
+      const accountId = typeof value.accountId === "string" ? value.accountId.trim() : "";
+      if (!channelId && !accountId) return undefined;
+      return {
+        channelId,
+        accountId: accountId || undefined,
+        name: typeof value.name === "string" ? value.name : "",
+      };
     }
     function writeChannelSettingsRequest(storage, request) {
       try { storage && storage.setItem(CHANNEL_SETTINGS_STORAGE_KEY, JSON.stringify(request)); } catch { /* ignore */ }
@@ -452,10 +457,20 @@ window.__ModuleLoader__.load({
     function resolveChannelSettingsTarget(request, channels) {
       const parsed = parseChannelSettingsRequest(request);
       if (!parsed || !Array.isArray(channels)) return undefined;
-      const channel = channels.find((item) => item && item.id === parsed.channelId);
+      if (parsed.accountId) {
+        for (const channel of channels) {
+          const account = (channel.accounts || []).find((a) => a && a.id === parsed.accountId);
+          if (account) return { channelId: channel.id, accountId: account.id };
+        }
+      }
+      const channel = channels.find((item) => item && (item.id === parsed.channelId || (item.accounts || []).some((a) => a && a.id === parsed.channelId)));
       if (!channel) return undefined;
       const accounts = channel.accounts || [];
-      return { channelId: channel.id, accountId: accounts.length === 1 ? accounts[0].id : undefined };
+      const matchedAccount = accounts.find((a) => a && (a.id === parsed.accountId || a.id === parsed.channelId));
+      return {
+        channelId: channel.id,
+        accountId: matchedAccount ? matchedAccount.id : (accounts.length === 1 ? accounts[0].id : undefined),
+      };
     }
     function pickSettingsSectionButton(buttons, labels) {
       const normalize = (value) => String(value || "").replace(/\s+/g, "").trim().toLowerCase();
@@ -3297,15 +3312,31 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     let requestHostSessionRefresh = () => {};
     let channelSessionIds = new Set();
     let channelSessionChannels = new Map();
+    let channelSessionAccounts = new Map();
+    let channelAccountMeta = new Map();
     let channelMembershipRevision = 0;
     const channelMembershipListeners = new Set();
+    function parsePlatformFromChannelId(id) {
+      const val = String(id || "");
+      const split = val.indexOf("_");
+      return split > 0 ? val.slice(0, split) : val;
+    }
     function updateChannelMembership(groups) {
       const next = new Set();
       const channels = new Map();
-      for (const group of groups) {
+      const accounts = new Map();
+      const meta = new Map();
+      for (const group of groups || []) {
+        const platform = group.platform || parsePlatformFromChannelId(group.id);
+        meta.set(group.id, {
+          id: group.id,
+          platform,
+          label: group.label || "",
+        });
         for (const session of group.sessions || []) {
           next.add(session.sessionId);
-          channels.set(String(session.sessionId), group.id);
+          channels.set(String(session.sessionId), platform);
+          accounts.set(String(session.sessionId), group.id);
         }
       }
       let changed = next.size !== channelSessionIds.size || [...next].some(id => !channelSessionIds.has(id));
@@ -3314,15 +3345,22 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           if (channelSessionChannels.get(id) !== channel) { changed = true; break; }
         }
       }
+      if (!changed) {
+        for (const [id, account] of accounts) {
+          if (channelSessionAccounts.get(id) !== account) { changed = true; break; }
+        }
+      }
       if (changed) {
         channelSessionIds = next;
         channelSessionChannels = channels;
+        channelSessionAccounts = accounts;
+        channelAccountMeta = meta;
         channelMembershipRevision += 1;
         for (const listener of channelMembershipListeners) listener();
       }
       try { requestHostSessionRefresh(changed); } catch { /* 下次频道轮询继续重试 */ }
     }
-    /** IM 会话 ID 包含账号实例；接口映射兼容沿用普通 ID 的已接入会话。 */
+    /** IM 会话 ID 所属渠道平台（如 weixin/feishu），供会话行图标展示。 */
     function channelIdOfSession(sessionId) {
       const value = String(sessionId || "");
       const mapped = channelSessionChannels.get(value);
@@ -3334,6 +3372,17 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       const instance = split > 0 ? rest.slice(0, split) : rest;
       const platform = instance.split("_", 1)[0];
       return platform || undefined;
+    }
+    /** IM 会话 ID 所属具体账号实例（如 feishu_1）。 */
+    function accountIdOfSession(sessionId) {
+      const value = String(sessionId || "");
+      const mapped = channelSessionAccounts.get(value);
+      if (mapped) return mapped;
+      if (!value.startsWith("im:")) return channelSessionChannels.get(value);
+      const rest = value.slice(3);
+      const split = rest.indexOf(":");
+      const instance = split > 0 ? rest.slice(0, split) : rest;
+      return instance || undefined;
     }
     // 新旧两代 IM 前缀都要认，否则存量会话升级后会掉出渠道页签。
     const isChannelSession = (id) => {
@@ -5397,16 +5446,34 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     }
 
     function channelGroupsFromSessionState(state, t) {
-      const groups = new Map(CHANNEL_GROUP_IDS.map((id) => [id, {
-        id,
-        label: channelLabel({ id }, t),
-        sessions: [],
-      }]));
+      const groups = new Map();
+      const metaMap = typeof channelAccountMeta !== "undefined" ? channelAccountMeta : new Map();
+      for (const [accountId, meta] of metaMap) {
+        groups.set(accountId, {
+          id: accountId,
+          platform: meta.platform,
+          label: meta.label || channelLabel({ id: meta.platform }, t),
+          sessions: [],
+        });
+      }
       const src = state || EMPTY_SESSION_STATE;
       for (const id of src.ids || []) {
-        const group = groups.get(channelIdOfSession(id));
+        const platform = channelIdOfSession(id);
+        if (!platform) continue;
+        const accountId = (typeof accountIdOfSession === "function" ? accountIdOfSession(id) : undefined) || platform;
+        let group = groups.get(accountId);
+        if (!group) {
+          const meta = metaMap.get(accountId);
+          group = {
+            id: accountId,
+            platform,
+            label: (meta && meta.label) || channelLabel({ id: platform }, t),
+            sessions: [],
+          };
+          groups.set(accountId, group);
+        }
         const session = src.byId && src.byId[id];
-        if (group && session) group.sessions.push({ sessionId: id, updatedAt: session.updatedAt });
+        if (session) group.sessions.push({ sessionId: id, updatedAt: session.updatedAt });
       }
       return [...groups.values()].filter((group) => group.sessions.length > 0);
     }
@@ -5428,7 +5495,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       const src = state || EMPTY_WORKSPACE_STATE;
       const key = groups.map((group) => [
         group.id,
-        channelLabel(group, t),
+        group.label || channelLabel(group, t),
         channelGroupCreatedAt(group),
         (group.sessions || []).map((session) => session.sessionId).join(","),
       ].join("\0")).join("\0\0");
@@ -5439,7 +5506,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         return {
           workspaceId,
           id: workspaceId,
-          title: channelLabel(group, t),
+          title: group.label || channelLabel(group, t),
           path: "",
           sessionIds: (group.sessions || []).map((session) => session.sessionId),
           createdAt: channelGroupCreatedAt(group),
@@ -5465,8 +5532,6 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       channelRealWorkspaceCache.set(src, { ids: memberIds, result });
       return result;
     }
-
-    let channelIconCssValue;
 
     /** 把 React 元素渲染成可直接注入官方 DOM 的 HTML。 */
     function channelMarkup(element) {
@@ -5501,26 +5566,6 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       const url = markup ? `url("data:image/svg+xml,${encodeURIComponent(markup)}")` : "";
       channelLogoUrlCache.set(id, url);
       return url;
-    }
-
-    /** 频道分组头图标：用品牌标覆盖官方文件夹图标，并保持悬停时可见。 */
-    function channelIconCss() {
-      if (channelIconCssValue !== undefined) return channelIconCssValue;
-      if (typeof document === "undefined") {
-        channelIconCssValue = "";
-        return channelIconCssValue;
-      }
-      channelIconCssValue = CHANNEL_GROUP_IDS.map((id) => {
-        const logo = channelLogoUrl(id);
-        if (!logo) return "";
-        const row = `[data-row-key="workspace:${channelWorkspaceId(id)}"]`;
-        return `.ima-channel-official ${row}>span:first-child>svg{display:none!important}`
-          + `.ima-channel-official ${row}>span:first-child{display:inline-flex!important;background:${logo} center/contain no-repeat!important}`
-          // 宿主在悬停时用 chevron 换掉文件夹；频道分组保持品牌图标可见。
-          + `.ima-channel-official ${row}:hover>span:first-child{display:inline-flex!important}`
-          + `.ima-channel-official ${row}:hover>span:nth-child(2){display:none!important}`;
-      }).join("");
-      return channelIconCssValue;
     }
 
     let channelWorkspaceIconCache = { key: "", css: "" };
@@ -5791,17 +5836,12 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       const groups = useMemo(() => channelGroupsFromSessionState(sessionSource, t), [membershipRevision, sessionSource, t]);
       const groupsRef = useRef(groups);
       groupsRef.current = groups;
-      const [channelIcons, setChannelIcons] = useState("");
       const [workspaceIcons, setWorkspaceIcons] = useState("");
       const open = props.openSession || hostProps.open || hostProps.openSession;
       const openChannelSettings = props.openChannelSettings || hostProps.openChannelSettings;
       const openImSettings = props.openImSettings || hostProps.openImSettings || (() => openImSettingsPage(t));
 
       useEffect(() => { ensureStyle(); }, []);
-
-      useEffect(() => {
-        if (groupBy === "channel" && channelIcons === "") setChannelIcons(channelIconCss());
-      }, [channelIcons, groupBy]);
 
       const memberKey = groups.map((group) => group.id + ":" + (group.sessions || []).map((session) => session.sessionId).join(",")).join("|");
       const memberIds = useMemo(() => {
@@ -5870,7 +5910,11 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         resolve: (channelId) => groupsRef.current.find((group) => group.id === channelId),
         onSettings: (group) => {
           if (typeof openChannelSettings === "function") {
-            openChannelSettings({ channelId: group.id, name: channelLabel(group, t) });
+            openChannelSettings({
+              channelId: group.platform || group.id,
+              accountId: group.id,
+              name: group.label || channelLabel(group, t),
+            });
             return;
           }
           openImSettings();
@@ -5938,7 +5982,6 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
 
       return h(React.Fragment, null,
         h("div", { className: "ima-channel-official", "data-mode": groupBy },
-          groupBy === "channel" && channelIcons !== "" && h("style", null, channelIcons),
           groupBy !== "channel" && workspaceIcons !== "" && h("style", null, workspaceIcons),
           // 宿主列表失败时 phase 仍停在 pending，没有横幅就是整页空白。
           groupsError && h("div", { className: "ima-channel-error", role: "alert" }, t("error.load")),

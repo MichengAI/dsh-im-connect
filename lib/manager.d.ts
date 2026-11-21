@@ -109,6 +109,12 @@ export interface ChannelView {
     online: number;
     total: number;
 }
+export interface ChannelSessionGroup {
+    id: string;
+    platform: ChannelId;
+    label: string;
+    sessions: SessionRecord[];
+}
 interface PendingRequest {
     userId: string;
     username?: string;
@@ -149,11 +155,8 @@ export declare class ChannelManager {
     private hydrateProxyUrl;
     private hydrateProxyUrls;
     private accountView;
-    channelSessions(): {
-        id: ChannelId;
-        label: string;
-        sessions: SessionRecord[];
-    }[];
+    accountGroupLabel(accountId: string, state: ChannelState | undefined, multiAccount: boolean): string;
+    channelSessions(): ChannelSessionGroup[];
     connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{
         ok: boolean;
         error?: string;
