@@ -5643,6 +5643,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           iconContainer = ownerDoc.createElement("span");
           if (typeof iconContainer.setAttribute === "function") {
             iconContainer.setAttribute("class", "ima-menu-item-icon");
+            iconContainer.setAttribute("aria-hidden", "true");
           }
           button.insertBefore(iconContainer, button.firstChild);
         }
@@ -5695,7 +5696,6 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         for (const child of [...button.children]) {
           if (child.tagName && child.tagName.toLowerCase() === "svg") child.remove();
         }
-        for (const svg of button.querySelectorAll(":scope > svg")) svg.remove();
         for (const check of button.querySelectorAll('[class*="check"], svg[class*="check"]')) check.remove();
         replaceMenuItemContent(button, (first.textContent || "").trim(), options.label, channelMarkup(h(IconQueueOutline, { size: 16 })));
         if (options.checked) {

@@ -762,6 +762,41 @@ test('replaceMenuItemContent 在模板项完全缺少图标容器时，自动补
   assert.equal(plainBtn.textContent.includes('新频道设置'), true, '文案必须成功更新')
   assert.doesNotMatch(plainBtn.textContent, /纯文本项/, '旧文案不应残留')
   assert.equal(plainBtn.children.length >= 2, true, '必须至少包含图标容器与文案容器')
+  assert.equal(plainBtn.children[0].getAttribute('aria-hidden'), 'true', '图标容器必须标记 aria-hidden')
   assert.equal(plainBtn.children[0].innerHTML, customIconHtml, '图标容器内必须包含指定的图标')
 })
+
+test('replaceMenuItemContent 在模板项仅含单个文案容器时，保留文案容器身份并补充独立图标容器', () => {
+  const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const replaceCode = extractBlock(source, '    function replaceMenuItemContent(', '    function installChannelGroupOption(', 'replaceMenuItemContent')
+
+  const document = new MockNode('document')
+  const replaceMenuItemContent = new Function(
+    'document',
+    `${replaceCode}; return replaceMenuItemContent;`
+  )(document)
+
+  // 模板项只有一个非图标子元素（如仅含自定义类名的标签 span，无任何预置图标）
+  const singleSpanBtn = new MockNode('button')
+  const labelSpan = new MockNode('span', 'custom-menu-label')
+  labelSpan.textContent = '重命名'
+  singleSpanBtn.appendChild(labelSpan)
+
+  const customIconHtml = '<svg class=\"custom-icon\"></svg>'
+  replaceMenuItemContent(singleSpanBtn, '重命名', '频道设置', customIconHtml)
+
+  // 1. 必须有两个子元素：新补充的独立图标容器 + 原有的文案容器
+  assert.equal(singleSpanBtn.children.length, 2, '必须具有独立图标容器与文案容器两个子节点')
+  // 2. 首子元素必须是新补充的图标容器，不能把原有的 labelSpan 误当成图标容器
+  const iconNode = singleSpanBtn.children[0]
+  assert.equal(iconNode.getAttribute('class'), 'ima-menu-item-icon')
+  assert.equal(iconNode.getAttribute('aria-hidden'), 'true')
+  assert.equal(iconNode.innerHTML, customIconHtml)
+  // 3. 第二个子元素必须依然是原有的 labelSpan，且保留其原有 class 与更新后的文本
+  const textNode = singleSpanBtn.children[1]
+  assert.equal(textNode, labelSpan, '原文案节点必须被保留，不能被替换或当作图标容器')
+  assert.equal(textNode.getAttribute('class'), 'custom-menu-label', '原有的文案类名必须完整保留')
+  assert.equal(textNode.textContent, '频道设置', '文案必须正确更新到原有文案节点中')
+})
+
 
