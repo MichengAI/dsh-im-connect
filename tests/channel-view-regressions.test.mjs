@@ -17,13 +17,17 @@ function fixture() {
   let cursor = 0, menu
   let sessions = { phase: 'pending', ids: [], byId: {} }
   const channelSessionChannels = new Map()
+  const channelSessionAccounts = new Map()
+  const channelAccountMeta = new Map()
   const channelIdOfSession = new Function('channelSessionChannels', `${channelIdCode}; return channelIdOfSession;`)(channelSessionChannels)
-  const CHANNEL_GROUP_IDS = ['weixin', 'wecom', 'qq', 'feishu', 'lark', 'dingtalk', 'telegram', 'discord', 'slack']
-  const channelGroupsFromSessionState = new Function('CHANNEL_GROUP_IDS', 'channelIdOfSession', 'channelLabel', `${groupsCode}; return channelGroupsFromSessionState;`)(
-    CHANNEL_GROUP_IDS,
-    channelIdOfSession,
-    group => group.id,
-  )
+  const accountIdOfSession = (id) => channelSessionAccounts.get(String(id || '')) || channelIdOfSession(id)
+  const channelGroupsFromSessionState = new Function(
+    'channelAccountMeta',
+    'accountIdOfSession',
+    'channelIdOfSession',
+    'channelLabel',
+    `${groupsCode}; return channelGroupsFromSessionState;`,
+  )(channelAccountMeta, accountIdOfSession, channelIdOfSession, group => group.id)
   const Official = () => {}
   const h = (type, props, ...children) => ({ type, props: { ...props, children } })
   const env = {
@@ -68,7 +72,17 @@ function fixture() {
   return {
     store, render, props, get menu() { return menu },
     setSessions: next => { sessions = next },
-    setMembership: groups => { for (const group of groups) for (const session of group.sessions || []) channelSessionChannels.set(session.sessionId, group.id) },
+    setMembership: groups => {
+      for (const group of groups) {
+        const platform = group.platform || group.id
+        const accountId = group.accountId || group.id
+        channelAccountMeta.set(accountId, { id: accountId, accountId, platform, label: group.label || platform })
+        for (const session of group.sessions || []) {
+          channelSessionChannels.set(session.sessionId, platform)
+          channelSessionAccounts.set(session.sessionId, accountId)
+        }
+      }
+    },
   }
 }
 

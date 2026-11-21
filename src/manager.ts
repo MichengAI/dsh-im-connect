@@ -255,6 +255,7 @@ export interface ChannelView {
 
 export interface ChannelSessionGroup {
   id: string
+  accountId: string
   platform: ChannelId
   label: string
   sessions: SessionRecord[]
@@ -515,7 +516,8 @@ export class ChannelManager {
       for (const accountId of accounts) {
         const state = channelStore[accountId]
         accountGroups.set(accountId, {
-          id: accountId,
+          id: platform,
+          accountId,
           platform,
           label: this.accountGroupLabel(accountId, state, isMulti),
           sessions: [],
@@ -530,7 +532,8 @@ export class ChannelManager {
         const platform = this.platformOf(accountId, channelStore[accountId])
         const platformLabel = CHANNEL_META[platform]?.label ?? platform
         group = {
-          id: accountId,
+          id: platform,
+          accountId,
           platform,
           label: `${platformLabel} · ${accountId}`,
           sessions: [],

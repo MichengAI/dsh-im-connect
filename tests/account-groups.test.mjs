@@ -12,9 +12,9 @@ const workspaceCode = extractBlock(source, '    function syntheticChannelWorkspa
 test('多账号分组时 channelIdOfSession 保持平台标识别，accountIdOfSession 精确识别账号', () => {
   const f = new Function(`${membership}; return { updateChannelMembership, channelIdOfSession, accountIdOfSession };`)()
   f.updateChannelMembership([
-    { id: 'feishu_dept_a', platform: 'feishu', label: '飞书 · 研发组', sessions: [{ sessionId: 's-dev-1' }, { sessionId: 's-dev-2' }] },
-    { id: 'feishu_dept_b', platform: 'feishu', label: '飞书 · 客服组', sessions: [{ sessionId: 's-kf-1' }] },
-    { id: 'weixin_main', platform: 'weixin', label: '微信', sessions: [{ sessionId: 's-wx-1' }] },
+    { id: 'feishu', accountId: 'feishu_dept_a', platform: 'feishu', label: '飞书 · 研发组', sessions: [{ sessionId: 's-dev-1' }, { sessionId: 's-dev-2' }] },
+    { id: 'feishu', accountId: 'feishu_dept_b', platform: 'feishu', label: '飞书 · 客服组', sessions: [{ sessionId: 's-kf-1' }] },
+    { id: 'weixin', accountId: 'weixin_main', platform: 'weixin', label: '微信', sessions: [{ sessionId: 's-wx-1' }] },
   ])
 
   // 会话行首彩色 Logo 依赖 channelIdOfSession 返回平台名
@@ -112,6 +112,14 @@ test('右键分组菜单时精准解析目标账号并打开设置弹窗', () =>
   // 多账号场景：通过 accountId 精确打开目标账号
   const target1 = resolveChannelSettingsTarget({ channelId: 'feishu', accountId: 'feishu_acc_2' }, channels)
   assert.deepEqual(target1, { channelId: 'feishu', accountId: 'feishu_acc_2' })
+
+  // 仅传 accountId 未传 channelId 场景：通过 accountId 优先检索所属渠道
+  const targetOnlyAccount = resolveChannelSettingsTarget({ accountId: 'feishu_acc_2' }, channels)
+  assert.deepEqual(targetOnlyAccount, { channelId: 'feishu', accountId: 'feishu_acc_2' })
+
+  // channelId 与 accountId 不一致时：以 accountId 所属渠道为准
+  const targetMismatched = resolveChannelSettingsTarget({ channelId: 'weixin', accountId: 'feishu_acc_2' }, channels)
+  assert.deepEqual(targetMismatched, { channelId: 'feishu', accountId: 'feishu_acc_2' })
 
   // 单账号场景：即使只传 channelId 也自动定位到该唯一账号
   const target2 = resolveChannelSettingsTarget({ channelId: 'weixin' }, channels)

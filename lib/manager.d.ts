@@ -111,6 +111,7 @@ export interface ChannelView {
 }
 export interface ChannelSessionGroup {
     id: string;
+    accountId: string;
     platform: ChannelId;
     label: string;
     sessions: SessionRecord[];
