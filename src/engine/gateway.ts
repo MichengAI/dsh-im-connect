@@ -1,4 +1,5 @@
 import { DeferredDelivery, DeliveryRejected, DeliveryUnavailable, type DeferredEntry } from './deferred-delivery.js'
+import { readLiveSessionHistory } from './session-history.js'
 import { ChoiceSendError } from './choice-delivery.js'
 import { sleepWithSignal } from './abort.js'
 import { ThinkingDisplayTracker, normalizeThinkingDisplay, type ThinkingDisplayTarget } from './thinking-display.js'
@@ -113,6 +114,7 @@ interface AgentLike {
   session?: {
     id?: string
     events?: readonly { type?: string; data?: Record<string, unknown> }[]
+    snapshotEvents?: () => readonly { type?: string; data?: Record<string, unknown> }[]
   }
 }
 
@@ -161,7 +163,7 @@ export class ImEngine {
   private readonly sessionActors = new Map<string, string>()
   private readonly chatActors = new Map<string, string>()
   private readonly interactionMessageIds = new Map<string, string | undefined>()
-  private readonly questionActors = new Map<string, string>()
+  private readonly questionActors = new Map<string, string | undefined>()
   private readonly questionDeliveries = new Map<string, Promise<InteractionDeliveryResult>>()
   private readonly questionPromptDelivered = new Set<string>()
   private readonly queues = new Map<string, Promise<void>>()
@@ -527,7 +529,7 @@ export class ImEngine {
         return
       }
       if (binding && this.questions.has(binding.sessionId)) {
-        const actor = this.questionActors.get(binding.sessionId) ?? this.sessionActors.get(binding.sessionId)
+        const actor = this.questionActors.has(binding.sessionId) ? this.questionActors.get(binding.sessionId) : this.sessionActors.get(binding.sessionId)
         if (actor && msg.userId !== actor) {
           await this.deliver(channel, msg.chatId, notice(this.ctx, '只有发起当前任务的用户可以回答这个问题。'))
           return
@@ -870,6 +872,43 @@ export class ImEngine {
     }, req.signal, () => cancelled)
   }
 
+  private recoverQuestionActor(sessionId: string, session: AgentLike['session']): { hasCurrentRequest: boolean; actor?: string } {
+    const hasHistory = typeof session?.snapshotEvents === 'function' || Array.isArray(session?.events)
+    if (!hasHistory) return { hasCurrentRequest: false }
+    try {
+      const snapshot = typeof session?.snapshotEvents === 'function' ? session.snapshotEvents() : undefined
+      const events = Array.isArray(snapshot) ? snapshot : readLiveSessionHistory(session)
+      if (!events) return { hasCurrentRequest: true }
+      let turn: number | undefined
+      let ids = new Set<string>()
+      for (const event of events) {
+        if (event.type === 'turn/start') {
+          turn = Number.isSafeInteger(event.data?.turn) ? event.data.turn : undefined
+          ids = new Set()
+        } else if (event.type === 'turn/end' && event.data?.turn === turn) {
+          turn = undefined
+          ids.clear()
+        } else if (turn !== undefined && event.type === 'user/message') {
+          if (typeof event.data?.id === 'string') ids.add(event.data.id)
+          if (typeof event.data?.source?.rpcId === 'string') ids.add(event.data.source.rpcId)
+        }
+      }
+      if (turn === undefined || !ids.size) return { hasCurrentRequest: true }
+      const binding = this.router.bindingForSession(sessionId)
+      if (!binding) return { hasCurrentRequest: true }
+      const channel = this.channels.get(binding.channelId)
+      if (!channel) return { hasCurrentRequest: true }
+      const actors = new Set(this.deferred.list(binding.channelId).filter(entry =>
+        ids.has(entry.id) && entry.sessionId === sessionId && entry.message.kind === binding.kind
+        && entry.message.chatId === binding.chatId && !!entry.message.userId
+        && (entry.turn === undefined || entry.turn === turn)
+        && !['sent', 'rejected', 'expired'].includes(entry.status)
+        && this.isAuthorized(binding.channelId, channel, entry.message) && this.validDelivery(entry),
+      ).map(entry => entry.message.userId!))
+      return { hasCurrentRequest: true, actor: actors.size === 1 ? actors.values().next().value : undefined }
+    } catch { return { hasCurrentRequest: true } }
+  }
+
   private async onUserQuestions(
     req: UserQuestionRequestLike,
     next: () => Promise<UserQuestionAnswer>,
@@ -887,7 +926,8 @@ export class ImEngine {
       throw req.signal.reason ?? new DOMException('Aborted', 'AbortError')
     }
     const initialBinding = this.router.bindingForSession(sessionId)
-    const actor = this.sessionActors.get(sessionId) ?? (initialBinding ? this.chatActors.get(`${initialBinding.channelId}:${initialBinding.kind}:${initialBinding.chatId}`) : undefined)
+    const recovered = this.recoverQuestionActor(sessionId, req.agent?.session)
+    const actor = recovered.hasCurrentRequest ? recovered.actor : this.sessionActors.get(sessionId) ?? (initialBinding ? this.chatActors.get(`${initialBinding.channelId}:${initialBinding.kind}:${initialBinding.chatId}`) : undefined) ?? (initialBinding?.kind === 'dm' ? initialBinding.chatId : undefined)
     if (actor) this.sessionActors.set(sessionId, actor)
     const typedQuestions = questions as UserQuestionItem[]
     return await this.runInteraction(sessionId, async () => {
@@ -902,7 +942,7 @@ export class ImEngine {
       // Abort can reject while the prompt send is still in flight; attach the
       // observer now, then await the same promise after presentation completes.
       void wait.catch(() => undefined)
-      if (actor) this.questionActors.set(sessionId, actor)
+      this.questionActors.set(sessionId, actor)
       const resume = this.progress.waiting(sessionId, true)
       try {
         const delivery = await this.retryInteraction(channel, () => this.deliverQuestionInteraction(sessionId, channel, binding.chatId, this.formatQuestion(
@@ -1694,7 +1734,7 @@ export class ImEngine {
     let tracked: Promise<InteractionDeliveryResult>
     const current = this.questions.current(sessionId)
     const binding = this.router.bindingForSession(sessionId)
-    const actor = this.questionActors.get(sessionId) ?? this.sessionActors.get(sessionId) ?? (binding ? this.chatActors.get(`${binding.channelId}:${binding.kind}:${binding.chatId}`) : undefined) ?? (binding?.kind === 'dm' ? chatId : undefined)
+    const actor = this.questionActors.has(sessionId) ? this.questionActors.get(sessionId) : this.sessionActors.get(sessionId) ?? (binding ? this.chatActors.get(`${binding.channelId}:${binding.kind}:${binding.chatId}`) : undefined) ?? (binding?.kind === 'dm' ? chatId : undefined)
     const selected = this.questionSelections.get(sessionId) ?? new Set<number>()
     const choices: Choice[] = current?.question.options?.map((option, index) => ({
       label: (current.question.multiSelect && selected.has(index) ? '✓ ' : '') + option.label,
