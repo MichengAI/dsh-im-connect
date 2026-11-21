@@ -11,7 +11,7 @@ class MockNode {
     this.parentElement = null
     this.attributes = new Map()
     if (className) this.attributes.set('class', className)
-    this.style = {}
+    this.style = { display: '' }
     this.listeners = new Map()
     this._textContent = ''
   }
@@ -275,6 +275,11 @@ test('频道分组右键菜单克隆重命名模板后，文案必须正确替�
   deleteWrap.appendChild(deleteBtn)
   menu.appendChild(deleteWrap)
 
+  // 宿主分割线
+  const separator = new MockNode('div', '_separator_70kcw_300')
+  separator.setAttribute('role', 'separator')
+  menu.appendChild(separator)
+
   body.appendChild(menu)
 
   let settingsOpened = false
@@ -303,7 +308,15 @@ test('频道分组右键菜单克隆重命名模板后，文案必须正确替�
   assert.doesNotMatch(injectedItem.textContent, /重命名/, 'button 全局内容绝对不能残留「重命名」')
   assert.match(injectedItem.innerHTML, /<svg><path d="gear"><\/path><\/svg>/, '图标必须替换为设置图标')
 
+  // 验证宿主自带分割线已被隐藏
+  assert.equal(separator.style.display, 'none', '菜单中的多余分割线必须被隐藏')
+  assert.equal(separator.getAttribute('aria-hidden'), 'true')
+
   dispose()
+
+  // 验证清理后分割线还原
+  assert.equal(separator.style.display, '', 'dispose 后分割线必须还原')
+  assert.equal(separator.getAttribute('aria-hidden'), null)
 })
 
 test('无特定类名的普通结构菜单项，文案与图标同样能被平稳替换', () => {
