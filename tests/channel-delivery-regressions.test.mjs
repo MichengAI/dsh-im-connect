@@ -102,3 +102,23 @@ for (const mode of ['normal', 'edit-failed', 'tail-failed']) test(`Telegram 长�
     assert.ok(delivered.every(part => [...part].length <= 4000 && !part.includes('\uFFFD')))
   }
 })
+
+test('Telegram 回复流收口可完整送达包含模型诊断原因的长错误通知', async t => {
+  t.after(() => mock.restoreAll())
+  const sentPayloads = []
+  mock.method(globalThis, 'fetch', async (url, init) => {
+    const body = JSON.parse(init.body)
+    sentPayloads.push({ url: String(url), body })
+    if (body.rich_message) return Response.json({ ok: false, error_code: 404, description: 'Not Found' })
+    return Response.json({ ok: true, result: { message_id: 42 } })
+  })
+
+  const channel = createTelegramChannel({ token: 'test' }, () => {})
+  const stream = await channel.beginReply('1')
+  const failureNotice = '本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。\n\n原因：Encountered invalidated oauth token for user, failing request pi-ai diagnostics.'
+  await stream.finish(failureNotice)
+
+  const deliveredTexts = sentPayloads.map(p => p.body?.text).filter(Boolean)
+  assert.ok(deliveredTexts.some(text => text.includes('Encountered invalidated oauth token for user, failing request pi-ai diagnostics.')))
+  assert.ok(deliveredTexts.some(text => text.includes('原因：')))
+})

@@ -7,7 +7,7 @@ import { assistantText, isSilentReplyText } from './assistant-text.js'
 import { readDeliveryHistory } from './delivery-history.js'
 import { FileInputError, filePromptParts } from './file-input.js'
 import { ChoiceStore, type Choice } from './choices.js'
-import { MessageProgress, ProgressTracker, type TurnCompletion } from './message-progress.js'
+import { extractErrorDetail, MessageProgress, ProgressTracker, type TurnCompletion } from './message-progress.js'
 import { notice, replyText, withReplyLocale } from './command-locale.js'
 import { FileDelivery, type DeliverySession } from './file-delivery.js'
 import { ChatCommands } from './chat-commands.js'
@@ -1382,12 +1382,16 @@ export class ImEngine {
       const thinkingFinal = this.thinking.finish(thinkingTarget)
       this.progress.delivery(sessionId, thinkingTurn, thinkingFinal.then(() => undefined))
       this.streamHints.delete(streamKey)
-      const reason = (event.data as { reason?: { kind?: string; error?: { message?: string } } } | undefined)?.reason
+      const reason = (event.data as { reason?: { kind?: string; error?: unknown } } | undefined)?.reason
       this.log(`[${channel.id}] 回合结束 ${sessionId}: ${reason?.kind ?? 'ok'}`)
       if (reason?.kind === 'error' && !trackedEnd) {
-        const detail = reason.error?.message || '模型调用失败'
+        const errorDetail = extractErrorDetail(reason.error)
+        const detail = errorDetail || '模型调用失败'
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
-        const failed = notice(this.ctx, '助手没有生成回复，请查看本机日志。')
+        const failed = [
+          notice(this.ctx, '助手没有生成回复，请查看本机日志。'),
+          errorDetail ? notice(this.ctx, '原因：{0}', errorDetail) : '',
+        ].filter(Boolean).join('\n\n')
         const taken = await this.streams.take(streamKey, sessionId)
         if (taken.invalidated || !stillDeliverable()) {
           await this.discardEmptyTake(taken)
@@ -1603,7 +1607,10 @@ export class ImEngine {
     const notified = await withReplyLocale(this.ctx, async () => {
       const text = ({
         empty: replyText('本次处理已结束，未返回可投递的结果。可补充要求后继续。'),
-        error: replyText('本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。'),
+        error: [
+          replyText('本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。'),
+          result.errorDetail ? replyText('原因：{0}', result.errorDetail) : '',
+        ].filter(Boolean).join('\n\n'),
         cancelled: result.reasonKind === 'max-tokens'
           ? replyText('本次处理已达到输出长度上限，已返回的内容保留。可发送「继续」接续生成。')
           : replyText('本次处理已停止，已返回的内容保留。可直接发消息继续。'),

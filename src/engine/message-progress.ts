@@ -108,7 +108,23 @@ function failureKind(error: unknown): string {
   return 'unknown'
 }
 
-export interface TurnCompletion { sessionId: string; turn: number; items: MessageProgress[]; status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed'; reasonKind?: string }
+/** 提取宿主模型回合结束时附带的错误诊断信息，供渠道在失败通知中透传。 */
+export function extractErrorDetail(error: unknown): string | undefined {
+  if (!error) return undefined
+  if (typeof error === 'string') {
+    const trimmed = error.trim()
+    return trimmed || undefined
+  }
+  if (typeof error === 'object') {
+    const value = error as { message?: unknown; description?: unknown; detail?: unknown }
+    if (typeof value.message === 'string' && value.message.trim()) return value.message.trim()
+    if (typeof value.description === 'string' && value.description.trim()) return value.description.trim()
+    if (typeof value.detail === 'string' && value.detail.trim()) return value.detail.trim()
+  }
+  return undefined
+}
+
+export interface TurnCompletion { sessionId: string; turn: number; items: MessageProgress[]; status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed'; reasonKind?: string; errorDetail?: string }
 
 type Group = { requestId: string; sessionId: string; items: MessageProgress[]; turn?: number; revision?: number; waiting?: number }
 
@@ -190,10 +206,13 @@ export class ProgressTracker {
           this.groups.delete(group)
         }
         if (![...this.groups].some(group => group.sessionId === sessionId)) this.currentTurn.delete(sessionId)
+        const errorDetail = extractErrorDetail(data?.reason?.error)
         if (live.length && !superseded) this.onComplete({ sessionId, turn: data.turn, items: live.flatMap(group => group.items),
           status: data?.reason?.kind === 'error' ? 'error' : data?.reason?.kind !== 'completed' ? 'cancelled'
             : results.length === 0 ? 'empty' : allSent ? 'completed' : 'delivery-failed',
-          reasonKind: data?.reason?.kind })
+          reasonKind: data?.reason?.kind,
+          errorDetail,
+        })
       })
     }
   }

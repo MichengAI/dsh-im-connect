@@ -173,3 +173,194 @@ for (const mode of ['completed', 'error', 'disabled', 'switched', 'waiting', 'ne
   else assert.deepEqual(sent, ['Answer'])
   assert.equal(engine.choices.resolve('qq', { chatId: 'user-1', userId: 'u', kind: 'dm', text: '1' }, sessionId), undefined)
 })
+
+test('IM 会话在模型回合失败时保留并透传完整的错误诊断原因', async (t) => {
+  for (const streamMode of [false, true]) {
+    const { engine, handlers, sessionId } = makeFailingEngine(t)
+    const sent = []
+    const channel = {
+      id: 'qq',
+      label: 'QQ',
+      maxMessageLength: 4000,
+      start() {},
+      stop() {},
+      setMessageHandler() {},
+      status: () => 'connected',
+      send: async (_, text) => { sent.push(text) },
+      ...(streamMode ? {
+        beginReply: async () => ({
+          update: async () => {},
+          finish: async (text) => { sent.push(text) },
+        }),
+      } : {}),
+    }
+    engine.register(channel)
+    engine.ctx.get = () => undefined
+    engine.resolveCommandPermissions = () => ({ dm: { enabled: true, users: [] }, group: { enabled: true, users: [] } })
+    engine.addAllowed('qq', 'user-1')
+
+    const item = new MessageProgress(channel, { chatId: 'user-1', userId: 'user-1', kind: 'dm', messageId: 'm' }, engine.ctx, () => {})
+    engine.progress.begin(sessionId, 'req-error', [item])
+    const emit = (event) => handlers['session/event']({ id: sessionId }, event)
+
+    await emit({ type: 'turn/start', data: { turn: 1 } })
+    await emit({ type: 'user/message', surfaceOp: 'append', data: { id: 'req-error' } })
+    if (streamMode) {
+      await emit({ type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text: '思考中...' } } })
+      await sleep(10)
+    }
+
+    const errorDiag = 'Encountered invalidated oauth token for user, failing request pi-ai diagnostics.'
+    await emit({
+      type: 'turn/end',
+      data: {
+        turn: 1,
+        reason: {
+          kind: 'error',
+          error: { message: errorDiag },
+        },
+      },
+    })
+    await sleep(20)
+
+    assert.ok(sent.length > 0, '必须发送收口通知')
+    const lastMessage = sent.at(-1)
+    assert.match(lastMessage, /处理失败/)
+    assert.match(lastMessage, /Encountered invalidated oauth token for user, failing request pi-ai diagnostics\./)
+    assert.match(lastMessage, /原因：/)
+    engine.dispose()
+  }
+})
+
+test('未追踪回合（!trackedEnd）在模型失败时同样透传错误诊断', async (t) => {
+  const { engine, handlers, sessionId } = makeFailingEngine(t)
+  const sent = []
+  const channel = {
+    id: 'qq',
+    label: 'QQ',
+    maxMessageLength: 4000,
+    start() {},
+    stop() {},
+    setMessageHandler() {},
+    status: () => 'connected',
+    send: async (_, text) => { sent.push(text) },
+  }
+  engine.register(channel)
+  engine.ctx.get = () => undefined
+  engine.resolveCommandPermissions = () => ({ dm: { enabled: true, users: [] }, group: { enabled: true, users: [] } })
+  engine.addAllowed('qq', 'user-1')
+
+  // 不调用 engine.progress.begin，模拟非 IM 认领的会话回合
+  const emit = (event) => handlers['session/event']({ id: sessionId }, event)
+  await emit({ type: 'turn/start', data: { turn: 1 } })
+
+  const errorDiag = 'Transport connection closed prematurely by upstream gateway.'
+  await emit({
+    type: 'turn/end',
+    data: {
+      turn: 1,
+      reason: {
+        kind: 'error',
+        error: { message: errorDiag },
+      },
+    },
+  })
+  await sleep(20)
+
+  assert.ok(sent.length > 0, '非追踪回合失败应发送通知')
+  const lastMessage = sent.at(-1)
+  assert.match(lastMessage, /助手没有生成回复/)
+  assert.match(lastMessage, /Transport connection closed prematurely by upstream gateway\./)
+  assert.match(lastMessage, /原因：/)
+  engine.dispose()
+})
+
+test('英文偏好下模型报错正确使用英文提示与 Reason 前缀', async (t) => {
+  const { engine, handlers, sessionId } = makeFailingEngine(t)
+  const sent = []
+  const channel = {
+    id: 'qq',
+    label: 'QQ',
+    maxMessageLength: 4000,
+    start() {},
+    stop() {},
+    setMessageHandler() {},
+    status: () => 'connected',
+    send: async (_, text) => { sent.push(text) },
+  }
+  engine.register(channel)
+  // 模拟宿主配置为英文语言
+  engine.ctx.get = (name) => name === 'locale' ? { preference: 'en-US' } : undefined
+  engine.resolveCommandPermissions = () => ({ dm: { enabled: true, users: [] }, group: { enabled: true, users: [] } })
+  engine.addAllowed('qq', 'user-1')
+
+  const item = new MessageProgress(channel, { chatId: 'user-1', userId: 'user-1', kind: 'dm', messageId: 'm' }, engine.ctx, () => {})
+  engine.progress.begin(sessionId, 'req-en', [item])
+  const emit = (event) => handlers['session/event']({ id: sessionId }, event)
+
+  await emit({ type: 'turn/start', data: { turn: 1 } })
+  await emit({ type: 'user/message', surfaceOp: 'append', data: { id: 'req-en' } })
+
+  const errorDiag = 'OAuth token expired during inference'
+  await emit({
+    type: 'turn/end',
+    data: {
+      turn: 1,
+      reason: {
+        kind: 'error',
+        error: errorDiag, // 测试直接传入纯字符串 error
+      },
+    },
+  })
+  await sleep(20)
+
+  assert.ok(sent.length > 0)
+  const lastMessage = sent.at(-1)
+  assert.match(lastMessage, /This turn failed/)
+  assert.match(lastMessage, /Reason: OAuth token expired during inference/)
+  engine.dispose()
+})
+
+test('无错误诊断时保持通用失败提示且无多余原因前缀', async (t) => {
+  const { engine, handlers, sessionId } = makeFailingEngine(t)
+  const sent = []
+  const channel = {
+    id: 'qq',
+    label: 'QQ',
+    maxMessageLength: 4000,
+    start() {},
+    stop() {},
+    setMessageHandler() {},
+    status: () => 'connected',
+    send: async (_, text) => { sent.push(text) },
+  }
+  engine.register(channel)
+  engine.ctx.get = () => undefined
+  engine.resolveCommandPermissions = () => ({ dm: { enabled: true, users: [] }, group: { enabled: true, users: [] } })
+  engine.addAllowed('qq', 'user-1')
+
+  const item = new MessageProgress(channel, { chatId: 'user-1', userId: 'user-1', kind: 'dm', messageId: 'm' }, engine.ctx, () => {})
+  engine.progress.begin(sessionId, 'req-no-diag', [item])
+  const emit = (event) => handlers['session/event']({ id: sessionId }, event)
+
+  await emit({ type: 'turn/start', data: { turn: 1 } })
+  await emit({ type: 'user/message', surfaceOp: 'append', data: { id: 'req-no-diag' } })
+
+  await emit({
+    type: 'turn/end',
+    data: {
+      turn: 1,
+      reason: {
+        kind: 'error',
+        error: null,
+      },
+    },
+  })
+  await sleep(20)
+
+  assert.ok(sent.length > 0)
+  const lastMessage = sent.at(-1)
+  assert.equal(lastMessage, '本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。')
+  assert.doesNotMatch(lastMessage, /原因：/)
+  engine.dispose()
+})

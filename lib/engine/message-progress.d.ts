@@ -25,12 +25,15 @@ export declare class MessageProgress {
     settled(): Promise<void>;
     private transition;
 }
+/** 提取宿主模型回合结束时附带的错误诊断信息，供渠道在失败通知中透传。 */
+export declare function extractErrorDetail(error: unknown): string | undefined;
 export interface TurnCompletion {
     sessionId: string;
     turn: number;
     items: MessageProgress[];
     status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed';
     reasonKind?: string;
+    errorDetail?: string;
 }
 /**
  * 一次回复投递的收口信号。
