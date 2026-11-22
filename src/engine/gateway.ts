@@ -800,10 +800,24 @@ export class ImEngine {
   }
 
   private approvalVerdict(text: string): boolean | undefined {
-    const value = text.trim().toLowerCase()
-    if (['批准', '同意', 'yes', 'y', 'allow'].includes(value)) return true
-    if (['拒绝', '不同意', 'no', 'n', 'reject', 'deny'].includes(value)) return false
-    return undefined
+    const match = (val: string): boolean | undefined => {
+      if (['批准', '同意', 'yes', 'y', 'allow'].includes(val)) return true
+      if (['拒绝', '不同意', 'no', 'n', 'reject', 'deny'].includes(val)) return false
+      return undefined
+    }
+    const direct = match(text.trim().toLowerCase())
+    if (direct !== undefined) return direct
+
+    // 防御性剥离可能的 mention 占位符、@ 前缀及伴随标点（如 "@_user_1 批准"、"@bot 批准"、"<@123> 同意"、"@bot: yes"）
+    const stripped = text
+      .replace(/<@!?\S+?>/g, '')
+      .replace(/@\S+\s+/g, '')
+      .replace(/@([a-zA-Z0-9_.-]+|所有人|全体成员|机器人)/gi, '')
+      .replace(/^[：:,，\s]+/, '')
+      .replace(/[ \t]+/g, ' ')
+      .trim()
+      .toLowerCase()
+    return match(stripped)
   }
 
   private async answerApproval(channelId: string, msg: ImMessage, allow: boolean | undefined): Promise<boolean> {

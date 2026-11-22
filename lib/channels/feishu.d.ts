@@ -49,10 +49,21 @@ export declare function parseFeishuChatId(chatId: string): {
  * Legacy 传统格式（header.title + elements）以及 json_card 包装格式。
  */
 export declare function extractFeishuCardText(rawContent: string | Record<string, unknown>, maxChars?: number): string;
+export interface FeishuMention {
+    key?: string;
+    id?: {
+        open_id?: string;
+        user_id?: string;
+        union_id?: string;
+    };
+    name?: string;
+    tenant_key?: string;
+}
 interface FeishuContentMessage {
     message_id?: string;
     message_type?: string;
     content?: string;
+    mentions?: FeishuMention[];
 }
 interface ResourceClient {
     im: {
@@ -72,8 +83,15 @@ interface ResourceClient {
         };
     };
 }
+/**
+ * 飞书消息文本规范化：
+ * 1. 剥离机器人自身的 mention 占位符（如 @_user_1）；
+ * 2. 将其他被提及成员的占位符替换为 @姓名，若无姓名则保留 @user；
+ * 3. 规整多余空格并去除首尾空白，确保审批词、斜杠命令与大模型输入干净清晰。
+ */
+export declare function formatFeishuInboundText(text: string, mentions?: FeishuMention[], botOpenId?: string): string;
 /** SDK messageResource.get is the receive-side API, not im.image.get. */
-export declare function resolveFeishuContent(client: ResourceClient, message: FeishuContentMessage, signal?: AbortSignal): Promise<{
+export declare function resolveFeishuContent(client: ResourceClient, message: FeishuContentMessage, signal?: AbortSignal, botOpenId?: string): Promise<{
     text: string;
     media: ImMedia[];
 }>;
@@ -85,12 +103,6 @@ interface FeishuConfig {
         get(name: string): unknown;
     };
     threadSessions?: boolean;
-}
-interface FeishuMention {
-    key?: string;
-    id?: {
-        open_id?: string;
-    };
 }
 /** 群消息只有明确 mention 当前机器人本身才算 addressed；@ 其他成员不触发。 */
 export declare function isFeishuBotMentioned(mentions: FeishuMention[] | undefined, botOpenId: string): boolean;

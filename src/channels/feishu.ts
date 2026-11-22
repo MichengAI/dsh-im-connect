@@ -333,10 +333,18 @@ function isRejectedCode(code: unknown): boolean {
   return code !== undefined && code !== 0 && code !== '0'
 }
 
+export interface FeishuMention {
+  key?: string
+  id?: { open_id?: string; user_id?: string; union_id?: string }
+  name?: string
+  tenant_key?: string
+}
+
 interface FeishuContentMessage {
   message_id?: string
   message_type?: string
   content?: string
+  mentions?: FeishuMention[]
 }
 interface ResourceClient {
   im: { messageResource: { get(opts: { path: { message_id: string; file_key: string }; params: { type: string } }): Promise<{ getReadableStream(): import('node:stream').Readable; headers?: Record<string, string> }> } }
@@ -360,8 +368,38 @@ function outgoingImageExt(file: { name?: string; data?: Uint8Array }): string | 
   return ext
 }
 
+/**
+ * 飞书消息文本规范化：
+ * 1. 剥离机器人自身的 mention 占位符（如 @_user_1）；
+ * 2. 将其他被提及成员的占位符替换为 @姓名，若无姓名则保留 @user；
+ * 3. 规整多余空格并去除首尾空白，确保审批词、斜杠命令与大模型输入干净清晰。
+ */
+export function formatFeishuInboundText(text: string, mentions?: FeishuMention[], botOpenId?: string): string {
+  if (!text) return ''
+  let result = text
+  if (Array.isArray(mentions) && mentions.length > 0) {
+    for (const mention of mentions) {
+      const key = mention.key?.trim()
+      if (!key) continue
+      const isBot = Boolean(botOpenId && mention.id?.open_id === botOpenId)
+      const replacement = isBot ? '' : (mention.name?.trim() ? `@${mention.name.trim()}` : '@user')
+      result = result.split(key).join(replacement)
+    }
+  }
+  return result
+    .split('\n')
+    .map(line => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .trim()
+}
+
 /** SDK messageResource.get is the receive-side API, not im.image.get. */
-export async function resolveFeishuContent(client: ResourceClient, message: FeishuContentMessage, signal: AbortSignal = AbortSignal.timeout(30_000)): Promise<{ text: string; media: ImMedia[] }> {
+export async function resolveFeishuContent(
+  client: ResourceClient,
+  message: FeishuContentMessage,
+  signal: AbortSignal = AbortSignal.timeout(30_000),
+  botOpenId?: string,
+): Promise<{ text: string; media: ImMedia[] }> {
   const content = JSON.parse(message.content ?? '{}')
   const keys: string[] = []
   const texts: string[] = []
@@ -381,6 +419,12 @@ export async function resolveFeishuContent(client: ResourceClient, message: Feis
         if (item.tag === 'img') {
           if (!item.image_key) throw new Error('图片资源缺失')
           keys.push(item.image_key)
+        } else if (item.tag === 'at') {
+          const isBot = Boolean(botOpenId && item.user_id === botOpenId)
+          if (!isBot) {
+            const name = item.user_name?.trim()
+            texts.push(name ? `@${name}` : '@user')
+          }
         } else if (typeof item.text === 'string') texts.push(item.text)
       }
     }
@@ -433,7 +477,9 @@ export async function resolveFeishuContent(client: ResourceClient, message: Feis
       stream?.destroy()
     }
   }
-  return { text: texts.join('\n'), media }
+  const rawText = texts.join('\n')
+  const text = formatFeishuInboundText(rawText, message.mentions, botOpenId)
+  return { text, media }
 }
 
 interface FeishuConfig {
@@ -442,11 +488,6 @@ interface FeishuConfig {
   domain?: 'feishu' | 'lark'
   host?: { get(name: string): unknown }
   threadSessions?: boolean
-}
-
-interface FeishuMention {
-  key?: string
-  id?: { open_id?: string }
 }
 
 /**
@@ -838,7 +879,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
             if (!current()) return
             let resolved: { text: string; media: ImMedia[] }
             try {
-              resolved = await resolveFeishuContent(client!, message, timeoutSignal(30_000, generation.signal))
+              resolved = await resolveFeishuContent(client!, message, timeoutSignal(30_000, generation.signal), botOpenId)
             } catch (error) {
               if (!current()) return
               log(`[${id}] 图片或消息读取失败: ${error instanceof Error ? error.message : String(error)}`)
