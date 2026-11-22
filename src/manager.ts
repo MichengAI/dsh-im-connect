@@ -22,6 +22,7 @@ import { normalizeAssistantModel, normalizePermission, normalizeWorkspacePath, t
 import type { ChannelAdapter, EngineConfig, ImMessage, SendMode } from './engine/types.js'
 import { KeyedSerialQueue } from './engine/keyed-queue.js'
 import { backupCorruptFileSync, writeFileAtomicSync } from './engine/atomic-file.js'
+import { normalizeTopicMode, type TopicMode } from './engine/topic-title.js'
 import { sameWorkspacePath } from './engine/workspace-path.js'
 
 export const API_CLIENT_HEADER = 'x-dsh-im-connect-client'
@@ -222,6 +223,8 @@ export interface ChannelState {
   segmentDelayMaxSecs?: number
   /** 空闲新开会话分钟数：缺省为 0 表示关闭。 */
   sessionIdleMinutes?: number
+  /** 平台话题自动命名策略；缺省跟随插件全局 topicNaming。仅 Telegram 账号使用。 */
+  topicNaming?: TopicMode
   lastCheckedAt?: string
 }
 
@@ -255,6 +258,8 @@ export interface AccountView {
   segmentDelayMaxSecs: number
   /** 空闲新开会话分钟数：0 表示关闭。 */
   sessionIdleMinutes: number
+  /** 该账号生效的话题命名策略；非 Telegram 账号不开放此能力，固定为 off。 */
+  topicNaming: TopicMode
   proxyMode: ChannelProxyMode
   proxyConfigured: boolean
   proxyUrl?: string
@@ -325,6 +330,10 @@ export class ChannelManager {
   private readonly stateDir: string
   private readonly sessions: SessionMapStore
   private readonly engine: ImEngine
+  /** 跨插件入口：话题开场白持久化（不投递、不启动回合）。 */
+  get topicContext(): ImEngine['topicContext'] {
+    return this.engine.topicContext
+  }
   private readonly vault: CredentialVault
   private readonly pairing: PairingHub
   private readonly log: (line: string) => void
@@ -366,7 +375,10 @@ export class ChannelManager {
     this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log, (accountId, msg) => {
       this.requestAuthorization(accountId, msg)
       return replyText('未授权：请管理员在设置 → IM助理 中批准你的访问。')
-    }, (accountId) => this.accountEngineConfig(accountId), (accountId) => this.store.channels[accountId]?.privateAccess === 'all' ? 'all' : 'approved', (accountId) => normalizeCommandPermissions(this.store.channels[accountId]?.commandPermissions), join(options.stateDir, 'deferred-delivery.json'), undefined, join(options.stateDir, 'topic-titles.json'))
+    }, (accountId) => this.accountEngineConfig(accountId), (accountId) => this.store.channels[accountId]?.privateAccess === 'all' ? 'all' : 'approved', (accountId) => normalizeCommandPermissions(this.store.channels[accountId]?.commandPermissions), join(options.stateDir, 'deferred-delivery.json'), undefined, join(options.stateDir, 'topic-titles.json'), join(options.stateDir, 'topic-openings.json'), (accountId) => {
+      const account = this.store.channels[accountId]
+      return account !== undefined && account.platform === 'telegram' && account.enabled !== false
+    })
     for (const [channelId, users] of Object.entries(this.store.allowlist)) {
       for (const userId of users) this.engine.addAllowed(channelId, userId)
     }
@@ -485,6 +497,7 @@ export class ChannelManager {
       segmentDelayMinSecs: segmentDelay.min,
       segmentDelayMaxSecs: segmentDelay.max,
       sessionIdleMinutes: normalizeIdleMinutes(state.sessionIdleMinutes) ?? 0,
+      topicNaming: platform === 'telegram' ? this.accountTopicMode(state) : 'off',
       proxyMode: supportsProxy(platform) && (config.proxyMode === 'direct' || config.proxyMode === 'custom') ? config.proxyMode : 'inherit',
       proxyConfigured: supportsProxy(platform) && config.proxyMode === 'custom'
         ? this.proxyUrlCache.has(accountId)
@@ -557,6 +570,7 @@ export class ChannelManager {
       ...(normalized.settings.segmentDelayMinSecs !== undefined ? { segmentDelayMinSecs: normalized.settings.segmentDelayMinSecs } : {}),
       ...(normalized.settings.segmentDelayMaxSecs !== undefined ? { segmentDelayMaxSecs: normalized.settings.segmentDelayMaxSecs } : {}),
       ...(normalized.settings.sessionIdleMinutes !== undefined ? { sessionIdleMinutes: normalized.settings.sessionIdleMinutes } : {}),
+      ...(normalized.settings.topicNaming !== undefined ? { topicNaming: normalized.settings.topicNaming } : {}),
       enabled: true,
       receiveEnabled: true,
       config: nextConfig,
@@ -785,6 +799,7 @@ export class ChannelManager {
               permissions: this.permissionOptions(),
               agentPresets: await this.agentPresetOptions(),
               agentPreset: this.engineConfig.agentPreset || 'standard',
+              topicNaming: this.topicNamingDefault(),
               providers: await this.listModelCatalog(),
             })
             return
@@ -1113,6 +1128,7 @@ export class ChannelManager {
       // 发送方式按注入时机读取，不需要重载会话。
       state.sendMode = normalized.settings.sendMode
       if (normalized.settings.sessionIdleMinutes !== undefined) state.sessionIdleMinutes = normalized.settings.sessionIdleMinutes
+      if (normalized.settings.topicNaming !== undefined) state.topicNaming = normalized.settings.topicNaming
       if (normalized.settings.segmentReply !== undefined) state.segmentReply = normalized.settings.segmentReply
       if (normalized.settings.segmentDelayMinSecs !== undefined) state.segmentDelayMinSecs = normalized.settings.segmentDelayMinSecs
       if (normalized.settings.segmentDelayMaxSecs !== undefined) state.segmentDelayMaxSecs = normalized.settings.segmentDelayMaxSecs
@@ -1629,7 +1645,7 @@ export class ChannelManager {
     return ordinal
   }
 
-  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all'; sendMode: SendMode; freeChatGroups?: string[]; thinkingDisplayMode?: ThinkingDisplayMode; sessionIdleMinutes?: number; segmentReply?: boolean; segmentDelayMinSecs?: number; segmentDelayMaxSecs?: number } } | { ok: false; error: string }> {
+  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all'; sendMode: SendMode; freeChatGroups?: string[]; thinkingDisplayMode?: ThinkingDisplayMode; sessionIdleMinutes?: number; topicNaming?: TopicMode; segmentReply?: boolean; segmentDelayMinSecs?: number; segmentDelayMaxSecs?: number } } | { ok: false; error: string }> {
     const agentPreset = input.agentPreset ?? previous.agentPreset ?? this.engineConfig.agentPreset ?? 'standard'
     if (typeof agentPreset !== 'string' || !agentPreset.trim()) return { ok: false, error: '请选择 Agent 预设' }
     if (input.agentPreset !== undefined) {
@@ -1659,6 +1675,12 @@ export class ChannelManager {
     if (platform !== 'telegram' && ((freeChatGroups?.length ?? 0) > 0 || thinkingDisplayMode === 'collapsed')) return { ok: false, error: '当前渠道不支持群聊免 @ 或思考过程展示' }
     const sendMode = normalizeSendMode(input.sendMode === undefined ? previous.sendMode : input.sendMode)
     const sessionIdleMinutes = normalizeIdleMinutes(input.sessionIdleMinutes) ?? previous.sessionIdleMinutes
+    // 话题命名仅 Telegram 账号可用；未传沿用已有值，显式传值必须精确匹配三种策略。
+    const requestedTopicNaming = input.topicNaming === undefined ? previous.topicNaming : input.topicNaming
+    if (requestedTopicNaming !== undefined && normalizeTopicMode(requestedTopicNaming) === undefined) {
+      return { ok: false, error: '话题命名策略无效' }
+    }
+    const topicNaming = platform === 'telegram' ? normalizeTopicMode(requestedTopicNaming) : undefined
     // 未传就从状态里沿用；显式传布尔值才覆盖，避免旧客户端保存时把开关打回默认。
     // 只有已开放分段回复的渠道才保存开关，未验证渠道一律记为关闭。
     const segmentReply = channelSupportsSegmentReply(platform)
@@ -1675,7 +1697,7 @@ export class ChannelManager {
     if ([...trimmed].length > ACCOUNT_REMARK_LIMIT) return { ok: false, error: `账号备注不能超过 ${ACCOUNT_REMARK_LIMIT} 个字符` }
     if (/[\u0000-\u001F\u007F]/.test(trimmed)) return { ok: false, error: '账号备注不能包含换行或控制字符' }
     const name = trimmed || autoAccountName(platform, nameOrdinal)
-    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, sendMode, freeChatGroups, thinkingDisplayMode, sessionIdleMinutes, segmentReply, segmentDelayMinSecs, segmentDelayMaxSecs, commandPermissions } }
+    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, sendMode, freeChatGroups, thinkingDisplayMode, sessionIdleMinutes, topicNaming, segmentReply, segmentDelayMinSecs, segmentDelayMaxSecs, commandPermissions } }
   }
 
   private accountIdFor(platform: ChannelId, config: Record<string, string>): string {
@@ -1723,6 +1745,16 @@ export class ChannelManager {
       : parseChatIdList(state.config?.freeChatGroups)
   }
 
+  /** 账号生效的话题命名策略：显式账号策略 ?? 插件全局策略 ?? once。 */
+  private accountTopicMode(state?: ChannelState): TopicMode {
+    return normalizeTopicMode(state?.topicNaming) ?? this.topicNamingDefault()
+  }
+
+  /** 插件级话题命名默认值；绑定新账号时客户端据此展示继承后的有效策略。 */
+  topicNamingDefault(): TopicMode {
+    return normalizeTopicMode(this.engineConfig.topicNaming) ?? 'once'
+  }
+
   private accountEngineConfig(accountId: string): EngineConfig {
     const state = this.store.channels[accountId]
     if (!state) return this.engineConfig
@@ -1737,6 +1769,9 @@ export class ChannelManager {
       ...(this.platformOf(accountId, state) === 'telegram' && state.thinkingDisplayMode !== undefined
         ? { thinkingDisplay: { ...this.engineConfig.thinkingDisplay, mode: state.thinkingDisplayMode } }
         : {}),
+      topicNaming: this.platformOf(accountId, state) === 'telegram'
+        ? this.accountTopicMode(state)
+        : this.engineConfig.topicNaming,
       permissionPreset: normalizePermission(state.permission, this.permissionPresets().names) ?? this.engineConfig.permissionPreset,
       sendMode: normalizeSendMode(state.sendMode),
       // 只有已验证逐条投递的渠道才真正生效，其他渠道即使旧配置里开了也不切分。
@@ -1762,6 +1797,11 @@ export class ChannelManager {
   /** 分段回复的系统提示说明；未绑定或该账号没开启时返回空串，由引擎判断。 */
   segmentInstructionForSession(sessionId: string): string {
     return this.engine.segmentInstructionForSession(sessionId)
+  }
+
+  /** A live reply binding, not a claim that the current input was received over IM. */
+  replyChannelInstructionForSession(sessionId: string): string {
+    return this.engine.replyChannelInstructionForSession(sessionId)
   }
 
 
@@ -1815,11 +1855,11 @@ export class ChannelManager {
   }
 }
 
-function pairingSettings(input?: Record<string, unknown>): Record<string, string> {
+export function pairingSettings(input?: Record<string, unknown>): Record<string, string> {
   if (!input) return {}
   const out: Record<string, string> = {}
   if (input.commandPermissions !== undefined) out.__setting_commandPermissions = JSON.stringify(normalizeCommandPermissions(input.commandPermissions))
-  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess', 'sendMode', 'sessionIdleMinutes', 'segmentReply', 'segmentDelayMinSecs', 'segmentDelayMaxSecs', 'agentPreset']) {
+  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess', 'sendMode', 'sessionIdleMinutes', 'topicNaming', 'segmentReply', 'segmentDelayMinSecs', 'segmentDelayMaxSecs', 'agentPreset']) {
     const value = input[key]
     if (value !== undefined && value !== null) out[`__setting_${key}`] = String(value)
   }

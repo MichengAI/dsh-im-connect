@@ -3,7 +3,7 @@ import { Agent, ProxyAgent, type Dispatcher } from 'undici'
 import { DeliveryRejected } from '../engine/deferred-delivery.js'
 import { notice } from '../engine/command-locale.js'
 import { diagnosticJson, DiagnosticError, probe, requireDiagnostic } from './diagnostics.js'
-import type { ChannelAdapter, ImMedia, ImMessage, ReplyStream, ThinkingOptions } from '../engine/types.js'
+import type { ChannelAdapter, ImChannelContext, ImMedia, ImMessage, ReplyStream, ThinkingOptions } from '../engine/types.js'
 import { fileForm } from './file-send.js'
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
@@ -28,22 +28,34 @@ export interface TelegramConfig {
   freeChatGroups?: readonly string[]
 }
 
+interface TgChat {
+  id: number
+  type: string
+  first_name?: string
+  last_name?: string
+  title?: string
+  username?: string
+  is_forum?: boolean
+}
+interface TgUser { id: number; username?: string; first_name?: string; last_name?: string; is_bot?: boolean }
+
 interface TgUpdate {
   update_id: number
   callback_query?: {
     id: string
     data?: string
-    from: { id: number }
+    from: TgUser
     message?: {
       message_id: number
-      chat: { id: number; type: string }
+      chat: TgChat
       message_thread_id?: number
+      reply_to_message?: { message_id?: number }
     }
   }
   message?: {
     message_id: number
-    chat: { id: number; type: string }
-    from?: { id: number; username?: string; first_name?: string; is_bot?: boolean }
+    chat: TgChat
+    from?: TgUser
     text?: string
     caption?: string
     media_group_id?: string
@@ -51,8 +63,9 @@ interface TgUpdate {
     document?: { file_id: string; mime_type?: string; file_name?: string; file_size?: number }
     entities?: Array<{ type: string; offset: number; length: number }>
     caption_entities?: Array<{ type: string; offset: number; length: number }>
-    reply_to_message?: { from?: { id: number } }
+    reply_to_message?: { message_id?: number; from?: { id: number } }
     message_thread_id?: number
+    forum_topic_created?: { name?: string }
     /** 服务消息：话题被改名（群组论坛才会推送），用于识别人工改名。 */
     forum_topic_edited?: { name?: string }
   }
@@ -98,7 +111,6 @@ const STATUS_REACTION_DELAYS_MS = [400, 1200] as const
  * 放宽到 6 秒仍然有界，不会堆积请求。
  */
 const TYPING_REQUEST_TIMEOUT_MS = 6000
-
 function isTerminalStatus(state: string): boolean {
   return state === 'success' || state === 'ended' || state === 'error' || state === 'cancelled'
 }
@@ -186,6 +198,7 @@ export function toTelegramRichMarkdown(value: string): string | undefined {
 /** 每个聊天当前还没收口的那条回复消息；状态行与正文合成同一条 Telegram 消息。 */
 interface OpenReply {
   messageId: number
+  platformMessageIds: string[]
   body: string
   status: string
   last: string
@@ -217,6 +230,46 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
   // 未触发但尚未收口的相册成员：cursor 已前进，因此必须独立持久化，stop/崩溃/重启后才能补投。
   // 内含 caption/file_id 等消息元数据（不落文件内容），按 0600 写到渠道 stateDir，30s 后过期。
   const albumFile = persist ? `${stateDir}/album-pending.json` : ''
+
+  // Only names actually observed in topic service messages; never query Telegram or infer General.
+  const topicNames = new Map<string, { name: string; observedAt: number }>()
+  const TOPIC_NAME_TTL_MS = 6 * 60 * 60_000
+  const MAX_TOPIC_NAMES = 256
+  function display(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined
+    const result = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim().slice(0, 256)
+    return result || undefined
+  }
+  function fullName(person: { first_name?: string; last_name?: string } | undefined): string | undefined {
+    return display([display(person?.first_name), display(person?.last_name)].filter(Boolean).join(' '))
+  }
+  function topicKey(chatId: number, threadId: number): string { return `${chatId}:${threadId}` }
+  function observeTopic(chat: TgChat, threadId: number | undefined, rawName: unknown): void {
+    const name = display(rawName)
+    if (!name || !Number.isSafeInteger(threadId) || threadId! <= 0) return
+    const key = topicKey(chat.id, threadId!)
+    topicNames.delete(key)
+    if (topicNames.size >= MAX_TOPIC_NAMES) topicNames.delete(topicNames.keys().next().value!)
+    topicNames.set(key, { name, observedAt: Date.now() })
+  }
+  function sourceContext(chat: TgChat, sender: TgUser | undefined, threadId?: number, replyId?: number): ImChannelContext {
+    const now = Date.now()
+    const validThread = Number.isSafeInteger(threadId) && threadId! > 0 ? threadId : undefined
+    const key = validThread === undefined ? undefined : topicKey(chat.id, validThread)
+    const cached = key === undefined ? undefined : topicNames.get(key)
+    const topic = cached && now - cached.observedAt < TOPIC_NAME_TTL_MS ? cached : undefined
+    if (key && cached && !topic) topicNames.delete(key)
+    const chatType = chat.type === 'private' || chat.type === 'group' || chat.type === 'supergroup' ? chat.type : undefined
+    return {
+      platform: 'telegram', chatId: String(chat.id), chatType, threadId: validThread,
+      isForum: typeof chat.is_forum === 'boolean' ? chat.is_forum : undefined,
+      chatTitle: display(chat.title), chatUsername: display(chat.username), chatDisplayName: fullName(chat),
+      topicName: topic?.name, topicNameObservedAt: topic?.observedAt,
+      senderDisplayName: fullName(sender), senderUsername: display(sender?.username),
+      replyToMessageId: Number.isSafeInteger(replyId) && replyId! > 0 ? String(replyId) : undefined,
+      observedAt: now,
+    }
+  }
 
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
   /** 话题改名回调；由引擎通过 setTopicEditHandler 注入。 */
@@ -374,14 +427,14 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     return /unknown method|unsupported/i.test(error instanceof Error ? error.message : '')
   }
 
-  async function sendMessageText(chatId: string, text: string): Promise<void> {
+  async function sendMessageText(chatId: string, text: string): Promise<number | undefined> {
     const route = parseTelegramChatId(chatId)
     const threadParam = route.threadId !== undefined ? { message_thread_id: route.threadId } : {}
     const markdown = richDisabled ? undefined : toTelegramRichMarkdown(text)
     if (markdown !== undefined) {
       try {
-        await api('sendRichMessage', { chat_id: route.chatId, ...threadParam, rich_message: { markdown } })
-        return
+        const sent = await api<{ message_id?: number }>('sendRichMessage', { chat_id: route.chatId, ...threadParam, rich_message: { markdown } })
+        return Number.isSafeInteger(sent?.message_id) ? sent.message_id : undefined
       } catch (error) {
         // Transport retries already ran; do not restart their budget by switching formats.
         if ((error as { rejected?: boolean })?.rejected !== true) throw error
@@ -391,7 +444,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         if (richUnsupported(error)) richDisabled = true
       }
     }
-    await api('sendMessage', { chat_id: route.chatId, ...threadParam, text })
+    const sent = await api<{ message_id?: number }>('sendMessage', { chat_id: route.chatId, ...threadParam, text })
+    return Number.isSafeInteger(sent?.message_id) ? sent.message_id : undefined
   }
 
   async function readApiResult<T>(method: string, res: Response, chatId: unknown, noteRateLimit = true): Promise<T> {
@@ -796,6 +850,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
       addressed,
       messageId: String(delivery.update_id),
       platformMessageId: String(message.message_id),
+      channelContext: sourceContext(message.chat, message.from, message.message_thread_id, message.reply_to_message?.message_id),
     })
     return 'committed'
   }
@@ -816,18 +871,22 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         text: '',
         actionToken: callback.data,
         messageId: `callback:${callback.id}`,
+        channelContext: sourceContext(callback.message.chat, callback.from, callback.message.message_thread_id, callback.message.message_id),
       })
       return 'committed'
     }
     const message = update.message
-    if (!message || message.from?.is_bot) return 'committed'
+    if (!message) return 'committed'
     if (!['private', 'group', 'supergroup'].includes(message.chat.type)) return 'committed'
-    // 话题改名是服务消息，不是对话内容：上报后直接结束，
-    // 绝不能送进 agent，否则会产生一个没有输入的空回合。
-    if (message.forum_topic_edited) {
-      onTopicEdited?.(telegramChatId(message.chat.id, message.message_thread_id), message.forum_topic_edited.name ?? '')
+    // Topic services only update observed metadata; they never start a turn.
+    if (message.forum_topic_created || message.forum_topic_edited) {
+      observeTopic(message.chat, message.message_thread_id, message.forum_topic_created?.name ?? message.forum_topic_edited?.name)
+      if (message.forum_topic_edited && !message.from?.is_bot) {
+        onTopicEdited?.(telegramChatId(message.chat.id, message.message_thread_id), message.forum_topic_edited.name ?? '')
+      }
       return 'committed'
     }
+    if (message.from?.is_bot) return 'committed'
     const direct = message.chat.type === 'private'
     let addressed = isInboundAddressed({
       direct,
@@ -1017,6 +1076,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
 
   return {
     id: 'telegram',
+    platform: 'telegram',
     label: 'Telegram',
     maxMessageLength: 4000,
     thinkingPreview: 'latest',
@@ -1084,6 +1144,10 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     canDeliverDeferred() { return !stopped },
     async send(chatId, text) {
       await sendMessageText(chatId, text)
+    },
+    async sendWithReceipt(chatId, text) {
+      const messageId = await sendMessageText(chatId, text)
+      return messageId === undefined ? {} : { platformMessageIds: [String(messageId)] }
     },
     async sendFile(chatId, file, signal) {
       if (stopped) throw new DOMException('Telegram channel stopped', 'AbortError')
@@ -1226,6 +1290,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         }
         track = {
           messageId: first.message_id,
+          platformMessageIds: [String(first.message_id)],
           body: '',
           status: '',
           last: firstText,
@@ -1291,7 +1356,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           if (stopped || (error as { rejected?: boolean })?.rejected !== true
             || Number((error as { status?: number }).status) !== 400
             || !/message to edit not found|message can(?:not|'t) be edited|message_id_invalid/i.test(detail)) throw error
-          await sendMessageText(chatId, next)
+           const messageId = await sendMessageText(chatId, next)
+           if (messageId !== undefined) current.platformMessageIds.push(String(messageId))
           current.last = next
         }
       }
@@ -1328,6 +1394,9 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           current.status = text ?? ''
           schedule(current.body)
         },
+         receipt() {
+           return { platformMessageIds: [...new Set(current.platformMessageIds)] }
+         },
         /** 新回合接管时删掉还没写正文的占位，别留下一条停在原地的状态消息。 */
         async discard() {
           if (current.closed) return
@@ -1353,7 +1422,8 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
           await flush(chars.slice(0, 4000).join(''), true)
           // 首段更新原气泡，剩余正文依次发送；全部确认后上层才将完整正文记为已送达。
           for (let offset = 4000; offset < chars.length; offset += 4000) {
-            await sendMessageText(chatId, chars.slice(offset, offset + 4000).join(''))
+             const messageId = await sendMessageText(chatId, chars.slice(offset, offset + 4000).join(''))
+             if (messageId !== undefined) current.platformMessageIds.push(String(messageId))
           }
         },
       }

@@ -196,10 +196,12 @@ test('失败收口保留已累计的流式正文', async t => {
   for (const event of f.history.slice(0, 2)) await engine.onSessionEvent({ id: f.sessionId }, event)
   await engine.onSessionEvent({ id: f.sessionId }, { type: 'assistant/chunk', data: { chunk: { type: 'text-delta', text: 'HALF-ANSWER' } } })
   await new Promise(resolve => setImmediate(resolve))
-  await engine.onSessionEvent({ id: f.sessionId }, { type: 'turn/end', data: { turn: 1, reason: { kind: 'error' } } })
+  await engine.onSessionEvent({ id: f.sessionId }, { type: 'turn/end', data: { turn: 1, reason: { kind: 'error', error: { message: 'Encountered invalidated oauth token for user, failing request pi-ai diagnostics: {"provider":"openai-codex","model":"gpt-6.1-sol"}' } } } })
   await new Promise(resolve => setImmediate(resolve))
   assert.match(final, /HALF-ANSWER/)
   assert.match(final, /处理失败/)
+  assert.match(final, /Encountered invalidated oauth token for user, failing request pi-ai diagnostics/)
+  assert.match(final, /gpt-6\.1-sol/)
 })
 
 test('max-tokens 收口保留已累计的流式正文并追加上限提示', async t => {

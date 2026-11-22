@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Per-account Telegram topic naming
+
+- Add an optional `topicNaming: 'off' | 'once' | 'follow'` policy to each Telegram account. A missing value inherits the existing plugin `topicNaming` configuration (default `once`), so accounts and configurations created before this change keep their behavior.
+- Add **Automatically sync topic names** with an On/Off switch and a First title only / Follow latest selector to the Telegram account settings. The setting applies to that account only, is saved through the existing account update endpoint (including pending setup settings), and takes effect immediately without reconnecting, reloading, or restarting the account.
+- Resolve the policy from the actually bound account whenever an automatic topic rename runs, including queued writes and `/topicname` status/on/off replies. Account-level `off` suppresses automatic renames for that account while DSH session titles keep updating; explicit `/rename` still works, and manual-rename/per-topic freezes keep precedence.
+- Reject explicit values outside `off`/`once`/`follow` on connect and update; non-Telegram platforms never acquire the per-account policy. Naming state and locks continue to live in `topic-titles.json`.
+- A rename request already in flight cannot be unsent; later queued writes observe the updated policy.
+
+### Cross-plugin topic opening persistence
+
+- Expose the `imTopicContext` cordis service: other plugins call `ctx.get('imTopicContext')` (no `inject`, so the caller keeps working while this plugin is unloaded) and `seedOpening({ channelId, chatId, title?, text, messageId? })` persists an opening message that was already sent through the platform Bot API.
+- The opening is injected through the host `Agent.inject()` into the `next-step` inbox and becomes a model-visible `user/message` after the system prompt on the next real turn. No model call, no reply, no `turn/start` / `turn/end`, no channel delivery, so goal rounds, turn stats and the IM gateway never treat it as a model turn or resend it to the chat.
+- The message source is `{ kind: 'im-topic-opening' }` and the body carries a quotation marker stating it is the bot's earlier topic opening, not a new user instruction.
+- Idempotency and durability are decided by the session log, not by a sidecar: every call folds the current mapping's session (admitted `user/message` plus inbox splices); the deterministic `im-topic-opening-<hash>` id with the same text only re-confirms durability, while a different text returns `persisted: false, conflict: 'opening-exists'`. `topic-openings.json` only remembers topic text; the log self-heals when that file is lost.
+- Receipts report `sessionId` (current mapping) and `persisted` separately; `persisted` is true only when `sessions.flush()` explicitly returns `true`, so a missing persistence listener, `false` or a rejection all report `flush-failed`.
+- The public service only accepts Telegram topics (`"<negative group id>:<thread id>"`); General (`thread=1`) is rejected, and the channel guard only admits enabled account entries whose platform is `telegram`. Invalid input throws `TypeError` instead of creating an arbitrary session.
+- The receipt `reason` set and `message` texts are a frozen cross-plugin contract (`channel-disabled`, `archived`, `session-busy`, `bind-failed`, `unsupported`, `session-unavailable`, `inject-failed`, `flush-failed`, `opening-exists`); callers must be updated together with any change.
+- `seedOpening(input, { signal })` honours cancellation after queueing and before injection; a `flush()` that has already started is never withdrawn, so a caller timeout should be treated as pending verification.
+- The sidecar is only an index: conflicts are decided by the session log, so a stale sidecar entry no longer blocks a new text once the old session is gone. Duplicate or invalid inbox splices are ignored instead of being folded into duplicate messages.
+- Late backfill never rotates: an existing mapping is resumed with `ensure`, so an archived or unrecoverable session returns `archived` / `session-unavailable` instead of spawning a replacement. While the session is running a turn the service returns `session-busy`, so the injected `next-step` message cannot be consumed by the current step.
+- Also resolves the live-agent resume path (`binding.handle` is empty when `router.resume` finds the agent through `ctx.agents.get`) by loading the agent from the agents service or `sessionController` before calling `inject()`.
+
 ## [1.0.30] - 2026-11-08
 
 ### Telegram collapsible thinking message & visual settings

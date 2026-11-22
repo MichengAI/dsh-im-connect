@@ -622,7 +622,7 @@ window.__ModuleLoader__.load({
         "settings.aria": "IM助理", "settings.publicChatNotice": "未批准用户可以发起聊天，但不能批准工具调用。", "pending.notice": "有访问请求。批准后该用户才能驱动本机助手。", "action.approve": "批准", "action.deny": "拒绝", "loading": "加载中…",
         "account.presetUnavailable": "预设不可用", "action.settings": "设置", "command.dm": "私聊命令", "command.group": "群聊命令", "command.enabled": "可以执行命令", "command.disabled": "仅正常对话",
         "account.workspace": "工作区", "account.currentWorkspace": "当前工作区", "account.selectWorkspace": "请选择工作区", "account.selectModel": "请选择模型", "account.selectPermission": "请选择权限", "account.privateAccess": "私聊准入", "account.privateApproved": "仅已批准用户", "account.privateAll": "允许所有私聊用户",        "account.sendMode": "发送方式", "account.sendQueue": "排队发送", "account.sendSteer": "插话发送", "account.sendSteerNote": "插话发送会把消息作为补充指令立即交给运行中的任务；任务空闲时与排队发送相同。", "account.sessionIdle": "空闲新开会话", "account.sessionIdleOff": "关闭（保持原会话）", "account.sessionIdleMin": "{n} 分钟", "account.sessionIdleHour": "{n} 小时", "account.sessionIdleHours": "{n} 小时", "account.sessionIdleNote": "距上一条消息超过该时间后再收到新消息，将开启新会话；旧会话仍可用 /sessions 找回。设为 0 表示关闭。", "account.segmentReply": "分段回复", "account.segmentFull": "完整发送", "account.segmentSplit": "分段发送", "account.segmentReplyNote": "选择分段发送时助手会把一次回复拆成多条短消息，在分隔标记处切开逐条发送；完整发送时仍是一条完整回复。",        "account.segmentGap": "发送间隔", "account.segmentGapMin": "最小间隔", "account.segmentGapMax": "最大间隔", "account.segmentGapInvalid": "请填写 0 到 60 之间的秒数", "account.segmentGapOrder": "上限不能低于下限", "account.seconds": "秒", "account.autoNameNote": "绑定成功后会自动生成账号名，无需手动填写。需要区分使用者时，可在账号行填写备注。", "account.proxyMode": "网络代理", "account.proxyInherit": "跟随宿主", "account.proxyDirect": "直接连接", "account.proxyCustom": "手动配置",        "account.proxyUrl": "代理地址", "account.proxyNote": "仅影响当前账号；保存后自动重连生效。", "account.proxySaved": "代理地址已保存；留空保存可保留当前地址。", "account.defaultName": "{channel}账号 {count}",
-        "account.freeChatGroups": "群聊免 @", "account.freeChatOff": "关闭（仍需 @ 或回复）", "account.freeChatSelected": "仅指定群", "account.freeChatGroupIds": "Telegram 群 ID", "account.freeChatIdsNote": "填写负整数群 ID（负号后 1–20 位数字），以逗号或空格分隔；也可直接粘贴 Telegram 网页版群聊链接（如 t.me/c/… 或 web.telegram.org/…）。去重后最多 100 个。失焦保存，关闭时清空列表。", "account.freeChatInvalid": "请输入负整数群 ID（负号后 1–20 位数字）或 Telegram 网页版群聊链接，去重后最多 100 个；如需清空请关闭群聊免 @。", "account.freeChatNote": "仅指定群免 @，不会扩大用户授权或工具权限。Telegram 必须先投递普通群消息：机器人需有群内权限，且按需关闭 BotFather 隐私模式（已有群可能需重新加入）或设为管理员；此开关不会更改 Telegram 设置。", "account.thinkingDisplay": "思考过程展示", "account.thinkingOff": "关闭", "account.thinkingCollapsed": "折叠展示", "account.thinkingNote": "默认关闭；开启后会将模型提供的思考过程发送到当前 Telegram 聊天，以折叠块展示。折叠不是权限控制：群内能看到消息的人均可展开，请留意隐私。",
+        "account.freeChatGroups": "群聊免 @", "account.freeChatOff": "关闭（仍需 @ 或回复）", "account.freeChatSelected": "仅指定群", "account.freeChatGroupIds": "Telegram 群 ID", "account.freeChatIdsNote": "填写负整数群 ID（负号后 1–20 位数字），以逗号或空格分隔；也可直接粘贴 Telegram 网页版群聊链接（如 t.me/c/… 或 web.telegram.org/…）。去重后最多 100 个。失焦保存，关闭时清空列表。", "account.freeChatInvalid": "请输入负整数群 ID（负号后 1–20 位数字）或 Telegram 网页版群聊链接，去重后最多 100 个；如需清空请关闭群聊免 @。", "account.freeChatNote": "仅指定群免 @，不会扩大用户授权或工具权限。Telegram 必须先投递普通群消息：机器人需有群内权限，且按需关闭 BotFather 隐私模式（已有群可能需重新加入）或设为管理员；此开关不会更改 Telegram 设置。", "account.thinkingDisplay": "思考过程展示", "account.thinkingOff": "关闭", "account.thinkingCollapsed": "折叠展示", "account.thinkingNote": "默认关闭；开启后会将模型提供的思考过程发送到当前 Telegram 聊天，以折叠块展示。折叠不是权限控制：群内能看到消息的人均可展开，请留意隐私。",        "account.topicNaming": "自动同步话题名称", "account.topicNamingOn": "开启", "account.topicNamingOff": "关闭（不自动改名）", "account.topicNamingCadence": "同步方式", "account.topicNamingOnce": "仅首次", "account.topicNamingFollow": "跟随最新", "account.topicNamingNote": "开启后会把 DSH 会话标题同步为 Telegram 话题名，可选择仅首次或跟随最新；不会改变 DSH 标题本身。关闭只停止自动改名，仍可用 /rename 手动同步。",
         "account.freeChatLegacy": "旧版：所有群免 @（仍生效）", "account.freeChatLegacyNote": "旧版所有群免 @ 策略仍然生效，并非已关闭。选择关闭并保存，或选择仅指定群、填写群 ID 并保存，才能收敛范围；不会扩大现有用户授权。",
         "account.remark": "名称备注", "account.remarkNote": "只在本机设置页区分账号，留空恢复自动名称。", "account.rename": "修改名称备注",
         "account.count": "{count} 个账号", "account.statusProcessing": "处理中…", "account.statusNotConnected": "未连接", "account.receive": "接收消息", "account.receiveDescription": "关闭后保留账号配置，但不接收新消息", "account.removeConfirm": "确定移除这个账号？本机保存的配置和凭据将一并删除。",
@@ -657,7 +657,7 @@ window.__ModuleLoader__.load({
         "settings.aria": "IM Assistant", "settings.publicChatNotice": "Unapproved users can start chats, but they cannot approve tool calls.", "pending.notice": "There are access requests. Approve a user before they can control the local assistant.", "action.approve": "Approve", "action.deny": "Deny", "loading": "Loading…",
         "account.presetUnavailable": "Preset unavailable", "action.settings": "Settings", "command.dm": "DM commands", "command.group": "Group commands", "command.enabled": "Commands enabled", "command.disabled": "Conversation only",
         "account.workspace": "Workspace", "account.currentWorkspace": "Current workspace", "account.selectWorkspace": "Select a workspace", "account.selectModel": "Select a model", "account.selectPermission": "Select a permission", "account.privateAccess": "Private chat access", "account.privateApproved": "Approved users only", "account.privateAll": "Allow all DM users",        "account.sendMode": "Send mode", "account.sendQueue": "Queue", "account.sendSteer": "Steer", "account.sendSteerNote": "Steer hands the message to the running task as additional instructions at its next step; when the task is idle it behaves like Queue.", "account.sessionIdle": "Idle session rotation", "account.sessionIdleOff": "Disabled (keep session)", "account.sessionIdleMin": "{n} min", "account.sessionIdleHour": "{n} hr", "account.sessionIdleHours": "{n} hrs", "account.sessionIdleNote": "Start a new session when the next message arrives after this idle period; previous sessions remain accessible via /sessions. Set to 0 to disable.", "account.segmentReply": "Segmented replies", "account.segmentFull": "Send as whole", "account.segmentSplit": "Send in segments", "account.segmentReplyNote": "When set to Send in segments, the assistant splits one reply into several short messages at the separator and sends them one by one; Send as whole keeps the entire reply in a single message.",        "account.segmentGap": "Send gap", "account.segmentGapMin": "Minimum gap", "account.segmentGapMax": "Maximum gap", "account.segmentGapInvalid": "Enter a number of seconds between 0 and 60.", "account.segmentGapOrder": "The maximum gap cannot be lower than the minimum.", "account.seconds": "s", "account.autoNameNote": "The account name is generated automatically after setup. Add a remark on the account row if you need to tell users apart.", "account.proxyMode": "Network proxy", "account.proxyInherit": "Follow Host", "account.proxyDirect": "Connect directly", "account.proxyCustom": "Configure manually",        "account.proxyUrl": "Proxy address", "account.proxyNote": "Affects only this account. The channel reconnects automatically after saving.", "account.proxySaved": "A proxy address is saved. Leave the field blank to keep it.", "account.defaultName": "{channel} account {count}",
-        "account.freeChatGroups": "Group mention bypass", "account.freeChatOff": "Off (mention or reply required)", "account.freeChatSelected": "Selected groups only", "account.freeChatGroupIds": "Telegram group IDs", "account.freeChatIdsNote": "Enter negative integer group IDs (1–20 digits after the minus sign) separated by commas or spaces, or paste a Telegram web chat link (t.me/c/… or web.telegram.org/…); up to 100 unique IDs. Saves on blur; switching off clears the list.", "account.freeChatInvalid": "Enter negative integer group IDs (1–20 digits after the minus sign) or a Telegram web chat link, up to 100 unique IDs. Switch bypass off to clear the list.", "account.freeChatNote": "Only selected groups bypass mentions; user authorization and tool permissions remain unchanged. Telegram must deliver ordinary group messages first: the bot needs group permissions and may need BotFather privacy mode disabled (existing groups may require re-adding the bot), or administrator status. This control does not change Telegram settings.", "account.thinkingDisplay": "Thinking display", "account.thinkingOff": "Off", "account.thinkingCollapsed": "Collapsed", "account.thinkingNote": "Off by default. When enabled, model-provided thinking is sent to the current Telegram chat in collapsed blocks. Collapsing is not access control: anyone who can see the group message can expand it. Consider privacy.",
+        "account.freeChatGroups": "Group mention bypass", "account.freeChatOff": "Off (mention or reply required)", "account.freeChatSelected": "Selected groups only", "account.freeChatGroupIds": "Telegram group IDs", "account.freeChatIdsNote": "Enter negative integer group IDs (1–20 digits after the minus sign) separated by commas or spaces, or paste a Telegram web chat link (t.me/c/… or web.telegram.org/…); up to 100 unique IDs. Saves on blur; switching off clears the list.", "account.freeChatInvalid": "Enter negative integer group IDs (1–20 digits after the minus sign) or a Telegram web chat link, up to 100 unique IDs. Switch bypass off to clear the list.", "account.freeChatNote": "Only selected groups bypass mentions; user authorization and tool permissions remain unchanged. Telegram must deliver ordinary group messages first: the bot needs group permissions and may need BotFather privacy mode disabled (existing groups may require re-adding the bot), or administrator status. This control does not change Telegram settings.", "account.thinkingDisplay": "Thinking display", "account.thinkingOff": "Off", "account.thinkingCollapsed": "Collapsed", "account.thinkingNote": "Off by default. When enabled, model-provided thinking is sent to the current Telegram chat in collapsed blocks. Collapsing is not access control: anyone who can see the group message can expand it. Consider privacy.",        "account.topicNaming": "Automatically sync topic names", "account.topicNamingOn": "On", "account.topicNamingOff": "Off (no automatic rename)", "account.topicNamingCadence": "Sync mode", "account.topicNamingOnce": "First title only", "account.topicNamingFollow": "Follow latest", "account.topicNamingNote": "When enabled, DSH session titles are synced to the Telegram topic name as either the first title only or the latest title; DSH titles themselves are unaffected. Turning this off only stops automatic renames; /rename still syncs manually.",
         "account.freeChatLegacy": "Legacy: all groups bypass mentions (still active)", "account.freeChatLegacyNote": "The legacy all-group bypass is still active, not off. Save Off, or choose Selected groups only, enter group IDs and save to narrow its scope. Existing user authorization is not expanded.",
         "account.remark": "Name remark", "account.remarkNote": "Shown only in settings to tell accounts apart. Leave blank to restore the automatic name.", "account.rename": "Edit name remark",
         "account.count": "{count} accounts", "account.statusProcessing": "Processing…", "account.statusNotConnected": "Not connected", "account.receive": "Receive messages", "account.receiveDescription": "Turn this off to keep the account settings without receiving new messages", "account.removeConfirm": "Remove this account? Its saved settings and credentials will also be deleted.",
@@ -1426,6 +1426,8 @@ window.__ModuleLoader__.load({
       const [success, setSuccess] = useState("");
       const modelTouched = useRef(false);
       const workspaceTouched = useRef(false);
+      // 新账号默认继承插件策略：只记录用户是否显式改过，未改过时从保存 payload 省略。
+      const topicNamingTouched = useRef(false);
       const [settings, setSettings] = useState(() => {
         const assistant = preferredAssistant(defaults, readMainSessionModel);
         return {
@@ -1459,6 +1461,20 @@ window.__ModuleLoader__.load({
         setSettings((current) => current.cwd === next ? current : { ...current, cwd: next });
       }, [defaults, workspaces]);
 
+      // 未手动改动时显示继承值（随迟到的 /assistant 默认值更新）；一旦改动即固定草稿。
+      const defaultTopicNaming = defaults && (defaults.topicNaming === "follow" || defaults.topicNaming === "off")
+        ? defaults.topicNaming
+        : "once";
+      const topicNaming = topicNamingTouched.current
+        ? (settings.topicNaming === "follow" || settings.topicNaming === "off" ? settings.topicNaming : "once")
+        : defaultTopicNaming;
+      const settingsForSave = () => {
+        const next = { ...settings };
+        if (topicNamingTouched.current) next.topicNaming = topicNaming;
+        else delete next.topicNaming;
+        return next;
+      };
+
       const startQr = useCallback((refresh) => {
               if (!hasQr || !workspaceIsListed(settings.cwd, workspaces)) return;
         setQrStarted(true);
@@ -1468,7 +1484,7 @@ window.__ModuleLoader__.load({
         api(`/channels/${ch.id}/qr/${refresh ? "refresh" : "start"}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ settings }),
+          body: JSON.stringify({ settings: settingsForSave() }),
         }).then((data) => {
           if (!alive.current) return;
           if (!data.ok && !data.pairing) setError(serverText(data.error, t) || t("error.qr"));
@@ -1542,7 +1558,7 @@ window.__ModuleLoader__.load({
         api(`/channels/${ch.id}/connect`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-           body: JSON.stringify({ config, settings }),
+           body: JSON.stringify({ config, settings: settingsForSave() }),
         }).then((data) => {
           if (!data.ok) setError(serverText(data.error, t) || t("error.save"));
           else {
@@ -1601,10 +1617,11 @@ window.__ModuleLoader__.load({
         success && h(NoticeBar, { type: "success" }, success),
         h("div", { className: "ima-setup-section" },
           h(AccountSettingsPicker, {
-            value: settings,
+            value: { ...settings, topicNaming },
             onChange: (patch) => {
               if (patch && patch.cwd !== undefined) workspaceTouched.current = true;
               if (patch && (patch.provider !== undefined || patch.model !== undefined)) modelTouched.current = true;
+              if (patch && Object.prototype.hasOwnProperty.call(patch, "topicNaming")) topicNamingTouched.current = true;
               setSettings((current) => ({ ...current, ...patch }));
             },
             catalog,
@@ -1729,6 +1746,7 @@ window.__ModuleLoader__.load({
       useEffect(() => { setSegmentGapMinDraft(String(segmentDelayMinSecs)); }, [segmentDelayMinSecs]);
       useEffect(() => { setSegmentGapMaxDraft(String(segmentDelayMaxSecs)); }, [segmentDelayMaxSecs]);
       const telegram = (props.platform || value.platform) === "telegram";
+      const topicNaming = value.topicNaming === "off" ? "off" : value.topicNaming === "follow" ? "follow" : "once";
       const groupIds = Array.isArray(value.freeChatGroups) ? value.freeChatGroups : [];
       const groupIdsKey = JSON.stringify(groupIds);
       const [freeChatEnabled, setFreeChatEnabled] = useState(groupIds.length > 0 && value.legacyAllGroupsBypass !== true);
@@ -2104,6 +2122,27 @@ window.__ModuleLoader__.load({
           onChange: (next) => update({ thinkingDisplayMode: next === "collapsed" ? "collapsed" : "off" }),
         })),
         telegram && h("div", { className: "ima-picker-note" }, t("account.thinkingNote")),
+        telegram && field("topicNaming", t("account.topicNaming"), h(Select, {
+          className: "ima-account-picker",
+          value: topicNaming === "off" ? "off" : "on",
+          "aria-label": t("account.topicNaming"),
+          options: [
+            { value: "on", label: t("account.topicNamingOn") },
+            { value: "off", label: t("account.topicNamingOff") },
+          ],
+          onChange: (next) => update({ topicNaming: next === "off" ? "off" : (topicNaming === "follow" ? "follow" : "once") }),
+        })),
+        telegram && topicNaming !== "off" && field("topicNamingCadence", t("account.topicNamingCadence"), h(Select, {
+          className: "ima-account-picker",
+          value: topicNaming === "follow" ? "follow" : "once",
+          "aria-label": t("account.topicNamingCadence"),
+          options: [
+            { value: "once", label: t("account.topicNamingOnce") },
+            { value: "follow", label: t("account.topicNamingFollow") },
+          ],
+          onChange: (next) => update({ topicNaming: next === "follow" ? "follow" : "once" }),
+        })),
+        telegram && h("div", { className: "ima-picker-note" }, t("account.topicNamingNote")),
         field("sessionIdle", sessionIdleLabel, h(Select, {
           className: "ima-account-picker",
           value: String(sessionIdleMinutes),
@@ -2262,14 +2301,14 @@ window.__ModuleLoader__.load({
         setDraft({ freeChatGroups: [], thinkingDisplayMode: "off", ...account });
         setProxyModeDraft(account.proxyMode || "inherit");
         setNote("");
-      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, JSON.stringify(account.freeChatGroups), account.legacyAllGroupsBypass, account.thinkingDisplayMode, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort]);
+      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, JSON.stringify(account.freeChatGroups), account.legacyAllGroupsBypass, account.thinkingDisplayMode, account.topicNaming, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort]);
       useEffect(() => {
         setProxyUrlDraft(account.proxyUrl || "");
       }, [account.id, account.proxyUrl]);
       const save = (patch) => {
         const seq = ++saveSeq.current;
         const next = { ...draft, ...patch };
-        const displayPatch = Object.prototype.hasOwnProperty.call(patch, "freeChatGroups") || Object.prototype.hasOwnProperty.call(patch, "thinkingDisplayMode");
+        const displayPatch = Object.prototype.hasOwnProperty.call(patch, "freeChatGroups") || Object.prototype.hasOwnProperty.call(patch, "thinkingDisplayMode") || Object.prototype.hasOwnProperty.call(patch, "topicNaming");
         // Commit these fields only after success; a failed save must not clear the group list.
         if (!displayPatch) setDraft(next);
         if (next.proxyMode) setProxyModeDraft(next.proxyMode);
@@ -2294,6 +2333,7 @@ window.__ModuleLoader__.load({
           // Omitted fields preserve inherited policy and concurrent display-setting saves.
           if (Object.prototype.hasOwnProperty.call(patch, "freeChatGroups")) payload.freeChatGroups = patch.freeChatGroups;
           if (Object.prototype.hasOwnProperty.call(patch, "thinkingDisplayMode")) payload.thinkingDisplayMode = patch.thinkingDisplayMode;
+          if (Object.prototype.hasOwnProperty.call(patch, "topicNaming")) payload.topicNaming = patch.topicNaming;
         }
         if (account.platform === "telegram" || account.platform === "discord") {
           const hasProxyPatch = Object.prototype.hasOwnProperty.call(patch, "proxyMode") || Object.prototype.hasOwnProperty.call(patch, "proxyUrl");
@@ -2505,7 +2545,7 @@ window.__ModuleLoader__.load({
       const [settingsAccount, setSettingsAccount] = useState(null);
       const [expanded, setExpanded] = useState({});
       const [channelSettingsRequest, setChannelSettingsRequest] = useState(() => typeof window !== "undefined" ? readChannelSettingsRequest(window.sessionStorage) : undefined);
-      const [catalog, setCatalog] = useState({ providers: [], permissions: [], assistant: null, cwd: "", permission: "" });
+      const [catalog, setCatalog] = useState({ providers: [], permissions: [], assistant: null, cwd: "", permission: "", topicNaming: "once" });
       const workspaces = props.useWorkspaces ? (props.useWorkspaces((state) => state && state.items || []) || []) : [];
       const selectAccount = useCallback((id) => {
         const next = id || "";
@@ -2535,7 +2575,7 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         ensureStyle();
         api("/assistant").then((data) => {
-          if (data.ok) setCatalog({ providers: data.providers || [], permissions: data.permissions || [], agentPresets: data.agentPresets || [], agentPreset: data.agentPreset || "standard", assistant: data.assistant || null, cwd: data.cwd || "", permission: data.permission || "" });
+          if (data.ok) setCatalog({ providers: data.providers || [], permissions: data.permissions || [], agentPresets: data.agentPresets || [], agentPreset: data.agentPreset || "standard", assistant: data.assistant || null, cwd: data.cwd || "", permission: data.permission || "", topicNaming: data.topicNaming === "follow" || data.topicNaming === "off" ? data.topicNaming : "once" });
         }).catch(() => undefined);
       }, [refresh]);
       useEffect(() => {

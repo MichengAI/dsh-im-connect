@@ -8,7 +8,7 @@ import type { ImMessage } from './types.js'
 export interface DeferredEntry {
   id: string; sessionId: string; channelId: string; message: ImMessage; createdAt: number
   turn?: number; status: 'waiting' | 'ready' | 'sending' | 'sent' | 'unknown' | 'blocked' | 'expired' | 'rejected'
-  text?: string; parts?: string[]; offset: number
+  text?: string; parts?: string[]; offset: number; platformMessageIds?: string[]
 }
 type Event = { type?: string; seq?: number; surfaceOp?: unknown; data?: any }
 
@@ -58,7 +58,8 @@ export class DeferredDelivery {
           || (entry.turn !== undefined && !Number.isSafeInteger(entry.turn))
           || this.entries.some(e => e.id === entry.id)
           || (entry.parts !== undefined && (!Array.isArray(entry.parts) || !entry.parts.every((p: unknown) => typeof p === 'string') || entry.offset > entry.parts.length))
-          || (entry.text !== undefined && typeof entry.text !== 'string')) throw new Error('Invalid delivery record')
+           || (entry.text !== undefined && typeof entry.text !== 'string')
+           || (entry.platformMessageIds !== undefined && (!Array.isArray(entry.platformMessageIds) || !entry.platformMessageIds.every((id: unknown) => typeof id === 'string' && id.length > 0)))) throw new Error('Invalid delivery record')
         if (entry.status === 'sending') entry.status = 'unknown'
         this.entries.push(entry)
       }
@@ -85,6 +86,20 @@ export class DeferredDelivery {
     this.entries.push({ id, sessionId, channelId, message: { chatId: message.chatId, userId: message.userId, kind: message.kind ?? 'dm', text: '', addressed: true }, createdAt: Date.now(), status: 'waiting', offset: 0 })
     try { this.flush() } catch (error) { this.entries = previous; throw error }
     this.active.add(id)
+  }
+  /** Persist a stable completion notice before attempting platform I/O. */
+  beginNotice(id: string, sessionId: string, channelId: string, message: ImMessage, text: string, turn?: number): boolean {
+    if (this.entries.some(entry => entry.id === id)) return false
+    this.begin(id, sessionId, channelId, message)
+    try {
+      this.patch(id, { text, turn, status: 'unknown' })
+      this.active.delete(id)
+    } catch (error) {
+      this.entries = this.entries.filter(entry => entry.id !== id)
+      try { this.flush() } catch { this.quarantined.add(id) }
+      throw error
+    }
+    return true
   }
   reject(id: string, definite = false): void {
     try { this.patch(id, { status: definite ? 'rejected' : 'unknown' }) }

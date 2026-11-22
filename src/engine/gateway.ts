@@ -14,14 +14,16 @@ import { canExecuteCommand, normalizeCommandPermissions, type CommandPermissions
 import type { Context } from '@deepseek-ai/cordis'
 import { ImageInputError, imageInputFailure, imagePromptPart } from './image-input.js'
 import { APPROVAL_WAIT_MS, ApprovalBroker } from './approval.js'
-import { SessionMerger } from './merge.js'
+import { SessionMerger, stripControlSuffix } from './merge.js'
+import { inboundContextText, messageSourceBlock, replyChannelInstruction } from './channel-context.js'
 import { KeyedSerialQueue } from './keyed-queue.js'
 import { SessionRouter } from './router.js'
 import { initialSessionTitle, readSessionTitle } from './session-title.js'
 import { SeenStore } from './seen-store.js'
 import { SessionMapStore } from './session-store.js'
 import { readSessionHistory } from './session-history.js'
-import { TopicTitleStore, clampTopicName, type TopicMode } from './topic-title.js'
+import { TopicTitleStore, clampTopicName, normalizeTopicMode, type TopicMode } from './topic-title.js'
+import { TopicContextService, type TopicContextHost } from './topic-context.js'
 import { type ChatKind } from './session-id.js'
 import { decideAccess } from './access.js'
 import { splitText } from './split.js'
@@ -43,7 +45,7 @@ import {
   type UserQuestionAnswer,
   type UserQuestionItem,
 } from './question.js'
-import type { ChannelAdapter, EngineConfig, ImMessage, SendMode } from './types.js'
+import type { ChannelAdapter, DeliveryReceipt, EngineConfig, ImMessage, SendMode } from './types.js'
 
 /** 分片发送的退避表（毫秒）：第一次立即，随后 1s/3s/8s/20s，累计约 32s。 */
 const SEND_RETRY_DELAYS_MS = [0, 1_000, 3_000, 8_000, 20_000] as const
@@ -91,6 +93,7 @@ export interface DeliveryOutcome {
    * 只在这里为 true；任何一次结果不明的失败都会让它保持 false。
    */
   definite?: boolean
+  platformMessageIds?: string[]
 }
 
 /**
@@ -193,12 +196,16 @@ export class ImEngine {
   /** 话题名回写状态：默认一个话题只命名一次。 */
   private readonly topicTitles: TopicTitleStore
   private readonly topicWrites = new KeyedSerialQueue()
+  /** 跨插件入口：话题开场白持久化（不投递、不启动回合）。 */
+  private readonly topicContextService: TopicContextService
   // Host observers are fire-and-forget: final delivery must finish before turn cleanup.
   private readonly replyFinalization = new KeyedSerialQueue()
 
   /**
    * @param sendRetryDelaysMs 分片发送退避表；测试可传 `[0]` 关闭等待。
    * @param topicTitleFile 话题名状态文件；缺省只在进程内去重。
+   * @param topicOpeningFile 话题开场白状态文件；缺省只在进程内幂等。
+   * @param seedableChannel 开场白渠道守卫：只允许已启用的 Telegram 账号（缺省放行）。
    */
   constructor(
     private readonly ctx: Context,
@@ -213,6 +220,8 @@ export class ImEngine {
     deliveryFile?: string,
     private readonly sendRetryDelaysMs: readonly number[] = SEND_RETRY_DELAYS_MS,
     topicTitleFile?: string,
+    topicOpeningFile?: string,
+    private readonly seedableChannel?: (channelId: string) => boolean,
   ) {
     this.topicTitles = new TopicTitleStore(topicTitleFile)
     this.deferred = new DeferredDelivery(deliveryFile)
@@ -229,6 +238,11 @@ export class ImEngine {
       },
     })
     this.fileDelivery = new FileDelivery(ctx as unknown as { get(name: string): unknown }, log)
+    this.topicContextService = new TopicContextService(ctx as unknown as TopicContextHost, this.router, {
+      ...(topicOpeningFile ? { file: topicOpeningFile } : {}),
+      ...(seedableChannel ? { isSeedableChannel: seedableChannel } : {}),
+      log,
+    })
     this.chatCommands = new ChatCommands(ctx as unknown as { get(name: string): unknown }, this.router, id => this.questions.has(id) || this.broker.has(id), (id, msg) => { if (msg.userId) this.sessionActors.set(id, msg.userId) }, (channel, msg, text, choices, session, allowNumber = true) => this.choices.show(channel, msg, text, choices, session, undefined,
       allowNumber ? undefined : replyText('点击按钮或发送对应命令；按钮 15 分钟内有效，普通文字继续聊天。'), allowNumber), (sessionId, title) => { void this.renameTopicNow(sessionId, title) },
       (channel, msg, action) => this.topicNameCommand(channel, msg, action))
@@ -343,6 +357,11 @@ export class ImEngine {
 
   attachMappedSessions(): Promise<void> {
     return this.router.attachMappedSessions(() => !this.disposed)
+  }
+
+  /** 跨插件使用的话题开场白写入服务；由 index.ts 以 `ctx.provide('imTopicContext')` 暴露。 */
+  get topicContext(): TopicContextService {
+    return this.topicContextService
   }
 
   register(channel: ChannelAdapter): void {
@@ -568,10 +587,14 @@ export class ImEngine {
         return
       }
       const mergeKey = `${channelId}:${msg.kind === 'group' ? 'group' : 'dm'}:${msg.chatId}`
-      this.mergedMessages.set(mergeKey, [...(this.mergedMessages.get(mergeKey) ?? []), msg])
+      // Keep the text actually admitted by the merger next to its own immutable source observation.
+      const original = { ...msg, text: stripControlSuffix(text).text }
+      this.mergedMessages.set(mergeKey, [...(this.mergedMessages.get(mergeKey) ?? []), original])
       const merged = this.merger.ingest(mergeKey, text)
-      if (merged.kind === 'flushed' && merged.text) {
-        await this.inject(channel, { ...msg, text: merged.text }, this.takeMergedMessages(mergeKey, msg))
+      if (merged.kind === 'flushed') {
+        // Even an empty commit ends the source batch; it must not contaminate a later input.
+        const originals = this.takeMergedMessages(mergeKey, msg)
+        if (merged.text) await this.inject(channel, { ...msg, text: merged.text }, originals)
       }
     } catch (error) {
       this.log(`[${channelId}] 处理失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -715,7 +738,7 @@ export class ImEngine {
       this.router.touch(channel.id, kind, msg.chatId)
       if (initialTitle) this.router.setTitle(binding.sessionId, initialTitle, 'message')
       const content: Array<Record<string, unknown>> = []
-      if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })
+      if (msg.text.trim()) content.push({ type: 'text', text: inboundContextText(channel, msg, sources) })
       for (const media of msg.media ?? []) {
         if (media.kind === 'image') content.push(await imagePromptPart(media))
         else if (media.kind === 'voice-text' && media.text) content.push({ type: 'text', text: `[语音] ${media.text}` })
@@ -724,6 +747,10 @@ export class ImEngine {
       const files = msg.media?.filter(media => media.kind === 'file') ?? []
       if (files.length) content.push(...await withReplyLocale(this.ctx, () => filePromptParts(this.ctx, binding.sessionId, files, signal)))
       if (signal.aborted || content.length === 0) return
+      if (!msg.text.trim()) {
+        const observation = messageSourceBlock(channel, msg)
+        if (observation) content.unshift({ type: 'text', text: observation })
+      }
       if (msg.userId) this.sessionActors.set(binding.sessionId, msg.userId)
       this.interactionMessageIds.set(binding.sessionId, msg.messageId)
       this.streams.reset(`${channel.id}:${msg.chatId}`)
@@ -1155,6 +1182,15 @@ export class ImEngine {
     if (taken.stream && !taken.text) await taken.stream.discard?.().catch(() => undefined)
   }
 
+  private recordDeliveryReceipt(sessionId: string, turn: number | undefined, ids?: string[]): void {
+    if (!Number.isSafeInteger(turn) || !ids?.length) return
+    const platformMessageIds = [...new Set(ids.filter(id => typeof id === 'string' && id.length > 0))]
+    if (!platformMessageIds.length) return
+    for (const entry of this.deferred.list()) {
+      if (entry.sessionId === sessionId && entry.turn === turn) this.deferred.patch(entry.id, { platformMessageIds })
+    }
+  }
+
   private async processSessionEvent(
     session: DeliverySession,
     event: {
@@ -1323,7 +1359,9 @@ export class ImEngine {
       if (reason?.kind === 'error' && !trackedEnd) {
         const detail = reason.error?.message || '模型调用失败'
         this.log(`[${channel.id}] 回合失败 ${sessionId}: ${detail}`)
-        const failed = notice(this.ctx, '助手没有生成回复，请查看本机日志。')
+        const failed = detail
+           ? `${notice(this.ctx, '助手没有生成回复，请查看本机日志。')}\n\n${detail}`
+           : notice(this.ctx, '助手没有生成回复，请查看本机日志。')
         const taken = await this.streams.take(streamKey, sessionId)
         if (taken.invalidated || !stillDeliverable()) {
           await this.discardEmptyTake(taken)
@@ -1382,6 +1420,7 @@ export class ImEngine {
             if (bubbles.length > 1 && !await this.pauseBeforeSegment(channel.id)) return
             try {
               await taken.stream.finish(bubbles[0] ?? finalText)
+               this.recordDeliveryReceipt(sessionId, event.data?.turn, taken.stream.receipt?.()?.platformMessageIds)
             } catch (error) {
               // 请求可能已经到达渠道，不能自动补一份重复回复。
               this.log(`[${channel.id}] 流式收口结果未知，请通过 /delivery 查询: ${error instanceof Error ? error.message : String(error)}`)
@@ -1396,6 +1435,7 @@ export class ImEngine {
               }
             }
             outcome.ok = outcome.ok && delivered
+           this.recordDeliveryReceipt(sessionId, event.data?.turn, outcome.platformMessageIds)
             if (delivered) this.streams.markDelivered(streamKey, sessionId)
           }
           return
@@ -1415,6 +1455,7 @@ export class ImEngine {
             : await this.deliver(channel, binding.chatId, bubbles[0] ?? text, outcome)
           if (delivered && bubbles.length > 1) delivered = await this.deliverSegments(channel, binding.chatId, bubbles.slice(1), outcome)
           outcome.ok = outcome.ok && delivered
+           this.recordDeliveryReceipt(sessionId, event.data?.turn, outcome.platformMessageIds)
         } else {
           this.log(`[${channel.id}] 助手消息为空 ${sessionId}`)
         }
@@ -1449,7 +1490,7 @@ export class ImEngine {
     const key = `${record.channel}:${record.chatId}`
     const name = clampTopicName(title)
     if (!name) return
-    const mode = this.topicMode()
+    const mode = this.topicMode(record.channel)
     if (!explicit && !this.topicTitles.canWrite(key, mode)) return
     // 名字没变就不必再调一次接口。
     if (this.topicTitles.get(key)?.name === name) return
@@ -1474,24 +1515,26 @@ export class ImEngine {
     // 当前提供改名能力的 Telegram 以 chatId:threadId 编码话题，普通聊天不能建立伪锁定。
     if (!channel.renameTopic || !/^-?\d+:[1-9]\d*$/.test(msg.chatId)) return replyText('当前聊天不支持话题命名。')
     const key = `${channel.id}:${msg.chatId}`
-    const mode = this.topicMode()
+    const mode = this.topicMode(channel.id)
     if (action === 'off') {
       this.topicTitles.freeze(key)
       return replyText('当前话题已锁定，不再自动命名。')
     }
     if (action === 'on') {
       this.topicTitles.unfreeze(key, mode)
-      return mode === 'off' ? replyText('全局话题自动命名已关闭，解除锁定不会开启自动命名。')
-        : replyText('当前话题已解除锁定，后续按 {0} 策略自动命名。', mode)
+      if (mode !== 'off') return replyText('当前话题已解除锁定，后续按 {0} 策略自动命名。', mode)
+      // 区分插件全局关闭与仅该账号关闭，避免把账号级设置说成全局设置。
+      return normalizeTopicMode(this.config.topicNaming) === 'off'
+        ? replyText('全局话题自动命名已关闭，解除锁定不会开启自动命名。')
+        : replyText('该账号的话题自动命名已关闭，解除锁定不会开启自动命名。')
     }
     const status = this.topicTitles.status(key)
     return replyText('话题命名策略：{0}；已命名：{1}；已锁定：{2}', mode, status.named, status.frozen)
   }
 
-  /** 命名策略；默认 once。 */
-  private topicMode(): TopicMode {
-    const mode = this.config.topicNaming
-    return mode === 'follow' || mode === 'off' ? mode : 'once'
+  /** 命名策略：按实际绑定的账号解析，缺省 once；不再读取全局配置。 */
+  private topicMode(channelId: string): TopicMode {
+    return normalizeTopicMode(this.resolveConfig(channelId).topicNaming) ?? 'once'
   }
 
   /** 话题被改名：自己写入的回显忽略，人工改名则锁定。私聊话题不会推送此事件。 */
@@ -1528,7 +1571,7 @@ export class ImEngine {
     if (!valid()) return
     const terminalIds: string[] = []
     const notified = await withReplyLocale(this.ctx, async () => {
-      const text = ({
+      const summary = ({
         empty: replyText('本次处理已结束，未返回可投递的结果。可补充要求后继续。'),
         error: replyText('本次处理失败，已返回的内容保留。请查看会话状态，或补充要求后重试。'),
         cancelled: result.reasonKind === 'max-tokens'
@@ -1536,7 +1579,11 @@ export class ImEngine {
           : replyText('本次处理已停止，已返回的内容保留。可直接发消息继续。'),
         'delivery-failed': replyText('本次处理已结束，但部分回复或文件未能发送。查看交付记录：/delivery；完整结果和文件请在网页查看，不会自动重复执行任务。'),
       })[status]
+      const detail = result.status === 'error' && result.errorMessage?.trim() ? result.errorMessage.trim() : ''
+      const text = detail ? `${summary}\n\n${detail}` : summary
       if (!valid()) return
+       const noticeId = `completion:${result.sessionId}:${result.turn}:${status}`
+       if (!this.deferred.beginNotice(noticeId, result.sessionId, channel.id, message, text, result.turn)) return
       if (result.status === 'error' || result.status === 'cancelled' || result.status === 'empty') {
         for (const entry of this.deferred.list(channel.id, message)) if (entry.sessionId === result.sessionId && entry.turn === result.turn && entry.status === 'waiting') {
           this.deferred.patch(entry.id, { status: 'unknown' })
@@ -1551,11 +1598,15 @@ export class ImEngine {
           const body = text
           // 复用已有回复流发送异常说明；收口结果不明时不重复发送。
           await taken.stream.finish([taken.text, body].filter(Boolean).join('\n\n'))
+           const receipt = taken.stream.receipt?.()
+           this.deferred.patch(noticeId, { status: 'sent', ...(receipt?.platformMessageIds?.length ? { platformMessageIds: receipt.platformMessageIds } : {}) })
           return true
         }
       }
-      const outcome = { ok: true }
+       const outcome: DeliveryOutcome = { ok: true }
       await this.deliver(channel, message.chatId, text, outcome)
+       if (outcome.ok) this.deferred.patch(noticeId, { status: 'sent', ...(outcome.platformMessageIds?.length ? { platformMessageIds: [...new Set(outcome.platformMessageIds)] } : {}) })
+       else if (outcome.definite) this.deferred.patch(noticeId, { status: 'ready' })
       return outcome.ok
     })
     if (notified) for (const id of terminalIds) this.deferred.patch(id, { status: 'sent' })
@@ -1571,6 +1622,7 @@ export class ImEngine {
       const result = await this.sendChunk(channel, chatId, chunk, deadline)
       if (result.ok) {
         deliveredAny = true
+        if (result.receipt?.platformMessageIds?.length && outcome) outcome.platformMessageIds = [...(outcome.platformMessageIds ?? []), ...result.receipt.platformMessageIds]
         this.log(`[${channel.id}] 已投递 ${chatId}，长度 ${chunk.length}`)
       } else {
         if (outcome) outcome.ok = false
@@ -1638,6 +1690,15 @@ export class ImEngine {
    * 给系统提示用的分段说明：只对本插件已绑定、且渠道已开放的会话生效，
    * 未绑定或该账号没开启分段回复时返回空串，提示词与发布前一致。
    */
+  /** Current delivery binding only; never infer the origin of a web/queued input from it. */
+  replyChannelInstructionForSession(sessionId: string): string {
+    if (this.disposed) return ''
+    const binding = this.router.bindingForSession(sessionId)
+    if (!binding) return ''
+    const channel = this.channels.get(binding.channelId)
+    return channel ? replyChannelInstruction(channel, binding) : ''
+  }
+
   segmentInstructionForSession(sessionId: string): string {
     const binding = this.router.bindingForSession(sessionId)
     if (!binding) return ''
@@ -1652,7 +1713,7 @@ export class ImEngine {
    * 结果不明的失败（超时、网络中断）立即返回：请求可能已经送达。
    * 等待超过 `deadline` 就放弃，让整条回复的重试开销有上界。
    */
-  private async sendChunk(channel: ChannelAdapter, chatId: string, chunk: string, deadline: number): Promise<{ ok: true } | { ok: false; error: unknown }> {
+  private async sendChunk(channel: ChannelAdapter, chatId: string, chunk: string, deadline: number): Promise<{ ok: true; receipt?: DeliveryReceipt } | { ok: false; error: unknown }> {
     let error: unknown
     for (const [attempt, delay] of this.sendRetryDelaysMs.entries()) {
       if (attempt > 0) {
@@ -1663,11 +1724,13 @@ export class ImEngine {
         if (this.disposed) break
       }
       try {
-        await channel.send(chatId, chunk)
-        return { ok: true }
-      } catch (caught) {
-        error = caught
-        if (!isDefiniteSendFailure(caught)) return { ok: false, error }
+         const receipt = channel.sendWithReceipt
+           ? await channel.sendWithReceipt(chatId, chunk)
+           : (await channel.send(chatId, chunk), undefined)
+         return receipt ? { ok: true, receipt } : { ok: true }
+       } catch (caught) {
+         error = caught
+         if (!isDefiniteSendFailure(caught)) return { ok: false, error }
       }
     }
     return { ok: false, error }

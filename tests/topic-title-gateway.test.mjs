@@ -178,3 +178,120 @@ test('显式改名入口按 once 去重，重命名异常后后续标题仍可�
   await retry.engine.syncTopicName(retry.sessionId, '恢复标题')
   assert.deepEqual(retry.writes, ['失败标题', '恢复标题'])
 })
+
+// 两个 Telegram 账号：resolveConfig 按实际绑定的账号 ID 返回各自的策略，
+// 缺省值继承插件全局 topicNaming。引擎侧其余逻辑与生产一致。
+function accountsFixture(t, options = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'topic-accounts-'))
+  const store = new SessionMapStore(join(dir, 'sessions.json'))
+  const accounts = {
+    telegram_a: { chatId: '100:20', userId: '100', sessionId: 'im:telegram:dm:1700000000000:100:20' },
+    telegram_b: { chatId: '200:30', userId: '200', sessionId: 'im:telegram:dm:1700000000000:200:30' },
+  }
+  for (const [id, account] of Object.entries(accounts)) {
+    store.upsert(`${id}:dm:${account.chatId}`, {
+      sessionId: account.sessionId, channel: id, kind: 'dm', chatId: account.chatId, title: '测试', updatedAt: new Date().toISOString(),
+    })
+  }
+  const policies = { ...(options.policies ?? {}) }
+  const base = { cwd: dir, provider: 'p', model: 'm', agentPreset: '', mergeTimeoutSecs: 1, permissionPreset: '', topicNaming: options.global ?? 'once' }
+  const engine = new ImEngine({ get: () => undefined }, store, new SeenStore(join(dir, 'seen.json')), base, () => {}, undefined,
+    (accountId) => ({ ...base, ...(policies[accountId] ? { topicNaming: policies[accountId] } : {}) }))
+  const writes = []
+  const replies = []
+  const edits = {}
+  for (const [id, account] of Object.entries(accounts)) {
+    engine.register({
+      id, label: id, maxMessageLength: 4000,
+      start() {}, stop() {}, status: () => '在线', setMessageHandler() {},
+      send: async (_, text) => { replies.push({ account: id, text }) },
+      setTopicEditHandler(handler) { edits[id] = name => handler(account.chatId, name) },
+      async renameTopic(chatId, name) {
+        writes.push({ account: id, chatId, name })
+        return options.rename ? options.rename(id, chatId, name) : true
+      },
+    })
+    engine.addAllowed(id, account.userId)
+  }
+  t.after(() => { engine.dispose(); rmSync(dir, { recursive: true, force: true }) })
+  const title = (id, name, kind = 'provider') => engine.onSessionEvent({ id: accounts[id].sessionId }, { type: 'session/title', data: { title: name, source: { kind } } })
+  const command = (id, text) => engine.handleInbound(id, { chatId: accounts[id].chatId, userId: accounts[id].userId, kind: 'dm', text })
+  return { engine, store, writes, replies, edits, accounts, policies, title, command }
+}
+
+test('账号级 off 只抑制该账号，另一账号仍按 follow 改名', async t => {
+  const f = accountsFixture(t, { policies: { telegram_a: 'off', telegram_b: 'follow' } })
+  await f.title('telegram_a', 'A 标题')
+  await f.title('telegram_b', 'B 标题')
+  await tick()
+  assert.deepEqual(f.writes, [{ account: 'telegram_b', chatId: '200:30', name: 'B 标题' }])
+})
+
+test('缺少账号策略时分别继承全局 off / once / follow', async t => {
+  const off = accountsFixture(t, { global: 'off' })
+  await off.title('telegram_a', '关闭标题')
+  await off.title('telegram_b', '关闭标题')
+  await tick()
+  assert.deepEqual(off.writes, [])
+
+  const once = accountsFixture(t, { global: 'once' })
+  await once.title('telegram_a', '首次标题')
+  await once.title('telegram_a', '后续标题')
+  await tick()
+  assert.deepEqual(once.writes.map(item => item.name), ['首次标题'])
+
+  const follow = accountsFixture(t, { global: 'follow' })
+  await follow.title('telegram_a', '标题一')
+  await follow.title('telegram_a', '标题二')
+  await tick()
+  assert.deepEqual(follow.writes.map(item => item.name), ['标题一', '标题二'])
+})
+
+test('/topicname 使用当前账号策略，账号级 off 不会被 on 解锁开启', async t => {
+  const f = accountsFixture(t, { policies: { telegram_a: 'off', telegram_b: 'follow' } })
+  await f.command('telegram_a', '/topicname')
+  assert.match(f.replies.at(-1).text, /off/)
+  await f.command('telegram_b', '/topicname')
+  assert.match(f.replies.at(-1).text, /follow/)
+  await f.command('telegram_a', '/topicname off')
+  await f.command('telegram_a', '/topicname on')
+  assert.match(f.replies.at(-1).text, /该账号.*已关闭/)
+  await f.title('telegram_a', '解锁后仍不应改名')
+  await tick()
+  assert.deepEqual(f.writes, [])
+  assert.equal(f.engine.topicTitles.status('telegram_a:100:20').frozen, false)
+})
+
+test('账号级 off 不阻止显式 /rename，per-topic 冻结在 follow 下仍然有效', async t => {
+  const f = accountsFixture(t, { global: 'follow', policies: { telegram_a: 'off', telegram_b: 'follow' } })
+  await f.engine.renameTopicNow(f.accounts.telegram_a.sessionId, '显式标题')
+  assert.deepEqual(f.writes, [{ account: 'telegram_a', chatId: '100:20', name: '显式标题' }])
+  // 若解析忽略了账号策略（沿用全局 follow），这条自动标题会被写出去。
+  await f.title('telegram_a', '自动标题')
+  await tick()
+  assert.equal(f.writes.length, 1)
+  await f.command('telegram_b', '/topicname off')
+  await f.title('telegram_b', '冻结后的自动标题')
+  await tick()
+  assert.equal(f.writes.length, 1)
+  assert.equal(f.engine.topicTitles.status('telegram_b:200:30').frozen, true)
+})
+
+test('排队中的自动改名按真正执行时的账号策略判断', async t => {
+  let release
+  // 全局 follow：若排队写入沿用全局策略，第二条会被写出；账号改为 off 后必须被抑制。
+  const f = accountsFixture(t, { global: 'follow', policies: { telegram_a: 'follow' }, rename: () => {
+    if (!release) return new Promise(resolve => { release = resolve })
+    return true
+  } })
+  const first = f.engine.syncTopicName(f.accounts.telegram_a.sessionId, '标题一')
+  await tick()
+  assert.equal(f.writes.length, 1)
+  // 请求在途时账号策略改为 off：已发出的请求无法撤回，排队中的写入必须观察到新策略。
+  f.policies.telegram_a = 'off'
+  const queued = f.engine.syncTopicName(f.accounts.telegram_a.sessionId, '排队标题')
+  release(true)
+  await Promise.all([first, queued])
+  await tick()
+  assert.deepEqual(f.writes.map(item => item.name), ['标题一'])
+})

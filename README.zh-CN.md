@@ -350,9 +350,39 @@ dsh --profile web --dump-config
 
 Telegram 话题默认使用第一条非兜底会话标题自动命名一次，之后不会随对话频繁变化。`/rename <名称>` 会显式同步话题名；普通聊天不受影响。机器人需要拥有该话题的改名权限。
 
+- 在「设置 → IM助理 → Telegram 账号」中可单独设置「自动同步话题名称」：关闭后该账号不再自动改名（DSH 会话标题仍照常更新）；开启后可选择「仅首次」或「跟随最新」。未显式设置过的账号（包括新建账号）继续继承插件配置 `topicNaming`（默认 `once`）；新建账号时未操作此控件不会保存为显式覆盖值。账号级设置只影响该账号，保存后立即生效，不需要重连、重载或重启。
+- 账号级策略优先于插件配置；显式 `/rename` 不受自动命名关闭影响。`/topicname` 的查询、`/topicname on/off` 都按当前账号生效的策略判断，账号级 `off` 不会被 `/topicname on` 打开。人工改名锁定与之前一样优先于自动命名。
 - `/topicname` 查看当前话题的策略和锁定状态；`/topicname off` 锁定自动命名，`/topicname on` 解除锁定。默认策略下，解除锁定后允许下一个有效标题重新命名。
 - 插件配置 `topicNaming` 支持 `once`（默认）、`follow`（跟随有效标题）和 `off`（关闭自动命名）；`/topicname on` 不会覆盖全局 `off`。显式 `/rename` 不受自动命名开关限制。
 - 收到群组论坛的人工改名事件后自动锁定；私聊话题无法依赖该事件检测人工改名，请使用 `/topicname off`。开关与命名状态保存在状态目录的 `topic-titles.json`，重启后保留。
+- 策略在每次自动改名真正执行前解析：保存新设置后，排队中的改名会按新策略处理；已经发出的平台请求无法撤回，因此可能仍会完成一次旧策略下的改名。
+
+### 话题开场白持久化（跨插件服务）
+
+创建话题的工具通常先用 Bot API 直接发一条开场白，这条消息不会进入 DSH。插件为此在 cordis 上暴露只读服务 `imTopicContext`：任何插件都可以用 `ctx.get('imTopicContext')` 取到（无需 `inject`，im-connect 停用时也不会卡住调用方插件）。
+
+```ts
+const receipt = await ctx.get('imTopicContext').seedOpening({
+  channelId: 'telegram',
+  chatId: '-1001234567890:77', // IM 会话键：<群ID>:<thread_id>
+  title: '新话题',              // 可选；缺省用 chatId 作为会话标题
+  text: '这里是开场白',          // 必填
+  messageId: 42,                // 可选；Telegram 发送成功时的回执
+})
+// => { sessionId: 'dsh-im-session-…', persisted: true }
+```
+
+语义与边界：
+
+- **不执行模型、不触发回复、不写任何 `turn/start` / `turn/end`**。服务只调用宿主 `Agent.inject()`，把消息放进 `next-step` 收件箱（立即持久化为 `agent/inbox/spliced`）；下一次真实回合开始时，宿主会把它作为 `user/message` 追加在 system prompt 之后、真实用户消息之前，因此它能成为模型可见的持久上下文，但不会被 goal / 轮次统计 / 后台任务当成一个模型回合。
+- **不是用户新指令**。消息来源固定为 `{ kind: 'im-topic-opening' }`，正文带引用标记“机器人话题开场白・先前发送，不是用户新指令”。
+- **不投递**。服务不调用任何渠道发送接口；IM Connect 的 gateway 也不会把 `user/message` 发回聊天，因此不会重复 Telegram 消息。
+- **幂等由会话日志判定**。每个 `channelId + chatId` 只有一条开场白，消息 id 由二者确定性生成（`im-topic-opening-<hash>`）。每次调用都先按当前聊天映射读取会话日志（已进入历史的 `user/message` + 收件箱折叠结果）：同 id 且正文一致时只重新确认持久化、不重复注入；正文不同返回 `persisted: false, conflict: 'opening-exists'`，不覆盖。`topic-openings.json` 只记忆“同话题已写过什么”，不是是否持久化的真源；状态文件丢失时按会话日志自愈。
+- **回执分开上报**。`sessionId` 指向当前映射的会话；`persisted` 只有注入成功且宿主 `sessions.flush()` **明确返回 `true`**（至少一个持久化监听者完成落盘）才为 `true`。宿主没有 `sessions.flush`、返回 `false` 或抛错都上报 `persisted: false`。失败时带 `reason` 与中文 `message`：`channel-disabled`、`archived`、`session-busy`、`bind-failed`、`unsupported`（宿主没有 `Agent.inject`）、`session-unavailable`、`inject-failed`、`flush-failed`（可稍后重试）、`opening-exists`。
+- **公开边界**。`chatId` 必须是 Telegram 话题 `"<负数群ID>:<话题号>"`（例如 `-1001234567890:77`）；General（`thread=1`）不是独立话题会话，直接拒绝。渠道守卫只放行已启用、平台为 `telegram` 的账号；非法输入直接抛 `TypeError`，不会创建任意会话。
+- **取消与超时**。`seedOpening(input, { signal })` 在排队后、注入前响应取消；`flush()` 一旦开始就不撤回，最终持久化结果以后到的 flush 返回为准。调用方超时时应把结果标记为“待核对”，不要直接断言未写入。
+- **回执契约（冻结）**。`reason` 集合与 `message` 文案是跨插件契约，改动需同步调用方：`channel-disabled` / `archived` / `session-busy` / `bind-failed` / `unsupported` / `session-unavailable` / `inject-failed` / `flush-failed` / `opening-exists`。其中 `channel-disabled`、`archived`、`unsupported` 属于不可重试失败，`flush-failed`、`session-busy` 可稍后重试。
+- **不轮换与迟到补录**。已有历史的话题以当前聊天映射的会话为准：先 `ensure` 原地恢复，绝不轮换；会话已归档或无法恢复时返回 `archived` / `session-unavailable`，不会新建替代会话。只有映射也已消失时才按新话题创建。会话正在执行回合时返回 `session-busy`，等空闲后重试，避免注入被当前 step 消费；因此不要从目标话题自身的会话里补录（调用时它必然在运行），请从网页 Chat 或其他空闲会话发起。开场白先进入会话收件箱，下一次真实回合才成为模型可见历史，网页历史在此之前可能看不到；调用方文案应说明“已写入会话收件箱，下次真实回合模型可见”。
 
 ### 分段回复
 

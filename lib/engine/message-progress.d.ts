@@ -31,6 +31,7 @@ export interface TurnCompletion {
     items: MessageProgress[];
     status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed';
     reasonKind?: string;
+    errorMessage?: string;
 }
 /**
  * 一次回复投递的收口信号。

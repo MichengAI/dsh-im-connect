@@ -2,6 +2,7 @@ import { type CommandPermissions } from './command-permissions.js';
 import type { Context } from '@deepseek-ai/cordis';
 import { SeenStore } from './seen-store.js';
 import { SessionMapStore } from './session-store.js';
+import { TopicContextService } from './topic-context.js';
 import type { ChannelAdapter, EngineConfig, ImMessage } from './types.js';
 /** 一次回复投递的收口状态，由 {@link Gateway.deliver} 就地填写。 */
 export interface DeliveryOutcome {
@@ -14,6 +15,7 @@ export interface DeliveryOutcome {
      * 只在这里为 true；任何一次结果不明的失败都会让它保持 false。
      */
     definite?: boolean;
+    platformMessageIds?: string[];
 }
 /**
  * 是否有明确证据证明本次发送未落地。
@@ -39,6 +41,7 @@ export declare class ImEngine {
     private readonly resolvePrivateAccess;
     private readonly resolveCommandPermissions;
     private readonly sendRetryDelaysMs;
+    private readonly seedableChannel?;
     private readonly deferred;
     private deferredTimer?;
     private recovering;
@@ -78,12 +81,16 @@ export declare class ImEngine {
     /** 话题名回写状态：默认一个话题只命名一次。 */
     private readonly topicTitles;
     private readonly topicWrites;
+    /** 跨插件入口：话题开场白持久化（不投递、不启动回合）。 */
+    private readonly topicContextService;
     private readonly replyFinalization;
     /**
      * @param sendRetryDelaysMs 分片发送退避表；测试可传 `[0]` 关闭等待。
      * @param topicTitleFile 话题名状态文件；缺省只在进程内去重。
+     * @param topicOpeningFile 话题开场白状态文件；缺省只在进程内幂等。
+     * @param seedableChannel 开场白渠道守卫：只允许已启用的 Telegram 账号（缺省放行）。
      */
-    constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all', resolveCommandPermissions?: (channelId: string) => CommandPermissions, deliveryFile?: string, sendRetryDelaysMs?: readonly number[], topicTitleFile?: string);
+    constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all', resolveCommandPermissions?: (channelId: string) => CommandPermissions, deliveryFile?: string, sendRetryDelaysMs?: readonly number[], topicTitleFile?: string, topicOpeningFile?: string, seedableChannel?: ((channelId: string) => boolean) | undefined);
     renameSession(sessionId: string, title: string): boolean;
     removeSession(sessionId: string): Promise<boolean>;
     cleanupMissingSession(sessionId: string): Promise<boolean>;
@@ -92,6 +99,8 @@ export declare class ImEngine {
     setCwd(cwd: string): void;
     setPermission(permission: string): void;
     attachMappedSessions(): Promise<void>;
+    /** 跨插件使用的话题开场白写入服务；由 index.ts 以 `ctx.provide('imTopicContext')` 暴露。 */
+    get topicContext(): TopicContextService;
     register(channel: ChannelAdapter): void;
     unregister(channelId: string): void;
     addAllowed(channelId: string, userId: string): void;
@@ -144,6 +153,7 @@ export declare class ImEngine {
     private onSessionEvent;
     /** 取流后因会话失效等原因放弃收口时，清掉只有状态、没有正文的占位。 */
     private discardEmptyTake;
+    private recordDeliveryReceipt;
     private processSessionEvent;
     /**
      * 把会话标题写成话题名。
@@ -156,7 +166,7 @@ export declare class ImEngine {
     private writeTopicName;
     /** 查询或切换当前话题的锁定状态；不创建会话，也不立即发起平台改名。 */
     private topicNameCommand;
-    /** 命名策略；默认 once。 */
+    /** 命名策略：按实际绑定的账号解析，缺省 once；不再读取全局配置。 */
     private topicMode;
     /** 话题被改名：自己写入的回显忽略，人工改名则锁定。私聊话题不会推送此事件。 */
     private observeTopicEdit;
@@ -181,6 +191,8 @@ export declare class ImEngine {
      * 给系统提示用的分段说明：只对本插件已绑定、且渠道已开放的会话生效，
      * 未绑定或该账号没开启分段回复时返回空串，提示词与发布前一致。
      */
+    /** Current delivery binding only; never infer the origin of a web/queued input from it. */
+    replyChannelInstructionForSession(sessionId: string): string;
     segmentInstructionForSession(sessionId: string): string;
     /**
      * 发送一个分片，平台明确拒绝时按 {@link SEND_RETRY_DELAYS_MS} 退避重试。

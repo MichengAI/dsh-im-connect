@@ -32,6 +32,11 @@ export type TopicEditResult = 'self' | 'frozen' | 'unknown'
 /** 命名策略：once（默认，只命名一次）/ follow（跟随最新）/ off（不自动命名）。 */
 export type TopicMode = 'once' | 'follow' | 'off'
 
+/** 只接受精确的三种策略值；非法输入返回 undefined，由调用方决定拒绝还是回落默认。 */
+export function normalizeTopicMode(value: unknown): TopicMode | undefined {
+  return value === 'once' || value === 'follow' || value === 'off' ? value : undefined
+}
+
 /**
  * Telegram 话题名长度上限 128：
  * 必须按**码点**截断，`str.slice(0, 128)` 按 UTF-16 单元切会把 emoji 的代理对切碎。

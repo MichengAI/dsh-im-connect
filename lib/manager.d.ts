@@ -3,8 +3,10 @@ import type { Context } from '@deepseek-ai/cordis';
 import { type ConnectionState } from './channels/connection-state.js';
 import { type DiagnosticCheck } from './channels/diagnostics.js';
 import type { ChannelId, SessionRecord } from './engine/session-id.js';
+import { ImEngine } from './engine/gateway.js';
 import { type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js';
 import type { EngineConfig, SendMode } from './engine/types.js';
+import { type TopicMode } from './engine/topic-title.js';
 export declare const API_CLIENT_HEADER = "x-dsh-im-connect-client";
 type ChannelProxyMode = 'inherit' | 'direct' | 'custom';
 type ThinkingDisplayMode = 'off' | 'collapsed';
@@ -52,6 +54,8 @@ export interface ChannelState {
     segmentDelayMaxSecs?: number;
     /** 空闲新开会话分钟数：缺省为 0 表示关闭。 */
     sessionIdleMinutes?: number;
+    /** 平台话题自动命名策略；缺省跟随插件全局 topicNaming。仅 Telegram 账号使用。 */
+    topicNaming?: TopicMode;
     lastCheckedAt?: string;
 }
 export interface AccountView {
@@ -84,6 +88,8 @@ export interface AccountView {
     segmentDelayMaxSecs: number;
     /** 空闲新开会话分钟数：0 表示关闭。 */
     sessionIdleMinutes: number;
+    /** 该账号生效的话题命名策略；非 Telegram 账号不开放此能力，固定为 off。 */
+    topicNaming: TopicMode;
     proxyMode: ChannelProxyMode;
     proxyConfigured: boolean;
     proxyUrl?: string;
@@ -135,6 +141,8 @@ export declare class ChannelManager {
     private readonly stateDir;
     private readonly sessions;
     private readonly engine;
+    /** 跨插件入口：话题开场白持久化（不投递、不启动回合）。 */
+    get topicContext(): ImEngine['topicContext'];
     private readonly vault;
     private readonly pairing;
     private readonly log;
@@ -261,11 +269,17 @@ export declare class ChannelManager {
     /** 与 Chat 使用同一预设名册，不向客户端暴露预设文件路径。 */
     private agentPresetOptions;
     private accountFreeChatGroups;
+    /** 账号生效的话题命名策略：显式账号策略 ?? 插件全局策略 ?? once。 */
+    private accountTopicMode;
+    /** 插件级话题命名默认值；绑定新账号时客户端据此展示继承后的有效策略。 */
+    topicNamingDefault(): TopicMode;
     private accountEngineConfig;
     /** 分段间隔区间：账号设置优先，其次插件配置，最后回落到 1–2 秒；上下界颠倒时自动对调。 */
     private segmentDelayRange;
     /** 分段回复的系统提示说明；未绑定或该账号没开启时返回空串，由引擎判断。 */
     segmentInstructionForSession(sessionId: string): string;
+    /** A live reply binding, not a claim that the current input was received over IM. */
+    replyChannelInstructionForSession(sessionId: string): string;
     pendingRequests(): Array<PendingRequest & {
         channelId: string;
     }>;
@@ -275,5 +289,6 @@ export declare class ChannelManager {
     private requestAuthorization;
     private flush;
 }
+export declare function pairingSettings(input?: Record<string, unknown>): Record<string, string>;
 export {};
 //# sourceMappingURL=manager.d.ts.map

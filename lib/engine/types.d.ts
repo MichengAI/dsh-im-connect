@@ -7,6 +7,23 @@ export interface ImMedia {
     text?: string;
     path?: string;
 }
+/** A message-bound observation, never an authorization grant or arbitrary platform object. */
+export interface ImChannelContext {
+    platform: 'telegram';
+    chatId: string;
+    chatType?: 'private' | 'group' | 'supergroup';
+    threadId?: number;
+    isForum?: boolean;
+    chatTitle?: string;
+    chatUsername?: string;
+    chatDisplayName?: string;
+    topicName?: string;
+    topicNameObservedAt?: number;
+    senderDisplayName?: string;
+    senderUsername?: string;
+    replyToMessageId?: string;
+    observedAt: number;
+}
 export interface ImMessage {
     chatId: string;
     userId?: string;
@@ -20,11 +37,18 @@ export interface ImMessage {
     platformMessageId?: string;
     actionToken?: string;
     context?: Record<string, unknown>;
+    /** Selected channel observations only. Never serialize the arbitrary context field. */
+    channelContext?: ImChannelContext;
     media?: ImMedia[];
+}
+export interface DeliveryReceipt {
+    platformMessageIds?: string[];
 }
 export interface ReplyStream {
     update(text: string): Promise<void>;
     finish(text: string): Promise<void>;
+    /** Platform identifiers confirmed while sending this reply. */
+    receipt?(): DeliveryReceipt | undefined;
     /** Stop channel-level reuse when taken for finalization, without closing this handle. */
     seal?(): void;
     /** 只改顶部状态行（思考 / 工具进度），不碰正文；渠道不支持时省略。 */
@@ -39,6 +63,8 @@ export interface ChoiceReceipt {
 }
 export interface ChannelAdapter {
     readonly id: string;
+    /** Canonical platform from the adapter implementation, not an account label or opaque account ID. */
+    readonly platform?: string;
     readonly label: string;
     readonly maxMessageLength: number;
     /** 抑制含工具调用的助手文字；实时与补发共用规则，不计为已投递。 */
@@ -48,6 +74,8 @@ export interface ChannelAdapter {
     start(): void | Promise<void>;
     stop(): void | Promise<void>;
     send(chatId: string, text: string): Promise<void>;
+    /** Sends a message and returns platform identifiers when the adapter can expose them. */
+    sendWithReceipt?(chatId: string, text: string): Promise<DeliveryReceipt>;
     /** 稳定收件目标可用时允许后台补发；没有此能力的渠道等待原聊天新消息。 */
     canDeliverDeferred?(): boolean;
     /** 原生选择卡片的容量，用于菜单分页；超长正文仍完整降级为文字。 */

@@ -33,4 +33,5 @@ export declare function apply(ctx: Context, config: PluginConfig): void;
 export { CHANNEL_META, CHANNEL_ORDER, listChannelMeta } from './channels/meta.js';
 export { IM_ORIGIN, IM_SESSION_PREFIX, IM_SESSION_PREFIX_LEGACY, createImSessionId, isImOrigin, isImSessionId, isTaskSession, sessionKeyOf, } from './engine/session-id.js';
 export { splitText } from './engine/split.js';
+export type { TopicOpeningInput, TopicOpeningReceipt } from './engine/topic-context.js';
 //# sourceMappingURL=index.d.ts.map

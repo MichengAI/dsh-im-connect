@@ -356,9 +356,39 @@ DingTalk replies prefer official AI Card streaming. If card creation fails, plai
 
 Telegram topics are automatically named once from the first non-fallback session title; later conversation titles do not keep changing the topic name. `/rename <title>` explicitly synchronizes the topic name. Ordinary chats are unaffected. The bot needs permission to rename the topic.
 
+- Each Telegram account has its own **Automatically sync topic names** setting under Settings → IM Assistant → Telegram account. Turning it off stops automatic renames for that account only (DSH session titles keep updating); when enabled, choose **First title only** or **Follow latest**. Accounts without an explicit setting, including newly created accounts, keep inheriting the plugin `topicNaming` configuration (default `once`); leaving this control untouched during setup does not save an override. The account setting applies to that account only and takes effect immediately without reconnecting, reloading, or restarting.
+- The account policy overrides the plugin configuration; explicit `/rename` remains available even when automatic naming is off. `/topicname` queries and `/topicname on|off` use the currently resolved account policy, and `/topicname on` does not enable an account-level `off`. Manual-rename locks still take precedence over automatic naming.
 - `/topicname` shows this topic's policy and lock state. `/topicname off` locks automatic naming; `/topicname on` unlocks it. With the default policy, unlocking allows the next valid title to name the topic again.
 - The plugin configuration `topicNaming` accepts `once` (default), `follow` (follow valid titles), or `off` (disable automatic naming). `/topicname on` does not override global `off`. Explicit `/rename` remains available regardless of automatic naming settings.
 - A manual rename event in a group forum locks automatic naming. Private topics cannot rely on that event for manual rename detection; use `/topicname off`. Naming and lock state persist across restarts in `topic-titles.json` under the state directory.
+- The policy is resolved each time an automatic rename actually runs: after saving a new setting, queued renames observe the new policy. A platform request already in flight cannot be unsent, so it may still finish a rename under the previous policy.
+
+### Topic opening persistence (cross-plugin service)
+
+Tools that create a topic usually send an opening message through the Bot API first; that message never enters DSH. The plugin exposes the read-only cordis service `imTopicContext` for this. Any plugin can call `ctx.get('imTopicContext')` — no `inject` is required, so a caller's tool keeps working even while im-connect is unloaded.
+
+```ts
+const receipt = await ctx.get('imTopicContext').seedOpening({
+  channelId: 'telegram',
+  chatId: '-1001234567890:77', // IM session key: <chat id>:<thread id>
+  title: 'New topic',           // optional; defaults to chatId as the session title
+  text: 'Hello from the bot',   // required
+  messageId: 42,                // optional; Telegram receipt when the send succeeded
+})
+// => { sessionId: 'dsh-im-session-…', persisted: true }
+```
+
+Semantics and boundaries:
+
+- **No model call, no reply, no `turn/start` / `turn/end`.** The service only calls the host `Agent.inject()`, which puts the message into the `next-step` inbox and durably records `agent/inbox/spliced`. When the next real turn starts, the host admits it as a `user/message` after the system prompt and before the real user message, so it becomes model-visible persistent context without being counted as a model turn by the goal/round driver, stats, or background jobs.
+- **Not a new user instruction.** The message source is always `{ kind: 'im-topic-opening' }` and the body carries a quotation marker saying it is the bot's earlier topic opening, not a user instruction.
+- **No delivery.** The service never calls a channel send API, and the IM Connect gateway never sends `user/message` back to the chat, so no duplicate Telegram message appears.
+- **Idempotency is decided by the session log.** Each `channelId + chatId` has exactly one opening; the message id is derived deterministically from both (`im-topic-opening-<hash>`). Every call first reads the session log of the current chat mapping (admitted `user/message` plus the folded inbox): the same id with the same text only re-confirms durability and never injects twice; a different text returns `persisted: false, conflict: 'opening-exists'` without overwriting. `topic-openings.json` only remembers what was written for a topic — it is not the source of truth for durability, and the session log self-heals when that file is lost.
+- **Separate receipt fields.** `sessionId` is the current mapping's session; `persisted` is `true` only when the injection succeeded and the host `sessions.flush()` **explicitly returns `true`** (at least one durability listener completed). A missing `sessions.flush`, a `false` return or a rejection all report `persisted: false`. Failures carry a `reason` and a Chinese `message`: `channel-disabled`, `archived`, `session-busy`, `bind-failed`, `unsupported` (host lacks `Agent.inject`), `session-unavailable`, `inject-failed`, `flush-failed` (retry later), `opening-exists`.
+- **Public boundary.** `chatId` must be a Telegram topic `"<negative group id>:<thread id>"` (for example `-1001234567890:77`); General (`thread=1`) is not a separate topic session and is rejected. The channel guard only admits enabled accounts whose platform is `telegram`; invalid input throws `TypeError` instead of creating an arbitrary session.
+- **Cancellation and timeout.** `seedOpening(input, { signal })` honours cancellation after queueing and before injection; once `flush()` has started it is never withdrawn, and the durable result is whatever that flush returns. A caller that times out should mark the outcome as pending verification instead of asserting it was not written.
+- **Frozen receipt contract.** The `reason` set and `message` texts are a cross-plugin contract; changing them requires updating callers: `channel-disabled` / `archived` / `session-busy` / `bind-failed` / `unsupported` / `session-unavailable` / `inject-failed` / `flush-failed` / `opening-exists`. `channel-disabled`, `archived` and `unsupported` are permanent failures; `flush-failed` and `session-busy` may be retried later.
+- **No rotation and late backfill.** A topic that already has history follows the current chat mapping: `ensure` resumes it in place and never rotates. An archived or otherwise unrecoverable session returns `archived` / `session-unavailable` and never spawns a replacement session; only a vanished mapping is treated as a new topic. While the session is running a turn, the service returns `session-busy` so the caller retries when idle instead of the injection being consumed by the current step — so do not backfill from the target topic's own session (it is necessarily running); use the web Chat or another idle session. The opening first enters the session inbox and only becomes model-visible history on the next real turn, so callers should say “written to the session inbox; visible to the model on the next real turn” rather than implying the history already shows it.
 
 ### Segmented replies
 

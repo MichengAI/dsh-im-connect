@@ -11,6 +11,7 @@ export interface DeferredEntry {
     text?: string;
     parts?: string[];
     offset: number;
+    platformMessageIds?: string[];
 }
 type Event = {
     type?: string;
@@ -35,6 +36,8 @@ export declare class DeferredDelivery {
     list(channelId?: string, message?: ImMessage): DeferredEntry[];
     turnEntries(sessionId: string, turn: number | undefined): DeferredEntry[];
     begin(id: string, sessionId: string, channelId: string, message: ImMessage): void;
+    /** Persist a stable completion notice before attempting platform I/O. */
+    beginNotice(id: string, sessionId: string, channelId: string, message: ImMessage, text: string, turn?: number): boolean;
     reject(id: string, definite?: boolean): void;
     patch(id: string, update: Partial<DeferredEntry>): void;
     claim(sessionId: string, turn: number, requestId: string): void;

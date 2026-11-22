@@ -138,6 +138,7 @@ export declare const commandEnglish: {
     readonly '\u5F53\u524D\u8BDD\u9898\u5DF2\u9501\u5B9A\uFF0C\u4E0D\u518D\u81EA\u52A8\u547D\u540D\u3002': "This topic is locked; automatic naming is disabled.";
     readonly '\u5F53\u524D\u8BDD\u9898\u5DF2\u89E3\u9664\u9501\u5B9A\uFF0C\u540E\u7EED\u6309 {0} \u7B56\u7565\u81EA\u52A8\u547D\u540D\u3002': "This topic is unlocked; future automatic naming uses the {0} policy.";
     readonly '\u5168\u5C40\u8BDD\u9898\u81EA\u52A8\u547D\u540D\u5DF2\u5173\u95ED\uFF0C\u89E3\u9664\u9501\u5B9A\u4E0D\u4F1A\u5F00\u542F\u81EA\u52A8\u547D\u540D\u3002': "Automatic topic naming is disabled globally; unlocking does not enable it.";
+    readonly '\u8BE5\u8D26\u53F7\u7684\u8BDD\u9898\u81EA\u52A8\u547D\u540D\u5DF2\u5173\u95ED\uFF0C\u89E3\u9664\u9501\u5B9A\u4E0D\u4F1A\u5F00\u542F\u81EA\u52A8\u547D\u540D\u3002': "Automatic topic naming is disabled for this account; unlocking does not enable it.";
     readonly '\u8BDD\u9898\u547D\u540D\u7B56\u7565\uFF1A{0}\uFF1B\u5DF2\u547D\u540D\uFF1A{1}\uFF1B\u5DF2\u9501\u5B9A\uFF1A{2}': "Topic naming policy: {0}; named: {1}; locked: {2}";
     readonly '/topicname [on|off] \u2014 \u67E5\u8BE2\u6216\u5F00\u5173\u5F53\u524D\u8BDD\u9898\u7684\u81EA\u52A8\u547D\u540D': "/topicname [on|off] — Check or toggle automatic naming for this topic";
     readonly '/rename \u65B0\u540D\u79F0 \u2014 \u7ED9\u5F53\u524D\u4F1A\u8BDD\u6539\u540D': "/rename new-name — Rename the current session";

@@ -108,6 +108,9 @@ test('已知消息的编辑遇到网络异常时重试同一消息', async () =>
   await mock(async (channel, calls) => {
     const stream = await channel.beginReply('42');
     await stream.finish('最终正文');
+    assert.deepEqual(stream.receipt(), { platformMessageIds: ['1'] });
+    const receipt = await channel.sendWithReceipt('42', '独立正文');
+    assert.deepEqual(receipt, { platformMessageIds: ['3'] });
     const requests = calls.filter(c => c.method === 'editMessageText');
     assert.equal(requests.length, 2);
     assert.equal(requests[0].body.message_id, requests[1].body.message_id);

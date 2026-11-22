@@ -110,7 +110,7 @@ function failureKind(error: unknown): string {
   return 'unknown'
 }
 
-export interface TurnCompletion { sessionId: string; turn: number; items: MessageProgress[]; status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed'; reasonKind?: string }
+export interface TurnCompletion { sessionId: string; turn: number; items: MessageProgress[]; status: 'completed' | 'empty' | 'error' | 'cancelled' | 'delivery-failed'; reasonKind?: string; errorMessage?: string }
 
 type Group = { requestId: string; sessionId: string; items: MessageProgress[]; turn?: number; revision?: number; waiting?: number }
 
@@ -195,7 +195,8 @@ export class ProgressTracker {
         if (live.length && !superseded) this.onComplete({ sessionId, turn: data.turn, items: live.flatMap(group => group.items),
           status: data?.reason?.kind === 'error' ? 'error' : data?.reason?.kind !== 'completed' ? 'cancelled'
             : results.length === 0 ? 'empty' : allSent ? 'completed' : 'delivery-failed',
-          reasonKind: data?.reason?.kind })
+          reasonKind: data?.reason?.kind,
+           errorMessage: typeof data?.reason?.error?.message === 'string' ? data.reason.error.message : undefined })
       })
     }
   }

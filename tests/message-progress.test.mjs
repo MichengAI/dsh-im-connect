@@ -370,7 +370,7 @@ test('完成通知等待投递且同一回合只触发一次，取消后不迟�
   assert.equal(notices.length, 1)
 })
 
-test('turn/end 的 reason.kind 会透传到 onComplete (如 max-tokens)', async t => {
+test('turn/end 的错误诊断会透传到 onComplete', async t => {
   const notices = []
   const tracker = new ProgressTracker(result => { notices.push(result) })
   const item = new MessageProgress({ id: 'bot' }, { chatId: 'chat' }, { get() {} }, () => {})
@@ -379,11 +379,12 @@ test('turn/end 的 reason.kind 会透传到 onComplete (如 max-tokens)', async 
   tracker.event('s', { type: 'turn/start', data: { turn: 1 } })
   tracker.event('s', { type: 'user/message', surfaceOp: 'append', data: { id: 'request' } })
   tracker.delivery('s', 1, Promise.resolve(true))
-  tracker.event('s', { type: 'turn/end', data: { turn: 1, reason: { kind: 'max-tokens' } } })
+  tracker.event('s', { type: 'turn/end', data: { turn: 1, reason: { kind: 'error', error: { message: 'Encountered invalidated oauth token for user' } } } })
   await tick()
   assert.equal(notices.length, 1)
-  assert.equal(notices[0].status, 'cancelled')
-  assert.equal(notices[0].reasonKind, 'max-tokens')
+  assert.equal(notices[0].status, 'error')
+  assert.equal(notices[0].reasonKind, 'error')
+   assert.equal(notices[0].errorMessage, 'Encountered invalidated oauth token for user')
 })
 
 test('max-tokens 回合的消息状态显示已结束，不显示已取消', async t => {
