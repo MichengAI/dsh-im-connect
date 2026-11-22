@@ -34,6 +34,48 @@ test('typing 429 is observable once; cooldown spans topics but not other base ch
   assert.deepEqual(f.calls[1].body, { chat_id: -456, message_thread_id: 2, action: 'typing' })
 })
 
+test('typing respects the full server retry_after instead of retrying at the local cap', async t => {
+  let now = 1_000_000
+  mock.method(Date, 'now', () => now)
+  const f = fixture(t, (_, count) => count === 1
+    ? Response.json({ ok: false, error_code: 429, parameters: { retry_after: 120 } }, { status: 429 })
+    : Response.json({ ok: true, result: true }))
+  await assert.rejects(f.channel.sendAction('-123:1', 'typing'), error => error.status === 429)
+  now += 31_000
+  await f.channel.sendAction('-123:2', 'typing')
+  assert.equal(f.calls.length, 1, 'must not shorten the server retry_after to the local 30s cap')
+  await f.channel.sendAction('-456:1', 'typing')
+  assert.equal(f.calls.length, 2, 'another base chat remains independent')
+  now += 88_999
+  await f.channel.sendAction('-123:3', 'typing')
+  assert.equal(f.calls.length, 2, 'all topics share the full base-chat cooldown')
+  now += 1
+  await f.channel.sendAction('-123:2', 'typing')
+  assert.equal(f.calls.length, 3, 'renewal resumes at the server deadline')
+  assert.deepEqual(f.calls.at(-1).body, { chat_id: -123, message_thread_id: 2, action: 'typing' })
+})
+
+test('concurrent topic 429 responses cannot shorten an existing base-chat cooldown', async t => {
+  let now = 1_000_000
+  mock.method(Date, 'now', () => now)
+  const releases = []
+  const f = fixture(t, () => new Promise(resolve => releases.push(resolve)))
+  const a = assert.rejects(f.channel.sendAction('-123:1', 'typing'), error => error.status === 429)
+  const b = assert.rejects(f.channel.sendAction('-123:2', 'typing'), error => error.status === 429)
+  assert.equal(releases.length, 2)
+  releases[0](Response.json({ ok: false, error_code: 429, parameters: { retry_after: 120 } }, { status: 429 }))
+  await a
+  now += 1000
+  releases[1](Response.json({ ok: false, error_code: 429, parameters: { retry_after: 1 } }, { status: 429 }))
+  await b
+  now += 31_000
+  const work = f.channel.sendAction('-123:3', 'typing')
+  // Resolve an unexpected transport call so a broken implementation fails, not hangs.
+  releases[2]?.(Response.json({ ok: true, result: true }))
+  await work
+  assert.equal(f.calls.length, 2, 'late short 429 must not erase the longer shared cooldown')
+})
+
 test('typing transport errors log safe numeric metadata, not arbitrary error fields', async t => {
   const f = fixture(t, () => { throw Object.assign(new Error('https://secret/token/chat'), { status: 'https://secret', code: 'secret' }) })
   await assert.rejects(f.channel.sendAction('private-chat', 'typing'))

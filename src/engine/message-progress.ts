@@ -256,7 +256,7 @@ export class ProgressTracker {
   }
 }
 
-type TypingGroup = { users: number; scope: AbortController; timer?: ReturnType<typeof setInterval>; retry?: ReturnType<typeof setTimeout>; pending?: Promise<void> }
+type TypingGroup = { users: number; scope: AbortController; timer?: ReturnType<typeof setInterval>; retry?: ReturnType<typeof setTimeout>; pending?: Promise<void>; missed?: boolean }
 const typingGroups = new WeakMap<ChannelAdapter, Map<string, TypingGroup>>()
 
 /** 一次心跳失败后的补发延迟：网络抖一下不该干等到下一个 4 秒点。 */
@@ -275,9 +275,12 @@ function acquireTyping(channel: ChannelAdapter, chatId: string,
     const current = group
     const typingBudget = positiveTimeout(channel.typingTimeoutMs, DEFAULT_TYPING_TIMEOUT_MS)
     const pulse = () => {
-      if (current.pending || current.scope.signal.aborted || chats!.get(chatId) !== current) return
+      if (current.scope.signal.aborted || chats!.get(chatId) !== current || current.retry) return
+      if (current.pending) { current.missed = true; return }
+      current.missed = false
       // pending 必须跟随有界等待，而不是可能永不结束的旧 SDK 请求。
       let failed = false
+      let succeeded = false
       const pending = safely(async signal => {
         const guard = AbortSignal.any([signal, current.scope.signal])
         await fileOperation(Promise.resolve().then(() => {
@@ -285,14 +288,17 @@ function acquireTyping(channel: ChannelAdapter, chatId: string,
           if (chats!.get(chatId) !== current || current.users === 0) return
           return channel.sendAction!(chatId, 'typing', guard).catch((error: unknown) => { failed = true; throw error })
         }), guard)
+        succeeded = true
       }, typingBudget)
       current.pending = pending
       void pending.finally(() => {
         if (current.pending === pending) current.pending = undefined
+        if (current.scope.signal.aborted || chats!.get(chatId) !== current) return
+        // 请求跨过续发点时合并补一次；保持单飞，失败仍走退避而不立即补发。
+        if (!failed) { if (succeeded && current.missed) pulse(); return }
         // 抖动导致的单次失败：隔 1.2 秒补一次，不让提示空窗撑到下一个整点。
-        if (!failed || current.scope.signal.aborted || chats!.get(chatId) !== current) return
         if (current.retry) clearTimeout(current.retry)
-        current.retry = setTimeout(pulse, TYPING_RETRY_AFTER_FAILURE_MS)
+        current.retry = setTimeout(() => { current.retry = undefined; pulse() }, TYPING_RETRY_AFTER_FAILURE_MS)
         current.retry.unref?.()
       })
     }

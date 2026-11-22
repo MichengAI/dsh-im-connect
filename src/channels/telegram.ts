@@ -98,11 +98,6 @@ const STATUS_REACTION_DELAYS_MS = [400, 1200] as const
  * 放宽到 6 秒仍然有界，不会堆积请求。
  */
 const TYPING_REQUEST_TIMEOUT_MS = 6000
-/**
- * typing 自己吃到 429 后的退避上限。正文 / 编辑的冷却再长也不牵连 typing：
- * 一个群被编辑限流几十秒时，「正在输入」不该跟着整段消失。
- */
-const TYPING_COOLDOWN_MAX_MS = 30_000
 
 function isTerminalStatus(state: string): boolean {
   return state === 'success' || state === 'ended' || state === 'error' || state === 'cancelled'
@@ -1177,7 +1172,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
     async sendAction(chatId, _action, signal) {
       signal?.throwIfAborted()
       const route = parseTelegramChatId(chatId)
-      // 只受 typing 自己的短冷却约束：正文 / 编辑被限流时，「正在输入」仍要照发，
+      // 只受 typing 自己的冷却约束：正文 / 编辑被限流时，「正在输入」仍要照发，
       // 否则同聊天的一次 40 秒 429 就能让它整段消失。typing 自己吃到 429 才退避。
       const chatKey = String(route.chatId)
       if ((typingCooldownUntil.get(chatKey) ?? 0) > Date.now()) return
@@ -1192,8 +1187,9 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         const status = Number((error as { status?: unknown } | undefined)?.status)
         const retryAfterMs = Number((error as { retryAfterMs?: unknown } | undefined)?.retryAfterMs)
         if (status === 429) {
-          const wait = Math.min(Math.max(1000, Number.isFinite(retryAfterMs) ? retryAfterMs : 0), TYPING_COOLDOWN_MAX_MS)
-          typingCooldownUntil.set(chatKey, Date.now() + wait)
+          const wait = Math.max(1000, Number.isFinite(retryAfterMs) ? retryAfterMs : 0)
+          // 同群不同话题的在途 429 可能乱序返回；较短的新冷却不能覆盖较长的旧冷却。
+          typingCooldownUntil.set(chatKey, Math.max(typingCooldownUntil.get(chatKey) ?? 0, Date.now() + wait))
         }
         const safeStatus = Number.isFinite(status) ? ` status=${status}` : ''
         // 每次 pulse 都失败时只记第一条：可观测，又不至于把日志刷满。
