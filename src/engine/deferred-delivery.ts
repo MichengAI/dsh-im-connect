@@ -188,7 +188,13 @@ export class DeferredDelivery {
       }
       if (!valid(entry)) { this.patch(id, { status: 'blocked' }); return }
       const duplicate = this.entries.find(e => e.id !== id && e.sessionId === entry.sessionId && e.turn !== undefined && e.turn === entry.turn && ['sent', 'unknown', 'sending'].includes(e.status))
-      if (duplicate && !explicit) { this.patch(id, { status: duplicate.status === 'sent' ? 'sent' : 'unknown' }); return }
+      if (duplicate && !explicit) {
+        this.patch(id, {
+          status: duplicate.status === 'sent' ? 'sent' : 'unknown',
+          ...(duplicate.status === 'sent' ? { text: undefined, parts: undefined } : {}),
+        })
+        return
+      }
       if (!entry.parts) this.patch(id, { parts: chunks(entry.text!) })
       const parts = entry.parts!
       if (!parts.length) { this.patch(id, { status: 'sent', text: undefined, parts: undefined }); return }

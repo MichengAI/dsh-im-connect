@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.50] - 2026-11-22
+
+### Model Error Diagnostics Visibility & Delivery Reliability (#85)
+
+- **Model error diagnostics in chat notifications**: When a model turn encounters an error (such as expired OAuth tokens, gateway disconnections, or network transport failures), the exact failure reason and diagnostic message are now cleanly appended to the failure notice, allowing operators to diagnose issues directly from the chat.
+- **Resilient offline multi-turn message recovery**: Accumulated and preserved all assistant reply segments within the same turn during offline or network disruption periods, ensuring complete and sequential recovery of all response parts upon reconnection.
+- **Oversized reply streaming safety**: Enhanced handling for extremely long assistant responses (>1MB), ensuring they are smoothly chunked and delivered to messaging channels without being blocked or dropped.
+- **Automatic delivery cache cleanup**: Immediately releases preserved response text and chunks from local storage once messages are successfully delivered, significantly reducing journal disk footprint.
+- **Reliable private question action buttons**: Fixed an issue where choice action buttons could be lost and fallback to plain text in Telegram and other direct-message interactions after plugin reloads or restarts.
+
 ## [1.0.49] - 2026-11-21
 
 ### Sidebar Channel Sessions Grouped by Account Instance & Quick Settings (#78)
