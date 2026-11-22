@@ -86,6 +86,20 @@ export class DeferredDelivery {
     try { this.flush() } catch (error) { this.entries = previous; throw error }
     this.active.add(id)
   }
+  /** Persist a stable completion notice before attempting platform I/O. */
+  beginNotice(id: string, sessionId: string, channelId: string, message: ImMessage, text: string, turn?: number): boolean {
+    if (this.entries.some(entry => entry.id === id)) return false
+    this.begin(id, sessionId, channelId, message)
+    try {
+      this.patch(id, { text, turn, status: 'unknown' })
+      this.active.delete(id)
+    } catch (error) {
+      this.entries = this.entries.filter(entry => entry.id !== id)
+      try { this.flush() } catch { this.quarantined.add(id) }
+      throw error
+    }
+    return true
+  }
   reject(id: string, definite = false): void {
     try { this.patch(id, { status: definite ? 'rejected' : 'unknown' }) }
     catch (error) { this.quarantined.add(id); throw error }
@@ -106,6 +120,16 @@ export class DeferredDelivery {
   claim(sessionId: string, turn: number, requestId: string): void {
     for (const e of this.entries) if (e.sessionId === sessionId && e.id === requestId && e.turn === undefined) this.patch(e.id, { turn })
   }
+  /** Save authoritative reply text before platform I/O, independent of later history availability. */
+  preserveText(sessionId: string, turn: number | undefined, text: string): void {
+    if (!Number.isSafeInteger(turn) || !text) return
+    if (text.length > 1_000_000) throw new Error('Delivery body exceeds journal limit')
+    for (const entry of this.entries) {
+      if (entry.sessionId !== sessionId || entry.turn !== turn || !this.active.has(entry.id)
+        || ['blocked', 'expired', 'rejected', 'sent'].includes(entry.status)) continue
+      this.patch(entry.id, { text })
+    }
+  }
   liveStart(sessionId: string, turn: number): string[] {
     const ids = this.entries.filter(e => e.sessionId === sessionId && e.turn === turn && this.active.has(e.id) && !['blocked', 'expired'].includes(e.status)).map(e => e.id)
     for (const id of ids) this.patch(id, { status: 'unknown' })
@@ -113,7 +137,7 @@ export class DeferredDelivery {
   }
   /**
    * 实时投递收口。`ok` 表示全部确认送达；`rejected` 表示一片都没送到、
-   * 且每次失败都是平台明确拒绝（服务端已应答），此时不存在「可能已送达」
+   * 且每次失败都明确未提交或被平台拒绝，此时不存在「可能已送达」
    * 的歧义，直接置为 `ready`，交回 30s 巡检自动补发。
    * 其余失败保持 `unknown`，不猜测、不自动重发。
    */
@@ -167,7 +191,7 @@ export class DeferredDelivery {
         try { await send(entry, parts[index]!) }
         catch (error) {
           // 只有适配器明确确认请求未提交时才保留自动恢复资格。
-          this.patch(id, { status: error instanceof DeliveryUnavailable ? 'ready' : 'unknown' })
+          this.patch(id, { status: error instanceof DeliveryUnavailable || error instanceof DeliveryRejected ? 'ready' : 'unknown' })
           return
         }
         const blocked = (entry.status as string) === 'blocked'
@@ -177,6 +201,7 @@ export class DeferredDelivery {
     })
   }
 }
+/** Trusted adapter evidence that no request was submitted; not a generic network failure. */
 export class DeliveryUnavailable extends Error {}
 
 /**
@@ -193,5 +218,5 @@ export class DeliveryRejected extends Error {
  * 整条重发会让用户看到重复内容，因此退化为结果不明的普通错误。
  */
 export function afterPartialDelivery(error: unknown): unknown {
-  return error instanceof DeliveryRejected ? new Error(error.message, { cause: error }) : error
+  return error instanceof DeliveryRejected || error instanceof DeliveryUnavailable ? new Error(error.message, { cause: error }) : error
 }
