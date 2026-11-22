@@ -10,6 +10,10 @@ export type HistoryHost = { get?(name: string): unknown }
  * 官方 Session 没有公开 events，同步活日志是 snapshotEvents。
  * events 只服务夹具和非官方对象；空数组继续往下看，避免把“还没写上”当成没有历史。
  */
+export function hasSessionHistoryCapability(session?: HistorySession): boolean {
+  return typeof session?.snapshotEvents === 'function' || Array.isArray(session?.events)
+}
+
 export function readLiveSessionHistory(session?: HistorySession): readonly HistoryEvent[] | undefined {
   if (Array.isArray(session?.events) && session.events.length > 0) return session.events
   if (typeof session?.snapshotEvents === 'function') {

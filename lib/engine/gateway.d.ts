@@ -130,6 +130,7 @@ export declare class ImEngine {
     private answerApproval;
     private onApproval;
     private handleApproval;
+    private recoverQuestionActor;
     private onUserQuestions;
     /**
      * DSH 0.1.1-rc.2 exposes a mutable provider behind a stable service.ask.
