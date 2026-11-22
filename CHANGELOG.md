@@ -2,13 +2,14 @@
 
 ## [1.0.50] - 2026-11-22
 
-### Model Error Diagnostics Visibility & Delivery Reliability (#85)
+### Delivery Reliability, Telegram Interaction & Model Error Diagnostics (#79, #81, #83, #85)
 
-- **Model error diagnostics in chat notifications**: When a model turn encounters an error (such as expired OAuth tokens, gateway disconnections, or network transport failures), the exact failure reason and diagnostic message are now cleanly appended to the failure notice, allowing operators to diagnose issues directly from the chat.
+- **Model error diagnostics in chat notifications (#85)**: When a model turn encounters an error (such as expired OAuth tokens, gateway disconnections, or network transport failures), the exact failure reason and diagnostic message are now cleanly appended to the failure notice, allowing operators to diagnose issues directly from the chat.
+- **Reliable task completion notices without duplicates (#79)**: Persists completion notices locally before submitting to Telegram. Pre-submit failures are safely retried, while post-submit timeouts or uncertain disconnections are marked unknown rather than blindly resent, preventing duplicate notice spam and lost notifications.
+- **Telegram question card reload recovery & native buttons (#81)**: Restores the authorized requester identity for active question turns after plugin reloads or restarts, ensuring questions continue to render Telegram native `inline_keyboard` buttons instead of falling back to plain text, while preserving private interaction options and unauthorized click protection.
+- **Telegram typing indicator rate-limit protection & renewal recovery (#83)**: Strictly honors server-provided 429 `retry_after` cooldowns across topics in the same base chat to avoid rate-limit escalations, and automatically coalesces renewal intervals missed during slow requests to keep typing and progress indicators active.
 - **Resilient offline multi-turn message recovery**: Accumulated and preserved all assistant reply segments within the same turn during offline or network disruption periods, ensuring complete and sequential recovery of all response parts upon reconnection.
-- **Oversized reply streaming safety**: Enhanced handling for extremely long assistant responses (>1MB), ensuring they are smoothly chunked and delivered to messaging channels without being blocked or dropped.
-- **Automatic delivery cache cleanup**: Immediately releases preserved response text and chunks from local storage once messages are successfully delivered, significantly reducing journal disk footprint.
-- **Reliable private question action buttons**: Fixed an issue where choice action buttons could be lost and fallback to plain text in Telegram and other direct-message interactions after plugin reloads or restarts.
+- **Oversized reply streaming & automatic cache cleanup**: Smoothly chunks and delivers responses exceeding 1MB without blocking delivery pipelines, and immediately releases cached text and slices from local storage once delivered to minimize disk footprint.
 
 ## [1.0.49] - 2026-11-21
 
