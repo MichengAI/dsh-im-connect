@@ -113,6 +113,55 @@ test('typing timeout releases bounded pending; ignored-abort old settlement cann
   f.pulse(); await tick(); assert.equal(requests.length, 3)
 })
 
+test('typing renews a missed interval as soon as a slow successful pulse settles', async t => {
+  const requests = []
+  const f = typingFixture(t, (_chat, _action, signal) => new Promise(resolve => requests.push({ resolve, signal })))
+  const item = f.make(); await tick()
+  assert.equal(requests.length, 1)
+  f.pulse(); f.pulse(); await tick()
+  assert.equal(requests.length, 1, 'slow pulse remains single-flight')
+  requests[0].resolve(); await tick()
+  assert.equal(requests.length, 2, 'missed renewal must not wait for another full interval')
+  requests[1].resolve(); await tick()
+  assert.equal(requests.length, 2, 'coalesce missed intervals without a catch-up loop')
+  item.finish('cancelled'); f.pulse(); await tick()
+  assert.equal(requests.length, 2, 'terminal state never schedules a catch-up pulse')
+})
+
+for (const state of ['waiting', 'cancelled', 'success']) test(`typing missed renewal is discarded on ${state}`, async t => {
+  const requests = []
+  const f = typingFixture(t, (_chat, _action, signal) => new Promise(resolve => requests.push({ resolve, signal })))
+  const item = f.make(); await tick(); f.pulse()
+  if (state === 'waiting') item.update(state); else item.finish(state)
+  assert.equal(requests[0].signal.aborted, true)
+  requests[0].resolve(); await tick(); f.pulse(); await tick()
+  assert.equal(requests.length, 1, 'settlement after release must not resurrect missed renewal')
+})
+
+test('typing missed renewal remains owned by the other shared processing item', async t => {
+  const requests = []
+  const f = typingFixture(t, (_chat, _action, signal) => new Promise(resolve => requests.push({ resolve, signal })))
+  const a = f.make(), b = f.make(); await tick(); f.pulse()
+  a.finish('success')
+  assert.equal(requests[0].signal.aborted, false)
+  requests[0].resolve(); await tick()
+  assert.equal(requests.length, 2, 'remaining processing owner receives the coalesced renewal')
+  b.finish('cancelled')
+  assert.equal(requests[1].signal.aborted, true)
+  requests[1].resolve(); await tick()
+  assert.equal(requests.length, 2)
+})
+
+test('typing missed interval does not bypass failure backoff', async t => {
+  const requests = []
+  const f = typingFixture(t, () => new Promise((resolve, reject) => requests.push({ resolve, reject })))
+  const item = f.make(); await tick()
+  f.pulse(); requests[0].reject(new Error('network jitter')); await tick()
+  f.pulse(); await tick()
+  assert.equal(requests.length, 1, 'scheduled interval must not bypass the pending failure backoff')
+  item.finish('cancelled')
+})
+
 test('typing budget covers a cold round trip instead of cancelling before delivery', async t => {
   let signal
   let settled = false
