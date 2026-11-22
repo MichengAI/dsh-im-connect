@@ -111,6 +111,9 @@ export class DeferredDelivery {
     if (Object.entries(update).every(([key, value]) => Object.is((entry as any)[key], value))) return
     const previous = { ...entry }
     Object.assign(entry, update)
+    for (const [key, value] of Object.entries(update)) {
+      if (value === undefined) delete (entry as any)[key]
+    }
     try { this.flush() } catch (error) {
       for (const key of Object.keys(entry)) delete (entry as any)[key]
       Object.assign(entry, previous)
@@ -123,11 +126,15 @@ export class DeferredDelivery {
   /** Save authoritative reply text before platform I/O, independent of later history availability. */
   preserveText(sessionId: string, turn: number | undefined, text: string): void {
     if (!Number.isSafeInteger(turn) || !text) return
-    if (text.length > 1_000_000) throw new Error('Delivery body exceeds journal limit')
+    if (text.length > 1_000_000) return
     for (const entry of this.entries) {
       if (entry.sessionId !== sessionId || entry.turn !== turn || !this.active.has(entry.id)
         || ['blocked', 'expired', 'rejected', 'sent'].includes(entry.status)) continue
-      this.patch(entry.id, { text })
+      const current = entry.text ? entry.text.split('\n\n') : []
+      if (!current.includes(text)) current.push(text)
+      const accumulated = current.join('\n\n')
+      if (accumulated.length > 1_000_000) continue
+      this.patch(entry.id, { text: accumulated, parts: undefined })
     }
   }
   liveStart(sessionId: string, turn: number): string[] {
@@ -144,7 +151,7 @@ export class DeferredDelivery {
   complete(sessionId: string, turn: number, ok: boolean, rejected = false): void {
     for (const e of this.entries) if (e.sessionId === sessionId && e.turn === turn && this.active.has(e.id)) {
       // waiting 表示实时路径根本未发送，留给冷读取；unknown 不猜测为失败。
-      if (e.status === 'unknown' && ok) this.patch(e.id, { status: 'sent' })
+      if (e.status === 'unknown' && ok) this.patch(e.id, { status: 'sent', text: undefined, parts: undefined })
       else if (e.status === 'unknown' && rejected) this.patch(e.id, { status: 'ready' })
       this.active.delete(e.id)
     }
@@ -184,7 +191,7 @@ export class DeferredDelivery {
       if (duplicate && !explicit) { this.patch(id, { status: duplicate.status === 'sent' ? 'sent' : 'unknown' }); return }
       if (!entry.parts) this.patch(id, { parts: chunks(entry.text!) })
       const parts = entry.parts!
-      if (!parts.length) { this.patch(id, { status: 'sent' }); return }
+      if (!parts.length) { this.patch(id, { status: 'sent', text: undefined, parts: undefined }); return }
       for (let index = entry.offset; index < parts.length; index++) {
         if (!valid(entry)) { this.patch(id, { status: 'blocked' }); return }
         this.patch(id, { status: 'sending' })
@@ -195,7 +202,11 @@ export class DeferredDelivery {
           return
         }
         const blocked = (entry.status as string) === 'blocked'
-        this.patch(id, { offset: index + 1, status: blocked ? 'blocked' : index + 1 === parts.length ? 'sent' : 'ready' })
+        this.patch(id, {
+          offset: index + 1,
+          status: blocked ? 'blocked' : index + 1 === parts.length ? 'sent' : 'ready',
+          ...(index + 1 === parts.length ? { text: undefined, parts: undefined } : {}),
+        })
         if (blocked) return
       }
     })

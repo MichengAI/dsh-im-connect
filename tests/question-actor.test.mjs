@@ -106,3 +106,35 @@ for (const [name, config] of Object.entries({
   'previous turn':{events:[{type:'turn/start',data:{turn:6}},{type:'user/message',data:{id:'request'}},{type:'turn/end',data:{turn:6}},{type:'turn/start',data:{turn:7}}]},
   'wrong session':{entry:{sessionId:'other'}}, 'wrong channel':{entry:{channelId:'other'}}, 'wrong chat':{entry:{chatId:'other'}}, 'wrong kind':{entry:{kind:'dm'}}, 'wrong turn':{entry:{turn:8}}, 'unauthorized':{allow:false}, 'no history':{events:[]}, 'ended turn':{events:[{type:'turn/start',data:{turn:7}},{type:'user/message',data:{id:'request'}},{type:'turn/end',data:{turn:7}}]}, 'other request':{events:[{type:'turn/start',data:{turn:7}},{type:'user/message',data:{id:'other'}}]},
 })) test(`does not guess actor: ${name}`,async t=>{const f=await fixture(t,config);assert.equal(f.cards.length,0);assert.equal(f.sent.length,1)})
+
+test('dm session preserves choice buttons even when session history has no matched journal entry', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'question-dm-actor-'))
+  const store = new SessionMapStore(join(dir, 'sessions.json'))
+  store.upsert('account:dm:dm-chat', { sessionId: 'dm-session', channel: 'account', kind: 'dm', chatId: 'dm-chat', title: 'test-dm', updatedAt: new Date().toISOString() })
+  const ctx = { on() { return () => {} }, get() {} }
+  const engine = new ImEngine(ctx, store, new SeenStore(join(dir, 'seen.json')), { cwd: dir, provider: 'p', model: 'm', agentPreset: '', mergeTimeoutSecs: 1, permissionPreset: '' }, () => {}, undefined, undefined, undefined, undefined, join(dir, 'delivery.json'))
+  const cards = [], sent = []
+  const channel = createChannelAdapter('telegram', { token: 'offline-fixture' }, () => {}, dir, { accountId: 'account' })
+  channel.send = async (_chat, text) => sent.push(text)
+  channel.sendChoices = async (_msg, text, buttons) => cards.push({ text, buttons })
+  channel.authorizes = () => true
+  channel.sendAction = undefined
+  channel.stopAction = undefined
+  engine.register(channel)
+  engine.addAllowed('account', 'dm-chat')
+  t.after(() => { engine.dispose(); rmSync(dir, { recursive: true, force: true }) })
+
+  // 会话有历史，但没有当前请求的匹配 journal 记录
+  const events = [{ type: 'turn/start', data: { turn: 1 } }, { type: 'user/message', data: { id: 'unmatched-id' } }]
+  const pending = engine.onUserQuestions({
+    agent: { session: { id: 'dm-session', snapshotEvents: () => events } },
+    questions: [{ id: 'q', question: 'Choose', options: [{ label: 'A' }, { label: 'B' }] }],
+  }, async () => assert.fail('fallback'))
+  void pending.catch(() => {})
+
+  for (let i = 0; i < 100 && !engine.questions.isReady('dm-session'); i++) await tick()
+  assert.equal(engine.questions.isReady('dm-session'), true)
+  // 私聊场景下即便无 journal 匹配，也必须兜底将 buttons 发出，不能退化为纯文本
+  assert.equal(cards.length, 1, 'DM question must deliver choice buttons')
+  assert.equal(sent.length, 0)
+})

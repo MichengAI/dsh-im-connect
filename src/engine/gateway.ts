@@ -940,7 +940,7 @@ export class ImEngine {
     const initialBinding = this.router.bindingForSession(sessionId)
     const recovered = this.recoverQuestionActor(sessionId, req.agent?.session)
     const actor = recovered.hasHistory
-      ? recovered.actor
+      ? (recovered.actor ?? (initialBinding?.kind === 'dm' ? initialBinding.chatId : undefined))
       : this.sessionActors.get(sessionId) ?? (initialBinding ? this.chatActors.get(`${initialBinding.channelId}:${initialBinding.kind}:${initialBinding.chatId}`) : undefined) ?? (initialBinding?.kind === 'dm' ? initialBinding.chatId : undefined)
     if (actor) this.sessionActors.set(sessionId, actor)
     const typedQuestions = questions as UserQuestionItem[]

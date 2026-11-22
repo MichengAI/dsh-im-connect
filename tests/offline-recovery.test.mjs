@@ -180,3 +180,56 @@ test('ambiguous disconnect preserves final body durably and never blindly auto-r
   assert.equal(f.historyReads(), 0, 'recovery must not depend on history being readable')
   assert.equal(f.requests.length, 1, 'delivery retry must not replay model or tools')
 })
+
+test('oversized body exceeding journal limit does not throw or abort live delivery', async t => {
+  const f = gatewayFixture(t)
+  f.online()
+  const { engine, channel } = f.make()
+  await engine.inject(channel, f.message)
+  const hugeText = 'a'.repeat(1_000_050)
+  // 必须能够顺利投递，不能因为超限抛错导致整条投递中断
+  await assert.doesNotReject(f.finish(engine, [{ type: 'text', text: hugeText }]))
+  assert.equal(f.sent.length, 252)
+  assert.match(f.sent[0], /（1\/252）/)
+  assert.match(f.sent[251], /（252\/252）/)
+  // 超限正文不缓存到 journal
+  assert.equal(engine.deferred.list()[0].text, undefined)
+})
+
+test('multiple assistant messages in the same turn accumulate and recover full combined text', async t => {
+  const f = gatewayFixture(t)
+  const first = f.make()
+  await first.engine.inject(first.channel, f.message)
+  // 同回合先后产生两条正文
+  const events = [
+    { type: 'turn/start', data: { turn: 1 } },
+    { type: 'user/message', surfaceOp: 'append', data: f.requests[0] },
+    { type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, message: { content: [{ type: 'text', text: 'PART-ONE' }] } } },
+    { type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, message: { content: [{ type: 'text', text: 'PART-TWO' }] } } },
+    { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+  ]
+  for (const event of events) await first.engine.onSessionEvent({ id: 'offline-session' }, event)
+  await new Promise(resolve => setImmediate(resolve))
+
+  const entry = first.engine.deferred.list()[0]
+  assert.equal(entry.status, 'unknown')
+  assert.equal(entry.text, 'PART-ONE\n\nPART-TWO', '同回合多条消息必须累积拼接，不得只保留最后一条')
+  first.engine.dispose()
+
+  const second = f.make()
+  f.online()
+  await second.engine.deliveryCommand(second.channel, { ...f.message, text: '/delivery retry ' + entry.id })
+  assert.deepEqual(f.sent, ['PART-ONE\n\nPART-TWO'])
+})
+
+test('sent status cleans up preserved body and chunk cache to keep journal compact', async t => {
+  const f = gatewayFixture(t)
+  f.online()
+  const { engine, channel } = f.make()
+  await engine.inject(channel, f.message)
+  await f.finish(engine, [{ type: 'text', text: 'SHORT-BODY' }])
+  const entry = engine.deferred.list()[0]
+  assert.equal(entry.status, 'sent')
+  assert.equal(entry.text, undefined, '送达后必须清空 text 避免 journal 文件膨胀')
+  assert.equal(entry.parts, undefined, '送达后必须清空 parts')
+})
