@@ -383,6 +383,7 @@ export function formatFeishuInboundText(text: string, mentions?: FeishuMention[]
   if (!text) return ''
   let result = text
   if (Array.isArray(mentions) && mentions.length > 0) {
+    // 排序为主防线、数字边界为第二道防御，确保长短 key 不发生前缀重叠误替换
     const sortedMentions = [...mentions].sort((a, b) => (b.key?.length ?? 0) - (a.key?.length ?? 0))
     for (const mention of sortedMentions) {
       const key = mention.key?.trim()
@@ -391,7 +392,8 @@ export function formatFeishuInboundText(text: string, mentions?: FeishuMention[]
       const boundary = /\d$/.test(key) ? '(?!\d)' : ''
       const escapedKey = escapeRegExp(key)
       if (isBot) {
-        const botRegex = new RegExp(`${escapedKey}${boundary}[ \\t]?`, 'g')
+        // escapeRegExp 防御特殊字符，[ \t]* 吃掉占位符后紧随的所有多余水平空白
+        const botRegex = new RegExp(`${escapedKey}${boundary}[ \t]*`, 'g')
         result = result.replace(botRegex, '')
       } else {
         const replacement = mention.name?.trim() ? `@${mention.name.trim()}` : '@user'

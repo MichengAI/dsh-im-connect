@@ -56,6 +56,10 @@ test('formatFeishuInboundText 剥离机器人自身 mention 占位符并规范�
     formatFeishuInboundText('@_user_1 @_user_11 来看下', overlappingMentions, botOpenId),
     '@王五 来看下',
   )
+
+  // 9. 机器人占位符后紧随多个空格时全部吃掉（P3-1）
+  assert.equal(formatFeishuInboundText('@_user_1   世界', mentions, botOpenId), '世界')
+  assert.equal(formatFeishuInboundText('你好\n@_user_1   世界', mentions, botOpenId), '你好\n世界')
 })
 
 test('resolveFeishuContent 接收 botOpenId 并过滤文本中的机器人占位符', async () => {

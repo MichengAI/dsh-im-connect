@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.51] - 2026-11-23
+
+### Feishu Group Approval and Text Formatting Fidelity (#87)
+
+- **Reliable group tool approvals (#87)**: Fixed an issue where replying "@bot approve/agree/yes/deny" in Feishu group chats failed to decide pending tool approvals. Group replies mentioning the bot now trigger approval decisions properly, aligned with direct message interactions.
+- **Code indentation and layout fidelity**: Enhanced inbound message text normalization to strictly preserve code block indentation, multi-space alignments in SQL statements, paragraph breaks, and rich-text formatting without accidental flattening.
+
 ## [1.0.50] - 2026-11-22
 
 ### Delivery Reliability, Telegram Interaction & Model Error Diagnostics (#79, #81, #83, #85)
