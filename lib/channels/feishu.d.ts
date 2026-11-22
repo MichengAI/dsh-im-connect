@@ -85,9 +85,10 @@ interface ResourceClient {
 }
 /**
  * 飞书消息文本规范化：
- * 1. 剥离机器人自身的 mention 占位符（如 @_user_1）；
+ * 1. 剥离机器人自身的 mention 占位符（如 @_user_1）及其紧邻的空白；
  * 2. 将其他被提及成员的占位符替换为 @姓名，若无姓名则保留 @user；
- * 3. 规整多余空格并去除首尾空白，确保审批词、斜杠命令与大模型输入干净清晰。
+ * 3. 避免长短 key（如 @_user_1 与 @_user_11）前缀重叠误截断；
+ * 4. 仅去除整段文本首尾空白，保留代码块缩进、换行与行内对齐格式。
  */
 export declare function formatFeishuInboundText(text: string, mentions?: FeishuMention[], botOpenId?: string): string;
 /** SDK messageResource.get is the receive-side API, not im.image.get. */

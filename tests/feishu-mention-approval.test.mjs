@@ -32,6 +32,30 @@ test('formatFeishuInboundText 剥离机器人自身 mention 占位符并规范�
 
   // 5. 多行文本
   assert.equal(formatFeishuInboundText('@_user_1\n第二行内容', mentions, botOpenId), '第二行内容')
+
+  // 6. 代码块与行首缩进保真（P2-1）
+  const codeText = 'def foo():\n    if True:\n        return 1\n    return 0'
+  assert.equal(formatFeishuInboundText(codeText), codeText)
+  assert.equal(formatFeishuInboundText(`@_user_1 ${codeText}`, mentions, botOpenId), codeText)
+
+  // 7. SQL 对齐与多空格保真（P2-1）
+  const sqlText = 'SELECT  *\n  FROM  users\n WHERE  id = 1'
+  assert.equal(formatFeishuInboundText(sqlText), sqlText)
+  assert.equal(formatFeishuInboundText(`@_user_1\n${sqlText}`, mentions, botOpenId), sqlText)
+
+  // 8. 多位数字 mention 前缀不被短 key 误截断（P3-2）
+  const overlappingMentions = [
+    { key: '@_user_1', id: { open_id: 'ou_bot_123' }, name: 'Bot' },
+    { key: '@_user_11', id: { open_id: 'ou_user_11' }, name: '王五' },
+  ]
+  assert.equal(
+    formatFeishuInboundText('@_user_11 你好', overlappingMentions, botOpenId),
+    '@王五 你好',
+  )
+  assert.equal(
+    formatFeishuInboundText('@_user_1 @_user_11 来看下', overlappingMentions, botOpenId),
+    '@王五 来看下',
+  )
 })
 
 test('resolveFeishuContent 接收 botOpenId 并过滤文本中的机器人占位符', async () => {
@@ -177,7 +201,23 @@ test('resolveFeishuContent 正确处理富文本 post 中的 at 标签与机器�
     }),
   }
   const res2 = await resolveFeishuContent(client, postMember, undefined, botOpenId)
-  assert.equal(res2.text, '@李四\n请注意查看')
+  assert.equal(res2.text, '@李四 请注意查看')
+
+  // 3. 富文本多行段落与代码块缩进保真
+  const postCode = {
+    message_id: 'om_post_3',
+    message_type: 'post',
+    content: JSON.stringify({
+      zh_cn: {
+        content: [
+          [{ tag: 'text', text: 'def test():' }],
+          [{ tag: 'text', text: '    return True' }],
+        ],
+      },
+    }),
+  }
+  const res3 = await resolveFeishuContent(client, postCode, undefined, botOpenId)
+  assert.equal(res3.text, 'def test():\n    return True')
 })
 
 test('Gateway approvalVerdict 支持防御性剥离 @mention 前缀与容错', () => {
