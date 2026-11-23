@@ -177,7 +177,8 @@ export declare class ChannelManager {
     private disconnectNow;
     remove(id: string): Promise<void>;
     private removeNow;
-    attachMappedSessions(): Promise<void>;
+    recoverMappedSessions(): Promise<void>;
+    attachMappedSessions(active: () => boolean): Promise<void>;
     initEnabled(): Promise<void>;
     registerApi(ctx: Context): void;
     disposeApi(): void;

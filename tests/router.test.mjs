@@ -50,8 +50,8 @@ for (const shape of ['legacy', 'stat']) {
     const headers = ['before', 'after'].map(chatId => ({ id: `im:wecom:dm:1724000000000:${chatId}`, cwd: 'D:/recovered', createdAt: 1000 }))
     const entry = header => shape === 'stat' ? { header, eventCount: 1 } : header
     f.ctx.get = name => name === 'sessionPersistence' ? { list: async () => [entry(headers[0]), {}, null, entry(headers[1])] } : undefined
-    await f.router.attachMappedSessions()
-    await f.router.attachMappedSessions()
+    await f.router.recoverMappedSessions(() => true)
+    await f.router.recoverMappedSessions(() => true)
     assert.deepEqual(f.store.list().map(item => item.sessionId).sort(), headers.map(item => item.id).sort())
     assert.equal(f.store.get('wecom:dm:before'), undefined)
     assert.equal(f.store.get('wecom:dm:after'), undefined)
@@ -62,8 +62,8 @@ test('新版持久化列表恢复历史头信息且幂等', async t => {
   const f = makeRouter(t)
   const header = { id: 'im:wecom:dm:1724000000000:recovered', cwd: 'D:/recovered', createdAt: 1000 }
   f.ctx.get = name => name === 'sessionPersistence' ? { list: async () => [{ header, eventCount: 3 }] } : undefined
-  await f.router.attachMappedSessions()
-  await f.router.attachMappedSessions()
+  await f.router.recoverMappedSessions(() => true)
+  await f.router.recoverMappedSessions(() => true)
   assert.equal(f.store.list().length, 1)
   assert.equal(f.store.list()[0].cwd, header.cwd)
   assert.equal(f.store.list()[0].sessionId, header.id)
@@ -195,8 +195,8 @@ test('启动补回孤立日志且不自动设为当前会话，重复恢复保�
   const { router, store } = makeRouter(t)
   const id = 'im:wecom:dm:1724000000000:orphan'
   router.ctx.get = name => name === 'sessionPersistence' ? { async list() { return [{ id }] } } : undefined
-  await router.attachMappedSessions()
-  await router.attachMappedSessions()
+  await router.recoverMappedSessions(() => true)
+  await router.recoverMappedSessions(() => true)
   assert.deepEqual(store.list().map(x => x.sessionId), [id])
   assert.equal(store.get('wecom:dm:orphan'), undefined)
   assert.equal(await router.ensure(id), true)
@@ -233,6 +233,7 @@ test('启动恢复保留归档标记，不把已归档会话重新挂入工作�
     if (name === 'sessionController') return { list: async () => ({ items: [{ sessionId: id, blank: false }] }) }
     if (name === 'workspaceRegistry') return { archivedSessionIds: [id], list: () => [{ path: '.', async attachSession(value) { attached.push(value) } }] }
   }
+  await router.recoverMappedSessions(() => true)
   await router.attachMappedSessions()
   assert.equal(store.list().length, 1)
   assert.deepEqual(attached, [])

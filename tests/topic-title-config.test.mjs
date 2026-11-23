@@ -24,6 +24,7 @@ test('插件配置经 apply 和管理器传到引擎，并持久化话题开关'
   t.mock.method(ChannelManager.prototype, 'disposeApi', () => {})
   const ctx = {
     get: () => undefined,
+    inject: () => {}, // This fixture has no workspace services.
     permissionPresets: { names: ['standard'], defaultPreset: 'standard' },
     logger: () => ({ info() {} }),
     effect: (operation, name) => { effects.set(name, operation) },

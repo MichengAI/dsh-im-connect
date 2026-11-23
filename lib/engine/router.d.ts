@@ -165,6 +165,7 @@ export declare class SessionRouter {
      * 频道会话的工作区成员关系由插件按需生命周期维护（空白时不挂入，首轮消息触发时挂入）。
      */
     onTurnStarted(sessionId: string, active: () => boolean): Promise<void>;
+    recoverMappedSessions(active: () => boolean): Promise<void>;
     attachMappedSessions(active?: () => boolean): Promise<void>;
     private restoreSessionWorkspace;
     private recoverHistory;

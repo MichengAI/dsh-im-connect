@@ -350,8 +350,12 @@ export class ImEngine {
     void this.router.disposeAll()
   }
 
-  attachMappedSessions(): Promise<void> {
-    return this.router.attachMappedSessions(() => !this.disposed)
+  recoverMappedSessions(): Promise<void> {
+    return this.router.recoverMappedSessions(() => !this.disposed)
+  }
+
+  attachMappedSessions(active: () => boolean): Promise<void> {
+    return this.router.attachMappedSessions(() => !this.disposed && active())
   }
 
   register(channel: ChannelAdapter): void {
