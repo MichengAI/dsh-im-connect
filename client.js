@@ -3311,6 +3311,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
 
     let requestHostSessionRefresh = () => {};
     let channelSessionIds = new Set();
+    let channelDraftIds = new Set();
     let channelSessionChannels = new Map();
     let channelSessionAccounts = new Map();
     let channelAccountMeta = new Map();
@@ -3323,6 +3324,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     }
     function updateChannelMembership(groups) {
       const next = new Set();
+      const drafts = new Set();
       const channels = new Map();
       const accounts = new Map();
       const meta = new Map();
@@ -3336,12 +3338,15 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           label: group.label || "",
         });
         for (const session of group.sessions || []) {
+          const id = String(session.sessionId);
           next.add(session.sessionId);
-          channels.set(String(session.sessionId), platform);
-          accounts.set(String(session.sessionId), accountId);
+          if (!session.adopted && !session.detached && (id.startsWith("dsh-im-session-") || id.startsWith("im:"))) drafts.add(id);
+          channels.set(id, platform);
+          accounts.set(id, accountId);
         }
       }
-      let changed = next.size !== channelSessionIds.size || [...next].some(id => !channelSessionIds.has(id));
+      let changed = next.size !== channelSessionIds.size || [...next].some(id => !channelSessionIds.has(id))
+        || drafts.size !== channelDraftIds.size || [...drafts].some(id => !channelDraftIds.has(id));
       if (!changed) {
         for (const [id, channel] of channels) {
           if (channelSessionChannels.get(id) !== channel) { changed = true; break; }
@@ -3367,6 +3372,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       }
       if (changed) {
         channelSessionIds = next;
+        channelDraftIds = drafts;
         channelSessionChannels = channels;
         channelSessionAccounts = accounts;
         channelAccountMeta = meta;
@@ -5448,14 +5454,22 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     const channelSyntheticWorkspaceCache = new WeakMap();
     const channelRealWorkspaceCache = new WeakMap();
 
-    /** 只保留 /channels 分组里的会话，避免官方树出现“未分组”桶。 */
-    function channelMemberSessionState(state, memberIds) {
+    /** 只保留频道会话，并让本频道的当前草稿可打开，不改宿主原始快照。 */
+    function channelMemberSessionState(state, memberIds, draftIds) {
       const src = state || EMPTY_SESSION_STATE;
       const hit = channelSessionStateCache.get(src);
-      if (hit && hit.ids === memberIds) return hit.result;
+      if (hit && hit.ids === memberIds && hit.draftIds === draftIds) return hit.result;
       const ids = (src.ids || []).filter((id) => memberIds.has(String(id)));
-      const result = cacheFilteredSessions(src, ids);
-      channelSessionStateCache.set(src, { ids: memberIds, result });
+      const filtered = cacheFilteredSessions(src, ids);
+      let byId;
+      for (const id of ids) {
+        const row = filtered.byId?.[id];
+        if (!row?.blank || !draftIds?.has(String(id))) continue;
+        byId ??= Object.assign({}, filtered.byId);
+        byId[id] = Object.assign({}, row, { blank: false });
+      }
+      const result = byId ? Object.assign({}, filtered, { byId }) : filtered;
+      channelSessionStateCache.set(src, { ids: memberIds, draftIds, result });
       return result;
     }
 
@@ -5945,10 +5959,11 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         return ids;
       }, [memberKey]);
 
+      const draftIds = channelDraftIds;
       const useChannelSessions = useCallback((selector, equals) => {
         if (typeof rawUseSessions !== "function") return selector(EMPTY_SESSION_STATE);
-        return rawUseSessions((state) => selector(channelMemberSessionState(state, memberIds)), equals);
-      }, [memberIds, rawUseSessions]);
+        return rawUseSessions((state) => selector(channelMemberSessionState(state, memberIds, draftIds)), equals);
+      }, [memberIds, draftIds, rawUseSessions]);
 
       const useChannelWorkspaces = useCallback((selector, equals) => {
         if (typeof rawUseWorkspaces !== "function") return selector(EMPTY_WORKSPACE_STATE);

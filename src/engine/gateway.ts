@@ -1153,6 +1153,9 @@ export class ImEngine {
   private onSessionEvent(session: DeliverySession, event: { type?: string; surfaceOp?: unknown; data?: any }): Promise<void> {
     const id = String(session.id ?? '')
     if (event.type === 'turn/start' && Number.isSafeInteger(event.data?.turn)) {
+      if (!this.disposed) void this.router.onTurnStarted(id, () => !this.disposed).catch(error => {
+        this.log(`[im-session] 首轮挂载工作区失败: ${error instanceof Error ? error.message : String(error)}`)
+      })
       const previous = this.observedTurns.get(id)
       if (previous === undefined || event.data.turn >= previous) {
         if (this.observedTurns.size >= 1024) this.observedTurns.delete(this.observedTurns.keys().next().value!)

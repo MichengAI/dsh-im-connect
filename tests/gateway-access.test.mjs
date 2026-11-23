@@ -284,6 +284,26 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}, options = {}) {
   return { engine, inbound, sent, handlers, dmSessionId, groupSessionId, store, ctx }
 }
 
+test('首轮宿主事件挂回 IM 工作区，后续回合不重复挂载且不影响普通会话', async t => {
+  const ids = []
+  let attempts = 0
+  const workspace = { path: 'D:/chosen', sessionIds: ids, async attachSession(id) { attempts++; ids.push(id) } }
+  const f = makeEngine(t, undefined, undefined, { workspaceRegistry: { list: () => [workspace] } })
+  t.after(() => f.engine.dispose())
+  const record = f.store.get('telegram:dm:user-1')
+  f.store.upsert('telegram:dm:user-1', { ...record, cwd: workspace.path })
+  f.store.saveHistory({ ...record, sessionId: 'ordinary-session', adopted: true, cwd: workspace.path })
+  const emit = (id, type, turn) => f.handlers['session/event']({ id }, { type, data: { turn } })
+  emit(f.dmSessionId, 'session/title', 0)
+  assert.equal(attempts, 0)
+  emit(f.dmSessionId, 'turn/start', 1)
+  emit(f.dmSessionId, 'turn/start', 2)
+  emit('ordinary-session', 'turn/start', 1)
+  await waitFor(() => ids.includes(f.dmSessionId))
+  assert.deepEqual(ids, [f.dmSessionId])
+  assert.equal(attempts, 1)
+})
+
 test('宿主标题事件同步到频道索引，手动标题不被自动事件覆盖', async t => {
   const { engine, handlers, dmSessionId, store } = makeEngine(t)
   try {

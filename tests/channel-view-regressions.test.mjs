@@ -8,6 +8,8 @@ const viewCode = extractBlock(source, '    function ChannelOfficialView(props)',
 const storeCode = extractBlock(source, '    function copySessionOrders(', '    const channelSessionStateCache', '频道状态')
 const groupsCode = extractBlock(source, '    function channelGroupsFromSessionState(', '    function channelGroupCreatedAt(', '频道会话分组')
 const channelIdCode = extractBlock(source, '    function channelIdOfSession(', '    const isChannelSession', '频道 ID')
+const channelProjectionCode = extractBlock(source, '    const channelSessionStateCache', '    function channelGroupsFromSessionState(', '频道投影')
+const filterCode = extractBlock(source, '    function cacheFilteredSessions(', '    function openRegisteredSession(', '会话过滤')
 
 // 执行真实组件函数，保留跨渲染的 hook 状态；按宿主行为检查传给官方树的数据。
 function fixture() {
@@ -30,6 +32,8 @@ function fixture() {
   )(channelAccountMeta, accountIdOfSession, channelIdOfSession, group => group.id)
   const Official = () => {}
   const h = (type, props, ...children) => ({ type, props: { ...props, children } })
+  const EMPTY_SESSION_STATE = { ids: [], byId: {}, current: null }
+  const channelMemberSessionState = new Function('EMPTY_SESSION_STATE', `${filterCode}; ${channelProjectionCode}; return channelMemberSessionState;`)(EMPTY_SESSION_STATE)
   const env = {
     document: {},
     React: { Fragment: 'fragment' }, h,
@@ -42,12 +46,8 @@ function fixture() {
     useSyncExternalStore: (_, snapshot) => snapshot(), useEffect: fn => { effects.push(fn) },
     getChannelViewStore: () => store, subscribeChannelMembership() {}, channelMembershipSnapshot: () => 0,
     ensureStyle() {},
-    channelGroupsFromSessionState,
-    EMPTY_SESSION_STATE: { ids: [], byId: {}, current: null },
-    channelMemberSessionState(state, memberIds) {
-      const ids = state.ids.filter(id => memberIds.has(id))
-      return { ...state, ids, byId: Object.fromEntries(ids.map(id => [id, state.byId[id]])) }
-    },
+    channelGroupsFromSessionState, channelMemberSessionState, EMPTY_SESSION_STATE,
+    channelDraftIds: new Set(),
     syntheticChannelWorkspaceState(state, groups) {
       return { ...state, items: groups.map(group => ({ workspaceId: `dsh-im-channel:${group.id}`, sessionIds: group.sessions.map(item => item.sessionId) })) }
     },
@@ -70,7 +70,7 @@ function fixture() {
     return { tree, effects: [...effects] }
   }
   return {
-    store, render, props, get menu() { return menu },
+    store, render, props, drafts: env.channelDraftIds, get menu() { return menu },
     setSessions: next => { sessions = next },
     setMembership: groups => {
       for (const group of groups) {
@@ -105,11 +105,12 @@ test('官方会话 store 就绪前不挂载频道树，就绪后直接从 store 
   const body = first.tree.props.children[0].props.children.at(-1)
   assert.equal(body, null, '尚未加载时不能让官方树把空列表作为权威数据清理状态')
   first.effects.forEach(fn => fn())
+  f.drafts.add('im:wecom_test:dm:1:a')
   f.setSessions({
     phase: 'ready',
     ids: ['im:wecom_test:dm:1:a', 'im:wecom_test:dm:2:b', 'adopted-id', 'ordinary'],
     byId: {
-      'im:wecom_test:dm:1:a': { id: 'im:wecom_test:dm:1:a', updatedAt: '2026-10-20T10:00:00.000Z' },
+      'im:wecom_test:dm:1:a': { id: 'im:wecom_test:dm:1:a', updatedAt: '2026-10-20T10:00:00.000Z', blank: true },
       'im:wecom_test:dm:2:b': { id: 'im:wecom_test:dm:2:b', updatedAt: '2026-10-20T09:00:00.000Z' },
       'adopted-id': { id: 'adopted-id', updatedAt: '2026-10-20T08:00:00.000Z' },
       ordinary: { id: 'ordinary' },
@@ -121,6 +122,8 @@ test('官方会话 store 就绪前不挂载频道树，就绪后直接从 store 
   const official = bodyReady.props.children[0]
   const filtered = official.props.useSessions(state => state)
   assert.deepEqual(filtered.ids, ['im:wecom_test:dm:1:a', 'im:wecom_test:dm:2:b', 'adopted-id'])
+  assert.equal(filtered.byId['im:wecom_test:dm:1:a'].blank, false)
+  assert.equal(f.props.hostProps.useSessions(state => state.byId['im:wecom_test:dm:1:a'].blank), true)
   const workspaces = official.props.useWorkspaces(state => state)
   assert.deepEqual(workspaces.items.map(item => item.sessionIds), [['im:wecom_test:dm:1:a', 'im:wecom_test:dm:2:b', 'adopted-id']])
   ready.effects.forEach(fn => fn())
