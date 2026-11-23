@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.53] - 2026-11-24
+
+### Remove Collapsible Thinking Option for Telegram (#89, #90)
+
+- **Disable Telegram collapsible thinking (#89, #90)**: Removed the collapsible thinking display setting for Telegram accounts to provide a consistent and stable messaging experience. Existing account configurations set to collapsed automatically fall back to off, while standard answers and progress indicators remain unaffected.
+- **Clarified thinking display guidance for Feishu and Lark**: Refined account setting descriptions to accurately represent collapsible thought bubbles and card displays on supported platforms.
+
 ## [1.0.52] - 2026-11-23
 
 ### Prevent Native Workspace Session Creation from Reusing Channel Drafts (#88)
