@@ -924,18 +924,21 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
         if (openReplies.get(chatId) === current) openReplies.delete(chatId)
       }
       /** 状态行在上、正文在下，合成同一条消息；状态为空时只剩正文。 */
-      const compose = (nextBody: string) => {
-        const head = current.status.trim()
+      const compose = (head: string, nextBody: string) => {
         const text = head ? (nextBody ? `${head}\n\n${nextBody}` : head) : nextBody
         return [...(text || '')].slice(0, 4000).join('') || '…'
       }
 
       const flush = async (nextBody: string, allowSend: boolean) => {
-        const next = compose(nextBody)
+        const head = current.status.trim()
+        const next = compose(head, nextBody)
         if (next === current.last) return
         // last 只在发送成功后更新：失败时保留旧值，finish 才能靠 sendMessage 兜底送出全文
         try {
-          const markdown = richDisabled ? undefined : toTelegramRichMarkdown(next)
+          // Telegram Rich Markdown treats underscores inside identifiers as emphasis delimiters.
+          // Escape only the status prefix, after truncation, so the body and plain fallback stay intact.
+          const richText = next.slice(0, head.length).replace(/[\\_]/g, '\\$&') + next.slice(head.length)
+          const markdown = richDisabled ? undefined : toTelegramRichMarkdown(richText)
           if (markdown !== undefined) {
             try {
               await api('editMessageText', { chat_id: route.chatId, message_id: current.messageId, rich_message: { markdown } })
