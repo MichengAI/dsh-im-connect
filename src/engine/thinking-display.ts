@@ -67,7 +67,7 @@ export class ThinkingDisplayTracker {
     if (this.identities.size >= 1024 && !this.identities.has(target.key)) this.identities.delete(this.identities.keys().next().value!)
     this.identities.set(target.key, { sessionId: target.sessionId, turn: target.turn })
     const config = normalizeThinkingDisplay(target.config)
-    if (config.mode !== 'collapsed' || !target.channel.sendThinking || !target.isCurrent()) return
+    if (target.channel.id === 'telegram' || config.mode !== 'collapsed' || !target.channel.sendThinking || !target.isCurrent()) return
     const channelLimit = target.channel.maxThinkingChars
       ?? (target.channel.id === 'feishu' || target.channel.id === 'lark' ? 65536 : 4096)
     const raw = target.config && typeof target.config === 'object' ? target.config as Record<string, unknown> : {}

@@ -85,17 +85,15 @@ test('多渠道真实配置结构加载与账号状态视图完整性验证', as
     assert.equal(item.accounts.length, 1, `配置的平台 ${p} 账号列表长度必须为 1`)
   }
 
-  // 2. 验证 Telegram 账号支持 thinkingDisplay 配置持久化与读取
+  // Telegram ignores the removed option, including stale stored values.
   const tgId = 'telegram_mock_1'
+  manager.engineConfig.thinkingDisplay = { mode: 'collapsed' }
+  manager.store.channels[tgId].config.thinkingDisplay = 'true'
   const res1 = await manager.updateAccount(tgId, { thinkingDisplay: true })
   assert.equal(res1.ok, true)
-  let account = manager.list().flatMap(c => c.accounts).find(a => a.id === tgId)
-  assert.equal(account.thinkingDisplay, true, 'Telegram 账号能够开启 thinkingDisplay')
-
-  const res2 = await manager.updateAccount(tgId, { thinkingDisplay: false })
-  assert.equal(res2.ok, true)
-  account = manager.list().flatMap(c => c.accounts).find(a => a.id === tgId)
-  assert.equal(account.thinkingDisplay, false, 'Telegram 账号能够关闭 thinkingDisplay')
+  assert.equal(manager.list().flatMap(c => c.accounts).find(a => a.id === tgId).thinkingDisplay, undefined)
+  assert.equal(manager.accountEngineConfig(tgId).thinkingDisplay.mode, 'off')
+  manager.engineConfig.thinkingDisplay = { mode: 'off' }
 
   // 3. 验证向数据结构中添加并更新飞书账号（带 thinkingDisplay 与 threadSessions）
   const created = await manager.connect('feishu', { appId: 'cli_test_mock', appSecret: 'sec_test_mock' }, {
