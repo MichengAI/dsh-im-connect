@@ -181,6 +181,7 @@ export interface ChannelState {
   permission?: PermissionPreset
   commandPermissions?: CommandPermissions
   privateAccess?: 'approved' | 'all'
+  groupAccess?: 'all' | 'approved' | 'disabled'
   /** 普通消息的默认发送方式；缺省为排队发送。 */
   sendMode?: SendMode
   /** 分段回复：覆盖插件级默认值；缺省时跟随插件配置。 */
@@ -212,6 +213,7 @@ export interface AccountView {
   permission: PermissionPreset
   commandPermissions: CommandPermissions
   privateAccess: 'approved' | 'all'
+  groupAccess: 'all' | 'approved' | 'disabled'
   sendMode: SendMode
   segmentReply: boolean
   /** 该渠道是否已开放分段回复；未开放的渠道不展示开关。 */
@@ -339,7 +341,7 @@ export class ChannelManager {
     this.engine = new ImEngine(options.ctx, this.sessions, seen, options.engineConfig, options.log, (accountId, msg) => {
       this.requestAuthorization(accountId, msg)
       return replyText('未授权：请管理员在设置 → IM助理 中批准你的访问。')
-    }, (accountId) => this.accountEngineConfig(accountId), (accountId) => this.store.channels[accountId]?.privateAccess === 'all' ? 'all' : 'approved', (accountId) => normalizeCommandPermissions(this.store.channels[accountId]?.commandPermissions), join(options.stateDir, 'deferred-delivery.json'), undefined, join(options.stateDir, 'topic-titles.json'))
+    }, (accountId) => this.accountEngineConfig(accountId), (accountId) => this.store.channels[accountId]?.privateAccess === 'all' ? 'all' : 'approved', (accountId) => normalizeCommandPermissions(this.store.channels[accountId]?.commandPermissions), join(options.stateDir, 'deferred-delivery.json'), undefined, join(options.stateDir, 'topic-titles.json'), (accountId) => this.store.channels[accountId]?.groupAccess ?? 'all')
     for (const [channelId, users] of Object.entries(this.store.allowlist)) {
       for (const userId of users) this.engine.addAllowed(channelId, userId)
     }
@@ -447,6 +449,7 @@ export class ChannelManager {
       agentPreset: state.agentPreset || this.engineConfig.agentPreset || 'standard',
       commandPermissions: normalizeCommandPermissions(state.commandPermissions),
       privateAccess: state.privateAccess === 'all' ? 'all' : 'approved',
+      groupAccess: state.groupAccess === 'approved' || state.groupAccess === 'disabled' ? state.groupAccess : 'all',
       sendMode: normalizeSendMode(state.sendMode),
       segmentReply: segmentSupported && (state.segmentReply ?? this.engineConfig.segmentReply) === true,
       segmentReplySupported: segmentSupported,
@@ -607,6 +610,7 @@ export class ChannelManager {
       agentPreset: normalized.settings.agentPreset,
       commandPermissions: normalized.settings.commandPermissions,
       privateAccess: normalized.settings.privateAccess,
+      groupAccess: normalized.settings.groupAccess,
       sendMode: normalized.settings.sendMode,
       ...(normalized.settings.segmentReply !== undefined ? { segmentReply: normalized.settings.segmentReply } : {}),
       ...(normalized.settings.segmentDelayMinSecs !== undefined ? { segmentDelayMinSecs: normalized.settings.segmentDelayMinSecs } : {}),
@@ -1114,6 +1118,7 @@ export class ChannelManager {
       state.permission = normalized.settings.permission
       state.commandPermissions = normalized.settings.commandPermissions
       state.privateAccess = normalized.settings.privateAccess
+      state.groupAccess = normalized.settings.groupAccess
       // 发送方式按注入时机读取，不需要重载会话。
       state.sendMode = normalized.settings.sendMode
       if (normalized.settings.sessionIdleMinutes !== undefined) state.sessionIdleMinutes = normalized.settings.sessionIdleMinutes
@@ -1587,6 +1592,7 @@ export class ChannelManager {
       state.cwd = normalizeWorkspacePath(state.cwd) ?? cwd
       state.permission = normalizePermission(state.permission, this.permissionPresets().names) ?? permission
       state.privateAccess = state.privateAccess === 'all' ? 'all' : 'approved'
+      state.groupAccess = state.groupAccess === 'approved' || state.groupAccess === 'disabled' ? state.groupAccess : 'all'
       state.sendMode = normalizeSendMode(state.sendMode)
     }
     this.store.version = 2
@@ -1630,7 +1636,7 @@ export class ChannelManager {
     return ordinal
   }
 
-  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all'; sendMode: SendMode; sessionIdleMinutes?: number; segmentReply?: boolean; segmentDelayMinSecs?: number; segmentDelayMaxSecs?: number } } | { ok: false; error: string }> {
+  private async normalizeAccountSettings(platform: ChannelId, input: Record<string, unknown>, previous: ChannelState): Promise<{ ok: true; settings: { name: string; nameOrdinal: number; assistant: AssistantModel; agentPreset: string; cwd: string; permission: PermissionPreset; commandPermissions: CommandPermissions; privateAccess: 'approved' | 'all'; groupAccess: 'all' | 'approved' | 'disabled'; sendMode: SendMode; sessionIdleMinutes?: number; segmentReply?: boolean; segmentDelayMinSecs?: number; segmentDelayMaxSecs?: number } } | { ok: false; error: string }> {
     const agentPreset = input.agentPreset ?? previous.agentPreset ?? this.engineConfig.agentPreset ?? 'standard'
     if (typeof agentPreset !== 'string' || !agentPreset.trim()) return { ok: false, error: '请选择 Agent 预设' }
     if (input.agentPreset !== undefined) {
@@ -1652,6 +1658,9 @@ export class ChannelManager {
     const permission = normalizePermission(input.permission ?? previous.permission ?? this.currentPermission(), this.permissionPresets().names)
     if (!permission) return { ok: false, error: '请选择权限' }
     const privateAccess = input.privateAccess === 'all' || (input.privateAccess === undefined && previous.privateAccess === 'all') ? 'all' : 'approved'
+    const requestedGroupAccess = input.groupAccess === undefined ? previous.groupAccess : input.groupAccess
+    if (requestedGroupAccess !== undefined && requestedGroupAccess !== 'all' && requestedGroupAccess !== 'approved' && requestedGroupAccess !== 'disabled') return { ok: false, error: '群聊准入配置无效' }
+    const groupAccess = requestedGroupAccess ?? 'all'
     const sendMode = normalizeSendMode(input.sendMode === undefined ? previous.sendMode : input.sendMode)
     const sessionIdleMinutes = normalizeIdleMinutes(input.sessionIdleMinutes) ?? previous.sessionIdleMinutes
     // 未传就从状态里沿用；显式传布尔值才覆盖，避免旧客户端保存时把开关打回默认。
@@ -1670,7 +1679,7 @@ export class ChannelManager {
     if ([...trimmed].length > ACCOUNT_REMARK_LIMIT) return { ok: false, error: `账号备注不能超过 ${ACCOUNT_REMARK_LIMIT} 个字符` }
     if (/[\u0000-\u001F\u007F]/.test(trimmed)) return { ok: false, error: '账号备注不能包含换行或控制字符' }
     const name = trimmed || autoAccountName(platform, nameOrdinal)
-    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, sendMode, sessionIdleMinutes, segmentReply, segmentDelayMinSecs, segmentDelayMaxSecs, commandPermissions } }
+    return { ok: true, settings: { name, nameOrdinal, assistant, agentPreset, cwd, permission, privateAccess, groupAccess, sendMode, sessionIdleMinutes, segmentReply, segmentDelayMinSecs, segmentDelayMaxSecs, commandPermissions } }
   }
 
   private accountIdFor(platform: ChannelId, config: Record<string, string>): string {
@@ -1810,7 +1819,7 @@ function pairingSettings(input?: Record<string, unknown>): Record<string, string
   if (!input) return {}
   const out: Record<string, string> = {}
   if (input.commandPermissions !== undefined) out.__setting_commandPermissions = JSON.stringify(normalizeCommandPermissions(input.commandPermissions))
-  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess', 'sendMode', 'sessionIdleMinutes', 'segmentReply', 'segmentDelayMinSecs', 'segmentDelayMaxSecs', 'agentPreset']) {
+  for (const key of ['name', 'provider', 'model', 'reasoningEffort', 'cwd', 'permission', 'privateAccess', 'groupAccess', 'sendMode', 'sessionIdleMinutes', 'segmentReply', 'segmentDelayMinSecs', 'segmentDelayMaxSecs', 'agentPreset']) {
     const value = input[key]
     if (value !== undefined && value !== null) out[`__setting_${key}`] = String(value)
   }

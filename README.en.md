@@ -35,12 +35,12 @@ Send tasks to your local DSH through your usual messenger, even when you are awa
 
 ## Who can drive the assistant
 
-Inbound messages are identified before commands, tool approvals, or injection.
+Inbound messages are identified before commands, tool approvals, or injection. Group access uses the account's approved-user list independently of its private-chat access setting.
 
 | Case | Behavior |
 |---|---|
 | Group without a mention of this bot | Ignored without a reply or pending approval request; mentioning someone else also does not trigger it |
-| Group explicitly mentioning this bot | No binding. Anyone can send work |
+| Group message meeting the channel's addressing rules | Account group access defaults to all members; it can be limited to approved users or disabled. Rejected group messages are silently ignored |
 | DM from the QR scanner | WeChat / Feishu / Lark / QQ scanners are allowlisted automatically |
 | DM from anyone else | Appears on the settings pending list until approved |
 | DM after QR binding that does not return user identity | DingTalk / WeCom QR setup returns bot credentials only, so the scanner still needs settings approval |

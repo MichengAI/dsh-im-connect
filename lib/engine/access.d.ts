@@ -6,6 +6,7 @@ export declare function decideAccess(input: {
     userAllowed: boolean;
     kind?: 'dm' | 'group';
     addressed?: boolean;
+    groupAccess?: 'all' | 'approved' | 'disabled';
 }): AccessDecision;
 /** 工具授权比普通消息更严：必须已在白名单，且只能在私聊里答复。 */
 export declare function canAnswerToolApproval(input: {

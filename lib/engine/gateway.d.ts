@@ -39,6 +39,7 @@ export declare class ImEngine {
     private readonly resolvePrivateAccess;
     private readonly resolveCommandPermissions;
     private readonly sendRetryDelaysMs;
+    private readonly resolveGroupAccess;
     private readonly deferred;
     private deferredTimer?;
     private recovering;
@@ -86,7 +87,7 @@ export declare class ImEngine {
      * @param sendRetryDelaysMs 分片发送退避表；测试可传 `[0]` 关闭等待。
      * @param topicTitleFile 话题名状态文件；缺省只在进程内去重。
      */
-    constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all', resolveCommandPermissions?: (channelId: string) => CommandPermissions, deliveryFile?: string, sendRetryDelaysMs?: readonly number[], topicTitleFile?: string);
+    constructor(ctx: Context, store: SessionMapStore, seen: SeenStore, config: EngineConfig, log: (line: string) => void, onUnauthorized?: ((channelId: string, msg: ImMessage) => string) | undefined, resolveConfig?: (channelId: string) => EngineConfig, resolvePrivateAccess?: (channelId: string) => 'approved' | 'all', resolveCommandPermissions?: (channelId: string) => CommandPermissions, deliveryFile?: string, sendRetryDelaysMs?: readonly number[], topicTitleFile?: string, resolveGroupAccess?: (channelId: string) => 'all' | 'approved' | 'disabled');
     renameSession(sessionId: string, title: string): boolean;
     removeSession(sessionId: string): Promise<boolean>;
     cleanupMissingSession(sessionId: string): Promise<boolean>;
@@ -107,6 +108,7 @@ export declare class ImEngine {
     private userAllowed;
     private cancelSessionInteractions;
     private isAuthorized;
+    private accessDecision;
     private rejectUnauthorized;
     private handleInbound;
     private validDelivery;
