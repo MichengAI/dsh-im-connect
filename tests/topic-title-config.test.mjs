@@ -17,6 +17,7 @@ test('话题命名配置默认 once，保留 follow/off 并拒绝无效值', () 
 test('插件配置经 apply 和管理器传到引擎，并持久化话题开关', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'topic-config-'))
   const effects = new Map()
+  const events = new Map()
   let manager
   t.mock.method(ChannelManager.prototype, 'registerApi', function () { manager = this })
   t.mock.method(ChannelManager.prototype, 'initEnabled', async () => {})
@@ -26,11 +27,18 @@ test('插件配置经 apply 和管理器传到引擎，并持久化话题开关'
     get: () => undefined,
     permissionPresets: { names: ['standard'], defaultPreset: 'standard' },
     logger: () => ({ info() {} }),
+    on: (name, handler) => {
+      events.set(name, handler)
+      return () => events.delete(name)
+    },
     effect: (operation, name) => { effects.set(name, operation) },
   }
   apply(ctx, Config({ stateDir: directory, topicNaming: 'off' }))
   const cleanup = effects.get('im-connect.serve')()
   try {
+    const excludesBlankReuse = events.get('session/exclude-blank-reuse')
+    assert.equal(excludesBlankReuse('dsh-im-session-placeholder'), true)
+    assert.equal(excludesBlankReuse('ordinary'), undefined)
     assert.equal(manager.engine.config.topicNaming, 'off')
     manager.engine.topicTitles.freeze('telegram:100:20')
     const { TopicTitleStore } = await import('../lib/engine/topic-title.js')

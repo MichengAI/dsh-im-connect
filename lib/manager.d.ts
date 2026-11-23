@@ -2,7 +2,7 @@ import { type CommandPermissions } from './engine/command-permissions.js';
 import type { Context } from '@deepseek-ai/cordis';
 import { type ConnectionState } from './channels/connection-state.js';
 import { type DiagnosticCheck } from './channels/diagnostics.js';
-import type { ChannelId, SessionRecord } from './engine/session-id.js';
+import { type ChannelId, type SessionRecord } from './engine/session-id.js';
 import { type AssistantModel, type PermissionPreset } from './engine/assistant-settings.js';
 import type { EngineConfig, SendMode } from './engine/types.js';
 export declare const API_CLIENT_HEADER = "x-dsh-im-connect-client";
@@ -159,6 +159,8 @@ export declare class ChannelManager {
     private hydrateProxyUrls;
     private accountView;
     accountGroupLabel(accountId: string, state: ChannelState | undefined, multiAccount: boolean): string;
+    /** 保留频道会话的归属，包括绑定到频道的普通 ID。 */
+    excludesBlankReuse(sessionId: string): true | undefined;
     channelSessions(): ChannelSessionGroup[];
     connect(id: ChannelId, config?: Record<string, string>, settings?: Record<string, unknown>): Promise<{
         ok: boolean;

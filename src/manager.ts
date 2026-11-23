@@ -11,7 +11,7 @@ import { fileOperation } from './engine/abort.js'
 import { parseAdditionalImageHosts } from './channels/image-host-policy.js'
 import { CHANNEL_META, CHANNEL_ORDER, channelSupportsSegmentReply, supportsQr } from './channels/meta.js'
 import { PairingHub } from './channels/qr/hub.js'
-import type { ChannelId, SessionRecord } from './engine/session-id.js'
+import { isImSessionId, type ChannelId, type SessionRecord } from './engine/session-id.js'
 import { SessionMapStore } from './engine/session-store.js'
 import { createFileVault, createServiceVault, credentialRef, type CredentialService, type CredentialVault } from './engine/credentials.js'
 import { ImEngine } from './engine/gateway.js'
@@ -499,6 +499,12 @@ export class ChannelManager {
     const rawName = state?.name?.trim()
     if (rawName) return `${platformLabel} · ${rawName}`
     return `${platformLabel} · ${accountId}`
+  }
+
+  /** 保留频道会话的归属，包括绑定到频道的普通 ID。 */
+  excludesBlankReuse(sessionId: string): true | undefined {
+    if (isImSessionId(sessionId) || this.sessions.findSession(sessionId)) return true
+    return undefined
   }
 
   channelSessions(): ChannelSessionGroup[] {

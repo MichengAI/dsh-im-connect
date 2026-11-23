@@ -3,6 +3,15 @@ import test from 'node:test'
 import { ChannelManager } from '../lib/manager.js'
 import { CHANNEL_META } from '../lib/channels/meta.js'
 
+test('workspace blank reuse excludes channel IDs and mapped host IDs', () => {
+  const manager = { sessions: { findSession: id => id === 'adopted' ? { sessionId: id } : undefined } }
+  const excludes = ChannelManager.prototype.excludesBlankReuse.bind(manager)
+  assert.equal(excludes('dsh-im-session-placeholder'), true)
+  assert.equal(excludes('im:telegram:dm:1'), true)
+  assert.equal(excludes('adopted'), true)
+  assert.equal(excludes('ordinary'), undefined)
+})
+
 test('accountGroupLabel 真实实现分支覆盖：单账号、自定义名、序号、rawName、accountId 回退与容错', () => {
   const manager = {
     platformOf: (id, state) => state?.platform || id.split('-')[0],

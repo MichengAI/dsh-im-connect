@@ -96,6 +96,11 @@ export function apply(ctx: Context, config: PluginConfig): void {
   const applyStarted = Date.now()
   const manager = new ChannelManager({ ctx, stateDir, log, engineConfig })
   log(`[boot] ChannelManager 构造 ${Date.now() - applyStarted}ms`)
+  // 新宿主会查询此事件，旧宿主可以照常加载插件。
+  const reuseHost = ctx as unknown as {
+    on(event: 'session/exclude-blank-reuse', handler: (sessionId: string) => true | undefined): void
+  }
+  reuseHost.on('session/exclude-blank-reuse', sessionId => manager.excludesBlankReuse(sessionId))
   // 分段回复：把「用标记分隔多条消息」的规则挂进系统提示。
   // 只有本插件已绑定、且该账号开启了分段回复的会话才拿到这段说明，其余会话提示词不变。
   const promptHost = ctx as unknown as {
