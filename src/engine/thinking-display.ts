@@ -49,6 +49,10 @@ interface Lifecycle {
   final: boolean
 }
 
+function isChannelPlatform(channelId: string, platform: string): boolean {
+  return channelId === platform || channelId.startsWith(`${platform}_`)
+}
+
 /** Owns raw reasoning only for explicitly enabled, supported, live generations. */
 export class ThinkingDisplayTracker {
   private readonly states = new Map<string, Lifecycle>()
@@ -59,17 +63,18 @@ export class ThinkingDisplayTracker {
   constructor(private readonly onError: (error: unknown) => void = () => {}, private readonly now = () => Date.now()) {}
 
   start(target: ThinkingDisplayTarget): void {
+    if (isChannelPlatform(target.channel.id, 'telegram')) return
     const old = this.identities.get(target.key)
     if (old?.sessionId === target.sessionId && target.turn !== undefined
       && old.turn !== undefined && target.turn < old.turn) return
     this.cancelKey(target.key)
+    const config = normalizeThinkingDisplay(target.config)
+    if (config.mode !== 'collapsed' || !target.channel.sendThinking || !target.isCurrent()) return
     // Tombstones reject late frames after finalization without retaining raw text.
     if (this.identities.size >= 1024 && !this.identities.has(target.key)) this.identities.delete(this.identities.keys().next().value!)
     this.identities.set(target.key, { sessionId: target.sessionId, turn: target.turn })
-    const config = normalizeThinkingDisplay(target.config)
-    if (target.channel.id === 'telegram' || config.mode !== 'collapsed' || !target.channel.sendThinking || !target.isCurrent()) return
     const channelLimit = target.channel.maxThinkingChars
-      ?? (target.channel.id === 'feishu' || target.channel.id === 'lark' ? 65536 : 4096)
+      ?? (isChannelPlatform(target.channel.id, 'feishu') || isChannelPlatform(target.channel.id, 'lark') ? 65536 : 4096)
     const raw = target.config && typeof target.config === 'object' ? target.config as Record<string, unknown> : {}
     // 原生长思维链渠道（如飞书/Lark）享有 64K 原生流式预算；
     // 只有当用户显式配置收紧预算（< 3500）时，才收紧缓冲预算；
@@ -83,7 +88,7 @@ export class ThinkingDisplayTracker {
   }
 
   append(target: ThinkingDisplayTarget, text: string): void {
-    if (!text) return
+    if (!text || isChannelPlatform(target.channel.id, 'telegram')) return
     let state = this.states.get(target.key)
     if (!state) {
       const identity = this.identities.get(target.key)
@@ -127,6 +132,7 @@ export class ThinkingDisplayTracker {
   }
 
   finish(target: ThinkingDisplayTarget): Promise<void> {
+    if (isChannelPlatform(target.channel.id, 'telegram')) return Promise.resolve()
     const state = this.states.get(target.key)
     if (!state || !this.matches(state, target) || state.final || !this.valid(state)) return Promise.resolve()
     state.final = true

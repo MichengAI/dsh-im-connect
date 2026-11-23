@@ -39,13 +39,16 @@ test('configuration requires opt-in, finite numbers, and clamps all bounds', () 
 })
 
 test('Telegram ignores legacy collapsed settings without retaining or sending reasoning', async () => {
-  const f = trackerFixture()
-  f.target.channel.id = 'telegram'
-  f.tracker.start(f.target)
-  f.tracker.append(f.target, 'private reasoning')
-  await f.tracker.finish(f.target)
-  assert.equal(f.tracker.states.size, 0)
-  assert.deepEqual(f.sends, [])
+  for (const channelId of ['telegram', 'telegram_1234567890ab']) {
+    const f = trackerFixture()
+    f.target.channel.id = channelId
+    f.tracker.start(f.target)
+    f.tracker.append(f.target, 'private reasoning')
+    await f.tracker.finish(f.target)
+    assert.equal(f.tracker.states.size, 0)
+    assert.deepEqual(f.sends, [])
+    assert.equal(f.tracker.identities.size, 0)
+  }
 })
 
 test('off and unsupported channels never retain any reasoning state', () => {
@@ -269,28 +272,30 @@ test('gateway dynamically checks mute, binding, permission, cold turn, reload, u
 })
 
 test('thinking tracker adapts buffer limit for feishu/lark without clamping at 4096', () => {
-  let now = 0
-  const sends = []
-  const tracker = new ThinkingDisplayTracker(() => {}, () => now)
-  const channel = { id: 'feishu', async sendThinking(chatId, text, options) { sends.push({ chatId, text, options }) } }
-  const target = {
-    key: 'feishu:long:chain',
-    sessionId: 'session-fs',
-    chatId: 'oc_long',
-    channel,
-    turn: 1,
-    config: { mode: 'collapsed', minChars: 10 },
-    isCurrent: () => true,
-    label: (final, n) => `${final}:${n}`,
+  for (const channelId of ['feishu', 'feishu_account123', 'lark_account456']) {
+    let now = 0
+    const sends = []
+    const tracker = new ThinkingDisplayTracker(() => {}, () => now)
+    const channel = { id: channelId, async sendThinking(chatId, text, options) { sends.push({ chatId, text, options }) } }
+    const target = {
+      key: `${channelId}:long:chain`,
+      sessionId: `session-${channelId}`,
+      chatId: 'oc_long',
+      channel,
+      turn: 1,
+      config: { mode: 'collapsed', minChars: 10 },
+      isCurrent: () => true,
+      label: (final, n) => `${final}:${n}`,
+    }
+    tracker.start(target)
+    // 注入 10000 字符思考
+    const longText = '深度推理长思维链。'.repeat(1000)
+    tracker.append(target, longText)
+    const state = [...tracker.states.values()][0]
+    assert.equal(state.prefix.length, longText.length, `${channelId}渠道思考前缀缓冲应完整容纳长文本，严禁在 4096 处封闭`)
+    assert.equal(state.closed, false, '未达安全上限前严禁封闭')
+    assert.equal(sends[0].options.truncated, false, '长思维链在安全预算内绝不标记 truncated: true')
   }
-  tracker.start(target)
-  // 注入 10000 字符思考
-  const longText = '深度推理长思维链。'.repeat(1000)
-  tracker.append(target, longText)
-  const state = [...tracker.states.values()][0]
-  assert.equal(state.prefix.length, longText.length, '飞书渠道思考前缀缓冲应完整容纳长文本，严禁在 4096 处封闭')
-  assert.equal(state.closed, false, '未达安全上限前严禁封闭')
-  assert.equal(sends[0].options.truncated, false, '长思维链在安全预算内绝不标记 truncated: true')
 })
 
 test('thinking tracker: 流式分块切断高位代理时不误报截断 (truncated 仅代表 true closed)', () => {
