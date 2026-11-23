@@ -241,6 +241,7 @@ export declare class ChannelManager {
     private accountEngineConfig;
     /** 分段间隔区间：账号设置优先，其次插件配置，最后回落到 1–2 秒；上下界颠倒时自动对调。 */
     private segmentDelayRange;
+    replyChannelInstructionForSession(sessionId: string): string;
     /** 分段回复的系统提示说明；未绑定或该账号没开启时返回空串，由引擎判断。 */
     segmentInstructionForSession(sessionId: string): string;
     pendingRequests(): Array<PendingRequest & {

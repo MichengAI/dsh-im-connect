@@ -16,6 +16,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { ImageInputError, imageInputFailure, imagePromptPart } from './image-input.js'
 import { APPROVAL_WAIT_MS, ApprovalBroker } from './approval.js'
 import { SessionMerger } from './merge.js'
+import { sourceText, sourceBlock, replyBinding } from './channel-context.js'
 import { KeyedSerialQueue } from './keyed-queue.js'
 import { SessionRouter } from './router.js'
 import { initialSessionTitle, readSessionTitle } from './session-title.js'
@@ -741,7 +742,7 @@ export class ImEngine {
       this.router.touch(channel.id, kind, msg.chatId)
       if (initialTitle) this.router.setTitle(binding.sessionId, initialTitle, 'message')
       const content: Array<Record<string, unknown>> = []
-      if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })
+      if (msg.text.trim()) content.push({ type: 'text', text: sourceText(channel, msg, sources) })
       for (const media of msg.media ?? []) {
         if (media.kind === 'image') content.push(await imagePromptPart(media))
         else if (media.kind === 'voice-text' && media.text) content.push({ type: 'text', text: `[语音] ${media.text}` })
@@ -750,6 +751,10 @@ export class ImEngine {
       const files = msg.media?.filter(media => media.kind === 'file') ?? []
       if (files.length) content.push(...await withReplyLocale(this.ctx, () => filePromptParts(this.ctx, binding.sessionId, files, signal)))
       if (signal.aborted || content.length === 0) return
+      if (!msg.text.trim()) {
+        const observation = sourceBlock(channel, msg)
+        if (observation) content.unshift({ type: 'text', text: observation })
+      }
       if (msg.userId) this.sessionActors.set(binding.sessionId, msg.userId)
       this.interactionMessageIds.set(binding.sessionId, msg.messageId)
       this.streams.reset(`${channel.id}:${msg.chatId}`)
@@ -1738,10 +1743,15 @@ export class ImEngine {
     } catch { return false }
   }
 
-  /**
-   * 给系统提示用的分段说明：只对本插件已绑定、且渠道已开放的会话生效，
-   * 未绑定或该账号没开启分段回复时返回空串，提示词与发布前一致。
-   */
+  /** Describe the reply binding without asserting the origin of the current input. */
+  replyChannelInstructionForSession(sessionId: string): string {
+    const binding = this.router.bindingForSession(sessionId)
+    if (!binding) return ''
+    const channel = this.channels.get(binding.channelId)
+    return channel ? replyBinding(channel, binding) : ''
+  }
+
+  /** 给系统提示用的分段说明，仅在已绑定且启用分段回复时生效。 */
   segmentInstructionForSession(sessionId: string): string {
     const binding = this.router.bindingForSession(sessionId)
     if (!binding) return ''

@@ -181,10 +181,9 @@ export declare class ImEngine {
     private deliverSegments;
     /** 分段回复的第一条也要等一个随机间隔；等待被 dispose 中止时返回 false。 */
     private pauseBeforeSegment;
-    /**
-     * 给系统提示用的分段说明：只对本插件已绑定、且渠道已开放的会话生效，
-     * 未绑定或该账号没开启分段回复时返回空串，提示词与发布前一致。
-     */
+    /** Describe the reply binding without asserting the origin of the current input. */
+    replyChannelInstructionForSession(sessionId: string): string;
+    /** 给系统提示用的分段说明，仅在已绑定且启用分段回复时生效。 */
     segmentInstructionForSession(sessionId: string): string;
     /**
      * 发送一个分片，平台明确拒绝时按 {@link SEND_RETRY_DELAYS_MS} 退避重试。

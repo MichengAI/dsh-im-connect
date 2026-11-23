@@ -133,6 +133,17 @@ export function apply(ctx: Context, config: PluginConfig): void {
     })
   }, 'im-connect.segment-section')
   ctx.effect(() => {
+    const systemPrompt = promptHost.systemPrompt
+    if (!systemPrompt) return () => {}
+    return systemPrompt.section({
+      name: 'im-connect-reply-channel', order: sectionOrder + 1, interpolate: false,
+      text: (context) => {
+        const sessionId = context?.agent?.session?.header?.id
+        return typeof sessionId === 'string' && sessionId ? manager.replyChannelInstructionForSession(sessionId) : ''
+      },
+    })
+  }, 'im-connect.reply-channel-section')
+  ctx.effect(() => {
     manager.registerApi(ctx)
     // 卸载或初始化失败后不再恢复会话；保留一个完整异常链，避免后台拒绝终止宿主。
     void manager.initEnabled().then(() => manager.attachMappedSessions()).catch(error => {

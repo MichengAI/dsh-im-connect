@@ -19,6 +19,14 @@ export interface ImMessage {
   messageId?: string
   /** 平台侧的消息 id，用于表情回应等只认平台 id 的接口。 */
   platformMessageId?: string
+  channelContext?: {
+    platform: 'telegram'
+    chatId: string
+    threadId?: number
+    senderDisplayName?: string
+    senderUsername?: string
+    replyToMessageId?: string
+  }
   actionToken?: string
   context?: Record<string, unknown>
   media?: ImMedia[]
@@ -42,6 +50,7 @@ export interface ChoiceReceipt { close(text: string): Promise<void> }
 
 export interface ChannelAdapter {
   readonly id: string
+  readonly platform?: string
   readonly label: string
   readonly maxMessageLength: number
   /** 抑制含工具调用的助手文字；实时与补发共用规则，不计为已投递。 */

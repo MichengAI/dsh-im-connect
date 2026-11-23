@@ -39,7 +39,7 @@ interface TgUpdate {
   message?: {
     message_id: number
     chat: { id: number; type: string }
-    from?: { id: number; username?: string; first_name?: string; is_bot?: boolean }
+    from?: { id: number; username?: string; first_name?: string; last_name?: string; is_bot?: boolean }
     text?: string
     caption?: string
     media_group_id?: string
@@ -47,7 +47,7 @@ interface TgUpdate {
     document?: { file_id: string; mime_type?: string; file_name?: string; file_size?: number }
     entities?: Array<{ type: string; offset: number; length: number }>
     caption_entities?: Array<{ type: string; offset: number; length: number }>
-    reply_to_message?: { from?: { id: number } }
+    reply_to_message?: { message_id?: number; from?: { id: number } }
     message_thread_id?: number
     /** 服务消息：话题被改名（群组论坛才会推送），用于识别人工改名。 */
     forum_topic_edited?: { name?: string }
@@ -690,6 +690,14 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
               addressed,
               messageId: String(delivery.update_id),
               platformMessageId: String(message.message_id),
+              channelContext: {
+                platform: 'telegram',
+                chatId: String(message.chat.id),
+                threadId: message.message_thread_id,
+                senderDisplayName: [message.from?.first_name, message.from?.last_name].filter(Boolean).join(' ') || undefined,
+                senderUsername: message.from?.username,
+                replyToMessageId: message.reply_to_message?.message_id === undefined ? undefined : String(message.reply_to_message.message_id),
+              },
             })
           }
         }
@@ -726,6 +734,7 @@ export function createTelegramChannel(config: TelegramConfig, log: (line: string
 
   return {
     id: 'telegram',
+    platform: 'telegram',
     label: 'Telegram',
     maxMessageLength: 4000,
     /** 占位消息支持顶部状态行（思考 / 工具进度），网关据此推送中间态。 */

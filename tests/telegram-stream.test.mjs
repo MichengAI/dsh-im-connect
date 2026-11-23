@@ -28,7 +28,7 @@ test('Telegram 长轮询解析入站消息并在分发前持久化 offset', asyn
     if (method === 'getMe') return { json: async () => ({ ok: true, result: { id: 99, username: 'test_bot', is_bot: true } }) }
     if (method === 'getWebhookInfo') return { json: async () => ({ ok: true, result: { url: '' } }) }
     if (method === 'getUpdates' && pollCount++ === 0) {
-      return { json: async () => ({ ok: true, result: [{ update_id: 41, message: { message_id: 7, chat: { id: 123, type: 'private' }, from: { id: 456, username: 'alice' }, text: 'hello' } }] }) }
+      return { json: async () => ({ ok: true, result: [{ update_id: 41, message: { message_id: 7, chat: { id: 123, type: 'private' }, from: { id: 456, username: 'alice', first_name: 'Alice', last_name: 'Smith' }, reply_to_message: { message_id: 6 }, text: 'hello' } }] }) }
     }
     return new Promise((resolve, reject) => {
       init.signal.addEventListener('abort', () => {
@@ -45,6 +45,7 @@ test('Telegram 长轮询解析入站消息并在分发前持久化 offset', asyn
     const message = await received
     assert.deepEqual(message, {
       chatId: '123', userId: '456', username: 'alice', text: 'hello', kind: 'dm', addressed: true, messageId: '41', platformMessageId: '7',
+      channelContext: { platform: 'telegram', chatId: '123', threadId: undefined, senderDisplayName: 'Alice Smith', senderUsername: 'alice', replyToMessageId: '6' },
     })
     assert.equal(JSON.parse(readFileSync(join(stateDir, 'cursor.json'), 'utf8')).offset, 42)
     await channel.stop()

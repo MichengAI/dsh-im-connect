@@ -1750,6 +1750,10 @@ export class ChannelManager {
     return min <= max ? { min, max } : { min: max, max: min }
   }
 
+  replyChannelInstructionForSession(sessionId: string): string {
+    return this.engine.replyChannelInstructionForSession(sessionId)
+  }
+
   /** 分段回复的系统提示说明；未绑定或该账号没开启时返回空串，由引擎判断。 */
   segmentInstructionForSession(sessionId: string): string {
     return this.engine.segmentInstructionForSession(sessionId)
