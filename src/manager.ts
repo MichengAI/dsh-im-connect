@@ -462,7 +462,7 @@ export class ChannelManager {
         mentionPolicy: config.mentionPolicy === 'always' ? 'always' : 'addressed',
         freeChatGroups: typeof config.freeChatGroups === 'string' ? config.freeChatGroups : '',
       } : {}),
-      ...((platform === 'telegram' || platform === 'feishu' || platform === 'lark') ? {
+      ...((platform === 'feishu' || platform === 'lark') ? {
         thinkingDisplay: config.thinkingDisplay === 'true'
           ? true
           : (config.thinkingDisplay === 'false'
@@ -1168,7 +1168,7 @@ export class ChannelManager {
         else delete config.freeChatGroups
         state.config = config
       }
-      const hasThinkingDisplaySetting = (platform === 'telegram' || platform === 'feishu' || platform === 'lark') && Object.hasOwn(input, 'thinkingDisplay')
+      const hasThinkingDisplaySetting = (platform === 'feishu' || platform === 'lark') && Object.hasOwn(input, 'thinkingDisplay')
       if (hasThinkingDisplaySetting) {
         const config = { ...(state.config ?? {}) }
         if (input.thinkingDisplay === true) config.thinkingDisplay = 'true'
@@ -1731,7 +1731,9 @@ export class ChannelManager {
       segmentDelayMinSecs: this.segmentDelayRange(state).min,
       segmentDelayMaxSecs: this.segmentDelayRange(state).max,
       sessionIdleMinutes: normalizeIdleMinutes(state.sessionIdleMinutes) ?? 0,
-      thinkingDisplay: state.config?.thinkingDisplay === 'true'
+      thinkingDisplay: this.platformOf(accountId, state) === 'telegram'
+        ? { ...this.engineConfig.thinkingDisplay, mode: 'off' }
+        : state.config?.thinkingDisplay === 'true'
         ? { ...this.engineConfig.thinkingDisplay, mode: 'collapsed' }
         : (state.config?.thinkingDisplay === 'false'
           ? { ...this.engineConfig.thinkingDisplay, mode: 'off' }

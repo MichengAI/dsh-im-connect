@@ -38,6 +38,16 @@ test('configuration requires opt-in, finite numbers, and clamps all bounds', () 
   assert.deepEqual(normalizeThinkingDisplay({ mode: 'invalid', minChars: 9000, intervalMs: 90000, maxChars: 9000 }), { mode: 'off', minChars: 4096, intervalMs: 60000, maxChars: 4096 })
 })
 
+test('Telegram ignores legacy collapsed settings without retaining or sending reasoning', async () => {
+  const f = trackerFixture()
+  f.target.channel.id = 'telegram'
+  f.tracker.start(f.target)
+  f.tracker.append(f.target, 'private reasoning')
+  await f.tracker.finish(f.target)
+  assert.equal(f.tracker.states.size, 0)
+  assert.deepEqual(f.sends, [])
+})
+
 test('off and unsupported channels never retain any reasoning state', () => {
   for (const mode of ['off', 'unsupported']) {
     const f = trackerFixture()
