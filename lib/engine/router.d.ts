@@ -160,6 +160,10 @@ export declare class SessionRouter {
     private resume;
     private createHandle;
     /** 首轮之后才与普通工作区关联，避免宿主复用频道空白会话。 */
+    /**
+     * 首轮消息开始时，若该 IM 会话此前未加入工作区，在此安全挂回匹配的工作区。
+     * 频道会话的工作区成员关系由插件按需生命周期维护（空白时不挂入，首轮消息触发时挂入）。
+     */
     onTurnStarted(sessionId: string, active: () => boolean): Promise<void>;
     attachMappedSessions(active?: () => boolean): Promise<void>;
     private restoreSessionWorkspace;

@@ -772,6 +772,32 @@ test('启动只摘除已确认空白的自建 IM 成员，保留已使用和无�
   assert.equal(f.store.list().length, entries.length)
 })
 
+test('启动核对工作区成员时 sessionController 缺失安全降级并输出日志', async t => {
+  const f = makeRouter(t)
+  const logs = []
+  f.router.log = msg => logs.push(msg)
+  f.store.upsert('dsh-im-session-test', { sessionId: 'dsh-im-session-test', channel: 'telegram', kind: 'dm', chatId: 'test', title: '测试', updatedAt: '2026-01-01T00:00:00Z' })
+  f.ctx.get = name => undefined
+  await f.router.attachMappedSessions()
+  assert.ok(logs.some(msg => msg.includes('sessionController 未就绪或未提供 list 接口')))
+})
+
+test('摘除空白会话时若工作区未实现 detachSession 输出日志并不抛错', async t => {
+  const f = makeRouter(t)
+  const logs = []
+  f.router.log = msg => logs.push(msg)
+  const sessionId = 'dsh-im-session-test'
+  const members = {
+    path: 'D:/chosen',
+    sessionIds: [sessionId],
+  }
+  f.store.upsert(sessionId, { sessionId, channel: 'telegram', kind: 'dm', chatId: 'test', title: '测试', cwd: members.path, updatedAt: '2026-01-01T00:00:00Z' })
+  f.ctx.get = name => name === 'workspaceRegistry' ? { list: () => [members] }
+    : name === 'sessionController' ? { list: async () => ({ items: [{ sessionId, blank: true }] }) } : undefined
+  await f.router.attachMappedSessions()
+  assert.ok(logs.some(msg => msg.includes('未提供 detachSession 方法')))
+})
+
 test('恢复和打开空白频道会话不重新挂入工作区', async t => {
   const f = makeRouter(t)
   const attached = []

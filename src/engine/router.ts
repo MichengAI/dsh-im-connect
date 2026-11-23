@@ -627,6 +627,10 @@ export class SessionRouter {
   }
 
   /** 首轮之后才与普通工作区关联，避免宿主复用频道空白会话。 */
+  /**
+   * 首轮消息开始时，若该 IM 会话此前未加入工作区，在此安全挂回匹配的工作区。
+   * 频道会话的工作区成员关系由插件按需生命周期维护（空白时不挂入，首轮消息触发时挂入）。
+   */
   async onTurnStarted(sessionId: string, active: () => boolean): Promise<void> {
     if (!isImSessionId(sessionId)) return
     const record = this.store.findSession(sessionId)
@@ -646,7 +650,10 @@ export class SessionRouter {
     const records = this.store.list().filter(record => !record.adopted && isImSessionId(record.sessionId))
     if (!records.length || !active()) return
     const controller = this.ctx.get?.('sessionController') as { list?(request: object): Promise<{ items: readonly { sessionId: string; blank?: boolean }[] }> } | undefined
-    if (!controller?.list) return
+    if (!controller?.list) {
+      this.log('[router] sessionController 未就绪或未提供 list 接口，跳过启动期工作区空白会话核对')
+      return
+    }
     try {
       const { items } = await controller.list({})
       const blank = new Map(items.map(row => [row.sessionId, row.blank]))
@@ -724,7 +731,11 @@ export class SessionRouter {
     for (const workspace of members) {
       if (!active()) return
       try {
-        await workspace.detachSession?.(sessionId)
+        if (typeof workspace.detachSession === 'function') {
+          await workspace.detachSession(sessionId)
+        } else {
+          this.log(`[router] 工作区 ${workspace.path} 未提供 detachSession 方法，无法摘除 ${sessionId}`)
+        }
       } catch (error) {
         this.log(`[router] 无法摘除空白 IM 会话 ${sessionId}: ${error instanceof Error ? error.message : String(error)}`)
       }

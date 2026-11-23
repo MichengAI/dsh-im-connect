@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.52] - 2026-11-23
+
+### Prevent Native Workspace Session Creation from Reusing Channel Drafts (#88)
+
+- **Isolated workspace session creation (#88)**: Fixed an issue where clicking "New Session" in an ordinary workspace inadvertently opened or reused a blank Telegram or IM channel session. Workspace session creation is now cleanly separated from channel sessions, preventing unexpected jumps into channel drafts.
+- **On-demand channel session attachment**: Unused blank channel drafts remain neatly in the sidebar Channels view without consuming workspace slots. Once the user sends the first message to start a conversation in a channel, the session seamlessly connects to the corresponding workspace, ensuring complete continuity.
+
 ## [1.0.51] - 2026-11-23
 
 ### Feishu Group Approval and Text Formatting Fidelity (#87)
