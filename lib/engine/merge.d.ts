@@ -16,6 +16,8 @@ export declare class SessionMerger {
     ingest(key: string, raw: string): MergeResult;
     dispose(): void;
     has(key: string): boolean;
+    /** 主动取出当前缓冲文本并清掉定时器，用于同一聊天切换发言人时提前分段。 */
+    flush(key: string): string | undefined;
     cancel(key: string): void;
     private setBuffer;
     private clear;

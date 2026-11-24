@@ -43,6 +43,14 @@ export class SessionMerger {
 
   has(key: string): boolean { return this.buffers.has(key) }
 
+  /** 主动取出当前缓冲文本并清掉定时器，用于同一聊天切换发言人时提前分段。 */
+  flush(key: string): string | undefined {
+    const entry = this.buffers.get(key)
+    if (!entry) return undefined
+    this.clear(key)
+    return entry.text
+  }
+
   cancel(key: string): void { this.clear(key) }
 
   private setBuffer(key: string, text: string): void {

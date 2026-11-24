@@ -119,6 +119,9 @@ export declare class ImEngine {
     private deliveryCommand;
     private handleCommand;
     private takeMergedMessages;
+    private composeMergedMessage;
+    /** 合并投递失败时就地记日志并通知用户，避免拖垮定时器或吞掉后续新发言人消息。 */
+    private injectMergedSafely;
     /**
      * 距上一条消息超过阈值时换会话：隔了很久回来，通常不是同一件事。
      *
@@ -190,6 +193,10 @@ export declare class ImEngine {
      * 未绑定或该账号没开启分段回复时返回空串，提示词与发布前一致。
      */
     segmentInstructionForSession(sessionId: string): string;
+    /**
+     * 飞书/Lark 群聊发送者元信息系统提示：只对已绑定飞书或 Lark 群聊的会话注入。
+     */
+    groupContextInstructionForSession(sessionId: string): string;
     /**
      * 发送一个分片，平台明确拒绝时按 {@link SEND_RETRY_DELAYS_MS} 退避重试。
      * 结果不明的失败（超时、网络中断）立即返回：请求可能已经送达。

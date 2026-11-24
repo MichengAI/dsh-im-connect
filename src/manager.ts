@@ -1787,6 +1787,11 @@ export class ChannelManager {
     return this.engine.segmentInstructionForSession(sessionId)
   }
 
+  /** 飞书/Lark 群聊发送者元信息系统提示；未绑定或非飞书群聊时返回空串。 */
+  groupContextInstructionForSession(sessionId: string): string {
+    return this.engine.groupContextInstructionForSession(sessionId)
+  }
+
 
   pendingRequests(): Array<PendingRequest & { channelId: string }> {
     return Object.entries(this.store.pending).flatMap(([channelId, list]) =>

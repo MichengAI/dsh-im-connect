@@ -246,6 +246,8 @@ export declare class ChannelManager {
     private segmentDelayRange;
     /** 分段回复的系统提示说明；未绑定或该账号没开启时返回空串，由引擎判断。 */
     segmentInstructionForSession(sessionId: string): string;
+    /** 飞书/Lark 群聊发送者元信息系统提示；未绑定或非飞书群聊时返回空串。 */
+    groupContextInstructionForSession(sessionId: string): string;
     pendingRequests(): Array<PendingRequest & {
         channelId: string;
     }>;

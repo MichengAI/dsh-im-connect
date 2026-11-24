@@ -8,6 +8,30 @@ export interface ImMedia {
   path?: string
 }
 
+export interface ImMention {
+  /** 平台原文占位符，如飞书的 @_user_1、@_all。 */
+  key?: string
+  /** 被 @ 对象的主标识（飞书/Lark 为 open_id）。 */
+  id?: string
+  /** 可选补充标识（如飞书 user_id）。 */
+  userId?: string
+  /** 可选跨应用标识（如飞书 union_id）。 */
+  unionId?: string
+  /** 被 @ 对象展示名称。 */
+  name?: string
+  /** 是否为当前机器人自身。 */
+  isBot: boolean
+}
+
+export interface ImGroupContext {
+  /** 群消息发送者 open_id。 */
+  senderOpenId?: string
+  /** 群消息发送者姓名；通讯录反查失败或无权限时省略。 */
+  senderName?: string
+  /** 本条消息中的 @ 提及列表，已区分机器人自身与群内其他成员。 */
+  mentions?: ImMention[]
+}
+
 export interface ImMessage {
   chatId: string
   userId?: string
@@ -22,6 +46,7 @@ export interface ImMessage {
   actionToken?: string
   context?: Record<string, unknown>
   media?: ImMedia[]
+  groupContext?: ImGroupContext
 }
 
 export interface ReplyStream {
