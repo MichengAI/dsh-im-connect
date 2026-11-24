@@ -91,6 +91,7 @@ export declare function extractFeishuHttpStatus(error: unknown): number | undefi
 /** 规范化飞书群消息 `@` 列表，并补充富文本 `post` 正文里遗漏的 `at` 节点。 */
 export declare function normalizeFeishuMentions(mentions: readonly FeishuMention[] | undefined, botOpenId: string, options?: {
     botName?: string;
+    botUserId?: string;
     messageType?: string;
     rawContent?: string;
     resolveCachedName?: (openId: string) => string | undefined;

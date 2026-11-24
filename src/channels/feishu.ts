@@ -929,11 +929,11 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               senderResolver?.seedFromMentions(mentions)
               const isUserSender = !data.sender?.sender_type || data.sender.sender_type === 'user'
               const hasPayload = resolved.text.trim().length > 0 || resolved.media.length > 0
-              const deliveryTimeoutMs = Math.max(1, config.deliveryResolverTimeoutMs ?? FEISHU_DEFAULT_DELIVERY_RESOLVER_TIMEOUT_MS)
-              const resolveSignal = timeoutSignal(deliveryTimeoutMs, generation.signal)
-              senderName = (senderOpenId && isUserSender && hasPayload)
-                ? await senderResolver?.resolveSenderName(senderOpenId, { chatId: rawChatId, signal: resolveSignal }).catch(() => undefined)
-                : undefined
+              if (senderOpenId && isUserSender && hasPayload && senderResolver) {
+                const deliveryTimeoutMs = Math.max(1, config.deliveryResolverTimeoutMs ?? FEISHU_DEFAULT_DELIVERY_RESOLVER_TIMEOUT_MS)
+                const resolveSignal = timeoutSignal(deliveryTimeoutMs, generation.signal)
+                senderName = await senderResolver.resolveSenderName(senderOpenId, { chatId: rawChatId, signal: resolveSignal }).catch(() => undefined)
+              }
               if (!current()) return
               if (senderOpenId || senderName || mentions.length > 0) {
                 groupContext = {

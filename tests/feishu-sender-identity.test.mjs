@@ -177,6 +177,26 @@ test('normalizeFeishuMentions：区分机器人/群成员/@all、补全名称、
     { key: '@_user_9', name: '临时', isBot: false },
   ])
 
+  // post at 节点中，非 ou_ 格式且等于 botUserId 时也能被正确识别为 isBot
+  const postCustomBot = normalizeFeishuMentions(
+    [],
+    botOpenId,
+    {
+      botUserId: 'bot_custom_9',
+      messageType: 'post',
+      rawContent: JSON.stringify({
+        zh_cn: {
+          content: [[
+            { tag: 'at', user_id: 'bot_custom_9', user_name: 'Robot' },
+          ]],
+        },
+      }),
+    },
+  )
+  assert.deepEqual(postCustomBot, [
+    { userId: 'bot_custom_9', name: 'Robot', isBot: true },
+  ])
+
   // @all 携带 open_id='all' 时归一化为 @all，不输出 open_id=all
   assert.deepEqual(
     normalizeFeishuMentions([{ key: '@_all', id: { open_id: 'all' }, name: '所有人' }], botOpenId),
@@ -636,6 +656,7 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
 
     // 4. 通讯录反查挂起时（接口超时），在投递超时预算内跳出降级为保留 senderOpenId，消息照常投递
     hangContact = true
+    const t0 = Date.now()
     await callback({
       sender: { sender_id: { open_id: 'ou_hang' }, sender_type: 'user' },
       message: {
@@ -647,9 +668,35 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
         mentions: [{ key: '@_user_1', id: { open_id: 'ou_bot' }, name: 'Bot' }],
       },
     })
+    const elapsed = Date.now() - t0
+    assert.ok(elapsed < 200, `首条超时应在 200ms 内跳出，实测 ${elapsed}ms`)
     assert.equal(received[3].text, '超时保护测试')
     assert.equal(received[3].username, undefined)
     assert.deepEqual(received[3].groupContext, {
+      senderOpenId: 'ou_hang',
+      mentions: [{ key: '@_user_1', id: 'ou_bot', name: 'Bot', isBot: true }],
+    })
+
+    // 4b. 超时后应写入负缓存：同一发送者连续发送第二条消息时立即降级，不再重复等待超时预算
+    const callsBeforeSecondMsg = contactCalls
+    const t1 = Date.now()
+    await callback({
+      sender: { sender_id: { open_id: 'ou_hang' }, sender_type: 'user' },
+      message: {
+        message_id: 'om_g_hang_2',
+        chat_id: 'oc_group_1',
+        chat_type: 'group',
+        message_type: 'text',
+        content: JSON.stringify({ text: '@_user_1 超时后连发测试' }),
+        mentions: [{ key: '@_user_1', id: { open_id: 'ou_bot' }, name: 'Bot' }],
+      },
+    })
+    const elapsed2 = Date.now() - t1
+    assert.ok(elapsed2 < 15, `负缓存命中应在 15ms 内立即完成，实测 ${elapsed2}ms`)
+    assert.equal(contactCalls, callsBeforeSecondMsg, '负缓存命中时不应重复发起通讯录查询')
+    assert.equal(received[4].text, '超时后连发测试')
+    assert.equal(received[4].username, undefined)
+    assert.deepEqual(received[4].groupContext, {
       senderOpenId: 'ou_hang',
       mentions: [{ key: '@_user_1', id: 'ou_bot', name: 'Bot', isBot: true }],
     })
@@ -668,9 +715,9 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
         mentions: [{ key: '@_user_1', id: { open_id: 'ou_bot' }, name: 'Bot' }],
       },
     })
-    assert.equal(received[4].text, '降级测试')
-    assert.equal(received[4].username, undefined)
-    assert.deepEqual(received[4].groupContext, {
+    assert.equal(received[5].text, '降级测试')
+    assert.equal(received[5].username, undefined)
+    assert.deepEqual(received[5].groupContext, {
       senderOpenId: 'ou_degraded',
       mentions: [{ key: '@_user_1', id: 'ou_bot', name: 'Bot', isBot: true }],
     })

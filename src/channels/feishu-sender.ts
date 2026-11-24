@@ -88,6 +88,12 @@ function toFiniteCode(value: unknown): number | undefined {
   return undefined
 }
 
+function isExplicitCancel(signal?: AbortSignal): boolean {
+  if (!signal?.aborted) return false
+  const name = (signal.reason as { name?: string } | undefined)?.name
+  return name !== 'TimeoutError'
+}
+
 function toHttpStatus(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599
     ? value
@@ -132,6 +138,7 @@ export function normalizeFeishuMentions(
   botOpenId: string,
   options?: {
     botName?: string
+    botUserId?: string
     messageType?: string
     rawContent?: string
     resolveCachedName?: (openId: string) => string | undefined
@@ -140,6 +147,7 @@ export function normalizeFeishuMentions(
   const result: ImMention[] = []
   const seenTargets = new Set<string>()
   const botName = options?.botName?.trim() || undefined
+  const botUserId = options?.botUserId?.trim() || undefined
 
   for (const mention of mentions ?? []) {
     if (result.length >= MAX_CONTEXT_MENTIONS) break
@@ -150,7 +158,10 @@ export function normalizeFeishuMentions(
     const key = isAll ? '@_all' : rawKey
     const userId = mention.id?.user_id?.trim() || undefined
     const unionId = mention.id?.union_id?.trim() || undefined
-    const isBot = !isAll && Boolean(botOpenId && id === botOpenId)
+    const isBot = !isAll && Boolean(
+      (botOpenId && id === botOpenId)
+      || (botUserId && userId === botUserId),
+    )
     const name = mention.name?.trim()
       || (isBot ? botName : (id ? options?.resolveCachedName?.(id)?.trim() : undefined))
       || undefined
@@ -202,7 +213,10 @@ export function normalizeFeishuMentions(
             const dedupeKey = isAll ? 'all' : (isPlaceholderKey ? rawAtId : (id || userId))
             if (dedupeKey && seenTargets.has(dedupeKey)) continue
 
-            const isBot = Boolean(botOpenId && id === botOpenId)
+            const isBot = Boolean(
+              (botOpenId && (id === botOpenId || rawAtId === botOpenId))
+              || (botUserId && (userId === botUserId || rawAtId === botUserId)),
+            )
             const rawName = typeof node.user_name === 'string' ? node.user_name.trim() : ''
             const name = rawName
               || (isBot ? botName : (id ? options?.resolveCachedName?.(id)?.trim() : undefined))
@@ -410,11 +424,11 @@ export class FeishuSenderResolver {
           this.log(`[${this.channelId}] 通讯录反查失败 (code=${safeLogCode(res.code)})，已降级保留 sender_open_id`)
         }
       } catch (error) {
-        if (options?.signal?.aborted) return undefined
+        if (isExplicitCancel(options?.signal)) return undefined
         const code = extractFeishuErrorCode(error)
         if (code === FEISHU_PERMISSION_DENIED_CODE) {
           this.markContactDenied(this.now())
-        } else if (lookupSignal.aborted) {
+        } else if (lookupSignal.aborted || options?.signal?.aborted) {
           this.log(`[${this.channelId}] 通讯录反查超时，已降级保留 sender_open_id`)
         } else {
           const status = extractFeishuHttpStatus(error)
@@ -477,15 +491,15 @@ export class FeishuSenderResolver {
           pageToken = nextToken
         }
       } catch (error) {
-        if (options?.signal?.aborted) return undefined
+        if (isExplicitCancel(options?.signal)) return undefined
         if (extractFeishuErrorCode(error) === FEISHU_PERMISSION_DENIED_CODE) {
           this.chatMembersDeniedUntil = this.now() + this.permissionCooldownMs
         }
       }
     }
 
-    // 3. 均未命中时记录短暂负缓存，避免频繁重复查询；通道停止取消时不写入负缓存
-    if (!options?.signal?.aborted) {
+    // 3. 均未命中时记录短暂负缓存，避免频繁重复查询；通道停止/显式取消时不写入负缓存
+    if (!isExplicitCancel(options?.signal)) {
       this.setNegative(openId, this.now())
     }
     return undefined
