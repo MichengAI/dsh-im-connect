@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.54] - 2026-11-24
+
+### DeepSeek Harness 0.2.3 Compatibility & Connection Reliability
+
+- **Full compatibility with DeepSeek Harness 0.2.3**: Optimized management service connectivity and authorization when running under the latest DeepSeek Harness host environments, ensuring uninterrupted communication and stable management endpoints.
+- **Immediate locale and UI preference updates**: Improved language preference synchronization to guarantee that interface text and settings modals reflect host language changes instantly without requiring a page reload.
+- **Extended host matrix support**: Validated host compatibility across versions up to 0.2.3-alpha.2 for consistent, reliable cross-version operation.
+
 ## [1.0.53] - 2026-11-24
 
 ### Account-Level Group Chat Access Policies (#96)

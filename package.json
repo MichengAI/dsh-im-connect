@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-im-connect",
-  "version": "1.0.53",
+  "version": "1.0.54",
   "description": "DSH IM Connect — 将主流即时通讯平台接入本机 DeepSeek Harness · Connect major messaging platforms to local DeepSeek Harness agents",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
@@ -98,22 +98,22 @@
     }
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.1.0",
-    "@deepseek-ai/dsh-agent": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-error": "0.2.2-rc.5",
-    "@deepseek-ai/dsh-host-webserver": "0.2.2-rc.5",
-    "@deepseek-ai/schemastery": "3.19.0",
+    "@deepseek-ai/cordis": "4.2.0-alpha.1",
+    "@deepseek-ai/dsh-agent": "0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-locale": "0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.3-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.3-alpha.2",
+    "@deepseek-ai/dsh-error": "0.2.3-alpha.2",
+    "@deepseek-ai/dsh-host-webserver": "0.2.3-alpha.2",
+    "@deepseek-ai/schemastery": "3.20.0-alpha.1",
     "@types/node": "^22.10.0",
     "@types/qrcode": "^1.5.6",
     "esbuild": "^0.25.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "5.9.3",
-    "@deepseek-ai/dsh-llm": "0.2.2-rc.5"
+    "@deepseek-ai/dsh-llm": "0.2.3-alpha.2"
   },
   "dsh": {
     "manifestVersion": 1,
