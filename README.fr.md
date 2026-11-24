@@ -40,7 +40,7 @@ Chaque message entrant est authentifié avant le traitement des commandes ou l'a
 | Cas d'usage | Comportement |
 |---|---|
 | Groupe sans mention (@) du bot | Message ignoré sans réponse ni notification d'approbation ; mentionner d'autres membres ne déclenche rien |
-| Groupe avec mention explicite (@) du bot | Aucune liaison préalable requise : tout participant peut assigner une tâche |
+| Groupe répondant aux règles de déclenchement | Par défaut, l'accès au groupe autorise tous les membres ; configurable en « Utilisateurs approuvés uniquement » ou « Désactivé ». Les messages non autorisés sont ignorés silencieusement |
 | Message privé de l'utilisateur ayant scanné le QR | Les utilisateurs de WeChat, Feishu, Lark et QQ ayant scanné le QR code sont automatiquement ajoutés à la liste blanche |
 | Message privé d'autres utilisateurs | Placé en file d'attente d'approbation dans les paramètres jusqu'à validation par un administrateur |
 | Message privé après liaison QR sans identité transmise | Les liaisons QR de DingTalk et WeCom ne renvoient que les accès bot ; une validation dans les paramètres reste nécessaire |
@@ -71,7 +71,7 @@ Chaque message entrant est authentifié avant le traitement des commandes ou l'a
 | **💬 WeChat** | QR Code | Scrutation officielle | Protocole de synchronisation natif |
 | **🏢 WeCom** | QR Code / Manuel / URL WebSocket | Rappel interne | Webhook / Messages enrichis / Déploiement privé |
 | **🐧 QQ** | QR Code / Manuel | WebSocket officiel / Webhook | OpenAPI / Markdown enrichi |
-| **✈️ Telegram** | Jeton de bot | Long Polling (getUpdates) | Telegram Bot API / Citations repliables |
+| **✈️ Telegram** | Jeton de bot | Long Polling (getUpdates) | Telegram Bot API |
 | **🎮 Discord** | Jeton de bot | Passerelle WebSocket | API REST |
 | **💬 Slack** | Bot Token & App Token | Socket Mode WebSocket | Web API / Block Kit |
 

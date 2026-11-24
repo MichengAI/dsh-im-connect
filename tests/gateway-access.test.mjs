@@ -404,6 +404,87 @@ test('禁用群聊时已批准用户也不能触发命令', async t => {
   } finally { engine.dispose() }
 })
 
+test('群聊准入=approved 时，重载导致 actor 内存缓存丢失后，审批请求仍能正常投递而不被静默拒绝', async t => {
+  const { engine, handlers, groupSessionId, sent } = makeEngine(t, undefined, undefined, {}, { resolveGroupAccess: () => 'approved' })
+  engine.addAllowed('telegram', 'trusted')
+  engine.sessionActors.clear()
+  engine.chatActors.clear()
+  try {
+    const req = { agent: { session: { id: groupSessionId } }, toolName: 'bash' }
+    const approvalPromise = handlers['approval/request'](req, async () => 'fallback')
+    await waitFor(() => engine.broker.isReady(groupSessionId) || sent.length > 0)
+    assert.equal(engine.broker.isReady(groupSessionId), true)
+    assert.equal(sent.length, 1)
+    assert.match(sent[0].text, /bash/)
+    engine.broker.cancel(groupSessionId)
+    await approvalPromise
+  } finally { engine.dispose() }
+})
+
+test('群聊准入=approved 时，重载导致 actor 内存缓存丢失后，提问请求仍能正常投递', async t => {
+  const { engine, handlers, groupSessionId, sent } = makeEngine(t, undefined, undefined, {}, { resolveGroupAccess: () => 'approved' })
+  engine.addAllowed('telegram', 'trusted')
+  engine.sessionActors.clear()
+  engine.chatActors.clear()
+  try {
+    const questionsReq = { agent: { id: groupSessionId }, questions: [{ id: 'q1', question: '请选择', options: [{ label: '选项1' }] }] }
+    const questionPromise = handlers['user-questions/request'](questionsReq, async () => ({ answers: [] }))
+    await waitFor(() => engine.questions.isReady(groupSessionId) || sent.length > 0)
+    assert.equal(engine.questions.isReady(groupSessionId), true)
+    assert.equal(sent.length, 1)
+    assert.match(sent[0].text, /请选择/)
+    engine.questions.cancel(groupSessionId, new Error('cancel test'))
+    await assert.rejects(questionPromise)
+  } finally { engine.dispose() }
+})
+
+test('群聊准入=approved 时，若明确记录的发起人不在白名单，交互与提问均被拦截', async t => {
+  const { engine, handlers, groupSessionId, sent } = makeEngine(t, undefined, undefined, {}, { resolveGroupAccess: () => 'approved' })
+  engine.addAllowed('telegram', 'trusted')
+  engine.sessionActors.set(groupSessionId, 'unauthorized-user')
+  try {
+    const req = { agent: { session: { id: groupSessionId } }, toolName: 'bash' }
+    const result = await handlers['approval/request'](req, async () => 'fallback')
+    assert.equal(result, 'rejected')
+    assert.equal(sent.length, 0)
+
+    const questionsReq = { agent: { id: groupSessionId }, questions: [{ id: 'q1', question: '请选择', options: [{ label: '选项1' }] }] }
+    await assert.rejects(
+      handlers['user-questions/request'](questionsReq, async () => ({ answers: [] })),
+      /交互问题未能发送到原聊天/,
+    )
+    assert.equal(sent.length, 0)
+  } finally { engine.dispose() }
+})
+
+test('recoverQuestionActor 在 approved 模式下严格校验白名单，不误认陌生人', t => {
+  const { engine, groupSessionId } = makeEngine(t, undefined, undefined, {}, { resolveGroupAccess: () => 'approved' })
+  try {
+    engine.deferred.list = () => [{
+      id: 'msg-1',
+      sessionId: groupSessionId,
+      status: 'waiting',
+      channelId: 'telegram',
+      message: { kind: 'group', chatId: 'chat-9', userId: 'stranger', text: '' },
+    }]
+    const fakeSession = {
+      capability: { history: true },
+      events: [
+        { type: 'turn/start', data: { turn: 1 } },
+        { type: 'user/message', data: { id: 'msg-1', turn: 1 } },
+      ],
+    }
+    const resStranger = engine.recoverQuestionActor(groupSessionId, fakeSession)
+    assert.equal(resStranger.actor, undefined)
+
+    engine.addAllowed('telegram', 'stranger')
+    const resAllowed = engine.recoverQuestionActor(groupSessionId, fakeSession)
+    assert.equal(resAllowed.actor, 'stranger')
+  } finally { engine.dispose() }
+})
+
+
+
 test('账号显式允许所有私聊用户时覆盖渠道本地白名单', async (t) => {
   const { engine, inbound, sent } = makeEngine(t, undefined, undefined, {}, {
     resolvePrivateAccess: () => 'all',

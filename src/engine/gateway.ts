@@ -469,6 +469,17 @@ export class ImEngine {
     })
   }
 
+  private isActorAuthorized(channelId: string, channel: ChannelAdapter, msg: ImMessage): boolean {
+    if (channel.authorizes?.(msg.userId ?? '') === false) return false
+    if (msg.kind === 'group') {
+      const policy = this.resolveGroupAccess(channelId)
+      if (policy === 'disabled') return false
+      if (policy === 'approved') return this.userAllowed(channelId, msg.userId)
+      return true
+    }
+    return this.isAuthorized(channelId, channel, msg)
+  }
+
   private async rejectUnauthorized(channelId: string, channel: ChannelAdapter, msg: ImMessage): Promise<void> {
     this.log(`[${channelId}] 拒绝未授权用户 ${msg.userId || '(无 userId)'}`)
     const hint = withReplyLocale(this.ctx, () => this.onUnauthorized?.(channelId, msg) ?? replyText('未授权：请管理员在设置 → IM助理 中批准你的访问。'))
@@ -875,15 +886,26 @@ export class ImEngine {
       const channel = binding ? this.channels.get(binding.channelId) : undefined
       if (!binding || !channel) return refused
       // 只记录真实发言人；不能拿 chatId 冒充用户，否则群聊会把发起者判成外人。
+      const recovered = !this.sessionActors.has(sessionId) && req.agent?.session
+        ? this.recoverQuestionActor(sessionId, req.agent.session).actor
+        : undefined
       const knownActor = this.sessionActors.get(sessionId)
         ?? this.chatActors.get(`${binding.channelId}:${binding.kind}:${binding.chatId}`)
+        ?? recovered
+        ?? (binding.kind === 'dm' ? binding.chatId : undefined)
       if (knownActor) this.sessionActors.set(sessionId, knownActor)
       const prompt = await withReplyLocale(this.ctx, () => this.approvalPrompt(req))
       const wait = this.broker.wait(sessionId, APPROVAL_WAIT_MS, req.signal)
       if (!wait) return refused
       const ticket = this.broker.token(sessionId)
       const delivery = await this.retryInteraction(channel, () => this.deliverInteraction(channel, binding.chatId, prompt, req.signal, {
-        sessionId, message: { chatId: binding.chatId, userId: knownActor ?? binding.chatId, kind: binding.kind, text: '', messageId: this.interactionMessageIds.get(sessionId) },
+        sessionId, message: {
+          chatId: binding.chatId,
+          userId: knownActor ?? (binding.kind === 'dm' ? binding.chatId : undefined),
+          kind: binding.kind,
+          text: '',
+          messageId: this.interactionMessageIds.get(sessionId),
+        },
         choices: withReplyLocale(this.ctx, () => [{ label: replyText('批准一次'), value: 'allow' }, { label: replyText('拒绝'), value: 'reject' }]),
         valid: () => this.broker.token(sessionId) === ticket && this.broker.isReady(sessionId),
       }))
@@ -940,7 +962,7 @@ export class ImEngine {
         && entry.message.chatId === binding.chatId && !!entry.message.userId
         && (entry.turn === undefined || entry.turn === turn)
         && !['sent', 'rejected', 'expired'].includes(entry.status)
-        && (entry.message.kind === 'group' && this.resolveGroupAccess(binding.channelId) === 'approved' || this.isAuthorized(binding.channelId, channel, entry.message)) && this.validDelivery(entry),
+        && this.isActorAuthorized(binding.channelId, channel, entry.message) && this.validDelivery(entry),
       ).map(entry => entry.message.userId!))
       return { hasHistory: true, actor: actors.size === 1 ? actors.values().next().value : undefined }
     } catch { return { hasHistory: true } }
@@ -1793,6 +1815,16 @@ export class ImEngine {
 
   private formatQuestion(...args: Parameters<typeof formatUserQuestion>): string { return withReplyLocale(this.ctx, () => formatUserQuestion(...args)) }
 
+  private canDeliverGroupInteraction(channelId: string, channel: ChannelAdapter, chatId: string, actor?: string): boolean {
+    const policy = this.resolveGroupAccess(channelId)
+    if (policy === 'disabled') return false
+    if (policy === 'all') return true
+    if (actor && actor !== chatId) {
+      return this.userAllowed(channelId, actor)
+    }
+    return (this.extraAllow.get(channelId)?.size ?? 0) > 0
+  }
+
   private deliverQuestionInteraction(
     sessionId: string,
     channel: ChannelAdapter,
@@ -1804,7 +1836,7 @@ export class ImEngine {
     const current = this.questions.current(sessionId)
     const binding = this.router.bindingForSession(sessionId)
     const actor = this.questionActors.has(sessionId) ? this.questionActors.get(sessionId) : this.sessionActors.get(sessionId) ?? (binding ? this.chatActors.get(`${binding.channelId}:${binding.kind}:${binding.chatId}`) : undefined) ?? (binding?.kind === 'dm' ? chatId : undefined)
-    if (binding?.kind === 'group' && this.accessDecision(channel.id, channel, { chatId, userId: actor, kind: 'group', text: '' }, true) !== 'allow') {
+    if (binding?.kind === 'group' && !this.canDeliverGroupInteraction(channel.id, channel, chatId, actor)) {
       return Promise.resolve({ status: 'failed', deliveredAny: false, retrySafe: false })
     }
     const selected = this.questionSelections.get(sessionId) ?? new Set<number>()
@@ -1852,7 +1884,7 @@ export class ImEngine {
     interactive?: { sessionId: string; message: ImMessage; choices: Choice[]; valid: () => boolean },
   ): Promise<InteractionDeliveryResult> {
     let deliveredAny = false
-    const allowed = () => !interactive || interactive.message.kind !== 'group' || this.accessDecision(channel.id, channel, interactive.message, true) === 'allow'
+    const allowed = () => !interactive || interactive.message.kind !== 'group' || this.canDeliverGroupInteraction(channel.id, channel, interactive.message.chatId, interactive.message.userId)
     if (!allowed()) return { status: 'failed', deliveredAny, retrySafe: false }
     const requiresDefinite = channel.interactionRetryRequiresDefinite === true
     let cardUnknown = false

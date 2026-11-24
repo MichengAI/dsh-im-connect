@@ -2,6 +2,19 @@
 
 ## [1.0.53] - 2026-11-24
 
+### Account-Level Group Chat Access Policies (#96)
+
+- **Configurable group chat access policies (#96)**: Added a "Group chat access" setting for bot accounts, allowing administrators to choose between "All group members" (default), "Approved users only", and "Disabled". In "Approved users only" mode, only whitelisted users can trigger the bot by mentioning it, while unauthorized mentions are silently ignored to prevent unwanted task execution in shared enterprise groups.
+- **Seamless backward compatibility**: Existing accounts retain their current behavior ("All group members") by default without configuration changes.
+
+### Telegram Status Line Formatting & Markdown Escaping (#97, #98)
+
+- **Reliable Telegram status and tool progress messages (#97, #98)**: Escaped all reserved Markdown characters (such as underscores, asterisks, brackets, tildes, and backticks) in status lines and tool execution progress notices, eliminating message delivery failures caused by Telegram Markdown formatting syntax errors.
+
+### Workspace Session Isolation & Startup Reliability (#88, #99)
+
+- **Clean workspace session creation (#88, #99)**: Further refined the workspace attachment mechanisms during startup to guarantee that clicking "New Session" in an ordinary workspace never inadvertently jumps into or reuses a blank IM channel draft.
+
 ### Remove Collapsible Thinking Option for Telegram (#89, #90)
 
 - **Disable Telegram collapsible thinking (#89, #90)**: Removed the collapsible thinking display setting for Telegram accounts to provide a consistent and stable messaging experience. Existing account configurations set to collapsed automatically fall back to off, while standard answers and progress indicators remain unaffected.

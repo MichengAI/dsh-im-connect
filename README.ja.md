@@ -40,7 +40,7 @@ PCの前にいなくても、普段お使いのメッセージングアプリか
 | 利用シナリオ | 動作 |
 |---|---|
 | ボットへの @メンションがないグループチャット | 無視され、返信や承認リクエストは生成されません。他のメンバーへの @メンションでも反応しません |
-| ボットへの @メンションがあるグループチャット | 連携不要で、誰でもタスクを指示できます |
+| グループチャット（トリガー条件を満たす場合） | アカウント設定のデフォルトは「全メンバーを許可」です。「承認済みユーザーのみ」または「グループチャット無効」に設定可能。拒否されたグループメッセージは静かに無視されます |
 | DM（QRコードをスキャンしたユーザー） | WeChat / Feishu / Lark / QQ のスキャン者は自動的にホワイトリストに登録され、直接対話可能です |
 | DM（その他のユーザー） | 承認待ちリストに入り、管理者が設定画面で承認するまで利用できません |
 | DM（ユーザー情報が返されないQR連携） | DingTalk / WeCom のクイック連携はボット情報のみを取得するため、スキャン者も設定画面での承認が必要です |
@@ -73,7 +73,7 @@ WeChat はQRコード連携のみでDMにのみ対応しているため、スキ
 | **💬 WeChat** | QRコードスキャン | 公式同期ポーリング | 組み込み同期プロトコル |
 | **🏢 WeCom** | QRコードスキャン / 手動凭証 / WebSocket URL | 内部コールバック | Webhook / カードメッセージ / オンプレミス対応 |
 | **🐧 QQ** | QRコードスキャン / 手動凭証 | 公式 WebSocket / Webhook | OpenAPI / リッチテキスト |
-| **✈️ Telegram** | Bot Token | 長時間ポーリング (getUpdates) | Telegram Bot API / 折畳引用 |
+| **✈️ Telegram** | Bot Token | 長時間ポーリング (getUpdates) | Telegram Bot API |
 | **🎮 Discord** | Bot Token | Gateway WebSocket | REST API |
 | **💬 Slack** | Bot Token & App Token | Socket Mode WebSocket | Web API / Block Kit |
 
@@ -158,7 +158,7 @@ dsh plugin --profile web add @michengai/dsh-im-connect --registry=https://regist
 
 ### 4. 思考プロセスの折りたたみ表示 (`thinkingDisplay`)
 - **デフォルト**: オフ (`off`)
-- **機能**: モデルの思考プロセスを Telegram（折りたたみ引用ブロック `<blockquote expandable>`）および Feishu/Lark（ネイティブ思考プロセスおよびスレッド内カード折りたたみ）として送信し、タップで展開できるようにします。
+- **機能**: Feishu / Lark において、モデルの思考プロセスをネイティブ思考プロセス気泡およびスレッド内折りたたみカードとして送信し、タップで展開できるようにします（Telegram では思考折りたたみ表示は行わず、通常の進捗通知と回答を維持します）。
 
 ### 5. 飛書（Feishu）スレッドセッション分離 (`threadSessions`)
 - **デフォルト**: 無効 (`false`)

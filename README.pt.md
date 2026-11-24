@@ -40,7 +40,7 @@ As mensagens recebidas são verificadas pelo remetente antes do processamento de
 | Caso de uso | Comportamento |
 |---|---|
 | Grupo sem menção (@) ao bot | Ignorado; nenhuma resposta ou solicitação de aprovação é gerada |
-| Grupo com menção explícita (@) ao bot | Sem necessidade de vinculação prévia: qualquer participante pode enviar tarefas |
+| Grupo que atende às regras de acionamento | O acesso em grupo por padrão permite todos os membros; configurável para «Apenas usuários aprovados» ou «Desativado». Mensagens não autorizadas são ignoradas silenciosamente |
 | Mensagem direta de quem escaneou o QR | Usuários de WeChat, Feishu, Lark e QQ que escanearam o QR code entram automaticamente na lista de permissões |
 | Mensagem direta de outros usuários | Entra na lista de espera das configurações até aprovação por um administrador |
 | Mensagem direta após QR sem identificação | A vinculação rápida do DingTalk e WeCom retorna apenas credenciais do bot; aprovação em configurações necessária |
@@ -71,7 +71,7 @@ As mensagens recebidas são verificadas pelo remetente antes do processamento de
 | **💬 WeChat** | QR Code | Sondagem oficial sincronizada | Protocolo de sincronização nativo |
 | **🏢 WeCom** | QR Code / Manual / URL do WebSocket | Callback interno | Webhook / Cartões formatados / Suporte On-Premise |
 | **🐧 QQ** | QR Code / Manual | WebSocket oficial / Webhook | OpenAPI / Markdown avançado |
-| **✈️ Telegram** | Token de Bot | Long Polling (getUpdates) | Telegram Bot API / Citações expansíveis |
+| **✈️ Telegram** | Token de Bot | Long Polling (getUpdates) | Telegram Bot API |
 | **🎮 Discord** | Token de Bot | Gateway WebSocket | REST API |
 | **💬 Slack** | Bot Token & App Token | Socket Mode WebSocket | Web API / Block Kit |
 

@@ -110,6 +110,7 @@ export declare class ImEngine {
     private cancelSessionInteractions;
     private isAuthorized;
     private accessDecision;
+    private isActorAuthorized;
     private rejectUnauthorized;
     private handleInbound;
     private validDelivery;
@@ -196,6 +197,7 @@ export declare class ImEngine {
      */
     private sendChunk;
     private formatQuestion;
+    private canDeliverGroupInteraction;
     private deliverQuestionInteraction;
     private announceApprovalTimedOut;
     private announceInteractionCancelled;
