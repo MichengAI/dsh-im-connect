@@ -393,9 +393,9 @@ test('client.js 导出的 threadSessions 行为映射与保存平台门控严格
   const larkPatch = { threadSessions: false, thinkingDisplay: false }
   assert.deepEqual(toPlain(filterAccountPlatformPayload('lark', larkPatch)), { threadSessions: false, thinkingDisplay: false })
 
-  // telegram 仅允许 thinkingDisplay，绝不允许透传 threadSessions
+  // telegram 现已移除 thinkingDisplay 支持，两项均严禁透传
   const tgPatch = { threadSessions: true, thinkingDisplay: true }
-  assert.deepEqual(toPlain(filterAccountPlatformPayload('telegram', tgPatch)), { thinkingDisplay: true })
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('telegram', tgPatch)), {})
 
   // 其他平台（如 wecom、dingtalk、qq）两项均严禁透传
   const otherPatch = { threadSessions: true, thinkingDisplay: true }

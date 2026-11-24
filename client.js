@@ -4206,7 +4206,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
 
     function filterAccountPlatformPayload(platform, patch, payload) {
       const result = payload || {};
-      if (platform === "telegram" || platform === "feishu" || platform === "lark") {
+      if (platform === "feishu" || platform === "lark") {
         if (Object.prototype.hasOwnProperty.call(patch, "thinkingDisplay")) {
           result.thinkingDisplay = patch.thinkingDisplay;
         }
