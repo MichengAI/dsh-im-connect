@@ -686,9 +686,13 @@ export class ChannelManager {
     this.flush()
   }
 
-  attachMappedSessions(): Promise<void> {
+  recoverMappedSessions(): Promise<void> {
+    return this.engine.recoverMappedSessions()
+  }
+
+  attachMappedSessions(active: () => boolean): Promise<void> {
     if (this.disposed) return Promise.resolve()
-    return this.engine.attachMappedSessions()
+    return this.engine.attachMappedSessions(active)
   }
 
   async initEnabled(): Promise<void> {

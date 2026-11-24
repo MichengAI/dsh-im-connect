@@ -641,12 +641,14 @@ export class SessionRouter {
     })
   }
 
-  async attachMappedSessions(active: () => boolean = () => true): Promise<void> {
-    const started = Date.now()
+  async recoverMappedSessions(active: () => boolean): Promise<void> {
     if (!active()) return
     await this.recoverHistory()
-    if (!active()) return
-    await this.pruneMissingSessions()
+    if (active()) await this.pruneMissingSessions()
+  }
+
+  async attachMappedSessions(active: () => boolean = () => true): Promise<void> {
+    const started = Date.now()
     const records = this.store.list().filter(record => !record.adopted && isImSessionId(record.sessionId))
     if (!records.length || !active()) return
     const controller = this.ctx.get?.('sessionController') as { list?(request: object): Promise<{ items: readonly { sessionId: string; blank?: boolean }[] }> } | undefined
@@ -661,7 +663,24 @@ export class SessionRouter {
         if (!active()) return
         await this.channelOperations.run(channel, async () => {
           const record = this.store.findSession(sessionId)
-          if (record) await this.syncWorkspaceMembership(record, blank.get(sessionId), active)
+          if (!record || !active()) return
+          let isBlank = blank.get(sessionId)
+          const registry = this.ctx.get?.('workspaceRegistry') as WorkspaceLookup | undefined
+          if (isBlank !== true && registry?.list().some(workspace => workspace.sessionIds?.includes(sessionId))) {
+            // The host list can report a cold session with no projection as nonblank.
+            const query = this.ctx.get?.('sessionQuery') as {
+              observeSession?(id: string): Promise<Disposable & { events: readonly { type: string }[] }>
+            } | undefined
+            if (query?.observeSession) {
+              try {
+                using observed = await query.observeSession(sessionId)
+                isBlank = !observed.events.some(event => event.type === 'turn/start')
+              } catch (error) {
+                this.log(`[router] 无法读取会话 ${sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+              }
+            }
+          }
+          await this.syncWorkspaceMembership(record, isBlank, active)
         })
       }
     } catch (error) {

@@ -94,7 +94,8 @@ export declare class ImEngine {
     setModel(provider: string, model: string, reasoningEffort?: string): void;
     setCwd(cwd: string): void;
     setPermission(permission: string): void;
-    attachMappedSessions(): Promise<void>;
+    recoverMappedSessions(): Promise<void>;
+    attachMappedSessions(active: () => boolean): Promise<void>;
     register(channel: ChannelAdapter): void;
     unregister(channelId: string): void;
     addAllowed(channelId: string, userId: string): void;

@@ -134,9 +134,18 @@ export function apply(ctx: Context, config: PluginConfig): void {
   }, 'im-connect.segment-section')
   ctx.effect(() => {
     manager.registerApi(ctx)
-    // 卸载或初始化失败后不再恢复会话；保留一个完整异常链，避免后台拒绝终止宿主。
-    void manager.initEnabled().then(() => manager.attachMappedSessions()).catch(error => {
+    const reportStartupError = (error: unknown) => {
       fileLog.append(`${new Date().toISOString()} [boot] 初始化失败: ${error instanceof Error ? error.message : String(error)}\n`)
+    }
+    const recovered = manager.initEnabled().then(() => manager.recoverMappedSessions())
+    void recovered.catch(reportStartupError)
+    // 工作区服务可能晚于 IM 启动，且无 Web 的宿主仍须恢复频道映射。
+    ctx.inject(['sessionController', 'workspaceRegistry', 'sessionQuery'], scope => {
+      scope.effect(() => {
+        let active = true
+        void recovered.then(() => manager.attachMappedSessions(() => active), () => {}).catch(reportStartupError)
+        return () => { active = false }
+      }, 'im-connect.reconcile-workspaces')
     })
     log(`[boot] apply 完成 ${Date.now() - applyStarted}ms`)
     return () => { manager.disposeApi(); void fileLog.flush() }
