@@ -9,7 +9,7 @@
 
 ### Telegram Status Line Formatting & Markdown Escaping (#97, #98)
 
-- **Reliable Telegram status and tool progress messages (#97, #98)**: Escaped all reserved Markdown characters (such as underscores, asterisks, brackets, tildes, and backticks) in status lines and tool execution progress notices, eliminating message delivery failures caused by Telegram Markdown formatting syntax errors.
+- **Reliable Telegram status and tool progress messages (#97, #98)**: Escaped reserved Markdown formatting characters (including backslashes, underscores, asterisks, brackets, tildes, and backticks) in status line prefixes and tool execution notices, preventing Telegram Markdown parse errors and delivery failures.
 
 ### Workspace Session Isolation & Startup Reliability (#88, #99)
 

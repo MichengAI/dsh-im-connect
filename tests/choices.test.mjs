@@ -167,3 +167,16 @@ for (const native of [true, false]) test(`正文已有部分选项时不重复�
   assert.equal(body.split('3. 提交所选').length - 1, 1)
   assert.equal(store.resolve('bot', { ...msg, text: '3' }, 's'), 'submit')
 })
+
+test('卡片未绑定指定操作者时（如群聊广播），同群成员点击均可生效', async () => {
+  const store = new ChoiceStore()
+  let token
+  const channel = { id: 'bot', sendChoices: async (_, __, buttons) => { token = buttons[0].token } }
+  const publicMsg = { chatId: 'chat-group', kind: 'group', text: '' }
+  await store.show(channel, publicMsg, 'Approval', [{ label: 'Approve', value: 'allow' }])
+  // 异群点击不匹配
+  assert.equal(store.resolve('bot', { chatId: 'other-group', kind: 'group', userId: 'alice', actionToken: token, text: '' }), '')
+  // 同群成员点击生效
+  assert.equal(store.resolve('bot', { chatId: 'chat-group', kind: 'group', userId: 'alice', actionToken: token, text: '' }), 'allow')
+})
+

@@ -16,6 +16,7 @@ export declare class ChoiceStore {
     private close;
     private retire;
     private key;
+    private matchesKey;
     clear(channel?: string): void;
     show(channel: ChannelAdapter, msg: ImMessage, text: string, choices: Choice[], session?: string, valid?: () => boolean, hint?: string, allowNumber?: boolean): Promise<string>;
     resolve(channel: string, msg: ImMessage, session?: string, allowNumber?: boolean): string | undefined;

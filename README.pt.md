@@ -101,7 +101,7 @@ Acessível no painel em **Plugins → @michengai/dsh-im-connect**:
 
 ### 4. Bloco recolhível de raciocínio (`thinkingDisplay`)
 - **Padrão**: Desativado (`off`)
-- **Função**: Envia a cadeia de pensamento no Telegram (`<blockquote expandable>`) e Feishu/Lark (processo nativo de pensamento ou cartão recolhível em tópicos).
+- **Função**: Envia a cadeia de pensamento no Feishu/Lark (processo nativo de pensamento ou cartão recolhível em tópicos; o Telegram não suporta mais o pensamento recolhível, mantendo as linhas de status e respostas habituais).
 
 ### 5. Isolamento de sessões de tópicos no Feishu (`threadSessions`)
 - **Padrão**: Desativado (`false`)

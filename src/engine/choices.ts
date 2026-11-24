@@ -30,6 +30,16 @@ export class ChoiceStore {
     this.close(entry, text ?? entry.expiredText)
   }
   private key(channel: string, msg: ImMessage): string { return JSON.stringify([channel, msg.kind ?? 'dm', msg.chatId, msg.userId ?? '']) }
+  private matchesKey(entryKey: string, key: string): boolean {
+    if (entryKey === key) return true
+    try {
+      const [eChan, eKind, eChat, eUser] = JSON.parse(entryKey)
+      const [kChan, kKind, kChat, kUser] = JSON.parse(key)
+      return eChan === kChan && eKind === kKind && eChat === kChat && (!eUser || eUser === kUser)
+    } catch {
+      return false
+    }
+  }
   clear(channel?: string): void {
     for (const [token, entry] of this.entries) if (!channel || JSON.parse(entry.key)[0] === channel) this.retire(token)
   }
@@ -73,17 +83,18 @@ export class ChoiceStore {
   resolve(channel: string, msg: ImMessage, session?: string, allowNumber = true): string | undefined {
     const key = this.key(channel, msg)
     const explicit = msg.actionToken
-    const token = explicit?.split(':')[0] ?? this.scopes.get(key)
+    const token = explicit?.split(':')[0] ?? this.scopes.get(key) ?? this.scopes.get(this.key(channel, { ...msg, userId: undefined }))
     if (!token) return explicit ? '' : undefined
     const entry = this.entries.get(token)
-    const numeric = allowNumber && entry?.allowNumber && /^\d+$/.test(msg.text.trim())
+    const text = msg.text?.trim() ?? ''
+    const numeric = allowNumber && entry?.allowNumber && /^\d+$/.test(text)
     if (!explicit && !numeric) {
-      if (!msg.text.startsWith('/')) this.retire(token)
+      if (!msg.text?.startsWith('/')) this.retire(token)
       return undefined
     }
-    if (!entry || entry.key !== key || entry.session !== session) return ''
+    if (!entry || !this.matchesKey(entry.key, key) || entry.session !== session) return ''
     if (entry.expires <= Date.now() || !entry.valid()) { this.retire(token); return '' }
-    const index = explicit ? Number(explicit.split(':')[1]) : Number(msg.text.trim()) - 1
+    const index = explicit ? Number(explicit.split(':')[1]) : Number(text) - 1
     if (!Number.isSafeInteger(index) || index < 0 || !entry.choices[index]) return ''
     this.retire(token, entry.selectedTexts[index])
     return entry.choices[index]!.value

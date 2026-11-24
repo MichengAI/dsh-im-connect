@@ -280,6 +280,7 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}, options = {}) {
     setMessageHandler(h) { inbound = h },
     status() { return '轮询中' },
     ...(options.authorizes ? { authorizes: options.authorizes } : {}),
+    ...(options.sendChoices ? { sendChoices: options.sendChoices } : {}),
   })
   return { engine, inbound, sent, handlers, dmSessionId, groupSessionId, store, ctx }
 }
@@ -418,6 +419,32 @@ test('群聊准入=approved 时，重载导致 actor 内存缓存丢失后，审
     assert.match(sent[0].text, /bash/)
     engine.broker.cancel(groupSessionId)
     await approvalPromise
+  } finally { engine.dispose() }
+})
+
+test('群聊准入=approved 时，重载后群内审批卡片按钮可被白名单用户正常点击批准', async t => {
+  const cards = []
+  const { engine, inbound, handlers, groupSessionId, sent } = makeEngine(t, undefined, undefined, {}, {
+    resolveGroupAccess: () => 'approved',
+    sendChoices: async (msg, text, buttons) => {
+      cards.push({ msg, text, buttons })
+      return { close: async () => {} }
+    },
+  })
+  engine.addAllowed('telegram', 'trusted')
+  engine.sessionActors.clear()
+  engine.chatActors.clear()
+  try {
+    const req = { agent: { session: { id: groupSessionId } }, toolName: 'bash' }
+    const approvalPromise = handlers['approval/request'](req, async () => 'fallback')
+    await waitFor(() => cards.length > 0)
+    assert.equal(cards.length, 1)
+    const approveBtn = cards[0].buttons[0]
+    assert.match(approveBtn.label, /批准/)
+    inbound({ chatId: 'chat-9', userId: 'trusted', text: '', kind: 'group', actionToken: approveBtn.token, messageId: 'click-btn-1' })
+    const verdict = await approvalPromise
+    assert.equal(verdict, 'allowed-once')
+    assert.equal(engine.sessionActors.get(groupSessionId), 'trusted')
   } finally { engine.dispose() }
 })
 

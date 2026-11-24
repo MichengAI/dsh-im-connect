@@ -101,7 +101,7 @@ Erreichbar über die Verwaltung unter **Plugins → @michengai/dsh-im-connect**:
 
 ### 4. Einklappbare Denkprozess-Anzeige (`thinkingDisplay`)
 - **Standard**: Aus (`off`)
-- **Funktion**: Übermittelt den Denkprozess des Modells auf Telegram als einklappbaren Zitatblock (`<blockquote expandable>`) sowie auf Feishu/Lark als nativen Denkprozess bzw. einklappbare Karte in Threads.
+- **Funktion**: Übermittelt den Denkprozess des Modells auf Feishu/Lark als nativen Denkprozess bzw. einklappbare Karte in Threads (Telegram unterstützt keine eingeklappte Denkprozess-Anzeige mehr, reguläre Statuszeilen und Antworten bleiben erhalten).
 
 ### 5. Feishu-Thread-Sitzungsisolation (`threadSessions`)
 - **Standard**: Deaktiviert (`false`)
