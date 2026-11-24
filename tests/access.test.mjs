@@ -17,6 +17,13 @@ test('群聊不用绑定：未 @ 忽略，@ 后直接放行', () => {
   assert.equal(decideAccess({ userAllowed: true, kind: 'group', addressed: true }), 'allow')
 })
 
+test('群策略只允许已批准用户或完全禁用，并保留寻址过滤', () => {
+  assert.equal(decideAccess({ userAllowed: false, kind: 'group', addressed: true, groupAccess: 'approved' }), 'ignore')
+  assert.equal(decideAccess({ userAllowed: true, kind: 'group', addressed: true, groupAccess: 'approved' }), 'allow')
+  assert.equal(decideAccess({ userAllowed: true, kind: 'group', addressed: false, groupAccess: 'approved' }), 'ignore')
+  assert.equal(decideAccess({ userAllowed: true, kind: 'group', addressed: true, groupAccess: 'disabled' }), 'ignore')
+})
+
 test('工具授权只允许私聊白名单用户', () => {
   assert.equal(canAnswerToolApproval({ userAllowed: true, kind: 'dm' }), true)
   assert.equal(canAnswerToolApproval({ userAllowed: true, kind: 'group' }), false)

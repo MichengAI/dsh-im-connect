@@ -994,6 +994,24 @@ test('只修改账号名称或私聊策略不重载会话', async (t) => {
   assert.deepEqual(reloads, [])
 })
 
+test('账号界面提供群访问策略并保存', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(client, /t\("account\.groupAccess"\)/)
+  assert.match(client, /groupAccess: next\.groupAccess/)
+})
+
+test('群访问策略默认开放并可更新，旧客户端保存不会覆盖', async t => {
+  const manager = makeManager(t)
+  manager.startOne = async () => undefined
+  const created = await manager.connect('telegram', { token: 'group-policy-test' }, { provider: 'p', model: 'm', cwd: 'D:/repo/group', permission: 'review' })
+  assert.equal((await manager.updateAccount(created.accountId, {})).account.groupAccess, 'all')
+  const updated = await manager.updateAccount(created.accountId, { groupAccess: 'approved', privateAccess: 'all' })
+  assert.equal(updated.account.groupAccess, 'approved')
+  const preserved = await manager.updateAccount(created.accountId, { name: 'group' })
+  assert.equal(preserved.account.groupAccess, 'approved')
+  assert.equal((await manager.updateAccount(created.accountId, { groupAccess: 'disabled' })).account.groupAccess, 'disabled')
+})
+
 test('清空账号备注后恢复原来的自动序号，不按当前账号数重编', async (t) => {
   const manager = makeManager(t)
   manager.startOne = async () => undefined

@@ -264,7 +264,7 @@ function makeEngine(t, onUnauthorized, sendImpl, services = {}, options = {}) {
     agentPreset: 'standard',
     mergeTimeoutSecs: 1,
     permissionPreset: 'danger-full-access',
-  }, () => undefined, onUnauthorized, undefined, options.resolvePrivateAccess, options.resolveCommandPermissions, undefined, [0])
+  }, () => undefined, onUnauthorized, undefined, options.resolvePrivateAccess, options.resolveCommandPermissions, undefined, [0], undefined, options.resolveGroupAccess)
   const sent = []
   let inbound
   engine.register({
@@ -340,6 +340,67 @@ test('/help 说明新旧会话行为及 /clear 别名', async t => {
     await waitFor(() => sent.length > 0)
     assert.match(sent[0].text, /\/clear/)
     assert.match(sent[0].text, /旧会话保留在频道列表/)
+  } finally { engine.dispose() }
+})
+
+test('群白名单独立于私聊全开放，拒绝者不改变活跃身份', async t => {
+  const { engine, inbound, sent } = makeEngine(t, undefined, undefined, {}, { resolvePrivateAccess: () => 'all', resolveGroupAccess: () => 'approved' })
+  engine.addAllowed('telegram', 'trusted')
+  try {
+    inbound({ chatId: 'chat-9', userId: 'trusted', text: '/help', kind: 'group', addressed: true, messageId: 'group-trusted' })
+    await waitFor(() => sent.length === 1)
+    inbound({ chatId: 'chat-9', userId: 'stranger', text: '/help', kind: 'group', addressed: true, messageId: 'group-stranger' })
+    await waitFor(() => engine.seen.has('telegram:group-stranger'))
+    assert.equal(sent.length, 1)
+    assert.equal(engine.chatActors.get('telegram:group:chat-9'), 'trusted')
+  } finally { engine.dispose() }
+})
+
+test('群交互提示重试前检查群策略', async t => {
+  let policy = 'all'
+  const { engine, sent } = makeEngine(t, undefined, undefined, {}, { resolveGroupAccess: () => policy })
+  const channel = engine.channels.get('telegram')
+  const interactive = { sessionId: 'session', message: { chatId: 'chat-9', userId: 'trusted', kind: 'group', text: '' }, choices: [], valid: () => true }
+  policy = 'disabled'
+  try {
+    const result = await engine.deliverInteraction(channel, 'chat-9', 'prompt', undefined, interactive)
+    assert.equal(result.status, 'failed')
+    assert.equal(sent.length, 0)
+  } finally { engine.dispose() }
+})
+
+test('合并窗口结束时策略已关闭不创建或触碰会话', async t => {
+  const { engine, store } = makeEngine(t, undefined, undefined, {}, { resolveGroupAccess: () => 'disabled' })
+  const before = structuredClone(store.get('telegram:group:chat-9'))
+  const channel = engine.channels.get('telegram')
+  try {
+    await engine.inject(channel, { chatId: 'chat-9', kind: 'group', text: 'merged' }, [{ chatId: 'chat-9', userId: 'trusted', kind: 'group', text: 'merged' }])
+    assert.deepEqual(store.get('telegram:group:chat-9'), before)
+  } finally { engine.dispose() }
+})
+
+test('补发时重新检查当前群策略和原发言人', t => {
+  let policy = 'all'
+  const { engine, groupSessionId } = makeEngine(t, undefined, undefined, {}, { resolvePrivateAccess: () => 'all', resolveGroupAccess: () => policy })
+  const entry = { channelId: 'telegram', sessionId: groupSessionId, message: { chatId: 'chat-9', userId: 'stranger', kind: 'group', text: '' } }
+  try {
+    assert.equal(engine.validDelivery(entry), true)
+    policy = 'approved'
+    assert.equal(engine.validDelivery(entry), false)
+    engine.addAllowed('telegram', 'stranger')
+    assert.equal(engine.validDelivery(entry), true)
+    policy = 'disabled'
+    assert.equal(engine.validDelivery(entry), false)
+  } finally { engine.dispose() }
+})
+
+test('禁用群聊时已批准用户也不能触发命令', async t => {
+  const { engine, inbound, sent } = makeEngine(t, undefined, undefined, {}, { resolveGroupAccess: () => 'disabled' })
+  engine.addAllowed('telegram', 'trusted')
+  try {
+    inbound({ chatId: 'chat-9', userId: 'trusted', text: '/help', kind: 'group', addressed: true, messageId: 'group-disabled' })
+    await waitFor(() => engine.seen.has('telegram:group-disabled'))
+    assert.equal(sent.length, 0)
   } finally { engine.dispose() }
 })
 

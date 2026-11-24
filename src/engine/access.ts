@@ -18,9 +18,11 @@ export function decideAccess(input: {
   userAllowed: boolean
   kind?: 'dm' | 'group'
   addressed?: boolean
+  groupAccess?: 'all' | 'approved' | 'disabled'
 }): AccessDecision {
   if (input.kind === 'group') {
-    return input.addressed === false ? 'ignore' : 'allow'
+    if (input.addressed === false || input.groupAccess === 'disabled' || (input.groupAccess === 'approved' && !input.userAllowed)) return 'ignore'
+    return 'allow'
   }
   return input.userAllowed ? 'allow' : 'deny'
 }
