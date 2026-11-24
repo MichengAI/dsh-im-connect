@@ -915,3 +915,98 @@ test('普通消息按发送方式选择 followup 或 steer，旧宿主无 steer 
   router.followup(binding, message, 'steer')
   assert.deepEqual(calls, [['followup', message]])
 })
+
+test('启动核对冷会话：若 host list 未标记 blank 但在工作区中，sessionQuery 验证无 turn/start 则判定为 blank 并摘除', async t => {
+  const f = makeRouter(t)
+  const sessionId = 'im:telegram:dm:1700000000000:cold-blank'
+  const detached = []
+  let disposed = false
+  const members = {
+    path: 'D:/chosen',
+    sessionIds: [sessionId],
+    async detachSession(id) {
+      detached.push(id)
+      members.sessionIds = members.sessionIds.filter(x => x !== id)
+    },
+  }
+  f.store.upsert(sessionId, { sessionId, channel: 'telegram', kind: 'dm', chatId: 'test', title: '冷草稿', cwd: members.path, updatedAt: '2026-01-01T00:00:00Z' })
+  f.ctx.get = name => {
+    if (name === 'workspaceRegistry') return { list: () => [members] }
+    if (name === 'sessionController') return { list: async () => ({ items: [{ sessionId, blank: false }] }) }
+    if (name === 'sessionQuery') {
+      return {
+        async observeSession(id) {
+          assert.equal(id, sessionId)
+          return {
+            events: [{ type: 'session/created' }],
+            [Symbol.dispose]() { disposed = true },
+          }
+        },
+      }
+    }
+    return undefined
+  }
+  await f.router.attachMappedSessions()
+  assert.deepEqual(detached, [sessionId])
+  assert.equal(disposed, true)
+})
+
+test('启动核对冷会话：若 sessionQuery 发现包含 turn/start，判定非空白并保留在工作区', async t => {
+  const f = makeRouter(t)
+  const sessionId = 'im:telegram:dm:1700000000000:cold-active'
+  const detached = []
+  let disposed = false
+  const members = {
+    path: 'D:/chosen',
+    sessionIds: [sessionId],
+    async detachSession(id) { detached.push(id) },
+  }
+  f.store.upsert(sessionId, { sessionId, channel: 'telegram', kind: 'dm', chatId: 'test', title: '有对话', cwd: members.path, updatedAt: '2026-01-01T00:00:00Z' })
+  f.ctx.get = name => {
+    if (name === 'workspaceRegistry') return { list: () => [members] }
+    if (name === 'sessionController') return { list: async () => ({ items: [{ sessionId, blank: false }] }) }
+    if (name === 'sessionQuery') {
+      return {
+        async observeSession(id) {
+          return {
+            events: [{ type: 'session/created' }, { type: 'turn/start' }],
+            [Symbol.dispose]() { disposed = true },
+          }
+        },
+      }
+    }
+    return undefined
+  }
+  await f.router.attachMappedSessions()
+  assert.deepEqual(detached, [])
+  assert.equal(disposed, true)
+})
+
+test('启动核对冷会话：sessionQuery 异常时安全记录日志并降级，不阻断对齐流程', async t => {
+  const f = makeRouter(t)
+  const logs = []
+  f.router.log = msg => logs.push(msg)
+  const sessionId = 'im:telegram:dm:1700000000000:cold-error'
+  const detached = []
+  const members = {
+    path: 'D:/chosen',
+    sessionIds: [sessionId],
+    async detachSession(id) { detached.push(id) },
+  }
+  f.store.upsert(sessionId, { sessionId, channel: 'telegram', kind: 'dm', chatId: 'test', title: '测试', cwd: members.path, updatedAt: '2026-01-01T00:00:00Z' })
+  f.ctx.get = name => {
+    if (name === 'workspaceRegistry') return { list: () => [members] }
+    if (name === 'sessionController') return { list: async () => ({ items: [{ sessionId, blank: false }] }) }
+    if (name === 'sessionQuery') {
+      return {
+        async observeSession() {
+          throw new Error('disk read failed')
+        },
+      }
+    }
+    return undefined
+  }
+  await f.router.attachMappedSessions()
+  assert.deepEqual(detached, [])
+  assert.ok(logs.some(msg => msg.includes('无法读取会话') && msg.includes('disk read failed')))
+})

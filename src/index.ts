@@ -140,7 +140,9 @@ export function apply(ctx: Context, config: PluginConfig): void {
     const recovered = manager.initEnabled().then(() => manager.recoverMappedSessions())
     void recovered.catch(reportStartupError)
     // 工作区服务可能晚于 IM 启动，且无 Web 的宿主仍须恢复频道映射。
-    ctx.inject(['sessionController', 'workspaceRegistry', 'sessionQuery'], scope => {
+    // sessionController 与 workspaceRegistry 是对齐工作区所必需的核心宿主服务；
+    // sessionQuery 用于深度穿透未带投影的冷会话，作为可选渐进增强在 router 内按需动态获取，避免非检索环境阻塞对齐。
+    ctx.inject(['sessionController', 'workspaceRegistry'], scope => {
       scope.effect(() => {
         let active = true
         void recovered.then(() => manager.attachMappedSessions(() => active), () => {}).catch(reportStartupError)
