@@ -2,6 +2,7 @@ import { type ChannelAdapter, type ImMedia } from '../engine/types.js';
 import { type FeishuMention } from './feishu-sender.js';
 /** 飞书一张卡片最多 5 个 table 元素，超了整个写入会被拒（230099 / ErrCode 11310），旧卡片内容会卡住。 */
 export declare const FEISHU_CARD_MAX_TABLES = 5;
+export declare const FEISHU_DEFAULT_DELIVERY_RESOLVER_TIMEOUT_MS = 1500;
 export declare const FEISHU_COT_API = "/open-apis/im/v1/message_cot";
 export declare const FEISHU_COT_COMPLETE_API = "/open-apis/im/v1/message_cot/complete";
 /** 飞书 message_cot 单个事件内容字符上限保护，避免 10001 AppendCOTEvents: event[0] content too long */
@@ -96,6 +97,7 @@ interface FeishuConfig {
         get(name: string): unknown;
     };
     threadSessions?: boolean;
+    deliveryResolverTimeoutMs?: number;
 }
 /** 群消息只有明确 mention 当前机器人本身才算 addressed；@ 其他成员不触发。 */
 export declare function isFeishuBotMentioned(mentions: FeishuMention[] | undefined, botOpenId: string): boolean;

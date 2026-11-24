@@ -8,7 +8,7 @@ const DEFAULT_CACHE_TTL_MS = 30 * 60_000
 const DEFAULT_NEGATIVE_TTL_MS = 60_000
 const DEFAULT_PERMISSION_COOLDOWN_MS = 10 * 60_000
 const DEFAULT_CHAT_MEMBERS_COOLDOWN_MS = 10 * 60_000
-const DEFAULT_LOOKUP_TIMEOUT_MS = 5_000
+const DEFAULT_LOOKUP_TIMEOUT_MS = 2_500
 const DEFAULT_MAX_ENTRIES = 2_000
 const DEFAULT_MAX_CHAT_MEMBER_PAGES = 5
 const MAX_CHAT_COOLDOWN_ENTRIES = 500
@@ -195,9 +195,11 @@ export function normalizeFeishuMentions(
             const rawAtId = typeof node.user_id === 'string' ? node.user_id.trim() : ''
             const isAll = rawAtId === 'all' || rawAtId === '@_all'
             const isPlaceholderKey = !isAll && PLACEHOLDER_USER_KEY_RE.test(rawAtId)
-            const id = rawAtId && !isAll && !isPlaceholderKey ? rawAtId : undefined
+            const isOpenId = rawAtId.startsWith('ou_')
+            const id = rawAtId && !isAll && !isPlaceholderKey && isOpenId ? rawAtId : undefined
+            const userId = rawAtId && !isAll && !isPlaceholderKey && !isOpenId ? rawAtId : undefined
             const key = isAll ? '@_all' : (isPlaceholderKey ? rawAtId : undefined)
-            const dedupeKey = isAll ? 'all' : (isPlaceholderKey ? rawAtId : id)
+            const dedupeKey = isAll ? 'all' : (isPlaceholderKey ? rawAtId : (id || userId))
             if (dedupeKey && seenTargets.has(dedupeKey)) continue
 
             const isBot = Boolean(botOpenId && id === botOpenId)
@@ -205,12 +207,13 @@ export function normalizeFeishuMentions(
             const name = rawName
               || (isBot ? botName : (id ? options?.resolveCachedName?.(id)?.trim() : undefined))
               || undefined
-            if (!key && !id && !name) continue
+            if (!key && !id && !userId && !name) continue
 
             if (dedupeKey) seenTargets.add(dedupeKey)
             result.push({
               ...(key ? { key } : {}),
               ...(id ? { id } : {}),
+              ...(userId ? { userId } : {}),
               ...(name ? { name } : {}),
               isBot,
             })

@@ -142,6 +142,7 @@ test('normalizeFeishuMentions：区分机器人/群成员/@all、补全名称、
             { tag: 'at', user_id: botOpenId, user_name: 'Bot' },
             { tag: 'at', user_id: 'ou_member_2', user_name: '张三' },
             { tag: 'at', user_id: 'ou_member_2', user_name: '张三' },
+            { tag: 'at', user_id: 'u_custom_9', user_name: '赵工' },
             { tag: 'at', user_id: 'all', user_name: '所有人' },
           ]],
         },
@@ -151,6 +152,7 @@ test('normalizeFeishuMentions：区分机器人/群成员/@all、补全名称、
   assert.deepEqual(postNormalized, [
     { key: '@_user_1', id: botOpenId, name: 'Bot', isBot: true },
     { id: 'ou_member_2', name: '张三', isBot: false },
+    { userId: 'u_custom_9', name: '赵工', isBot: false },
     { key: '@_all', name: '所有人', isBot: false },
   ])
 
@@ -532,6 +534,7 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
     let contactCalls = 0
     const received = []
     let failContact = false
+    let hangContact = false
     const sdk = {
       defaultHttpInstance: { request: async opts => opts },
       Client: class {
@@ -541,6 +544,7 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
             user: {
               get: async ({ path }) => {
                 contactCalls += 1
+                if (hangContact) return await new Promise(() => {})
                 if (failContact) return { code: 99991672 }
                 return { code: 0, data: { user: { name: `用户_${path.user_id}` } } }
               },
@@ -564,7 +568,7 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
       },
     }
 
-    const channel = createFeishuChannel(platform, { appId: 'app', appSecret: 'sec' }, () => {}, async () => sdk)
+    const channel = createFeishuChannel(platform, { appId: 'app', appSecret: 'sec', deliveryResolverTimeoutMs: 25 }, () => {}, async () => sdk)
     channel.setMessageHandler(msg => { received.push(msg) })
     await channel.start()
     t.after(() => channel.stop())
@@ -630,7 +634,28 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
       mentions: [{ key: '@_user_1', id: 'ou_bot', name: 'Bot', isBot: true }],
     })
 
-    // 4. 通讯录权限拒绝时优雅降级：省略 senderName，保留 senderOpenId & mentions，照常投递
+    // 4. 通讯录反查挂起时（接口超时），在投递超时预算内跳出降级为保留 senderOpenId，消息照常投递
+    hangContact = true
+    await callback({
+      sender: { sender_id: { open_id: 'ou_hang' }, sender_type: 'user' },
+      message: {
+        message_id: 'om_g_hang',
+        chat_id: 'oc_group_1',
+        chat_type: 'group',
+        message_type: 'text',
+        content: JSON.stringify({ text: '@_user_1 超时保护测试' }),
+        mentions: [{ key: '@_user_1', id: { open_id: 'ou_bot' }, name: 'Bot' }],
+      },
+    })
+    assert.equal(received[3].text, '超时保护测试')
+    assert.equal(received[3].username, undefined)
+    assert.deepEqual(received[3].groupContext, {
+      senderOpenId: 'ou_hang',
+      mentions: [{ key: '@_user_1', id: 'ou_bot', name: 'Bot', isBot: true }],
+    })
+    hangContact = false
+
+    // 5. 通讯录权限拒绝时优雅降级：省略 senderName，保留 senderOpenId & mentions，照常投递
     failContact = true
     await callback({
       sender: { sender_id: { open_id: 'ou_degraded' }, sender_type: 'user' },
@@ -643,9 +668,9 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
         mentions: [{ key: '@_user_1', id: { open_id: 'ou_bot' }, name: 'Bot' }],
       },
     })
-    assert.equal(received[3].text, '降级测试')
-    assert.equal(received[3].username, undefined)
-    assert.deepEqual(received[3].groupContext, {
+    assert.equal(received[4].text, '降级测试')
+    assert.equal(received[4].username, undefined)
+    assert.deepEqual(received[4].groupContext, {
       senderOpenId: 'ou_degraded',
       mentions: [{ key: '@_user_1', id: 'ou_bot', name: 'Bot', isBot: true }],
     })
@@ -931,3 +956,51 @@ test('ImEngine：groupContextInstructionForSession 仅对飞书/Lark 群聊生�
   assert.equal(engine.groupContextInstructionForSession('im:qq:group:5:qq_1'), '')
   assert.equal(engine.groupContextInstructionForSession('unbound-session'), '')
 })
+
+test('ImEngine：无消息正文标题时群聊标题保持 chatId，私聊标题回退为 username', async t => {
+  const { engine, store, prompts } = makeEngine(t, { mergeTimeoutSecs: 0.04 })
+  let inbound
+  engine.register({
+    id: 'feishu',
+    label: '飞书',
+    maxMessageLength: 4000,
+    authorizes: () => true,
+    start() {},
+    stop() {},
+    send: async () => {},
+    setMessageHandler: h => { inbound = h },
+  })
+
+  // 1. 群聊：纯图片无 initialTitle，携带 username 绝不应把群命名为人名
+  inbound({
+    chatId: 'oc_group_untitled',
+    userId: 'ou_alice',
+    username: 'Alice',
+    text: '',
+    media: [{ kind: 'image', data: Buffer.from('pngbytes'), mediaType: 'image/png' }],
+    kind: 'group',
+    addressed: true,
+    messageId: 'm_grp_untitled',
+    groupContext: {
+      senderOpenId: 'ou_alice',
+      senderName: 'Alice',
+    },
+  })
+  await waitFor(() => prompts.length >= 1)
+  assert.equal(store.get('feishu:group:oc_group_untitled')?.title, 'oc_group_untitled')
+
+  // 2. 私聊：纯图片无 initialTitle，携带 username 应回退为人名
+  inbound({
+    chatId: 'ou_bob',
+    userId: 'ou_bob',
+    username: 'Bob',
+    text: '',
+    media: [{ kind: 'image', data: Buffer.from('pngbytes'), mediaType: 'image/png' }],
+    kind: 'dm',
+    addressed: true,
+    messageId: 'm_dm_untitled',
+  })
+  await waitFor(() => prompts.length >= 2)
+  assert.equal(store.get('feishu:dm:ou_bob')?.title, 'Bob')
+})
+

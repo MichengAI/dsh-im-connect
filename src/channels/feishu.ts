@@ -19,6 +19,7 @@ import {
 
 /** 飞书一张卡片最多 5 个 table 元素，超了整个写入会被拒（230099 / ErrCode 11310），旧卡片内容会卡住。 */
 export const FEISHU_CARD_MAX_TABLES = 5
+export const FEISHU_DEFAULT_DELIVERY_RESOLVER_TIMEOUT_MS = 1_500
 
 export const FEISHU_COT_API = '/open-apis/im/v1/message_cot'
 export const FEISHU_COT_COMPLETE_API = '/open-apis/im/v1/message_cot/complete'
@@ -504,6 +505,7 @@ interface FeishuConfig {
   domain?: 'feishu' | 'lark'
   host?: { get(name: string): unknown }
   threadSessions?: boolean
+  deliveryResolverTimeoutMs?: number
 }
 
 /**
@@ -927,8 +929,10 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               senderResolver?.seedFromMentions(mentions)
               const isUserSender = !data.sender?.sender_type || data.sender.sender_type === 'user'
               const hasPayload = resolved.text.trim().length > 0 || resolved.media.length > 0
+              const deliveryTimeoutMs = Math.max(1, config.deliveryResolverTimeoutMs ?? FEISHU_DEFAULT_DELIVERY_RESOLVER_TIMEOUT_MS)
+              const resolveSignal = timeoutSignal(deliveryTimeoutMs, generation.signal)
               senderName = (senderOpenId && isUserSender && hasPayload)
-                ? await senderResolver?.resolveSenderName(senderOpenId, { chatId: rawChatId, signal: generation.signal })
+                ? await senderResolver?.resolveSenderName(senderOpenId, { chatId: rawChatId, signal: resolveSignal }).catch(() => undefined)
                 : undefined
               if (!current()) return
               if (senderOpenId || senderName || mentions.length > 0) {
