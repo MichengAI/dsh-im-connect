@@ -39,5 +39,17 @@ export declare function toTelegramHardBreaks(value: string): string;
  * 交给纯文本发送，不把半截代码块当富文本发出去。
  */
 export declare function toTelegramRichMarkdown(value: string): string | undefined;
+/**
+ * 富文本载荷里的状态前缀转义。
+ *
+ * 状态行是插件自己拼的字面文本（工具名、参数摘要），其中的 `_`、`*`、反引号、
+ * `~`、`[`、`]`、`$`、`=` 会被 Telegram 的 Rich Markdown 当成行内标记，
+ * 于是 `mcp__magpie__…` 这类工具名会掉字符、glob/正则摘要会被当成强调；
+ * 正文是模型输出的 Markdown，必须保持原样，因此只转义 head 这一段。
+ *
+ * 转义在合成与截断之后进行（传进来的已是最终文本），反斜杠必须一起转义，
+ * 否则 Windows 路径里的 `\` 会吃掉后加的转义符。
+ */
+export declare function escapeTelegramStatusLine(composed: string, head: string): string;
 export declare function createTelegramChannel(config: TelegramConfig, log: (line: string) => void): ChannelAdapter | undefined;
 //# sourceMappingURL=telegram.d.ts.map
