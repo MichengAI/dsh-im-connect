@@ -20,6 +20,7 @@ import { KeyedSerialQueue } from './keyed-queue.js'
 import { SessionRouter } from './router.js'
 import { initialSessionTitle, readSessionTitle } from './session-title.js'
 import { SeenStore } from './seen-store.js'
+import { feishuGroupSenderInstruction, mergeGroupContexts, prependGroupContext } from './group-context.js'
 import { SessionMapStore } from './session-store.js'
 import { readSessionHistory } from './session-history.js'
 import { TopicTitleStore, clampTopicName, type TopicMode } from './topic-title.js'
@@ -248,13 +249,11 @@ export class ImEngine {
       const rest = key.slice(sep + 1)
       const channel = this.channels.get(channelId)
       if (!channel) return
-      const merged: ImMessage = { chatId: rest.split(':').slice(1).join(':') || rest, text, kind: rest.startsWith('group:') ? 'group' : 'dm' }
+      const fallback: ImMessage = { chatId: rest.split(':').slice(1).join(':') || rest, text, kind: rest.startsWith('group:') ? 'group' : 'dm' }
+      const sources = this.takeMergedMessages(key, fallback)
+      const merged = this.composeMergedMessage(fallback, sources)
       // 合并窗口回调不在任何请求链路里，必须自兜底，否则 rejection 无人接
-      void this.inject(channel, merged, this.takeMergedMessages(key, merged)).catch((error) => {
-        const detail = error instanceof Error ? error.message : String(error)
-        this.log(`[${channelId}] 合并投递失败: ${detail}`)
-        channel.send(merged.chatId, notice(this.ctx, '消息处理失败，请查看本机日志。')).catch(() => undefined)
-      })
+      void this.injectMergedSafely(channel, merged, sources)
     })
     const on = (this.ctx as unknown as { on: (name: string, fn: (...args: unknown[]) => unknown, opts?: unknown) => () => void }).on
     if (typeof on === 'function') {
@@ -614,10 +613,25 @@ export class ImEngine {
         return
       }
       const mergeKey = `${channelId}:${msg.kind === 'group' ? 'group' : 'dm'}:${msg.chatId}`
+      if (msg.kind === 'group' && this.merger.has(mergeKey)) {
+        const pendingSources = this.mergedMessages.get(mergeKey)
+        const pendingUserId = pendingSources?.[pendingSources.length - 1]?.userId?.trim() || ''
+        const currentUserId = msg.userId?.trim() || ''
+        if (pendingUserId !== currentUserId) {
+          const flushedText = this.merger.flush(mergeKey)
+          const prevSources = this.takeMergedMessages(mergeKey, { chatId: msg.chatId, kind: 'group', text: flushedText ?? '' })
+          if (flushedText) {
+            const flushedMsg = this.composeMergedMessage({ chatId: msg.chatId, kind: 'group', text: flushedText }, prevSources)
+            await this.injectMergedSafely(channel, flushedMsg, prevSources)
+          }
+        }
+      }
       this.mergedMessages.set(mergeKey, [...(this.mergedMessages.get(mergeKey) ?? []), msg])
       const merged = this.merger.ingest(mergeKey, text)
       if (merged.kind === 'flushed' && merged.text) {
-        await this.inject(channel, { ...msg, text: merged.text }, this.takeMergedMessages(mergeKey, msg))
+        const sources = this.takeMergedMessages(mergeKey, msg)
+        const groupContext = mergeGroupContexts(sources)
+        await this.inject(channel, { ...msg, text: merged.text, ...(groupContext ? { groupContext } : {}) }, sources)
       }
     } catch (error) {
       this.log(`[${channelId}] 处理失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -708,6 +722,29 @@ export class ImEngine {
     return messages
   }
 
+  private composeMergedMessage(fallback: ImMessage, sources: ImMessage[]): ImMessage {
+    const latest = sources[sources.length - 1]
+    const groupContext = mergeGroupContexts(sources) ?? fallback.groupContext
+    return {
+      ...fallback,
+      userId: latest?.userId ?? fallback.userId,
+      username: latest?.username ?? fallback.username,
+      addressed: latest?.addressed ?? fallback.addressed,
+      messageId: latest?.messageId ?? fallback.messageId,
+      platformMessageId: latest?.platformMessageId ?? fallback.platformMessageId,
+      ...(groupContext ? { groupContext } : {}),
+    }
+  }
+
+  /** 合并投递失败时就地记日志并通知用户，避免拖垮定时器或吞掉后续新发言人消息。 */
+  private async injectMergedSafely(channel: ChannelAdapter, merged: ImMessage, sources: ImMessage[]): Promise<void> {
+    await this.inject(channel, merged, sources).catch((error) => {
+      const detail = error instanceof Error ? error.message : String(error)
+      this.log(`[${channel.id}] 合并投递失败: ${detail}`)
+      channel.send(merged.chatId, notice(this.ctx, '消息处理失败，请查看本机日志。')).catch(() => undefined)
+    })
+  }
+
   /**
    * 距上一条消息超过阈值时换会话：隔了很久回来，通常不是同一件事。
    *
@@ -763,7 +800,9 @@ export class ImEngine {
       this.router.touch(channel.id, kind, msg.chatId)
       if (initialTitle) this.router.setTitle(binding.sessionId, initialTitle, 'message')
       const content: Array<Record<string, unknown>> = []
-      if (msg.text.trim()) content.push({ type: 'text', text: msg.text.trim() })
+      const groupContext = kind === 'group' ? (mergeGroupContexts(sources) ?? msg.groupContext) : undefined
+      const promptText = prependGroupContext(msg.text, groupContext, (msg.media?.length ?? 0) > 0)
+      if (promptText) content.push({ type: 'text', text: promptText })
       for (const media of msg.media ?? []) {
         if (media.kind === 'image') content.push(await imagePromptPart(media))
         else if (media.kind === 'voice-text' && media.text) content.push({ type: 'text', text: `[语音] ${media.text}` })
@@ -1790,6 +1829,17 @@ export class ImEngine {
     const config = this.resolveConfig(binding.channelId)
     if (config.segmentReply !== true) return ''
     return segmentInstruction(config.segmentMarker?.trim() || DEFAULT_SEGMENT_MARKER)
+  }
+
+  /**
+   * 飞书/Lark 群聊发送者元信息系统提示：只对已绑定飞书或 Lark 群聊的会话注入。
+   */
+  groupContextInstructionForSession(sessionId: string): string {
+    const binding = this.router.bindingForSession(sessionId)
+    if (!binding || binding.kind !== 'group') return ''
+    const platform = binding.channelId.split('_', 1)[0]
+    if (platform !== 'feishu' && platform !== 'lark') return ''
+    return feishuGroupSenderInstruction()
   }
 
   /**

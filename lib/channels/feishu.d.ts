@@ -1,4 +1,5 @@
 import { type ChannelAdapter, type ImMedia } from '../engine/types.js';
+import { type FeishuMention } from './feishu-sender.js';
 /** 飞书一张卡片最多 5 个 table 元素，超了整个写入会被拒（230099 / ErrCode 11310），旧卡片内容会卡住。 */
 export declare const FEISHU_CARD_MAX_TABLES = 5;
 export declare const FEISHU_COT_API = "/open-apis/im/v1/message_cot";
@@ -49,16 +50,7 @@ export declare function parseFeishuChatId(chatId: string): {
  * Legacy 传统格式（header.title + elements）以及 json_card 包装格式。
  */
 export declare function extractFeishuCardText(rawContent: string | Record<string, unknown>, maxChars?: number): string;
-export interface FeishuMention {
-    key?: string;
-    id?: {
-        open_id?: string;
-        user_id?: string;
-        union_id?: string;
-    };
-    name?: string;
-    tenant_key?: string;
-}
+export { extractFeishuErrorCode, FeishuSenderResolver, normalizeFeishuMentions, type FeishuContactClient, type FeishuMention } from './feishu-sender.js';
 interface FeishuContentMessage {
     message_id?: string;
     message_type?: string;
@@ -108,5 +100,4 @@ interface FeishuConfig {
 /** 群消息只有明确 mention 当前机器人本身才算 addressed；@ 其他成员不触发。 */
 export declare function isFeishuBotMentioned(mentions: FeishuMention[] | undefined, botOpenId: string): boolean;
 export declare function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig, log: (line: string) => void, loadSdk?: () => Promise<typeof import('@larksuiteoapi/node-sdk')>): ChannelAdapter | undefined;
-export {};
 //# sourceMappingURL=feishu.d.ts.map

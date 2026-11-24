@@ -3,12 +3,19 @@ import { choiceSendError, ChoiceSendError } from '../engine/choice-delivery.js'
 import { afterPartialDelivery, DeliveryRejected } from '../engine/deferred-delivery.js'
 import { diagnosticJson, platformResult, probe, requireDiagnostic } from './diagnostics.js'
 import { fileOperation } from './file-send.js'
-import { DEFAULT_TRUNCATED_NOTE, DEFAULT_THINKING_MAX_CHARS, type ChannelAdapter, type ImMedia, type ImMessage, type ThinkingOptions } from '../engine/types.js'
+import { DEFAULT_TRUNCATED_NOTE, DEFAULT_THINKING_MAX_CHARS, type ChannelAdapter, type ImGroupContext, type ImMedia, type ImMessage, type ThinkingOptions } from '../engine/types.js'
 import { quietSdkLogger } from '../engine/quiet-logger.js'
 import { KeyedSerialQueue } from '../engine/keyed-queue.js'
 import { timeoutSignal } from '../engine/abort.js'
 import { fileMedia, MAX_CHANNEL_IMAGES } from './channel-image-download.js'
 import { markdownTableOffsets } from '../engine/split.js'
+import {
+  extractFeishuErrorCode,
+  FeishuSenderResolver,
+  normalizeFeishuMentions,
+  type FeishuContactClient,
+  type FeishuMention,
+} from './feishu-sender.js'
 
 /** 飞书一张卡片最多 5 个 table 元素，超了整个写入会被拒（230099 / ErrCode 11310），旧卡片内容会卡住。 */
 export const FEISHU_CARD_MAX_TABLES = 5
@@ -333,12 +340,7 @@ function isRejectedCode(code: unknown): boolean {
   return code !== undefined && code !== 0 && code !== '0'
 }
 
-export interface FeishuMention {
-  key?: string
-  id?: { open_id?: string; user_id?: string; union_id?: string }
-  name?: string
-  tenant_key?: string
-}
+export { extractFeishuErrorCode, FeishuSenderResolver, normalizeFeishuMentions, type FeishuContactClient, type FeishuMention } from './feishu-sender.js'
 
 interface FeishuContentMessage {
   message_id?: string
@@ -555,13 +557,14 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
   if (!appId || !appSecret) return undefined
 
   let handler: ((msg: ImMessage) => void | Promise<void>) | undefined
-  let client: ResourceClient & {
+  let client: ResourceClient & FeishuContactClient & {
     request(opts: { url: string; method?: string; data?: unknown; params?: unknown }): Promise<unknown>
     im: { messageReaction: { create(opts: unknown): Promise<{ code?: number; data?: { reaction_id?: string } }>; delete(opts: unknown): Promise<{ code?: number }> }; message: { create(opts: unknown): Promise<unknown>; reply?(opts: unknown): Promise<unknown>; patch(opts: unknown): Promise<unknown> }; file: { create(opts: unknown): Promise<{ file_key?: string } | null> }; image: { create(opts: unknown): Promise<{ image_key?: string } | null> } }
   } | undefined
   let ws: { close(opts?: { force?: boolean }): void } | undefined
   let statusText = '未连接'
   let lifecycle: AbortController | undefined
+  let senderResolver: FeishuSenderResolver | undefined
   const label = id === 'lark' ? 'Lark' : '飞书'
 
   const openThinking = new Map<string, FeishuThinkingState>()
@@ -854,10 +857,13 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
       httpInstance.request = (opts: Record<string, unknown>) => sdk.defaultHttpInstance.request({ ...opts, timeout: 30_000, maxRedirects: 0 })
       client = new sdk.Client({ appId, appSecret, logger, loggerLevel, httpInstance, ...(domain ? { domain } : {}) }) as unknown as typeof client
       const identity = await client!.request({ url: '/open-apis/bot/v3/info', method: 'GET' }) as {
-        bot?: { open_id?: string }
+        bot?: { open_id?: string; app_name?: string }
       }
       const botOpenId = identity.bot?.open_id?.trim() ?? ''
       if (!botOpenId) throw new Error(`${id}: 无法获取机器人 open_id`)
+      const botName = identity.bot?.app_name?.trim() || undefined
+      senderResolver?.clear()
+      senderResolver = new FeishuSenderResolver(client!, id, log)
       const dispatcher = new sdk.EventDispatcher({}).register({
         'card.action.trigger': async (data: { operator?: { open_id?: string }; action?: { value?: { token?: string; group?: boolean; chatId?: string } }; context?: { open_chat_id?: string }; event_id?: string }) => {
           const token = data.action?.value?.token
@@ -868,7 +874,7 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
           return {}
         },
         'im.message.receive_v1': async (data: {
-          sender?: { sender_id?: { open_id?: string } }
+          sender?: { sender_id?: { open_id?: string; user_id?: string; union_id?: string }; sender_type?: string }
           message?: { message_id?: string; root_id?: string; parent_id?: string; thread_id?: string; chat_id?: string; chat_type?: string; message_type?: string; content?: string; mentions?: FeishuMention[] }
         }) => {
           const message = data.message
@@ -908,15 +914,42 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
               return
             }
             if (!current()) return
+            let senderName: string | undefined
+            let groupContext: ImGroupContext | undefined
+            if (group) {
+              const senderOpenId = data.sender?.sender_id?.open_id?.trim() || undefined
+              const mentions = normalizeFeishuMentions(message.mentions, botOpenId, {
+                botName,
+                messageType: message.message_type,
+                rawContent: message.content,
+                resolveCachedName: openId => senderResolver?.getCachedName(openId),
+              })
+              senderResolver?.seedFromMentions(mentions)
+              const isUserSender = !data.sender?.sender_type || data.sender.sender_type === 'user'
+              const hasPayload = resolved.text.trim().length > 0 || resolved.media.length > 0
+              senderName = (senderOpenId && isUserSender && hasPayload)
+                ? await senderResolver?.resolveSenderName(senderOpenId, { chatId: rawChatId, signal: generation.signal })
+                : undefined
+              if (!current()) return
+              if (senderOpenId || senderName || mentions.length > 0) {
+                groupContext = {
+                  ...(senderOpenId ? { senderOpenId } : {}),
+                  ...(senderName ? { senderName } : {}),
+                  ...(mentions.length > 0 ? { mentions } : {}),
+                }
+              }
+            }
             await handler?.({
               chatId,
               userId: data.sender?.sender_id?.open_id,
+              ...(senderName ? { username: senderName } : {}),
               text: resolved.text,
               ...(resolved.media.length ? { media: resolved.media } : {}),
               messageId: message.message_id,
               platformMessageId: message.message_id,
               kind: group ? 'group' : 'dm',
               addressed,
+              ...(groupContext ? { groupContext } : {}),
             })
           }).catch(() => { if (current()) log(`[${id}] 消息处理失败`) })
         },
@@ -930,6 +963,8 @@ export function createFeishuChannel(id: 'feishu' | 'lark', config: FeishuConfig,
     async stop() {
       lifecycle?.abort()
       lifecycle = undefined
+      senderResolver?.clear()
+      senderResolver = undefined
       ws?.close({ force: true })
       ws = undefined
       for (const thinking of activeThinking) {
