@@ -50,15 +50,28 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
   assert.equal(manifest.devDependencies['react-dom'], '^18.3.1')
 })
 
-test('client.js 依赖的宿主模块必须在 dsh.client.inject 中声明', () => {
-  // ModuleLoader 只解析 manifest 声明的宿主模块。漏声明时 require 会走 catch 返回 {}，
-  // 组件拿到 undefined 类型后在渲染期直接崩溃（primitives 就是这样漏掉的）。
+test('dsh.client.inject 仅声明动态客户端模块，严禁声明前端静态内置包', () => {
+  // 宿主 0.2.3 ModuleLoader 会严格比对客户端模块图。静态内置模块（primitives、slots 等）
+  // 已经由前端 bootstrap asset 固化，不在 dynamic module graph 中；若误写在 inject 中，
+  // 会抛出 "is not in the client module graph" 错误导致 client.js 挂起无法加载。
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  const injected = manifest.dsh?.client?.inject || []
+  const injectedSet = new Set(injected)
+
+  // 必须声明的动态模块
+  assert.ok(injectedSet.has('@deepseek-ai/dsh-client-locale'), '缺少 dsh-client-locale')
+  assert.ok(injectedSet.has('@deepseek-ai/dsh-client-ui-settings'), '缺少 dsh-client-ui-settings')
+  assert.ok(injectedSet.has('@deepseek-ai/dsh-client-ui-workspace'), '缺少 dsh-client-ui-workspace')
+
+  // 严禁声明的静态内置包
+  assert.ok(!injectedSet.has('@deepseek-ai/dsh-client-ui-slots'), '禁止在 inject 中声明内置 slots')
+  assert.ok(!injectedSet.has('@deepseek-ai/dsh-client-ui-primitives'), '禁止在 inject 中声明内置 primitives')
+})
+
+test('client.js 必须使用内置 Button 组件，严禁直接裸传 PrimitiveButton', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  const injected = new Set(manifest.dsh?.client?.inject || [])
-  const required = [...client.matchAll(/require\("(@deepseek-ai\/[^"]+)"\)/g)].map((match) => match[1])
-  assert.ok(required.length > 0, 'client.js 应至少依赖一个宿主模块')
-  for (const name of new Set(required)) assert.ok(injected.has(name), `${name} 未在 dsh.client.inject 中声明`)
+  // 不得出现 h(PrimitiveButton, ...) 导致缺少 primitives 时渲染崩溃
+  assert.ok(!/h\(\s*PrimitiveButton\s*,/.test(client), 'client.js 不得直接裸传 PrimitiveButton 给 h()')
 })
 
 function makeManager(t, ctx = {}, engineOverrides = {}) {
