@@ -121,3 +121,31 @@ test('Telegram 富文本被拒时单条回退，不影响后续内容', async ()
     restore()
   }
 })
+
+test('Telegram protects tool progress underscores while preserving rich body and plain fallback', { timeout: 3000 }, async () => {
+  const status = '🔧 第 3 步 · mcp__magpie__magpie-web-search__web_search'
+  const bodyText = '**正文** _强调_'
+  const fallback = Promise.withResolvers()
+  let richMarkdown
+  const restore = mockFetch(async (url, init) => {
+    const method = String(url).split('/').pop()
+    const body = JSON.parse(String(init.body))
+    if (method === 'editMessageText') {
+      if (body.rich_message) {
+        richMarkdown = body.rich_message.markdown
+        return Response.json({ ok: false, error_code: 400, description: "Bad Request: can't parse entities" }, { status: 400 })
+      }
+      fallback.resolve(body.text)
+    }
+    return Response.json({ ok: true, result: { message_id: 5 } })
+  })
+  try {
+    const stream = await createTelegramChannel({ token: 'test-token' }, () => {}).beginReply('123')
+    await stream.setStatus(status)
+    await stream.update(bodyText)
+    assert.equal(await fallback.promise, `${status}\n\n${bodyText}`)
+    assert.equal(richMarkdown, `${status.replaceAll('_', '\\_')}\n\n${bodyText}`)
+  } finally {
+    restore()
+  }
+})
