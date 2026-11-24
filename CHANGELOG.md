@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.55] - 2026-11-25
+
+### DeepSeek Harness 0.2.3 Sidebar Channels Panel Compatibility (#100)
+
+- **Fix blank and frozen sidebar Channels panel in DeepSeek Harness 0.2.3 (#100)**: Adapted client module integration to align with DeepSeek Harness 0.2.3 host architectures, ensuring the sidebar "Channels" tab renders reliably with complete session lists and smooth responsiveness in 0.2.3 desktop environments.
+
+### Feishu Group Chat Sender Identification & Clean Conversation Titles (#109)
+
+- **Accurate group sender and @mention identification (#109)**: Group chat messages in Feishu now provide sender names and @mentioned member information to the assistant, allowing agents to accurately recognize who is speaking within shared team groups.
+- **Clean group conversation titles**: Preserved pure group names and identifiers for group chat sessions in the sidebar, preventing individual sender names from overriding or contaminating group titles.
+- **Responsive delivery and continuous messaging acceleration**: Enhanced contact lookup handling during incoming group messages to ensure swift message delivery during network latency or timeouts, eliminating delays and processing consecutive messages from the same sender immediately.
+
 ## [1.0.54] - 2026-11-24
 
 ### DeepSeek Harness 0.2.3 Compatibility & Connection Reliability
