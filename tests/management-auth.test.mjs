@@ -110,6 +110,12 @@ test('服务缺失与认证故障均关闭管理入口，恢复后按当前服�
   }
   current = { requestRejection() { throw new Error('authentication unavailable') } }
   assert.equal((await send('/api/michengai/dsh-im-connect/channels', { host: 'localhost' })).status, 500)
+  current = { admit() { return { rejection: 401 } } }
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { host: 'localhost' })).status, 401)
+  current = { admit() { return { rejection: 403 } } }
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { host: 'localhost' })).status, 403)
+  current = { admit() { return { peer: {} } } }
+  assert.equal((await send('/api/michengai/dsh-im-connect/channels', { host: 'localhost' })).status, 200)
   current = connection
   assert.equal((await send('/api/michengai/dsh-im-connect/channels', { headers: { cookie } })).status, 200)
   assert.equal((await send('/api/michengai/dsh-im-connect/channels')).status, 401)
@@ -302,4 +308,53 @@ test('真实宿主登录 Cookie 允许反代外部 Host 读取与修改管理设
   assert.equal(saved.status, 200)
   const read = JSON.parse((await send('/api/michengai/dsh-im-connect/assistant', { headers: { cookie } })).text)
   assert.equal(read.assistant.provider, 'new-provider')
+})
+
+test('管理入口独立验证：支持 connection.admit 与 connection.requestRejection 两代鉴权', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'im-admit-standalone-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const manager = new ChannelManager({
+    ctx: { permissionPresets: { names: ['review'], defaultPreset: 'review', optionOf: (name) => ({ value: name, name }) } },
+    stateDir: dir, log() {},
+    engineConfig: { cwd: dir, provider: 'p', model: 'm', agentPreset: 'standard', mergeTimeoutSecs: 5, permissionPreset: 'review' },
+  })
+  t.after(() => manager.disposeApi())
+  let currentConnection
+  let routeHandler
+  const webServer = {
+    register(route) {
+      if (route.path === '/api/michengai/dsh-im-connect') routeHandler = route.handler
+      return () => {}
+    },
+  }
+  manager.registerApi({ webServer, get: (name) => (name === 'connection' ? currentConnection : undefined) })
+  assert.ok(routeHandler)
+
+  const call = async (connection) => {
+    currentConnection = connection
+    let status
+    let body
+    const req = { method: 'GET', url: '/api/michengai/dsh-im-connect/channels', headers: { host: 'localhost' } }
+    const res = {
+      writeHead(s) { status = s; return res },
+      end(b) { body = b ? JSON.parse(b) : undefined },
+    }
+    await routeHandler(req, res)
+    return { status, body }
+  }
+
+  // 1. 无 connection 或无支持的方法 -> 503
+  assert.equal((await call(undefined)).status, 503)
+  assert.equal((await call({})).status, 503)
+
+  // 2. 老版 connection.requestRejection
+  assert.equal((await call({ requestRejection: () => 401 })).status, 401)
+  assert.equal((await call({ requestRejection: () => 403 })).status, 403)
+  assert.equal((await call({ requestRejection: () => undefined })).status, 200)
+
+  // 3. 新版 connection.admit
+  assert.equal((await call({ admit: () => ({ rejection: 401 }) })).status, 401)
+  assert.equal((await call({ admit: () => ({ rejection: 403 }) })).status, 403)
+  assert.equal((await call({ admit: () => ({ peer: { id: 'test' } }) })).status, 200)
+  assert.equal((await call({ admit: () => ({}) })).status, 200)
 })

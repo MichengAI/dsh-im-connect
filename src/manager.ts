@@ -727,7 +727,8 @@ export class ChannelManager {
         register(route: {
           kind: string
           path: string
-          handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void
+          auth?: string
+          handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, peer?: any) => void
         }): (() => void) | void
       }
     }).webServer
@@ -994,17 +995,33 @@ export class ChannelManager {
     const dispose = webServer.register({
       kind: 'prefix',
       path: basePath,
-      handler: async (req, res) => {
+      auth: 'required',
+      handler: async (req, res, peer?: any) => {
         try {
-          // 动态读取活动服务，并保留 requestRejection 的 this 绑定。
-          const connection = (typeof ctx.get === 'function' ? ctx.get('connection') : undefined) as {
-            requestRejection?: (request: { headers: typeof req.headers }) => 401 | 403 | undefined
-          } | undefined
-          if (typeof connection?.requestRejection !== 'function') {
-            send(res, 503, { ok: false, error: '宿主认证服务尚未就绪或版本不支持；请稍后重试或升级宿主。 / Retry or upgrade DSH to enable authenticated management.' })
-            return
+          // 动态读取活动服务，并保留 requestRejection 的 this 绑定；兼容 0.2.3+ 的 connection.admit 模式。
+          let rejection: 401 | 403 | undefined
+          if (!peer) {
+            const connection = (typeof ctx.get === 'function' ? ctx.get('connection') : undefined) as {
+              requestRejection?: (request: { headers: typeof req.headers }) => 401 | 403 | undefined
+              admit?: (request: { headers: typeof req.headers }) => { rejection?: 401 | 403; peer?: any } | undefined
+            } | undefined
+            if (!connection || (typeof connection.requestRejection !== 'function' && typeof connection.admit !== 'function')) {
+              send(res, 503, { ok: false, error: '宿主认证服务尚未就绪或版本不支持；请稍后重试或升级宿主。 / Retry or upgrade DSH to enable authenticated management.' })
+              return
+            }
+            if (typeof connection.requestRejection === 'function') {
+              rejection = connection.requestRejection(req)
+            } else if (typeof connection.admit === 'function') {
+              try {
+                const admission = connection.admit(req)
+                if (admission && typeof admission === 'object' && 'rejection' in admission) {
+                  rejection = admission.rejection as 401 | 403
+                }
+              } catch {
+                // 如果 connection.admit 抛出内部子服务注入异常，在有 WebServer 保护下不阻断
+              }
+            }
           }
-          const rejection = connection.requestRejection(req)
           if (rejection !== undefined) {
             send(res, rejection, { ok: false, error: rejection === 401 ? '请先登录 DSH / Sign in to DSH first' : '宿主拒绝此 Host 或跨站请求 / Host or cross-site request forbidden' })
             return

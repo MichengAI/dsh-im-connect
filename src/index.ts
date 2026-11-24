@@ -22,6 +22,7 @@ export const inject = [
   'llm',
   'permissionPresets',
   'systemPrompt',
+  'connection',
 ]
 
 export interface PluginConfig {

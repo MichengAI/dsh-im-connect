@@ -36,9 +36,9 @@ test('DSH 子包依赖声明与客户端和服务端实际使用保持一致', (
   const hostUnion = '>=0.2.2-rc.1 <0.3.0-0'
   for (const packageName of dshPackages) {
     assert.equal(manifest.peerDependencies[packageName], hostUnion)
-    assert.equal(manifest.devDependencies[packageName], '0.2.2-rc.5')
+    assert.equal(manifest.devDependencies[packageName], '0.2.3-alpha.2')
   }
-  assert.equal(manifest.devDependencies['@deepseek-ai/cordis'], '4.1.0')
+  assert.equal(manifest.devDependencies['@deepseek-ai/cordis'], '4.2.0-alpha.1')
   assert.equal(
     manifest.peerDependencies['@deepseek-ai/dsh-client-runtime'],
     undefined,
