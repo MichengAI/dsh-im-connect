@@ -138,7 +138,6 @@ export function normalizeFeishuMentions(
   botOpenId: string,
   options?: {
     botName?: string
-    botUserId?: string
     messageType?: string
     rawContent?: string
     resolveCachedName?: (openId: string) => string | undefined
@@ -147,7 +146,6 @@ export function normalizeFeishuMentions(
   const result: ImMention[] = []
   const seenTargets = new Set<string>()
   const botName = options?.botName?.trim() || undefined
-  const botUserId = options?.botUserId?.trim() || undefined
 
   for (const mention of mentions ?? []) {
     if (result.length >= MAX_CONTEXT_MENTIONS) break
@@ -158,10 +156,7 @@ export function normalizeFeishuMentions(
     const key = isAll ? '@_all' : rawKey
     const userId = mention.id?.user_id?.trim() || undefined
     const unionId = mention.id?.union_id?.trim() || undefined
-    const isBot = !isAll && Boolean(
-      (botOpenId && id === botOpenId)
-      || (botUserId && userId === botUserId),
-    )
+    const isBot = !isAll && Boolean(botOpenId && id === botOpenId)
     const name = mention.name?.trim()
       || (isBot ? botName : (id ? options?.resolveCachedName?.(id)?.trim() : undefined))
       || undefined
@@ -213,10 +208,7 @@ export function normalizeFeishuMentions(
             const dedupeKey = isAll ? 'all' : (isPlaceholderKey ? rawAtId : (id || userId))
             if (dedupeKey && seenTargets.has(dedupeKey)) continue
 
-            const isBot = Boolean(
-              (botOpenId && (id === botOpenId || rawAtId === botOpenId))
-              || (botUserId && (userId === botUserId || rawAtId === botUserId)),
-            )
+            const isBot = Boolean(botOpenId && (id === botOpenId || rawAtId === botOpenId))
             const rawName = typeof node.user_name === 'string' ? node.user_name.trim() : ''
             const name = rawName
               || (isBot ? botName : (id ? options?.resolveCachedName?.(id)?.trim() : undefined))

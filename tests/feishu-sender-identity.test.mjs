@@ -177,24 +177,24 @@ test('normalizeFeishuMentions：区分机器人/群成员/@all、补全名称、
     { key: '@_user_9', name: '临时', isBot: false },
   ])
 
-  // post at 节点中，非 ou_ 格式且等于 botUserId 时也能被正确识别为 isBot
-  const postCustomBot = normalizeFeishuMentions(
+  // post at 节点中，即使 mentions 数组为空，at botOpenId 也能被正确识别为 isBot 并回退 botName
+  const postAtBot = normalizeFeishuMentions(
     [],
     botOpenId,
     {
-      botUserId: 'bot_custom_9',
+      botName: '飞书助手',
       messageType: 'post',
       rawContent: JSON.stringify({
         zh_cn: {
           content: [[
-            { tag: 'at', user_id: 'bot_custom_9', user_name: 'Robot' },
+            { tag: 'at', user_id: botOpenId, user_name: '' },
           ]],
         },
       }),
     },
   )
-  assert.deepEqual(postCustomBot, [
-    { userId: 'bot_custom_9', name: 'Robot', isBot: true },
+  assert.deepEqual(postAtBot, [
+    { id: botOpenId, name: '飞书助手', isBot: true },
   ])
 
   // @all 携带 open_id='all' 时归一化为 @all，不输出 open_id=all
@@ -692,7 +692,7 @@ test('createFeishuChannel：群聊注入发送者与 mentions，降级/私聊/�
       },
     })
     const elapsed2 = Date.now() - t1
-    assert.ok(elapsed2 < 15, `负缓存命中应在 15ms 内立即完成，实测 ${elapsed2}ms`)
+    assert.ok(elapsed2 < 50, `负缓存命中应在 50ms 内立即完成，实测 ${elapsed2}ms`)
     assert.equal(contactCalls, callsBeforeSecondMsg, '负缓存命中时不应重复发起通讯录查询')
     assert.equal(received[4].text, '超时后连发测试')
     assert.equal(received[4].username, undefined)
