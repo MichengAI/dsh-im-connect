@@ -85,7 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           ver="${{ matrix.dsh }}"
-          args=(--prefix "$RUNNER_TEMP/dsh-image-contract" --no-audit --no-fund --legacy-peer-deps)
+          args=(--prefix "$RUNNER_TEMP/dsh-image-contract" --no-audit --no-fund)
           cordis="4.1.0"
           schema="3.19.0"
           if [[ "$ver" == 0.2.3-alpha.2* ]]; then
@@ -120,7 +120,7 @@ jobs:
             "@deepseek-ai/dsh-fs-local@${ver}"
             "@deepseek-ai/dsh-api-workspace-files@${ver}"
           )
-          npm install --prefix "$RUNNER_TEMP/dsh-file-contract" --ignore-scripts --no-audit --no-fund --legacy-peer-deps "${pkgs[@]}"
+          npm install --prefix "$RUNNER_TEMP/dsh-file-contract" --ignore-scripts --no-audit --no-fund "${pkgs[@]}"
 
       - name: 编译并测试
         env:
