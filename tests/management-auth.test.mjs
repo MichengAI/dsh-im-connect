@@ -268,11 +268,7 @@ async function fixture(t, { activateConnection = true, initialState } = {}) {
       }
     }
     const route = [...routes.values()].sort((a, b) => b.path.length - a.path.length).find((item) => req.url.startsWith(item.path))
-    if (route) {
-      const cookie = req.headers['cookie'] || ''
-      const peer = cookie.includes('dsh-token=') ? { id: 'test-peer' } : undefined
-      void route.handler(req, res, peer)
-    }
+    if (route) void route.handler(req, res)
     else { res.writeHead(404); res.end() }
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -293,14 +289,10 @@ async function fixture(t, { activateConnection = true, initialState } = {}) {
     req.end(body)
   })
   const login = async (authority = 'im.example.test') => {
-    const conn = ctx.get('connection')
-    if (typeof conn?.authenticatedUrl === 'function') {
-      const url = new URL(conn.authenticatedUrl(`http://${authority}`))
-      const result = await send(url.pathname + url.search, { host: authority })
-      assert.equal(result.status, 303)
-      return result.headers['set-cookie'][0].split(';')[0]
-    }
-    return 'dsh-token=test-authenticated-peer'
+    const url = new URL(ctx.get('connection').authenticatedUrl(`http://${authority}`))
+    const result = await send(url.pathname + url.search, { host: authority })
+    assert.equal(result.status, 303)
+    return result.headers['set-cookie'][0].split(';')[0]
   }
   return { send, login, ctx, manager, routes, activate }
 }
@@ -368,4 +360,11 @@ test('管理入口独立验证：支持 connection.admit 与 connection.requestR
   assert.equal((await call({ admit: () => ({ rejection: 403 }) })).status, 403)
   assert.equal((await call({ admit: () => ({ peer: { id: 'test' } }) })).status, 200)
   assert.equal((await call({ admit: () => ({}) })).status, 200)
+
+  // 4. 新版 WebServer 原生 peer 准入
+  let peerStatus
+  const peerReq = { method: 'GET', url: '/api/michengai/dsh-im-connect/channels', headers: { host: 'localhost' } }
+  const peerRes = { writeHead(s) { peerStatus = s; return peerRes }, end() {} }
+  await routeHandler(peerReq, peerRes, { id: 'admitted-peer' })
+  assert.equal(peerStatus, 200)
 })
