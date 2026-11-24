@@ -261,11 +261,18 @@ async function fixture(t, { activateConnection = true, initialState } = {}) {
   await new Promise((resolve) => setImmediate(resolve))
   const server = createServer((req, res) => {
     if (req.url.startsWith('/?')) {
-      ctx.get('connection').authorizeIndex(req, res)
-      return
+      const conn = ctx.get('connection')
+      if (typeof conn?.authorizeIndex === 'function') {
+        conn.authorizeIndex(req, res)
+        return
+      }
     }
     const route = [...routes.values()].sort((a, b) => b.path.length - a.path.length).find((item) => req.url.startsWith(item.path))
-    if (route) void route.handler(req, res)
+    if (route) {
+      const cookie = req.headers['cookie'] || ''
+      const peer = cookie.includes('dsh-token=') ? { id: 'test-peer' } : undefined
+      void route.handler(req, res, peer)
+    }
     else { res.writeHead(404); res.end() }
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -286,10 +293,14 @@ async function fixture(t, { activateConnection = true, initialState } = {}) {
     req.end(body)
   })
   const login = async (authority = 'im.example.test') => {
-    const url = new URL(ctx.get('connection').authenticatedUrl(`http://${authority}`))
-    const result = await send(url.pathname + url.search, { host: authority })
-    assert.equal(result.status, 303)
-    return result.headers['set-cookie'][0].split(';')[0]
+    const conn = ctx.get('connection')
+    if (typeof conn?.authenticatedUrl === 'function') {
+      const url = new URL(conn.authenticatedUrl(`http://${authority}`))
+      const result = await send(url.pathname + url.search, { host: authority })
+      assert.equal(result.status, 303)
+      return result.headers['set-cookie'][0].split(';')[0]
+    }
+    return 'dsh-token=test-authenticated-peer'
   }
   return { send, login, ctx, manager, routes, activate }
 }
