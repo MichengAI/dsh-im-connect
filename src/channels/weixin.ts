@@ -827,7 +827,7 @@ export function createWeixinChannel(config: WeixinChannelConfig, log: (line: str
   return {
     id: 'weixin',
     label: '微信',
-    maxMessageLength: 1200,
+    maxMessageLength: 4000,
     // iLink 回复次数有限，工具调用前的过渡文字不占用发送窗口。
     skipInterimText: true,
     async start() {

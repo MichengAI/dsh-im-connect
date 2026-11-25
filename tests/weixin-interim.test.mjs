@@ -260,4 +260,10 @@ for (const [text, expected] of [
   }
 })
 
+test('微信渠道单条出站消息最大长度对齐官方规范为 4000 字（Issue #110）', async t => {
+  const f = fixture(t)
+  assert.equal(f.channel.maxMessageLength, 4000)
+})
+
+
 
