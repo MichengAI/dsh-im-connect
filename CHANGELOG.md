@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.56] - 2026-11-25
+
+### Feishu Group Chat Auto-Create Topic Thread on @Mention (#101)
+
+- **Auto-create topic thread on group @mention (#101)**: Introduced a new account setting "Auto-Create Topic on Group Mention". When enabled in standard Feishu group chats, @mentioning the bot in the main group stream automatically initiates a dedicated reply thread rooted at that message. Consecutive follow-up messages within the thread maintain continuous context without flooding the main channel.
+
+### Feishu "Deliver Final Reply Only" & Interim Narrative Filtering (#106, #107)
+
+- **Deliver final reply only account toggle (#106)**: Added a "Deliver Final Reply Only" setting for Feishu and Lark accounts to suppress intermediate transition messages (e.g. "Checking now...", "Reading configuration") emitted during tool interactions, keeping shared channels quiet until the final result is ready.
+- **Reliable substantive response and terminal conclusion delivery (#107)**: Enhanced interim filtering and substantive text detection to ensure meaningful responses containing data, files, structured lists, or concise conclusions (such as "Done.", "Service restarted") are delivered without loss, preventing substantive answers from being accidentally dropped.
+
 ## [1.0.55] - 2026-11-25
 
 ### DeepSeek Harness 0.2.3 Sidebar Channels Panel Compatibility (#100)
