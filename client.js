@@ -677,6 +677,14 @@ window.__ModuleLoader__.load({
         "account.threadSessionsIsolated": "独立会话",
         "account.threadSessionsNote": "开启后飞书群聊回复串将按话题独立会话与上下文；默认关闭。",
         "account.threadSessionsOff": "关闭",
+        "account.mentionTopicReply": "群大厅@开话题",
+        "account.mentionTopicReplyEnabled": "开启",
+        "account.mentionTopicReplyNote": "开启后，在飞书普通群大厅被 @ 时，自动以该消息为根发起独立话题回复，避免刷屏；默认关闭。",
+        "account.mentionTopicReplyOff": "关闭",
+        "account.skipInterimText": "只发送最终回复",
+        "account.skipInterimTextEnabled": "开启",
+        "account.skipInterimTextNote": "开启后拦截模型调用工具过程中的过渡叙述，仅在工具执行完毕后投递最终回复；默认关闭。",
+        "account.skipInterimTextOff": "关闭",
         "account.workspace": "工作区",
         "action.addAccount": "添加账号",
         "action.approve": "批准",
@@ -991,6 +999,14 @@ window.__ModuleLoader__.load({
         "account.threadSessionsIsolated": "Isolated sessions",
         "account.threadSessionsNote": "When enabled, group message threads are isolated into separate sessions; disabled by default.",
         "account.threadSessionsOff": "Off",
+        "account.mentionTopicReply": "Create topic on group mention",
+        "account.mentionTopicReplyEnabled": "Enabled",
+        "account.mentionTopicReplyNote": "When enabled, bot mentions in the main group chat will automatically create a reply thread with the message as root; disabled by default.",
+        "account.mentionTopicReplyOff": "Off",
+        "account.skipInterimText": "Deliver final reply only",
+        "account.skipInterimTextEnabled": "Enabled",
+        "account.skipInterimTextNote": "When enabled, suppresses interim narrations during tool calls and only sends the final response; disabled by default.",
+        "account.skipInterimTextOff": "Off",
         "account.workspace": "Workspace",
         "action.addAccount": "Add account",
         "action.approve": "Approve",
@@ -1305,6 +1321,14 @@ window.__ModuleLoader__.load({
         "account.threadSessionsIsolated": "スレッドごとに分離",
         "account.threadSessionsNote": "有効にすると、グループ返信スレッドごとに独立したセッションとコンテキストが保持されます。デフォルトは無効です。",
         "account.threadSessionsOff": "オフ",
+        "account.mentionTopicReply": "メンション時にトピック作成",
+        "account.mentionTopicReplyEnabled": "有効",
+        "account.mentionTopicReplyNote": "有効にすると、グループのメインチャットで@メンションされた際に、そのメッセージをルートとして返信スレッドを自動作成します。デフォルトは無効です。",
+        "account.mentionTopicReplyOff": "オフ",
+        "account.skipInterimText": "最終返信のみ送信",
+        "account.skipInterimTextEnabled": "有効",
+        "account.skipInterimTextNote": "有効にすると、ツール呼び出し中の経過テキストを非表示にし、最終的な回答のみを送信します。デフォルトは無効です。",
+        "account.skipInterimTextOff": "オフ",
         "account.workspace": "ワークスペース",
         "action.addAccount": "アカウントを追加",
         "action.approve": "承認",
@@ -1619,6 +1643,14 @@ window.__ModuleLoader__.load({
         "account.threadSessionsIsolated": "Sesiones aisladas",
         "account.threadSessionsNote": "Al activarse, los hilos de mensajes en grupos se aíslan en sesiones independientes; desactivado por defecto.",
         "account.threadSessionsOff": "Desactivado",
+        "account.mentionTopicReply": "Crear tema al mencionar en grupo",
+        "account.mentionTopicReplyEnabled": "Activado",
+        "account.mentionTopicReplyNote": "Al activarse, las menciones en el chat grupal principal crean automáticamente un hilo de respuestas como raíz; desactivado por defecto.",
+        "account.mentionTopicReplyOff": "Desactivado",
+        "account.skipInterimText": "Enviar solo respuesta final",
+        "account.skipInterimTextEnabled": "Activado",
+        "account.skipInterimTextNote": "Al activarse, suprime las narraciones intermedias durante llamadas a herramientas y solo entrega la respuesta final; desactivado por defecto.",
+        "account.skipInterimTextOff": "Desactivado",
         "account.workspace": "Espacio de trabajo",
         "action.addAccount": "Añadir cuenta",
         "action.approve": "Aprobar",
@@ -1933,6 +1965,14 @@ window.__ModuleLoader__.load({
         "account.threadSessionsIsolated": "Sessions isolées",
         "account.threadSessionsNote": "Une fois activé, les fils de messages de groupe sont isolés dans des sessions distinctes ; désactivé par défaut.",
         "account.threadSessionsOff": "Désactivé",
+        "account.mentionTopicReply": "Créer un sujet sur mention de groupe",
+        "account.mentionTopicReplyEnabled": "Activé",
+        "account.mentionTopicReplyNote": "Une fois activé, les mentions dans le salon principal de groupe créent automatiquement un fil de réponses racine ; désactivé par défaut.",
+        "account.mentionTopicReplyOff": "Désactivé",
+        "account.skipInterimText": "Envoyer uniquement la réponse finale",
+        "account.skipInterimTextEnabled": "Activé",
+        "account.skipInterimTextNote": "Une fois activé, supprime les narrations intermédiaires pendant les appels d'outils et ne livre que la réponse finale ; désactivé par défaut.",
+        "account.skipInterimTextOff": "Désactivé",
         "account.workspace": "Espace de travail",
         "action.addAccount": "Ajouter un compte",
         "action.approve": "Approuver",
@@ -2247,6 +2287,14 @@ window.__ModuleLoader__.load({
         "account.threadSessionsIsolated": "Isolierte Sitzungen",
         "account.threadSessionsNote": "Wenn aktiviert, werden Gruppen-Nachrichten-Threads in separate Sitzungen isoliert; standardmäßig deaktiviert.",
         "account.threadSessionsOff": "Aus",
+        "account.mentionTopicReply": "Thema bei Gruppen-Erwähnung erstellen",
+        "account.mentionTopicReplyEnabled": "Aktiviert",
+        "account.mentionTopicReplyNote": "Wenn aktiviert, wird bei einer Erwähnung im Hauptchat der Gruppe automatisch ein Antwort-Thread als Wurzel erstellt; standardmäßig deaktiviert.",
+        "account.mentionTopicReplyOff": "Aus",
+        "account.skipInterimText": "Nur finale Antwort senden",
+        "account.skipInterimTextEnabled": "Aktiviert",
+        "account.skipInterimTextNote": "Wenn aktiviert, werden Zwischenberichte während Tool-Aufrufen unterdrückt und nur die finale Antwort gesendet; standardmäßig deaktiviert.",
+        "account.skipInterimTextOff": "Aus",
         "account.workspace": "Arbeitsbereich",
         "action.addAccount": "Konto hinzufügen",
         "action.approve": "Genehmigen",
@@ -2561,6 +2609,14 @@ window.__ModuleLoader__.load({
         "account.threadSessionsIsolated": "Изолированные сессии",
         "account.threadSessionsNote": "При включении цепочки ответов в группах изолируются в отдельные сессии; по умолчанию выключено.",
         "account.threadSessionsOff": "Выкл",
+        "account.mentionTopicReply": "Создавать тред при упоминании в группе",
+        "account.mentionTopicReplyEnabled": "Вкл",
+        "account.mentionTopicReplyNote": "При включении упоминания в общем чате группы автоматически создают тред ответов от исходного сообщения; по умолчанию выключено.",
+        "account.mentionTopicReplyOff": "Выкл",
+        "account.skipInterimText": "Отправлять только итоговый ответ",
+        "account.skipInterimTextEnabled": "Вкл",
+        "account.skipInterimTextNote": "При включении промежуточные пояснения во время вызова инструментов скрываются, отправляется только итоговый ответ; по умолчанию выключено.",
+        "account.skipInterimTextOff": "Выкл",
         "account.workspace": "Рабочая область",
         "action.addAccount": "Добавить аккаунт",
         "action.approve": "Одобрить",
@@ -2875,6 +2931,14 @@ window.__ModuleLoader__.load({
         "account.threadSessionsIsolated": "Sessões isoladas",
         "account.threadSessionsNote": "Quando ativado, os tópicos de mensagens em grupos são isolados em sessões separadas; desativado por padrão.",
         "account.threadSessionsOff": "Desativado",
+        "account.mentionTopicReply": "Criar tópico ao mencionar no grupo",
+        "account.mentionTopicReplyEnabled": "Ativado",
+        "account.mentionTopicReplyNote": "Quando ativado, as menções no chat principal do grupo criam automaticamente um tópico de resposta como raiz; desativado por padrão.",
+        "account.mentionTopicReplyOff": "Desativado",
+        "account.skipInterimText": "Enviar apenas resposta final",
+        "account.skipInterimTextEnabled": "Ativado",
+        "account.skipInterimTextNote": "Quando ativado, suprime narrações intermediárias durante chamadas de ferramentas e entrega apenas a resposta final; desativado por padrão.",
+        "account.skipInterimTextOff": "Desativado",
         "account.workspace": "Espaço de trabalho",
         "action.addAccount": "Adicionar conta",
         "action.approve": "Aprovar",
@@ -4229,6 +4293,22 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       return { threadSessions: next === "isolated" };
     }
 
+    function resolveMentionTopicReplySelect(value) {
+      return Boolean(value && value.mentionTopicReply) ? "enabled" : "off";
+    }
+
+    function mentionTopicReplyPatch(next) {
+      return { mentionTopicReply: next === "enabled" };
+    }
+
+    function resolveSkipInterimTextSelect(value) {
+      return Boolean(value && value.skipInterimText) ? "enabled" : "off";
+    }
+
+    function skipInterimTextPatch(next) {
+      return { skipInterimText: next === "enabled" };
+    }
+
     function filterAccountPlatformPayload(platform, patch, payload) {
       const result = payload || {};
       if (platform === "feishu" || platform === "lark") {
@@ -4239,6 +4319,16 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
       if (platform === "feishu" || platform === "lark") {
         if (Object.prototype.hasOwnProperty.call(patch, "threadSessions")) {
           result.threadSessions = patch.threadSessions;
+        }
+      }
+      if (platform === "feishu" || platform === "lark") {
+        if (Object.prototype.hasOwnProperty.call(patch, "mentionTopicReply")) {
+          result.mentionTopicReply = patch.mentionTopicReply;
+        }
+      }
+      if (platform === "feishu" || platform === "lark") {
+        if (Object.prototype.hasOwnProperty.call(patch, "skipInterimText")) {
+          result.skipInterimText = patch.skipInterimText;
         }
       }
       if (platform === "wecom") {
@@ -4473,6 +4563,52 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
           : threadSessionsTipAnchor,
       );
 
+      const mentionTopicReplyTip = t("account.mentionTopicReplyNote");
+      const mentionTopicReplyTipAnchor = h("span", {
+        className: "ima-label-tip",
+        title: HostTooltip ? undefined : mentionTopicReplyTip,
+        "aria-label": mentionTopicReplyTip,
+        role: "button",
+        tabIndex: 0,
+        style: {
+          display: "inline-flex",
+          alignItems: "center",
+          cursor: "help",
+          color: "var(--dsw-alias-label-tertiary, var(--ima-muted))",
+          marginLeft: 2,
+        },
+      }, h(IconInfoOutline, { size: 12 }));
+
+      const mentionTopicReplyLabel = h("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 } },
+        h("span", null, t("account.mentionTopicReply")),
+        HostTooltip
+          ? h(HostTooltip, { label: mentionTopicReplyTip, portal: true, side: "top" }, mentionTopicReplyTipAnchor)
+          : mentionTopicReplyTipAnchor,
+      );
+
+      const skipInterimTextTip = t("account.skipInterimTextNote");
+      const skipInterimTextTipAnchor = h("span", {
+        className: "ima-label-tip",
+        title: HostTooltip ? undefined : skipInterimTextTip,
+        "aria-label": skipInterimTextTip,
+        role: "button",
+        tabIndex: 0,
+        style: {
+          display: "inline-flex",
+          alignItems: "center",
+          cursor: "help",
+          color: "var(--dsw-alias-label-tertiary, var(--ima-muted))",
+          marginLeft: 2,
+        },
+      }, h(IconInfoOutline, { size: 12 }));
+
+      const skipInterimTextLabel = h("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 } },
+        h("span", null, t("account.skipInterimText")),
+        HostTooltip
+          ? h(HostTooltip, { label: skipInterimTextTip, portal: true, side: "top" }, skipInterimTextTipAnchor)
+          : skipInterimTextTipAnchor,
+      );
+
       const sessionIdleLabel = h("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 } },
         h("span", null, t("account.sessionIdle")),
         HostTooltip
@@ -4624,6 +4760,26 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
             { value: "isolated", label: t("account.threadSessionsIsolated") },
           ],
           onChange: (next) => update(threadSessionsPatch(next)),
+        })),
+        props.mentionTopicReplySupported && field("mentionTopicReply", mentionTopicReplyLabel, h(Select, {
+          className: "ima-account-picker",
+          value: resolveMentionTopicReplySelect(value),
+          "aria-label": t("account.mentionTopicReply"),
+          options: [
+            { value: "off", label: t("account.mentionTopicReplyOff") },
+            { value: "enabled", label: t("account.mentionTopicReplyEnabled") },
+          ],
+          onChange: (next) => update(mentionTopicReplyPatch(next)),
+        })),
+        props.skipInterimTextSupported && field("skipInterimText", skipInterimTextLabel, h(Select, {
+          className: "ima-account-picker",
+          value: resolveSkipInterimTextSelect(value),
+          "aria-label": t("account.skipInterimText"),
+          options: [
+            { value: "off", label: t("account.skipInterimTextOff") },
+            { value: "enabled", label: t("account.skipInterimTextEnabled") },
+          ],
+          onChange: (next) => update(skipInterimTextPatch(next)),
         })),
         segmentSupported && field("segmentReply", segmentReplyLabel, h(Select, {
           className: "ima-account-picker",
@@ -4803,7 +4959,7 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
         setDraft(account);
         setProxyModeDraft(account.proxyMode || "inherit");
         setNote("");
-      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.groupAccess, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.threadSessions, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort, account.thinkingDisplay]);
+      }, [account.id, account.cwd, account.permission, account.agentPreset, account.privateAccess, account.sendMode, account.groupAccess, account.sessionIdleMinutes, account.segmentReply, account.segmentDelayMinSecs, account.segmentDelayMaxSecs, account.proxyMode, account.proxyConfigured, JSON.stringify(account.commandPermissions), account.receiveEnabled, account.threadSessions, account.mentionTopicReply, account.skipInterimText, account.assistant && account.assistant.provider, account.assistant && account.assistant.model, account.assistant && account.assistant.reasoningEffort, account.thinkingDisplay]);
       useEffect(() => {
         if (accountIdRef.current !== account.id) {
           accountIdRef.current = account.id;
@@ -4916,6 +5072,8 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
             onChange: applySettings,
             thinkingDisplaySupported: account.platform === "feishu" || account.platform === "lark",
             threadSessionsSupported: account.platform === "feishu" || account.platform === "lark",
+            mentionTopicReplySupported: account.platform === "feishu" || account.platform === "lark",
+            skipInterimTextSupported: account.platform === "feishu" || account.platform === "lark",
             segmentReplySupported: account.segmentReplySupported !== false,
             catalog,
             permissions,
@@ -7560,6 +7718,10 @@ body:not([data-ds-dark-theme]) .ima-section-card{background:var(--dsw-alias-bg-l
     exports.setupSidebarEntry = setupSidebarEntry;
     exports.resolveThreadSessionsSelect = resolveThreadSessionsSelect;
     exports.threadSessionsPatch = threadSessionsPatch;
+    exports.resolveMentionTopicReplySelect = resolveMentionTopicReplySelect;
+    exports.mentionTopicReplyPatch = mentionTopicReplyPatch;
+    exports.resolveSkipInterimTextSelect = resolveSkipInterimTextSelect;
+    exports.skipInterimTextPatch = skipInterimTextPatch;
     exports.filterAccountPlatformPayload = filterAccountPlatformPayload;
     return module.exports;
   },

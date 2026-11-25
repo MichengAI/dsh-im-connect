@@ -132,6 +132,56 @@ test('飞书入站消息识别 thread_id 与 threadSessions 配置开关', async
     },
   })
   assert.equal(receivedMessages[0].chatId, 'oc_chat_1:om_root_topic_1', '开启 threadSessions 后普通群回复串按 root_id 隔离')
+
+  // 3. 开启 mentionTopicReply: true 时：普通群大厅 @ 消息以自身 message_id 为话题根隔离
+  receivedMessages.length = 0
+  const channelMentionTopic = createFeishuChannel('feishu', { appId: 'app', appSecret: 'sec', mentionTopicReply: true }, () => {}, async () => sdk)
+  t.after(() => channelMentionTopic.stop())
+  channelMentionTopic.setMessageHandler(msg => { receivedMessages.push(msg) })
+  await channelMentionTopic.start()
+
+  const onMessageMentionTopic = registeredDispatcher?.['im.message.receive_v1']
+  // 大厅普通 @ 消息（无 thread_id，无 root_id）
+  await onMessageMentionTopic({
+    sender: { sender_id: { open_id: 'ou_user_5' } },
+    message: {
+      message_id: 'om_msg_hall_5',
+      chat_id: 'oc_chat_1',
+      chat_type: 'group',
+      message_type: 'text',
+      content: JSON.stringify({ text: '大厅提问' }),
+      mentions: [{ id: { open_id: 'ou_bot' } }],
+    },
+  })
+  // 随后的回复（带 root_id 指向首贴 message_id）
+  await onMessageMentionTopic({
+    sender: { sender_id: { open_id: 'ou_user_5' } },
+    message: {
+      message_id: 'om_msg_follow_5',
+      root_id: 'om_msg_hall_5',
+      chat_id: 'oc_chat_1',
+      chat_type: 'group',
+      message_type: 'text',
+      content: JSON.stringify({ text: '话题内追问' }),
+      mentions: [{ id: { open_id: 'ou_bot' } }],
+    },
+  })
+  // 私聊消息即使开启 mentionTopicReply 也不隔离话题
+  await onMessageMentionTopic({
+    sender: { sender_id: { open_id: 'ou_user_6' } },
+    message: {
+      message_id: 'om_msg_p2p_6',
+      chat_id: 'oc_p2p_2',
+      chat_type: 'p2p',
+      message_type: 'text',
+      content: JSON.stringify({ text: '私聊提问' }),
+    },
+  })
+
+  assert.equal(receivedMessages.length, 3)
+  assert.equal(receivedMessages[0].chatId, 'oc_chat_1:om_msg_hall_5', '开启 mentionTopicReply 时大厅 @ 消息按自身 message_id 隔离')
+  assert.equal(receivedMessages[1].chatId, 'oc_chat_1:om_msg_hall_5', '话题内追问按 root_id 隔离并与大厅首贴归入同一会话')
+  assert.equal(receivedMessages[2].chatId, 'oc_p2p_2', '私聊消息绝不隔离')
 })
 
 test('飞书话题内卡片按钮携带复合 chatId 且回调触发 ChoiceStore.resolve 成功', async t => {
@@ -309,6 +359,19 @@ test('client.js 与 8 语字典包含 threadSessions 下拉选择器与文案绑
   assert.match(client, /account\.threadSessionsIsolated/)
   assert.doesNotMatch(client, /h\(Switch,\s*\{\s*role:\s*"switch",\s*checked:\s*Boolean\(draft\.threadSessions/)
 
+  // mentionTopicReply 与 skipInterimText 控件结构与 8 语词典完整性校验
+  assert.match(client, /mentionTopicReplySupported:\s*account\.platform === "feishu" \|\| account\.platform === "lark"/)
+  assert.match(client, /props\.mentionTopicReplySupported && field\("mentionTopicReply", mentionTopicReplyLabel, h\(Select/)
+  assert.match(client, /value:\s*resolveMentionTopicReplySelect\(value\)/)
+  assert.match(client, /skipInterimTextSupported:\s*account\.platform === "feishu" \|\| account\.platform === "lark"/)
+  assert.match(client, /props\.skipInterimTextSupported && field\("skipInterimText", skipInterimTextLabel, h\(Select/)
+  assert.match(client, /value:\s*resolveSkipInterimTextSelect\(value\)/)
+
+  assert.match(client, /"account\.mentionTopicReply":\s*"群大厅@开话题"/)
+  assert.match(client, /"account\.mentionTopicReply":\s*"Create topic on group mention"/)
+  assert.match(client, /"account\.skipInterimText":\s*"只发送最终回复"/)
+  assert.match(client, /"account\.skipInterimText":\s*"Deliver final reply only"/)
+
   // 8 语词典完整性校验 - 标题与提示
   assert.match(client, /"account\.threadSessions":\s*"群回复串会话隔离"/)
   assert.match(client, /"account\.threadSessions":\s*"Thread session isolation"/)
@@ -368,9 +431,21 @@ test('client.js 导出的 threadSessions 行为映射与保存平台门控严格
   }
   vm.runInNewContext(clientSource, sandbox)
 
-  const { resolveThreadSessionsSelect, threadSessionsPatch, filterAccountPlatformPayload } = exportedModule
+  const {
+    resolveThreadSessionsSelect,
+    threadSessionsPatch,
+    resolveMentionTopicReplySelect,
+    mentionTopicReplyPatch,
+    resolveSkipInterimTextSelect,
+    skipInterimTextPatch,
+    filterAccountPlatformPayload,
+  } = exportedModule
   assert.equal(typeof resolveThreadSessionsSelect, 'function')
   assert.equal(typeof threadSessionsPatch, 'function')
+  assert.equal(typeof resolveMentionTopicReplySelect, 'function')
+  assert.equal(typeof mentionTopicReplyPatch, 'function')
+  assert.equal(typeof resolveSkipInterimTextSelect, 'function')
+  assert.equal(typeof skipInterimTextPatch, 'function')
   assert.equal(typeof filterAccountPlatformPayload, 'function')
 
   const toPlain = (obj) => JSON.parse(JSON.stringify(obj))
@@ -382,23 +457,36 @@ test('client.js 导出的 threadSessions 行为映射与保存平台门控严格
   assert.equal(resolveThreadSessionsSelect(null), 'off')
   assert.equal(resolveThreadSessionsSelect(undefined), 'off')
 
+  // 1.2 mentionTopicReply 与 skipInterimText 回显映射验证
+  assert.equal(resolveMentionTopicReplySelect({ mentionTopicReply: true }), 'enabled')
+  assert.equal(resolveMentionTopicReplySelect({ mentionTopicReply: false }), 'off')
+  assert.equal(resolveMentionTopicReplySelect({}), 'off')
+  assert.deepEqual(toPlain(mentionTopicReplyPatch('enabled')), { mentionTopicReply: true })
+  assert.deepEqual(toPlain(mentionTopicReplyPatch('off')), { mentionTopicReply: false })
+
+  assert.equal(resolveSkipInterimTextSelect({ skipInterimText: true }), 'enabled')
+  assert.equal(resolveSkipInterimTextSelect({ skipInterimText: false }), 'off')
+  assert.equal(resolveSkipInterimTextSelect({}), 'off')
+  assert.deepEqual(toPlain(skipInterimTextPatch('enabled')), { skipInterimText: true })
+  assert.deepEqual(toPlain(skipInterimTextPatch('off')), { skipInterimText: false })
+
   // 2. 下拉选项补丁函数验证：isolated -> true，其他任何值 -> false
   assert.deepEqual(toPlain(threadSessionsPatch('isolated')), { threadSessions: true })
   assert.deepEqual(toPlain(threadSessionsPatch('off')), { threadSessions: false })
   assert.deepEqual(toPlain(threadSessionsPatch('unknown')), { threadSessions: false })
 
-  // 3. 平台保存门控逻辑验证：feishu 与 lark 支持 threadSessions 与 thinkingDisplay
-  const feishuPatch = { threadSessions: true, thinkingDisplay: true }
-  assert.deepEqual(toPlain(filterAccountPlatformPayload('feishu', feishuPatch)), { threadSessions: true, thinkingDisplay: true })
-  const larkPatch = { threadSessions: false, thinkingDisplay: false }
-  assert.deepEqual(toPlain(filterAccountPlatformPayload('lark', larkPatch)), { threadSessions: false, thinkingDisplay: false })
+  // 3. 平台保存门控逻辑验证：feishu 与 lark 支持 threadSessions、mentionTopicReply、skipInterimText 与 thinkingDisplay
+  const feishuPatch = { threadSessions: true, mentionTopicReply: true, skipInterimText: true, thinkingDisplay: true }
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('feishu', feishuPatch)), { threadSessions: true, mentionTopicReply: true, skipInterimText: true, thinkingDisplay: true })
+  const larkPatch = { threadSessions: false, mentionTopicReply: false, skipInterimText: false, thinkingDisplay: false }
+  assert.deepEqual(toPlain(filterAccountPlatformPayload('lark', larkPatch)), { threadSessions: false, mentionTopicReply: false, skipInterimText: false, thinkingDisplay: false })
 
-  // telegram 现已移除 thinkingDisplay 支持，两项均严禁透传
-  const tgPatch = { threadSessions: true, thinkingDisplay: true }
+  // telegram 现已移除 thinkingDisplay 支持，各项均严禁透传
+  const tgPatch = { threadSessions: true, mentionTopicReply: true, skipInterimText: true, thinkingDisplay: true }
   assert.deepEqual(toPlain(filterAccountPlatformPayload('telegram', tgPatch)), {})
 
-  // 其他平台（如 wecom、dingtalk、qq）两项均严禁透传
-  const otherPatch = { threadSessions: true, thinkingDisplay: true }
+  // 其他平台（如 wecom、dingtalk、qq）各项均严禁透传
+  const otherPatch = { threadSessions: true, mentionTopicReply: true, skipInterimText: true, thinkingDisplay: true }
   assert.deepEqual(toPlain(filterAccountPlatformPayload('wecom', otherPatch)), {})
   assert.deepEqual(toPlain(filterAccountPlatformPayload('dingtalk', otherPatch)), {})
   assert.deepEqual(toPlain(filterAccountPlatformPayload('qq', otherPatch)), {})
@@ -547,4 +635,22 @@ test('manager 侧 threadSessions 持久化与重连路径覆盖（N2 真实守�
   assert.equal(res2.account.threadSessions, false)
   assert.equal(manager.store.channels['feishu:test1'].config.threadSessions, undefined)
   assert.equal(restartedCount, 2, '关闭 threadSessions 必须触发 startOne 重启')
+
+  // 4. 开启 mentionTopicReply 与 skipInterimText
+  const res3 = await manager.updateAccount('feishu:test1', { mentionTopicReply: true, skipInterimText: true })
+  assert.equal(res3.ok, true)
+  assert.equal(res3.account.mentionTopicReply, true)
+  assert.equal(res3.account.skipInterimText, true)
+  assert.equal(manager.store.channels['feishu:test1'].config.mentionTopicReply, 'true')
+  assert.equal(manager.store.channels['feishu:test1'].config.skipInterimText, 'true')
+  assert.equal(restartedCount, 3, '启用 mentionTopicReply 与 skipInterimText 必须触发 startOne 重启')
+
+  // 5. 关闭 mentionTopicReply 与 skipInterimText
+  const res4 = await manager.updateAccount('feishu:test1', { mentionTopicReply: false, skipInterimText: false })
+  assert.equal(res4.ok, true)
+  assert.equal(res4.account.mentionTopicReply, false)
+  assert.equal(res4.account.skipInterimText, false)
+  assert.equal(manager.store.channels['feishu:test1'].config.mentionTopicReply, undefined)
+  assert.equal(manager.store.channels['feishu:test1'].config.skipInterimText, undefined)
+  assert.equal(restartedCount, 4, '关闭必须触发 startOne 重启')
 })

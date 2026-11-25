@@ -57,6 +57,8 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
       { key: 'appId', label: 'App ID' },
       { key: 'appSecret', label: 'App Secret', secret: true },
       { key: 'threadSessions', label: '话题会话隔离', settingsOnly: true },
+      { key: 'mentionTopicReply', label: '群话题回复', settingsOnly: true },
+      { key: 'skipInterimText', label: '只发送最终回复', settingsOnly: true },
     ],
   },
   lark: {
@@ -68,6 +70,8 @@ export const CHANNEL_META: Record<ChannelId, ChannelMeta> = {
       { key: 'appId', label: 'App ID' },
       { key: 'appSecret', label: 'App Secret', secret: true },
       { key: 'threadSessions', label: '话题会话隔离', settingsOnly: true },
+      { key: 'mentionTopicReply', label: '群话题回复', settingsOnly: true },
+      { key: 'skipInterimText', label: '只发送最终回复', settingsOnly: true },
     ],
   },
   weixin: {

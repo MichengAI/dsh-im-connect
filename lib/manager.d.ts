@@ -79,6 +79,8 @@ export interface AccountView {
     freeChatGroups?: string;
     thinkingDisplay?: boolean;
     threadSessions?: boolean;
+    mentionTopicReply?: boolean;
+    skipInterimText?: boolean;
     wsUrl?: string;
     lastCheckedAt?: string;
 }

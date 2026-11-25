@@ -97,6 +97,8 @@ interface FeishuConfig {
         get(name: string): unknown;
     };
     threadSessions?: boolean;
+    mentionTopicReply?: boolean;
+    skipInterimText?: boolean;
     deliveryResolverTimeoutMs?: number;
 }
 /** 群消息只有明确 mention 当前机器人本身才算 addressed；@ 其他成员不触发。 */

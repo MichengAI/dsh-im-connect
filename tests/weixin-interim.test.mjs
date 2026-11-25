@@ -166,3 +166,36 @@ test('微信过滤不拦截必要交互和最终回复的成果文件', async t 
   assert.equal(f.engine.deferred.list()[0].status, 'sent')
 })
 
+test('过滤中间叙述时，混合工具调用的实质性正文正常送达，杜绝整轮正文被吞（Issue #107）', async t => {
+  const f = fixture(t)
+  await f.start()
+  // 模拟中间过渡叙述（如「正在检查第 1 项」），必须被过滤跳过
+  await f.reply('正在检查第 1 项', true)
+  assert.deepEqual(f.sent, [])
+  // 模拟模型在输出最终长正文的同时附带了工具调用（例如写记忆/审计），必须予以保留投递，杜绝整轮正文被吞
+  await f.reply('经过排查，系统的全部 3 项检查均已完成，未发现异常。', true)
+  await f.end('completed')
+  assert.deepEqual(f.sent, ['经过排查，系统的全部 3 项检查均已完成，未发现异常。'])
+  assert.equal(f.engine.deferred.list()[0].status, 'sent')
+})
+
+test('过滤中间叙述时，冷恢复在全回合含工具调用时兜底恢复最后一段正文', async t => {
+  const f = fixture(t)
+  await f.start()
+  await f.reply('第一步正在查询', true)
+  f.history.push(
+    { seq: 4, type: 'assistant/message', surfaceOp: 'append', data: { turn: 1, message: { content: [
+      { type: 'text', text: '查询完毕，这是完整的报表结果' },
+      { type: 'tool-call', id: 'call_save', name: 'save', arguments: '{}' },
+    ] } } },
+    { seq: 5, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+  )
+  f.engine.deferred.release(f.sessionId)
+  await f.engine.recoverDeliveries(f.channel, message)
+  assert.equal(f.sent.length, 1)
+  assert.match(f.sent[0], /查询完毕，这是完整的报表结果/)
+  assert.doesNotMatch(f.sent[0], /第一步正在查询/)
+  assert.equal(f.engine.deferred.list()[0].status, 'sent')
+})
+
+

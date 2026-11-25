@@ -229,6 +229,8 @@ export interface AccountView {
   freeChatGroups?: string
   thinkingDisplay?: boolean
   threadSessions?: boolean
+  mentionTopicReply?: boolean
+  skipInterimText?: boolean
   wsUrl?: string
   lastCheckedAt?: string
 }
@@ -474,6 +476,8 @@ export class ChannelManager {
       } : {}),
       ...((platform === 'feishu' || platform === 'lark') ? {
         threadSessions: config.threadSessions === 'true',
+        mentionTopicReply: config.mentionTopicReply === 'true',
+        skipInterimText: config.skipInterimText === 'true',
       } : {}),
       ...(platform === 'wecom' && config.wsUrl ? {
         wsUrl: config.wsUrl,
@@ -1213,6 +1217,28 @@ export class ChannelManager {
         else delete config.threadSessions
         state.config = config
       }
+      const hasMentionTopicReplySetting = (platform === 'feishu' || platform === 'lark') && Object.hasOwn(input, 'mentionTopicReply')
+      let mentionTopicReplyChanged = false
+      if (hasMentionTopicReplySetting) {
+        const previous = state.config?.mentionTopicReply === 'true'
+        const requested = input.mentionTopicReply === true || input.mentionTopicReply === 'true'
+        mentionTopicReplyChanged = requested !== previous
+        const config = { ...(state.config ?? {}) }
+        if (requested) config.mentionTopicReply = 'true'
+        else delete config.mentionTopicReply
+        state.config = config
+      }
+      const hasSkipInterimTextSetting = (platform === 'feishu' || platform === 'lark') && Object.hasOwn(input, 'skipInterimText')
+      let skipInterimTextChanged = false
+      if (hasSkipInterimTextSetting) {
+        const previous = state.config?.skipInterimText === 'true'
+        const requested = input.skipInterimText === true || input.skipInterimText === 'true'
+        skipInterimTextChanged = requested !== previous
+        const config = { ...(state.config ?? {}) }
+        if (requested) config.skipInterimText = 'true'
+        else delete config.skipInterimText
+        state.config = config
+      }
       const hasWecomWsUrlSetting = platform === 'wecom' && Object.hasOwn(input, 'wsUrl')
       let wecomWsUrlChanged = false
       if (hasWecomWsUrlSetting) {
@@ -1233,7 +1259,7 @@ export class ChannelManager {
       }
       this.flush()
       if (reloadSessions) await this.engine.reloadChannel(accountId, { resetSessions })
-      if ((proxyChanged || mentionPolicyChanged || threadSessionsChanged || wecomWsUrlChanged) && this.running.has(accountId)) await this.startOne(accountId)
+      if ((proxyChanged || mentionPolicyChanged || threadSessionsChanged || mentionTopicReplyChanged || skipInterimTextChanged || wecomWsUrlChanged) && this.running.has(accountId)) await this.startOne(accountId)
       return { ok: true, account: this.accountView(accountId, state) }
     })
   }

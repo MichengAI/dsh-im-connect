@@ -18,6 +18,7 @@ export function recoverTurn(events: Event[], requestId: string, skipInterimText 
   let matched = false
   let target: number | undefined
   const replies: string[] = []
+  let lastInterim: string | undefined
   for (const event of events) {
     const data = event.data
     if (event.type === 'turn/start') {
@@ -32,10 +33,18 @@ export function recoverTurn(events: Event[], requestId: string, skipInterimText 
     if (!matched) continue
     if (event.type === 'assistant/message' && data?.turn === target && !data?.interrupted) {
       const text = assistantText(data?.message?.content, skipInterimText)
-      if (text) replies.push(text)
+      if (text) {
+        replies.push(text)
+      } else if (skipInterimText) {
+        const raw = assistantText(data?.message?.content, false)
+        if (raw) lastInterim = raw
+      }
       if (replies.reduce((size, value) => size + value.length, 0) > 1_000_000) return undefined
     }
-    if (event.type === 'turn/end' && data?.turn === target) return { turn: target!, text: replies.join('\n\n'), kind: data?.reason?.kind ?? 'unknown' }
+    if (event.type === 'turn/end' && data?.turn === target) {
+      const finalReplies = replies.length > 0 ? replies : (lastInterim ? [lastInterim] : [])
+      return { turn: target!, text: finalReplies.join('\n\n'), kind: data?.reason?.kind ?? 'unknown' }
+    }
   }
 }
 
