@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.57] - 2026-11-25
+
+### WeChat Outbound Message Length Optimization (#110)
+
+- **Align outbound single-message character limit with official specification (#110)**: Increased WeChat single outbound message length limit from 1,200 to 4,000 characters to match official specifications. Structured long-form responses and reports now deliver as cohesive single messages, preventing fragmented reading experiences while conserving the precious conversation reply count quota in WeChat.
+
 ## [1.0.56] - 2026-11-25
 
 ### Feishu Group Chat Auto-Create Topic Thread on @Mention (#101)
