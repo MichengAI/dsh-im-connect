@@ -6,7 +6,10 @@ type AssistantContent = ReadonlyArray<{
 export declare function isSilentReplyText(content?: AssistantContent): boolean;
 /**
  * 判断一段被工具调用的消息所伴随的文字是否属于过渡说明（如「准备执行下一步」「正在检查...」）。
- * 包含段落换行、结构化 Markdown 或长篇正文的内容属于实质性回答，不应被当作过渡叙述丢弃。
+ *
+ * 判据按「形态」分层，不再以长度为主开关：长度只作最后一道保守兜底，
+ * 因此短结论（「已重启」「Done.」）与含数据/中文数字的短正文不会被误杀，
+ * 长句预告（「我先看一下这个文件…，然后再决定」）也不会因为够长就被当成正文。
  */
 export declare function isInterimPreamble(text: string): boolean;
 /**

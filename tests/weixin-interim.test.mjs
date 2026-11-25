@@ -198,4 +198,66 @@ test('过滤中间叙述时，冷恢复在全回合含工具调用时兜底恢�
   assert.equal(f.engine.deferred.list()[0].status, 'sent')
 })
 
+for (const kind of ['completed', 'error', 'cancelled']) test(`冷恢复不把过渡语当结论补发：${kind}`, async t => {
+  const f = fixture(t)
+  await f.start()
+  await f.reply('准备执行下一步', true)
+  f.history.push({ seq: 4, type: 'turn/end', data: { turn: 1, reason: { kind } } })
+  f.engine.deferred.release(f.sessionId)
+  await f.engine.recoverDeliveries(f.channel, message)
+  // 允许发送一条收尾提示，但绝不能把过程预告包装成结果补发。
+  assert.equal(f.sent.length, 1)
+  assert.doesNotMatch(f.sent[0], /准备执行下一步/)
+  assert.match(f.sent[0], kind === 'completed' ? /此前任务已完成/ : kind === 'error' ? /此前任务失败/ : /此前任务已停止/)
+})
+
+for (const text of ['已重启', 'Done.', '重启完成', '服务已重启，端口 8080 正常监听']) test(`短终态结论不被中间叙述过滤吞掉：${text}`, async t => {
+  const f = fixture(t)
+  await f.start()
+  await f.reply(text, true)
+  await f.end()
+  assert.deepEqual(f.sent, [text])
+  assert.equal(f.engine.deferred.list()[0].status, 'sent')
+})
+
+test('长篇过渡预告不再被当作最终正文投递（实时与冷恢复一致）', async t => {
+  const longInterim = '我先看一下这个文件里到底是怎么写的，然后再决定下一步要不要改'
+  const f = fixture(t)
+  await f.start()
+  await f.reply(longInterim, true)
+  assert.deepEqual(f.sent, [])
+  f.history.push({ seq: 4, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } })
+  f.engine.deferred.release(f.sessionId)
+  await f.engine.recoverDeliveries(f.channel, message)
+  assert.doesNotMatch(f.sent.join('\n'), /我先看一下这个文件/)
+})
+
+test('过渡语与终态结论在同一回合内只投递终态结论', async t => {
+  const f = fixture(t)
+  await f.start()
+  await f.reply('我先检查一下配置', true)
+  await f.reply('已重启', true)
+  await f.end()
+  assert.deepEqual(f.sent, ['已重启'])
+})
+
+for (const [text, expected] of [
+  ['正在检查结果', false], ['Checking the status now', false], ['OK, checking now', false], ['Let me check the logs', false],
+  ['已开始处理', false], ['正在排查，目前全部正常', false], ['第一步正在查询', false],
+  ['Done.', true], ['OK', true], ['Completed.', true], ['未改动任何文件', true], ['建议更换凭据', true], ['重启了三个会话', true],
+]) test(`中间叙述判据形态化：${text}`, async t => {
+  const f = fixture(t)
+  const { isInterimPreamble } = await import('../lib/engine/assistant-text.js')
+  assert.equal(isInterimPreamble(text), !expected)
+  // 同时验证整轮投递行为与判据一致：判为过渡时实时只发空结果提示，不发送该句。
+  await f.start()
+  await f.reply(text, true)
+  if (!expected) {
+    await f.end()
+    assert.equal(f.sent.length, 1)
+    assert.match(f.sent[0], /未返回可投递/)
+    assert.ok(!f.sent[0].includes(text))
+  }
+})
+
 
